@@ -2310,3 +2310,160 @@ body::before {
   .appbar-end .sync { font-size: 0; gap: 0; padding: 0; width: 40px; height: 40px; max-width: none; justify-content: center; border-radius: 50%; }
   .appbar-end .sync::before { margin: 0; }
 }
+
+/* === Update 5 (Agent J): Feiertage automatisch sichtbar === */
+/* Kalender: Feiertagszellen klar violett */
+.cal .cal-day.hol {
+  background: linear-gradient(160deg, color-mix(in srgb, var(--k-feiertag) 42%, var(--card)), color-mix(in srgb, var(--k-feiertag) 26%, var(--card)));
+  border: 1px solid color-mix(in srgb, var(--k-feiertag) 70%, transparent);
+  color: var(--ink);
+}
+.cal .cal-day.hol .cal-num { color: color-mix(in srgb, var(--k-feiertag) 55%, var(--ink)); }
+.cal .cal-day.hol.out { opacity: .6; }
+.cal .cal-day.hol.today { border: 2px solid var(--accent); }
+.cal .cal-day.hol.sel, .cal .cal-day.hol[aria-pressed="true"] {
+  background: color-mix(in srgb, var(--k-feiertag) 38%, var(--card));
+  border: 2px solid var(--k-feiertag);
+}
+.cal .cal-day.hol .cal-dot { background: var(--k-feiertag); box-shadow: 0 0 0 2px var(--card); }
+.cal-hn {
+  display: none;
+  color: color-mix(in srgb, var(--k-feiertag) 60%, var(--ink));
+  max-width: 100%;
+  padding: 0 3px;
+  font-size: .6rem;
+  font-weight: 700;
+  line-height: 1.15;
+  color: color-mix(in srgb, var(--k-feiertag) 75%, var(--ink));
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.cal-day.hol .cal-h:empty { display: none; }
+@media (min-width: 560px) {
+  .cal-hn { display: block; }
+}
+@media (min-width: 1024px) {
+  .cal-hn { font-size: .68rem; margin-top: 2px; }
+}
+
+/* Liste: Feiertagszeile */
+.entry.ek-holrow {
+  cursor: default;
+  background: color-mix(in srgb, var(--k-feiertag) 14%, var(--card));
+  border-color: color-mix(in srgb, var(--k-feiertag) 45%, transparent);
+  box-shadow: inset 4px 0 0 var(--k-feiertag);
+}
+.entry.ek-holrow .t { display: inline-flex; align-items: center; gap: 8px; font-family: var(--f-body); font-weight: 700; }
+.entry.ek-holrow .d { color: var(--k-feiertag); }
+.ek-holico { display: inline-flex; color: var(--k-feiertag); }
+.ek-holnote { margin: 0; }
+
+/* Karte „Kommende Feiertage“ */
+.ek-uphol {
+  background: var(--card);
+  border: 1px solid color-mix(in srgb, var(--k-feiertag) 30%, var(--line));
+  border-radius: var(--r);
+  box-shadow: var(--shadow);
+  padding: 12px 14px;
+}
+.ek-uphol[hidden] { display: none; }
+.ek-uphol-h { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; color: var(--k-feiertag); }
+.ek-uphol-h span { font-family: var(--f-serif, var(--f-display)); font-weight: 600; font-size: 1.05rem; color: var(--ink); }
+.ek-uphol-h small { margin-left: auto; color: var(--muted); font-size: .76rem; font-weight: 600; }
+.ek-uphol ul { list-style: none; margin: 8px 0 0; padding: 0; display: grid; gap: 6px; }
+.cal-day-link {
+  width: 100%;
+  display: flex; align-items: center; gap: 10px;
+  padding: 8px 10px;
+  border: 0; border-radius: 12px;
+  background: var(--k-feiertag-bg);
+  color: var(--ink);
+  font: inherit; text-align: left; cursor: pointer;
+}
+.cal-day-link:focus-visible { outline: 3px solid var(--accent); outline-offset: 1px; }
+.ek-uphol-d { min-width: 82px; font-weight: 700; font-variant-numeric: tabular-nums; color: var(--k-feiertag); }
+.ek-uphol-n { flex: 1; min-width: 0; font-weight: 600; }
+.ek-uphol-t { font-size: .74rem; font-weight: 700; padding: 1px 8px; border-radius: 999px; background: var(--k-feiertag); color: var(--card); }
+@media (min-width: 700px) {
+  .ek-uphol ul { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+  .cal-day-link { flex-direction: column; align-items: flex-start; gap: 2px; }
+}
+
+/* Heute: Feiertags-Hinweis in der Uhr-Karte */
+.hol-today { display: inline-flex; align-items: center; gap: 8px; max-width: 100%; text-align: left; }
+.hol-today[hidden] { display: none; }
+.hol-today.hol-is-today {
+  padding: 8px 14px;
+  border-radius: 14px;
+  background: var(--grad);
+  color: var(--accent-ink);
+  font-weight: 600;
+  font-size: .98rem;
+  box-shadow: 0 8px 18px -10px color-mix(in srgb, var(--accent-2) 80%, transparent);
+}
+.hol-today.hol-is-today b { font-family: var(--f-serif, var(--f-display)); font-size: 1.08rem; }
+.hol-today.hol-is-next {
+  padding: 4px 12px;
+  border-radius: 999px;
+  background: var(--k-feiertag-bg);
+  color: var(--ink);
+  font-size: .84rem;
+  font-weight: 500;
+}
+.hol-today.hol-is-next .ico, .hol-today.hol-is-next svg { color: var(--k-feiertag); flex: none; }
+.clock.is-holiday { border-color: color-mix(in srgb, var(--k-feiertag) 50%, var(--line)); }
+
+/* === Update 5 (Agent I): Erinnerungen per Push === */
+#reminders-panel.rm {
+  display: flex; flex-direction: column; gap: 12px;
+  margin-top: 4px; padding-top: 16px;
+  border-top: 1px solid var(--line);
+}
+.rm-head { display: flex; gap: 12px; align-items: flex-start; }
+.rm-head .note { margin: 2px 0 0; }
+.rm-ico {
+  flex: none; display: grid; place-items: center;
+  width: 38px; height: 38px; border-radius: 12px;
+  background: color-mix(in srgb, var(--accent) 14%, var(--card));
+  color: var(--accent);
+}
+.rm-title { font-family: var(--f-serif); font-weight: 600; font-size: 1.15rem; color: var(--ink); }
+.rm-main span { font-weight: 600; }
+.rm-opts { display: flex; flex-direction: column; gap: 10px; transition: opacity .2s ease; }
+.rm-opts.off { opacity: .5; }
+.rm-opt {
+  display: flex; flex-direction: column; gap: 6px;
+  padding: 6px 14px 10px; border-radius: var(--r-sm);
+  background: color-mix(in srgb, var(--soft) 55%, var(--card));
+  border: 1px solid color-mix(in srgb, var(--accent) 12%, var(--line));
+}
+.rm-opt .switch { font-size: .96rem !important; }
+.rm-opt:has(> .switch:only-child) { padding-bottom: 6px; }
+.rm-inline {
+  display: flex; flex-wrap: wrap; align-items: center; gap: 8px;
+  font-size: .9rem; color: var(--muted);
+}
+.rm-inline input { width: auto; min-width: 0; flex: 0 0 auto; }
+.rm-inline input[type="time"] { width: 7.2em; }
+.rm-inline input[type="number"] { width: 5em; }
+.rm-inline span { flex: 1 1 140px; min-width: 0; }
+.rm-status {
+  display: flex; gap: 10px; align-items: flex-start;
+  padding: 10px 14px; border-radius: var(--r-sm);
+  font-size: .9rem; line-height: 1.4; color: var(--ink);
+  background: var(--soft);
+  border: 1px solid color-mix(in srgb, var(--accent) 20%, transparent);
+}
+.rm-status:empty { display: none; }
+.rm-status .ico { flex: none; margin-top: 1px; color: var(--accent); }
+.rm-status.ok { background: var(--run-soft); border-color: color-mix(in srgb, var(--run) 30%, transparent); }
+.rm-status.ok .ico { color: var(--run); }
+.rm-status.bad { background: color-mix(in srgb, var(--danger) 10%, var(--card)); border-color: color-mix(in srgb, var(--danger) 30%, transparent); }
+.rm-status.bad .ico { color: var(--danger); }
+.rm-status.wait {
+  background: linear-gradient(135deg, color-mix(in srgb, var(--accent) 14%, var(--card)), color-mix(in srgb, var(--accent-2, var(--accent)) 12%, var(--card)));
+}
+.rm-actions { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; }
+.rm-actions .btn.primary { flex: 1 1 220px; }
+.rm-actions [hidden] { display: none !important; }

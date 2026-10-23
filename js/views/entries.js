@@ -38,12 +38,13 @@ export function mount(el, ctx) {
         </div>
         <div class="cal" data-ref="cal"></div>
       </div>
+      <div class="ek-uphol" data-ref="uphol" hidden></div>
       <p class="note" data-ref="sum"></p>
       <div class="stack" data-ref="list"></div>
     </div>`;
 
   el.addEventListener("click", (ev) => {
-    const dayBtn = ev.target.closest("button.cal-day[data-day]");
+    const dayBtn = ev.target.closest("button.cal-day[data-day], button.cal-day-link[data-day]");
     if (dayBtn && el.contains(dayBtn)) {
       const k = dayBtn.dataset.day;
       if (selKey === k) {
@@ -125,6 +126,7 @@ function calendarHTML(snap, util, holidaysOn) {
   const creditMin = util.creditMin || util.netMin;
   const kindLabel = util.kindLabel || ((k) => k);
   const holidayName = util.holidayName || (() => null);
+  const holidayShort = util.holidayShort || ((n) => n);
 
   const first = startOfWeek(new Date(curY, curM, 1));
   const lastOfMonth = new Date(curY, curM + 1, 0);
@@ -168,6 +170,7 @@ function calendarHTML(snap, util, holidaysOn) {
         for (const kd of CAL_KINDS) if (info.kinds.has(kd)) { cls.push(`k-${kd}`); labels.push(kindLabel(kd)); }
       }
       if (hol && !cls.includes("k-feiertag")) cls.push("k-feiertag");
+      if (hol) cls.push("hol");
       const aria = [util.fmtDate(dt.getTime())];
       if (hol) aria.push(hol);
       if (labels.length) aria.push(labels.join(", "));
@@ -175,6 +178,7 @@ function calendarHTML(snap, util, holidaysOn) {
       grid += `<button type="button" class="${cls.join(" ")}" data-day="${k}"` +
         `${hol ? ` title="${esc(hol)}"` : ""} aria-label="${esc(aria.join(" · "))}" aria-pressed="${k === selKey}">` +
         `<span class="cal-num">${dt.getDate()}</span>` +
+        `${hol ? `<span class="cal-hn" aria-hidden="true">${esc(holidayShort(hol))}</span>` : ""}` +
         `<span class="cal-h">${info && info.min > 0 ? esc(hm(info.min)) : ""}</span>` +
         `${hol || (info && info.kinds.has("feiertag")) ? `<span class="cal-dot" aria-hidden="true"></span>` : ""}` +
         `${dotsHTML(info)}` +
@@ -184,7 +188,7 @@ function calendarHTML(snap, util, holidaysOn) {
   }
 
   const legend = ["work", ...CAL_KINDS]
-    .map((k) => `<span class="k-${k}">${esc(kindLabel(k))}</span>`).join("");
+    .map((k) => `<span class="k-${k}">${esc(k === "feiertag" && holidaysOn ? "Feiertag (automatisch)" : kindLabel(k))}</span>`).join("");
 
   return `<div class="cal-head" aria-hidden="true">${head}</div>
     <div class="cal-grid">${grid}</div>
@@ -222,17 +226,51 @@ function render() {
   }
   const holidaysOn = (snap.settings || {}).holidays !== false;
   calEl.innerHTML = calendarHTML(snap, util, holidaysOn);
+  renderUpcoming(util, holidaysOn);
 
   const from = new Date(curY, curM, 1).getTime();
   const to = new Date(curY, curM + 1, 1).getTime();
   const monthList = (snap.entries || []).filter((e) => e.start >= from && e.start < to);
   const list = selKey ? monthList.filter((e) => dayKey(e.start) === selKey) : monthList;
 
+  // gesetzliche Feiertage des Monats (bzw. des gewählten Tags): dayKey → Name
+  const monthHols = new Map();
+  if (holidaysOn) {
+    const last = new Date(curY, curM + 1, 0).getDate();
+    for (let d = 1; d <= last; d++) {
+      const dt = new Date(curY, curM, d);
+      const k = dayKey(dt);
+      if (selKey && k !== selKey) continue;
+      const n = holidayName(dt.getTime());
+      if (n) monthHols.set(k, n);
+    }
+  }
+  const holRow = (name) => `
+        <div class="entry ek-holrow" role="note">
+          <span class="t"><span class="ek-holico" aria-hidden="true">${icon("calendar", 18)}</span>${esc(name)}</span>
+          <span class="d">frei</span>
+          <span class="p">${selKey
+            ? "Gesetzlicher Feiertag – arbeitsfrei, zählt nicht als Fehlstunden"
+            : "Gesetzlicher Feiertag · arbeitsfrei · automatisch eingetragen"}</span>
+        </div>`;
+  const holDayHTML = (k, name) => {
+    const d = parseDate(k);
+    const ts = new Date(d.y, d.mo, d.d).getTime();
+    return `
+      <div class="day ek-holday">
+        <div class="day-h"><span>${esc(fmtDate(ts))} <span class="ek-hol">${esc(name)}</span></span></div>
+        ${holRow(name)}
+      </div>`;
+  };
+
   const resetBtn = `<div class="row"><button type="button" class="btn ghost sm" data-act="all-days">Alle Tage zeigen</button></div>`;
 
   if (!list.length) {
     sumEl.textContent = "";
-    if (selKey) {
+    if (selKey && monthHols.has(selKey)) {
+      listEl.innerHTML = holDayHTML(selKey, monthHols.get(selKey)) +
+        `<p class="note ek-holnote">${esc(monthHols.get(selKey))} – arbeitsfrei, zählt nicht als Fehlstunden. Du musst nichts eintragen.</p>${resetBtn}`;
+    } else if (selKey) {
       const d = parseDate(selKey);
       const ts = d ? new Date(d.y, d.mo, d.d).getTime() : Date.now();
       const hol = holidaysOn ? holidayName(ts) : null;
@@ -240,7 +278,9 @@ function render() {
         ${hol ? `<p class="note">Feiertag: ${esc(hol)}</p>` : ""}
         <p class="note">Tippe auf „+ Nachtragen“, um für diesen Tag etwas einzutragen.</p></div>${resetBtn}`;
     } else {
-      listEl.innerHTML = `<div class="empty ek-empty">
+      const holsHTML = [...monthHols.keys()].sort().reverse().map((k) => holDayHTML(k, monthHols.get(k))).join("");
+      if (holsHTML) sumEl.textContent = `${monthHols.size} ${monthHols.size === 1 ? "Feiertag" : "Feiertage"} · automatisch eingetragen`;
+      listEl.innerHTML = holsHTML + `<div class="empty ek-empty">
         <span class="ek-empty-deco" aria-hidden="true">${leaves("left")}${sparkles()}</span>
         <div class="ek-empty-ill">${emptyClipboard()}</div>
         <div class="ek-empty-txt">
@@ -259,6 +299,7 @@ function render() {
     if (!groups.has(k)) groups.set(k, []);
     groups.get(k).push(e);
   }
+  for (const k of monthHols.keys()) if (!groups.has(k)) groups.set(k, []);
   const keys = [...groups.keys()].sort().reverse();
 
   let total = 0;
@@ -266,6 +307,7 @@ function render() {
   const absCount = new Map();
   const html = keys.map((k) => {
     const items = groups.get(k).sort((a, b) => a.start - b.start);
+    if (!items.length) return holDayHTML(k, monthHols.get(k));
     const daySum = items.reduce((s, e) => s + creditMin(e), 0);
     total += daySum;
     if (items.some((e) => isWork(e) && netMin(e) > 0)) workDays++;
@@ -305,8 +347,9 @@ function render() {
     }).join("");
     const hol = holidaysOn ? holidayName(items[0].start) : null;
     return `
-      <div class="day">
+      <div class="day${hol ? " ek-holday" : ""}">
         <div class="day-h"><span>${esc(fmtDate(items[0].start))}${hol ? ` <span class="ek-hol">${esc(hol)}</span>` : ""}</span><span class="sum">${esc(hm(daySum))} h</span></div>
+        ${hol ? holRow(hol) : ""}
         ${rows}
       </div>`;
   }).join("");
@@ -321,8 +364,31 @@ function render() {
     const n = absCount.get(kind);
     if (n) parts.push(`${n}× ${kindLabel(kind)}`);
   }
+  if (monthHols.size) parts.push(`${monthHols.size} ${monthHols.size === 1 ? "Feiertag" : "Feiertage"} (automatisch)`);
   sumEl.textContent = parts.join(" · ");
   listEl.innerHTML = html;
+}
+
+// Karte „Kommende Feiertage“ unter dem Kalender (nächste 3 ab heute)
+function renderUpcoming(util, holidaysOn) {
+  const el = root.querySelector('[data-ref="uphol"]');
+  if (!el) return;
+  if (!holidaysOn || !util.upcomingHolidays) { el.hidden = true; el.innerHTML = ""; return; }
+  const { esc, WD, pad, dayKey } = util;
+  let next = [];
+  try { next = util.upcomingHolidays(Date.now(), 3); } catch { next = []; }
+  if (!next.length) { el.hidden = true; return; }
+  const today = dayKey(Date.now());
+  el.innerHTML = `<div class="ek-uphol-h">${icon("calendar", 18)}<span>Kommende Feiertage</span><small>automatisch eingetragen</small></div>
+    <ul>${next.map((h) => {
+      const d = new Date(h.ts);
+      const k = dayKey(h.ts);
+      return `<li><button type="button" class="cal-day-link" data-day="${esc(k)}">` +
+        `<span class="ek-uphol-d">${esc(WD[d.getDay()])}, ${pad(d.getDate())}.${pad(d.getMonth() + 1)}.</span>` +
+        `<span class="ek-uphol-n">${esc(h.name)}</span>` +
+        `${k === today ? `<span class="ek-uphol-t">heute</span>` : ""}</button></li>`;
+    }).join("")}</ul>`;
+  el.hidden = false;
 }
 
 // Ortsname eines Eintrags/Abschnitts: gespeicherter Name, sonst Adresse des Start-Standorts
@@ -494,6 +560,7 @@ export function openEntryForm(entry, ctx, prefill = null) {
     <div class="fields">
       <div class="lbl">Art</div>
       <div class="chips ek-kinds" role="group" aria-label="Art des Eintrags">${chips}</div>
+      <p class="note ek-fei-hint" hidden>Gesetzliche Feiertage sind schon automatisch eingetragen. „Feiertag“ hier nur für <b>zusätzliche</b> freie Tage verwenden (z. B. 24.12. oder Betriebsfeiertag).</p>
       <div class="row">
         <label>Datum
           <input type="date" id="ef-date" value="${esc(vDate)}" required>
@@ -570,6 +637,8 @@ export function openEntryForm(entry, ctx, prefill = null) {
     const work = kind === "work";
     box.querySelectorAll(".ek-only-work").forEach((n) => { n.hidden = !work; });
     box.querySelectorAll(".ek-only-abs").forEach((n) => { n.hidden = work; });
+    const fh = box.querySelector(".ek-fei-hint");
+    if (fh) fh.hidden = kind !== "feiertag";
     if (!work && !creditTouched) {
       const r = absenceDays();
       const ts = r.days ? r.days[0] : Date.now();

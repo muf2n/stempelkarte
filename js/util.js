@@ -189,3 +189,47 @@ const KIND_LABELS = { work: "Arbeit", urlaub: "Urlaub", krank: "Krank", feiertag
 export function kindLabel(kind) {
   return KIND_LABELS[kind || "work"] || "Arbeit";
 }
+
+/* ---------- Update 5: Feiertage sichtbar machen ---------- */
+
+const HOLIDAY_SHORT = {
+  "Neujahr": "Neujahr",
+  "Heilige Drei Könige": "Hl. 3 Kön.",
+  "Ostersonntag": "Ostern",
+  "Ostermontag": "Ostermo.",
+  "Staatsfeiertag": "Staatsf.",
+  "Christi Himmelfahrt": "Chr. Himmelf.",
+  "Pfingstsonntag": "Pfingsten",
+  "Pfingstmontag": "Pfingstmo.",
+  "Fronleichnam": "Fronl.",
+  "Mariä Himmelfahrt": "Mariä Himmelf.",
+  "Nationalfeiertag": "Nationalf.",
+  "Allerheiligen": "Allerh.",
+  "Mariä Empfängnis": "Mariä Empf.",
+  "Christtag": "Christtag",
+  "Stefanitag": "Stefanitag",
+};
+
+/** Kurzform eines Feiertagsnamens für Kalenderzellen. */
+export function holidayShort(name) {
+  if (!name) return "";
+  const s = String(name);
+  return HOLIDAY_SHORT[s] || (s.length > 11 ? s.slice(0, 10) + "." : s);
+}
+
+/** Die nächsten `count` Feiertage ab dem Tag von fromTs (inklusive) → [{ts, name}]. */
+export function upcomingHolidays(fromTs, count = 3) {
+  const from = startOfDay(fromTs);
+  const fromKey = dayKey(from);
+  const n = Math.max(0, Math.trunc(Number(count) || 0));
+  const out = [];
+  for (let y = from.getFullYear(); out.length < n && y <= from.getFullYear() + 2; y++) {
+    for (const [k, name] of holidaysOf(y)) {
+      if (k < fromKey) continue;
+      const [yy, mm, dd] = k.split("-").map(Number);
+      out.push({ ts: new Date(yy, mm - 1, dd).getTime(), name });
+      if (out.length >= n) break;
+    }
+  }
+  return out;
+}

@@ -2,6 +2,7 @@
 // am PC als Dashboard mit rechter Spalte (Heute, Wochenziel, Einstempeln, Schnelle Aktionen, Legende).
 import { icon } from "../icons.js";
 import { leaves, sparkles } from "../deco.js";
+import * as reminders from "./reminders.js";
 
 let ctx = null;
 let root = null;
@@ -115,6 +116,7 @@ export function mount(el, c) {
             </label>
             <p class="note">Ohne Datum zählt das Konto ab deinem ersten Eintrag.</p>
           </div>
+          <div id="reminders-panel"></div>
           <div class="lbl">Konto</div>
           <div id="ov-account"></div>
         </div>
@@ -163,6 +165,8 @@ export function mount(el, c) {
     }));
 
   $("#ov-csv").addEventListener("click", exportCSV);
+
+  try { reminders.mount($("#reminders-panel"), ctx); } catch (err) { console.error(err); }
 
   const target = $("#ov-target");
   target.addEventListener("input", () => {
@@ -228,6 +232,7 @@ export function update(s) {
   renderRail();
   renderSettings();
   renderAccount();
+  try { reminders.update(snap); } catch (err) { console.error(err); }
 }
 
 let lastTick = 0;

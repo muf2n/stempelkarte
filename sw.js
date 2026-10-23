@@ -31,6 +31,8 @@ const SHELL = [
   "js/views/entries.js",
   "js/views/overview.js",
   "js/views/places.js",
+  "js/views/reminders.js",
+  "js/push.js",
   "js/app.js"
 ];
 
@@ -185,3 +187,44 @@ async function cacheFirst(req, cacheName, key) {
     return new Response("", { status: 504, statusText: "Offline" });
   }
 }
+
+// ---------- Erinnerungen per Push ----------
+// Der Server schickt „data-only“-Nachrichten (FCM/webpush): {data:{title, body, url, tag}}.
+self.addEventListener("push", (event) => {
+  let payload = {};
+  try { payload = event.data ? event.data.json() : {}; } catch (e) {
+    try { payload = { data: { body: event.data ? event.data.text() : "" } }; } catch (e2) { payload = {}; }
+  }
+  const n = payload.notification || {};
+  const d = payload.data || {};
+  const title = d.title || n.title || payload.title || "Stempelkarte";
+  const body = d.body || n.body || payload.body || "";
+  const url = d.url || payload.url || (payload.fcmOptions && payload.fcmOptions.link) || "./#heute";
+  const tag = d.tag || n.tag || payload.tag || "stempelkarte";
+  event.waitUntil(self.registration.showNotification(title, {
+    body,
+    icon: "icons/icon-192.png",
+    badge: "icons/icon-192.png",
+    tag,
+    renotify: true,
+    data: { url },
+  }));
+});
+
+self.addEventListener("notificationclick", (event) => {
+  event.notification.close();
+  const rel = (event.notification.data && event.notification.data.url) || "./#heute";
+  const target = new URL(rel, self.registration.scope).href;
+  event.waitUntil((async () => {
+    const list = await self.clients.matchAll({ type: "window", includeUncontrolled: true });
+    for (const c of list) {
+      if (!c.url.startsWith(self.registration.scope)) continue;
+      try {
+        await c.focus();
+        if ("navigate" in c && c.url !== target) await c.navigate(target).catch(() => {});
+        return;
+      } catch (e) { /* nächstes Fenster probieren */ }
+    }
+    if (self.clients.openWindow) await self.clients.openWindow(target);
+  })());
+});

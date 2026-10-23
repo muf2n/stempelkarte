@@ -217,6 +217,7 @@ export function mount(el, c) {
   <div class="card clock" data-r="clock">
     <div class="clock-deco" aria-hidden="true">${sparkles()}${leaves("left")}${leaves("right")}</div>
     <span class="pill" data-r="pill">Nicht eingestempelt</span>
+    <div class="hol-today" data-r="hol" hidden></div>
     <div class="big" data-r="big">0:00:00</div>
     <div class="dayprog" data-r="prog">
       <div class="progress" data-r="progwrap"><div data-r="progbar" style="width:0%"></div></div>
@@ -456,10 +457,10 @@ function renderProgress() {
   const target = Math.round(targetMin(now));
   const doneMin = Math.floor(sumSince(util.startOfDay(now).getTime()));
   let txt, pct = 0, free = false;
+  renderHoliday(now);
   if (target <= 0) {
     free = true;
-    const h = holiday(now);
-    txt = h ? `Heute frei (Feiertag: ${h})` : "Heute frei";
+    txt = "Heute frei"; // Feiertagsname steht deutlich im Hinweis darüber
     if (doneMin > 0) txt += ` · ${util.hm(doneMin)} h erfasst`;
   } else {
     txt = `heute ${util.hm(doneMin)} von ${util.hm(target)} h`;
@@ -472,6 +473,36 @@ function renderProgress() {
   $("progwrap").hidden = free;
   $("progbar").style.width = pct + "%";
   $("prog").classList.toggle("full", pct >= 100);
+}
+
+/** Feiertags-Hinweis in der Uhr-Karte: heute Feiertag oder nächster in ≤ 7 Tagen (nur Anzeige). */
+let holKey = null;
+function renderHoliday(now) {
+  const { util } = ctx;
+  const el = $("hol");
+  if (!el) return;
+  let html = "", mode = "";
+  const h = holiday(now);
+  if (h) {
+    mode = "today";
+    html = `${icon("calendar", 20)}<span>Heute ist <b>${util.esc(h)}</b> – arbeitsfrei</span>`;
+  } else if (settings().holidays !== false && util.upcomingHolidays) {
+    let next = null;
+    try { next = util.upcomingHolidays(now, 1)[0] || null; } catch { next = null; }
+    const days = next ? Math.round((next.ts - util.startOfDay(now).getTime()) / 86400000) : 99;
+    if (next && days <= 7) {
+      const d = new Date(next.ts);
+      mode = "next";
+      html = `${icon("calendar", 16)}<span>Nächster Feiertag: <b>${util.WD[d.getDay()]}, ${util.pad(d.getDate())}.${util.pad(d.getMonth() + 1)}.</b> – ${util.esc(next.name)}</span>`;
+    }
+  }
+  const key = mode + "|" + html;
+  if (key === holKey) return;
+  holKey = key;
+  el.innerHTML = html;
+  el.className = "hol-today" + (mode ? " hol-is-" + mode : "");
+  el.hidden = !html;
+  $("clock").classList.toggle("is-holiday", mode === "today");
 }
 
 /* ---------------- Hinweis-Kärtchen ---------------- */

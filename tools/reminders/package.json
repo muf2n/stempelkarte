@@ -1,0 +1,12 @@
+{
+  "name": "stempelkarte-reminders",
+  "private": true,
+  "version": "1.0.0",
+  "description": "Schickt Push-Erinnerungen der Stempelkarte (GitHub Actions).",
+  "type": "module",
+  "engines": { "node": ">=20" },
+  "scripts": { "send": "node send.mjs" },
+  "dependencies": {
+    "firebase-admin": "^12.7.0"
+  }
+}
