@@ -86,7 +86,13 @@ export async function togglePause() {
   return next;
 }
 
-/** Neuen Abschnitt in der laufenden Schicht beginnen (z. B. „Autofahren“ → „Arbeiten“). */
+/** Ort-Text für ein Abschnittsende: gespeicherter Ort, sonst Adresse (falls schon bekannt). */
+function endPlaceOf(place, loc) {
+  return place || (loc && loc.addr) || "";
+}
+
+/** Neuen Abschnitt in der laufenden Schicht beginnen (z. B. „Autofahren“ → „Arbeiten“).
+ *  Der bisherige letzte Abschnitt endet dort, wo der neue beginnt (endLoc/endPlace). */
 export async function addSegment({ activity = DEFAULT_ACTIVITY, placeId = null, place = "", loc = null } = {}) {
   const r = store.get().running;
   if (!r) throw new Error("Du bist nicht eingestempelt.");
@@ -94,24 +100,46 @@ export async function addSegment({ activity = DEFAULT_ACTIVITY, placeId = null, 
   const last = segs[segs.length - 1];
   const start = Math.max(Date.now(), (last && last.start) || 0);
   const seg = { start, activity: activity || DEFAULT_ACTIVITY, placeId: placeId ?? null, place: place || "", loc: loc ?? null };
-  const next = { ...r, segments: [...segs, seg] };
+  const prev = segs.slice(0, -1);
+  if (last) prev.push({ ...last, endLoc: loc ?? null, endPlace: endPlaceOf(place, loc) });
+  const next = { ...r, segments: [...prev, seg] };
   await store.setRunning(next);
   return seg;
 }
 
-/** Abschnitte mit Ende für den Eintrag (nur Abschnitte, die vor dem Schichtende beginnen). */
-function closeSegments(r, end) {
-  const segs = segmentsOf(r).filter((s, i) => i === 0 || s.start < end);
-  return segs.map((s, i) => ({
-    ...s,
-    start: i === 0 ? r.start : s.start,
-    end: i + 1 < segs.length ? segs[i + 1].start : end,
-  }));
+/** Abschnitte mit Ende für den Eintrag (nur Abschnitte, die vor dem Schichtende beginnen).
+ *  Der letzte Abschnitt endet am Ausstempel-Standort (wenn bekannt). */
+function closeSegments(r, end, outLoc = null, outPlace = "") {
+  const all = segmentsOf(r);
+  const segs = all.filter((s, i) => i === 0 || s.start < end);
+  return segs.map((s, i) => {
+    const isLast = i + 1 === segs.length;
+    let endLoc = s.endLoc ?? null;
+    let endPlace = s.endPlace || "";
+    if (isLast) {
+      if (outLoc) {
+        endLoc = outLoc;
+        endPlace = endPlaceOf(outPlace, outLoc);
+      } else if (segs.length < all.length || !endLoc) {
+        // Ende stammt sonst von einem weggefallenen Abschnitt → unbekannt
+        endLoc = null;
+        endPlace = "";
+      }
+    }
+    return {
+      ...s,
+      start: i === 0 ? r.start : s.start,
+      end: isLast ? end : segs[i + 1].start,
+      endLoc,
+      endPlace,
+    };
+  });
 }
 
 /** Schicht beenden: ERST setRunning(null), DANN Eintrag speichern. Gibt den Eintrag zurück.
- *  Optional `end` (ms) für eine nachträglich gewählte Endzeit (Standard: jetzt). */
-export async function clockOut({ outLoc = null, end = null } = {}) {
+ *  Optional `end` (ms) für eine nachträglich gewählte Endzeit (Standard: jetzt),
+ *  `outPlace` = Name des gespeicherten Orts beim Ausstempeln (sonst Adresse aus outLoc). */
+export async function clockOut({ outLoc = null, end = null, outPlace = "" } = {}) {
   const r = store.get().running;
   if (!r) throw new Error("Du bist nicht eingestempelt.");
   const now = Number.isFinite(end) && end > r.start ? Math.min(end, Date.now()) : Date.now();
@@ -125,7 +153,7 @@ export async function clockOut({ outLoc = null, end = null } = {}) {
     note: r.note || "",
     inLoc: r.inLoc ?? null,
     outLoc: outLoc ?? null,
-    segments: closeSegments(r, now),
+    segments: closeSegments(r, now, outLoc ?? null, outPlace || ""),
   };
   await store.setRunning(null);
   await store.saveEntry(entry);
