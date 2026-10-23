@@ -67,6 +67,56 @@ function placeLabel(name, loc) {
   return "Ort unbekannt";
 }
 
+/* ---- Tätigkeitsfarben & „von → bis“ ---- */
+
+/** Slug einer Tätigkeit (für data-act) nach UPDATE3-SPEC, z. B. „Material holen“ → „material-holen“. */
+function actSlug(name) {
+  return String(name || "Arbeiten").toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "")
+    .replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "");
+}
+/** Einfacher String-Hash → Farbton 0–359 (eigene Tätigkeiten; CSS überschreibt die bekannten). */
+function actHue(name) {
+  const str = String(name || "Arbeiten");
+  let h = 0;
+  for (let i = 0; i < str.length; i++) h = (h * 31 + str.charCodeAt(i)) >>> 0;
+  return h % 360;
+}
+/** Attribute für ein Element, das eine Tätigkeit darstellt. */
+function actAttrs(name) {
+  return ` data-act="${ctx.util.esc(actSlug(name))}" style="--act-hue:${actHue(name)}"`;
+}
+function isDrive(activity) { return actSlug(activity) === "autofahren"; }
+
+/** Luftlinie zwischen zwei Standorten als „ca. 12 km“ (oder null). */
+function airDist(a, b) {
+  if (!a || !b || typeof a.lat !== "number" || typeof b.lat !== "number") return null;
+  let m = 0;
+  try { m = ctx.geo.distanceM(a, b); } catch { return null; }
+  if (!Number.isFinite(m)) return null;
+  if (m < 1000) return `ca. ${Math.max(100, Math.round(m / 100) * 100)} m`;
+  return `ca. ${Math.round(m / 1000)} km`;
+}
+
+/** Ortsangabe eines Abschnitts als HTML: „von A → nach B“ (+ Luftlinie, Dauer) oder nur „A“.
+ *  `end` = Endzeit (ms) für die Dauer; `current` = laufender Abschnitt. */
+function routeHTML(g, { current = false, end = null } = {}) {
+  const { util } = ctx;
+  const from = placeLabel(g.place || ((findPlace(g.placeId) || {}).name) || "", g.loc);
+  if (current) {
+    if (isDrive(g.activity)) return `von ${util.esc(from)} → <i>unterwegs …</i>`;
+    return util.esc(from);
+  }
+  const hasEnd = !!(g.endLoc || g.endPlace);
+  const to = hasEnd ? placeLabel(g.endPlace || "", g.endLoc) : "";
+  const knownTo = g.endPlace || (g.endLoc && g.endLoc.addr) || "";
+  if (!hasEnd || !(isDrive(g.activity) || (knownTo && knownTo !== from))) return util.esc(from);
+  let html = `von ${util.esc(from)} → nach ${util.esc(to)}`;
+  const d = airDist(g.loc, g.endLoc);
+  if (d) html += ` · <span class="seg-dist">${util.esc(d)} <small>Luftlinie</small></span>`;
+  if (Number.isFinite(end) && end > g.start) html += ` · <span class="seg-dur">${util.hm(Math.floor((end - g.start) / 60000))} h</span>`;
+  return html;
+}
+
 function places() { return (snap && snap.places) || []; }
 function settings() {
   return Object.assign({
@@ -252,6 +302,20 @@ function renderClock() {
   card.classList.toggle("running", st === "running");
   card.classList.toggle("paused", st === "paused");
   card.classList.toggle("done", st === "done");
+  {
+    const rr = snap && snap.running;
+    const ca = rr ? segs(rr)[segs(rr).length - 1].activity || "Arbeiten" : "";
+    const slug = ca ? actSlug(ca) : "";
+    if ((card.dataset.act || "") !== slug) {
+      if (slug) {
+        card.dataset.act = slug;
+        card.style.setProperty("--act-hue", String(actHue(ca)));
+      } else {
+        delete card.dataset.act;
+        card.style.removeProperty("--act-hue");
+      }
+    }
+  }
 
   const r = snap && snap.running;
   const e = st === "done" ? doneEntry() : null;
@@ -312,12 +376,15 @@ function renderClock() {
   if (r) {
     const ss = segs(r);
     const cur = ss[ss.length - 1];
-    segHTML = `<b>${util.esc(cur.activity || "Arbeiten")}</b>` +
+    segHTML = `<b${actAttrs(cur.activity)}>${util.esc(cur.activity || "Arbeiten")}</b>` +
       `<span>seit ${util.clock(cur.start)} · <span data-r="segdur">0:00</span> h</span>`;
+    if (isDrive(cur.activity)) segHTML += `<span class="seg-route">${routeHTML(cur, { current: true })}</span>`;
     if (ss.length > 1) {
-      listHTML = ss.map((g) => {
-        const pn = placeLabel(g.place || ((findPlace(g.placeId) || {}).name) || "", g.loc);
-        return `<li><b>${util.clock(g.start)}</b> ${util.esc(g.activity || "Arbeiten")} – ${util.esc(pn)}</li>`;
+      listHTML = ss.map((g, i) => {
+        const last = i + 1 === ss.length;
+        const route = routeHTML(g, { current: last, end: last ? null : ss[i + 1].start });
+        return `<li${actAttrs(g.activity)}><b>${util.clock(g.start)}</b> ` +
+          `<span class="seg-act">${util.esc(g.activity || "Arbeiten")}</span> – <span class="seg-route">${route}</span></li>`;
       }).join("");
     }
   }
@@ -328,6 +395,14 @@ function renderClock() {
     const sn = $("segnow");
     sn.innerHTML = segHTML;
     sn.hidden = !segHTML;
+    if (r) {
+      const ca = segs(r)[segs(r).length - 1].activity || "Arbeiten";
+      sn.dataset.act = actSlug(ca);
+      sn.style.setProperty("--act-hue", String(actHue(ca)));
+    } else {
+      delete sn.dataset.act;
+      sn.style.removeProperty("--act-hue");
+    }
     const sl = $("seglist");
     sl.innerHTML = listHTML;
     sl.hidden = !listHTML;
@@ -834,7 +909,14 @@ async function doClockOut(btn) {
     };
     pendingOut = true;
     try {
-      entry = await timer.clockOut({ outLoc });
+      let outPlace = "";
+      if (outLoc) {
+        try {
+          const m = ctx.geofence.matchPlace(outLoc, places(), set.defaultRadius);
+          if (m) outPlace = m.place.name;
+        } catch { /* ohne Ort */ }
+      }
+      entry = await timer.clockOut({ outLoc, outPlace });
       if (entry) done = entry;
       buzz([40, 60, 40]);
       ui.toast(`Ausgestempelt · ${util.hm(util.netMin(done))} h`);
@@ -875,7 +957,24 @@ async function fillEntryAddrs(id) {
   if (outAddr && e.outLoc && !e.outLoc.addr) next.outLoc = { ...e.outLoc, addr: outAddr };
   if (inAddr && e.inLoc && !e.inLoc.addr) next.inLoc = { ...e.inLoc, addr: inAddr };
   if (inAddr && !e.placeId && !e.place) next.place = inAddr;
-  if (next.outLoc === e.outLoc && next.inLoc === e.inLoc && next.place === e.place) return;
+  // Abschnitte: Ende des letzten (Ausstempel-Ort) bzw. Beginn des ersten ergänzen
+  if (Array.isArray(e.segments) && e.segments.length) {
+    const list = e.segments.slice();
+    let segChanged = false;
+    const li = list.length - 1;
+    const lg = list[li];
+    if (outAddr && lg.endLoc && e.outLoc && lg.endLoc.ts === e.outLoc.ts) {
+      list[li] = { ...lg, endLoc: { ...lg.endLoc, addr: lg.endLoc.addr || outAddr }, endPlace: lg.endPlace || outAddr };
+      segChanged = true;
+    }
+    const g0 = list[0];
+    if (inAddr && g0.loc && e.inLoc && g0.loc.ts === e.inLoc.ts && (!g0.loc.addr || (!g0.placeId && !g0.place))) {
+      list[0] = { ...g0, loc: { ...g0.loc, addr: g0.loc.addr || inAddr }, place: (!g0.placeId && !g0.place) ? inAddr : g0.place };
+      segChanged = true;
+    }
+    if (segChanged) next.segments = list;
+  }
+  if (next.outLoc === e.outLoc && next.inLoc === e.inLoc && next.place === e.place && next.segments === e.segments) return;
   try { await store.saveEntry(next); } catch { /* Toast kommt vom Store */ }
 }
 
@@ -925,7 +1024,7 @@ function renderActs() {
   if (key === actsKey) return;
   actsKey = key;
   $("acts").innerHTML = list.map((a) =>
-    `<button type="button" class="chip" data-act-name="${util.esc(a)}" aria-pressed="${a === cur ? "true" : "false"}">${util.esc(a)}</button>`
+    `<button type="button" class="chip" data-act-name="${util.esc(a)}"${actAttrs(a)} aria-pressed="${a === cur ? "true" : "false"}">${util.esc(a)}</button>`
   ).join("");
 }
 
@@ -945,7 +1044,7 @@ function openSegSheet() {
   const ss = segs(snap.running);
   const curAct = ss[ss.length - 1].activity || "Arbeiten";
   const chipsHTML = () => activities().map((a) =>
-    `<button type="button" class="chip" data-a="${util.esc(a)}" aria-pressed="${a === curAct ? "true" : "false"}">${util.esc(a)}</button>`
+    `<button type="button" class="chip" data-a="${util.esc(a)}"${actAttrs(a)} aria-pressed="${a === curAct ? "true" : "false"}">${util.esc(a)}</button>`
   ).join("");
   ui.openSheet({
     title: "Abschnitt wechseln",
@@ -1044,6 +1143,13 @@ async function fillSegmentAddr(segStart, loc) {
   if (!g.placeId && !g.place) ng.place = addr;
   const list = r.segments.slice();
   list[i] = ng;
+  // Der vorige Abschnitt endet hier → sein Ziel (endPlace) ebenso ergänzen
+  if (i > 0) {
+    const p = list[i - 1];
+    if (p.endLoc && loc.ts != null && p.endLoc.ts === loc.ts) {
+      list[i - 1] = { ...p, endLoc: { ...p.endLoc, addr: p.endLoc.addr || addr }, endPlace: p.endPlace || addr };
+    }
+  }
   try { await store.setRunning({ ...r, segments: list }); } catch { /* Toast kommt vom Store */ }
 }
 
