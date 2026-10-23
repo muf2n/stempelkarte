@@ -49,8 +49,9 @@ export function mount(el, c) {
         </label>
         <label class="rm-inline">bis
           <input type="time" id="rm-start-time" step="300">
-          <span>Uhr (an Arbeitstagen, nicht an Feiertagen)</span>
+          <span>Uhr</span>
         </label>
+        <p class="note">Nur an Arbeitstagen – nicht an Feiertagen, im Urlaub oder Krankenstand.</p>
       </div>
       <div class="rm-opt">
         <label class="switch">
@@ -61,6 +62,7 @@ export function mount(el, c) {
           <input type="number" id="rm-end-hours" inputmode="decimal" min="1" max="24" step="0.5">
           <span>Stunden</span>
         </label>
+        <p class="note">Falls du das Ausstempeln vergessen hast.</p>
       </div>
       <div class="rm-opt">
         <label class="switch">
@@ -159,7 +161,7 @@ async function renderStatus() {
   statusKey = key;
 
   let cls = "", html = "";
-  let showAllow = true, showTest = st.supported && st.permission === "granted";
+  let showAllow = true, showTest = cloud && st.supported && st.permission !== "denied";
   if (!cloud) {
     cls = "info";
     html = `${icon("user", 18)}<span>Erinnerungen gibt es nur mit Anmeldung (Google), weil sie vom Server kommen. Melde dich unten bei „Konto“ an.</span>`;

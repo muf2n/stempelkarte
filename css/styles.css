@@ -2447,7 +2447,9 @@ body::before {
 .rm-inline input { width: auto; min-width: 0; flex: 0 0 auto; }
 .rm-inline input[type="time"] { width: 7.2em; }
 .rm-inline input[type="number"] { width: 5em; }
-.rm-inline span { flex: 1 1 140px; min-width: 0; }
+.rm-inline span { flex: 0 1 auto; min-width: 0; }
+.rm-opt .note { margin: 0; font-size: .82rem; }
+.rm-main input:disabled { opacity: .55; }
 .rm-status {
   display: flex; gap: 10px; align-items: flex-start;
   padding: 10px 14px; border-radius: var(--r-sm);
