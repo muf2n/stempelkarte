@@ -25,6 +25,28 @@ export function vienna(ts) {
 
 export function dayKeyVienna(ts) { return vienna(ts).key; }
 
+/** Wiener Ortszeit (y, m 1–12, d, hh, mm) → Zeitstempel (berücksichtigt Sommer-/Winterzeit). */
+export function viennaToTs(y, m, d, hh, mm) {
+  const want = Date.UTC(y, m - 1, d, hh, mm);
+  let ts = want;
+  for (let i = 0; i < 3; i++) {
+    const v = vienna(ts);
+    const diff = Date.UTC(v.y, v.m - 1, v.d, v.hh, v.mm) - want;
+    if (diff === 0) break;
+    ts -= diff;
+  }
+  return ts;
+}
+
+/** Gilt dieser Plan am Wiener Tag v? (aktiv; Wochentag in days bzw. einmaliges Datum) */
+export function planAppliesOn(plan, v) {
+  if (!plan || !plan.id || plan.enabled === false) return false;
+  if (!/^\d{1,2}:\d{2}$/.test(String(plan.time || ""))) return false;
+  const days = Array.isArray(plan.days) ? plan.days.map(Number) : [];
+  if (days.length) return days.includes(v.wd);
+  return !!plan.date && plan.date === v.key;
+}
+
 /* ---- Feiertage Österreich (gleiche Berechnung wie js/util.js) ---- */
 function easter(y) {
   const a = y % 19, b = Math.floor(y / 100), c = y % 100;
@@ -102,8 +124,8 @@ function fmtHours(ms) {
  * @param settings     users/{uid}/meta/settings (oder null)
  * @param running      laufende Schicht ({start, pauseMs, pauseStart}) oder null
  * @param todayEntries Einträge mit Beginn am heutigen Wiener Tag
- * @param pushlog      users/{uid}/meta/pushlog ({startSent, endSentFor, pauseSentFor}) oder null
- * @returns Array von {type, title, body, tag, url, log}
+ * @param pushlog      users/{uid}/meta/pushlog ({startSent, endSentFor, pauseSentFor, planSent{}, snooze{}, snoozeSent{}}) oder null
+ * @returns Array von {type, title, body, tag, url, log: [[Feldpfad[], Wert], …]} (für pushlog-update)
  */
 export function decide(now, settings, running, todayEntries, pushlog) {
   const s = settings || {};
@@ -113,12 +135,42 @@ export function decide(now, settings, running, todayEntries, pushlog) {
   if (!rem.enabled) return out;
   const v = vienna(now);
 
-  // Start-Erinnerung
-  if (rem.start.enabled && !running) {
+  const isHoliday = s.holidays !== false && holidaysOf(v.y).has(v.key);
+  const list = (Array.isArray(todayEntries) ? todayEntries : []).filter((e) => e && dayKeyVienna(Number(e.start)) === v.key);
+  const absent = list.some((e) => e.kind && e.kind !== "work");
+  const plans = (Array.isArray(s.plans) ? s.plans : []).filter((p) => planAppliesOn(p, v));
+  const planSent = (log.planSent && typeof log.planSent === "object") ? log.planSent : {};
+  const snooze = (log.snooze && typeof log.snooze === "object") ? log.snooze : {};
+  const snoozeSent = (log.snoozeSent && typeof log.snoozeSent === "object") ? log.snoozeSent : {};
+
+  // Geplante Schichten: Push zur Planzeit (nachholen höchstens bis +60 min) und bei „Später erinnern“
+  if (!running && !isHoliday && !absent) {
+    for (const p of plans) {
+      const k = `${p.id}:${v.key}`;
+      const [ph, pm] = String(p.time).split(":").map(Number);
+      const due = viennaToTs(v.y, v.m, v.d, ph, pm);
+      const sz = Number(snooze[k]);
+      if (sz === -1) continue; // „Heute nicht“
+      const place = String(p.place || "").trim() || "deinem Arbeitsort";
+      const msg = {
+        title: `Schicht bei ${place}`,
+        tag: `plan-${p.id}`,
+        url: `./?plan=${encodeURIComponent(p.id)}&due=${due}#heute`,
+      };
+      if (now >= due && now < due + HOUR && !planSent[k]) {
+        out.push({ type: "plan", ...msg, body: `Es ist ${pad(ph)}:${pad(pm)} – tippe, um einzustempeln.`,
+          log: [[["planSent", k], due]] });
+      } else if (sz > 0 && now >= sz && now < sz + HOUR && Number(snoozeSent[k]) !== sz) {
+        out.push({ type: "plan-snooze", ...msg, body: `Erinnerung: Schicht um ${pad(ph)}:${pad(pm)} – tippe, um einzustempeln.`,
+          log: [[["snoozeSent", k], sz]] });
+      }
+    }
+  }
+
+  // Start-Erinnerung (entfällt an Tagen mit geplanter Schicht – dann übernimmt der Plan)
+  if (rem.start.enabled && !running && plans.length === 0) {
     const days = Array.isArray(s.workDays) ? s.workDays.map(Number) : [1, 2, 3, 4, 5];
     const isWorkDay = days.includes(v.wd);
-    const isHoliday = s.holidays !== false && holidaysOf(v.y).has(v.key);
-    const list = (Array.isArray(todayEntries) ? todayEntries : []).filter((e) => e && dayKeyVienna(Number(e.start)) === v.key);
     const [th, tm] = rem.start.time.split(":").map(Number);
     const nowMin = v.hh * 60 + v.mm;
     const startMin = th * 60 + tm;
@@ -130,7 +182,7 @@ export function decide(now, settings, running, todayEntries, pushlog) {
         body: `Es ist ${pad(v.hh)}:${pad(v.mm)} – tippe hier, um einzustempeln.`,
         tag: "stempel-start",
         url: "./#heute",
-        log: { startSent: v.key },
+        log: [[["startSent"], v.key]],
       });
     }
   }
@@ -146,7 +198,7 @@ export function decide(now, settings, running, todayEntries, pushlog) {
         body: `Du bist seit ${fmtHours(gross)} h eingestempelt. Ausstempeln vergessen?`,
         tag: "stempel-end",
         url: "./#heute",
-        log: { endSentFor: start },
+        log: [[["endSentFor"], start]],
       });
     }
     // Pausen-Erinnerung (einmal pro Schicht): netto > 6 h ohne Pause
@@ -158,7 +210,7 @@ export function decide(now, settings, running, todayEntries, pushlog) {
         body: "Du arbeitest seit über 6 Stunden ohne Pause.",
         tag: "stempel-pause",
         url: "./#heute",
-        log: { pauseSentFor: start },
+        log: [[["pauseSentFor"], start]],
       });
     }
   }

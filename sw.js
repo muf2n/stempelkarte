@@ -217,12 +217,13 @@ self.addEventListener("notificationclick", (event) => {
   const target = new URL(rel, self.registration.scope).href;
   event.waitUntil((async () => {
     const list = await self.clients.matchAll({ type: "window", includeUncontrolled: true });
+    // Bestehendes App-Fenster auf genau diese url schicken (z. B. ./?plan=…&due=…#heute) und fokussieren
     for (const c of list) {
       if (!c.url.startsWith(self.registration.scope)) continue;
       try {
-        await c.focus();
-        if ("navigate" in c && c.url !== target) await c.navigate(target).catch(() => {});
-        return;
+        let win = c;
+        if (c.url !== target && "navigate" in c) win = (await c.navigate(target)) || null;
+        if (win) { await win.focus().catch(() => {}); return; }
       } catch (e) { /* nächstes Fenster probieren */ }
     }
     if (self.clients.openWindow) await self.clients.openWindow(target);

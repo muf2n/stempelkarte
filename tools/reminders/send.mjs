@@ -30,6 +30,41 @@ const BAD_TOKEN = new Set([
   "messaging/invalid-argument",
 ]);
 
+/** pushlog nur in eigenen Feldern ändern (die App schreibt dort „snooze“). */
+async function writeLog(ref, pairs) {
+  const args = [];
+  for (const [path, val] of pairs) args.push(new FieldPath(...path), val);
+  try {
+    await ref.update(...args);
+  } catch (e) {
+    if (e && (e.code === 5 || /NOT_FOUND|No document/i.test(String(e.message)))) {
+      // Dokument gibt es noch nicht → anlegen (merge, falls die App gleichzeitig schreibt)
+      const obj = {};
+      for (const [path, val] of pairs) {
+        let o = obj;
+        path.slice(0, -1).forEach((p) => { o = o[p] = o[p] || {}; });
+        o[path[path.length - 1]] = val;
+      }
+      await ref.set(obj, { merge: true });
+    } else throw e;
+  }
+}
+
+/** Alte Tages-Schlüssel (planId:YYYY-MM-DD) aus pushlog entfernen, älter als 7 Tage. */
+async function pruneLog(ref, log, todayKey) {
+  const limit = dayKeyVienna(Date.now() - 7 * 86400000);
+  const args = [];
+  for (const field of ["planSent", "snooze", "snoozeSent"]) {
+    const m = log && log[field];
+    if (!m || typeof m !== "object") continue;
+    for (const k of Object.keys(m)) {
+      const day = k.split(":").pop();
+      if (/^\d{4}-\d{2}-\d{2}$/.test(day) && day < limit) args.push(new FieldPath(field, k), FieldValue.delete());
+    }
+  }
+  if (args.length) await ref.update(...args).catch(() => {});
+}
+
 const now = Date.now();
 const todayKey = dayKeyVienna(now);
 console.log(`Lauf um ${new Date(now).toISOString()} (${TZ}: ${todayKey})`);
@@ -57,6 +92,7 @@ for (const userRef of refs) {
     const todayEntries = entSnap.docs.map((d) => d.data()).filter((e) => dayKeyVienna(Number(e.start)) === todayKey);
 
     const due = decide(now, settings, running, todayEntries, pushlog);
+    if (logSnap.exists) await pruneLog(meta.doc("pushlog"), pushlog, todayKey);
     let live = tokens;
     for (const n of due) {
       if (!live.length) break;
@@ -78,7 +114,7 @@ for (const userRef of refs) {
         console.log(`[${uid}] ${bad.length} ungültige(s) Token entfernt`);
       }
       if (res.successCount > 0) {
-        await meta.doc("pushlog").set({ ...n.log, updatedAt: now }, { merge: true });
+        await writeLog(meta.doc("pushlog"), [...n.log, [["updatedAt"], now]]);
         sent++;
         console.log(`[${uid}] gesendet: ${n.type}`);
       }
