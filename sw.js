@@ -1,10 +1,12 @@
-// Service Worker der Stempelkarte: cacht die App-Shell für Offline-Nutzung.
-// Navigation: zuerst Netz, sonst index.html aus dem Cache. Eigene Dateien: stale-while-revalidate.
-// Fremde Domains (Firebase, Google APIs, Nominatim, OSM, unpkg) werden nicht angefasst –
-// einzige Ausnahme: Schriftdateien von fonts.gstatic.com (cache-first).
+// Service Worker der Stempelkarte: sorgt für automatische Updates und Offline-Nutzung.
+// Eigene Dateien (HTML, JS, CSS, Manifest): zuerst Netz (neue Version kommt sofort an), sonst Cache.
+// Icons und Schriftdateien (fonts.gstatic.com): cache-first.
+// Alle anderen fremden Domains (Firebase, Google APIs, Nominatim, OSM, unpkg) werden nicht angefasst.
 
-const VERSION = "stempelkarte-v1";
-const FONT_CACHE = "stempelkarte-fonts-v1";
+const VERSION = "20261024-0105"; // wird beim Veröffentlichen automatisch ersetzt
+const CACHE = "stempelkarte-" + VERSION;
+const FONT_CACHE = "stempelkarte-fonts"; // versionsunabhängig, bleibt erhalten
+const NET_TIMEOUT_MS = 4000; // bei schlechtem Netz nach dieser Zeit auf den Cache ausweichen
 
 const SHELL = [
   "./",
@@ -36,9 +38,17 @@ function scopeUrl(path) {
   return new URL(path, self.registration.scope).href;
 }
 
+// Cache-Schlüssel ohne ?v=… usw., damit Offline-Treffer unabhängig vom Query-String sind
+function plainUrl(url) {
+  const u = new URL(url);
+  return u.origin + u.pathname;
+}
+
 self.addEventListener("install", (event) => {
+  // Neue Version soll nicht warten, bis alle Fenster geschlossen sind
+  self.skipWaiting();
   event.waitUntil((async () => {
-    const cache = await caches.open(VERSION);
+    const cache = await caches.open(CACHE);
     // Einzeln und fehlertolerant: eine fehlende Datei bricht die Installation nicht ab.
     await Promise.all(SHELL.map(async (path) => {
       try {
@@ -51,13 +61,14 @@ self.addEventListener("install", (event) => {
 
 self.addEventListener("activate", (event) => {
   event.waitUntil((async () => {
-    const keep = new Set([VERSION, FONT_CACHE]);
+    const keep = new Set([CACHE, FONT_CACHE]);
     const keys = await caches.keys();
-    await Promise.all(keys.map((k) => (k.startsWith("stempelkarte-") && !keep.has(k)) ? caches.delete(k) : null));
+    await Promise.all(keys.map((k) => (k.startsWith("stempelkarte") && !keep.has(k)) ? caches.delete(k) : null));
     await self.clients.claim();
   })());
 });
 
+// Abwärtskompatibel: ältere Seiten schicken evtl. noch diese Nachricht
 self.addEventListener("message", (event) => {
   if (event.data && event.data.type === "SKIP_WAITING") self.skipWaiting();
 });
@@ -65,69 +76,110 @@ self.addEventListener("message", (event) => {
 self.addEventListener("fetch", (event) => {
   const req = event.request;
   if (req.method !== "GET") return;
-  const url = new URL(req.url);
+  let url;
+  try { url = new URL(req.url); } catch (e) { return; }
 
   // Schriftdateien: cache-first
   if (url.hostname === "fonts.gstatic.com") {
-    event.respondWith(cacheFirst(req, FONT_CACHE));
+    event.respondWith(cacheFirst(req, FONT_CACHE, req));
     return;
   }
 
   // Alle anderen fremden Domains durchlassen
   if (url.origin !== self.location.origin) return;
 
+  // Nur Dateien innerhalb des App-Bereichs
+  if (!req.url.startsWith(self.registration.scope)) return;
+
   if (req.mode === "navigate") {
-    event.respondWith(networkFirstNav(req));
+    event.respondWith(networkFirstNav(event, req));
     return;
   }
 
-  event.respondWith(staleWhileRevalidate(event, req));
+  // Icons: cache-first
+  if (url.pathname.startsWith(new URL(scopeUrl("icons/")).pathname)) {
+    event.respondWith(cacheFirst(req, CACHE, plainUrl(req.url)));
+    return;
+  }
+
+  event.respondWith(networkFirst(event, req));
 });
 
-async function networkFirstNav(req) {
-  const cache = await caches.open(VERSION);
-  try {
-    const res = await fetch(req);
-    if (res && res.ok) {
-      const u = new URL(req.url);
-      const indexUrl = scopeUrl("index.html");
-      const scopeRoot = scopeUrl("./");
-      const plain = u.origin + u.pathname;
-      if (plain === indexUrl || plain === scopeRoot) cache.put(indexUrl, res.clone()).catch(() => {});
+// Wartet höchstens ms auf das Netz; liefert null bei Zeitüberschreitung
+function withTimeout(promise, ms) {
+  return new Promise((resolve) => {
+    const t = setTimeout(() => resolve(null), ms);
+    promise.then((v) => { clearTimeout(t); resolve(v); }, () => { clearTimeout(t); resolve(null); });
+  });
+}
+
+async function networkFirst(event, req) {
+  const cache = await caches.open(CACHE);
+  const key = plainUrl(req.url);
+  // "no-cache": beim Server nachfragen (ETag), damit der Browser-HTTP-Cache keine alte Datei liefert
+  const network = fetch(req, { cache: "no-cache" }).then((res) => {
+    if (res && res.ok && res.type === "basic") {
+      const copy = res.clone();
+      event.waitUntil(cache.put(key, copy).catch(() => {}));
     }
     return res;
+  });
+  network.catch(() => {}); // unbehandelte Ablehnung vermeiden
+
+  const cached = await cache.match(key) || await cache.match(req, { ignoreSearch: true });
+  if (cached) {
+    const res = await withTimeout(network, NET_TIMEOUT_MS);
+    if (res && (res.ok || res.status < 500)) return res;
+    return cached;
+  }
+  try {
+    return await network;
   } catch (e) {
-    const cached = (await cache.match(scopeUrl("index.html"))) ||
-                   (await cache.match(scopeUrl("./"))) ||
-                   (await cache.match(req, { ignoreSearch: true }));
-    if (cached) return cached;
-    return new Response("<!doctype html><meta charset=utf-8><title>Offline</title><p>Du bist offline.</p>",
+    return new Response("", { status: 504, statusText: "Offline" });
+  }
+}
+
+async function networkFirstNav(event, req) {
+  const cache = await caches.open(CACHE);
+  const indexUrl = scopeUrl("index.html");
+  const rootUrl = scopeUrl("./");
+  const plain = plainUrl(req.url);
+  const isShell = plain === indexUrl || plain === rootUrl;
+
+  let netReq = req;
+  try { netReq = new Request(req, { cache: "no-cache" }); } catch (e) { netReq = req; }
+  const network = fetch(netReq).then((res) => {
+    if (res && res.ok && res.type === "basic" && isShell) {
+      const copy = res.clone();
+      event.waitUntil(cache.put(indexUrl, copy).catch(() => {}));
+    }
+    return res;
+  });
+  network.catch(() => {});
+
+  const cached = (await cache.match(indexUrl)) ||
+                 (await cache.match(rootUrl)) ||
+                 (await cache.match(req, { ignoreSearch: true }));
+  if (cached) {
+    const res = await withTimeout(network, NET_TIMEOUT_MS);
+    if (res && res.status < 500) return res;
+    return cached;
+  }
+  try {
+    return await network;
+  } catch (e) {
+    return new Response("<!doctype html><meta charset=utf-8><meta name=viewport content=\"width=device-width,initial-scale=1\"><title>Offline</title><p style=\"font-family:sans-serif;padding:16px\">Du bist offline. Bitte versuche es gleich noch einmal.</p>",
       { status: 503, headers: { "Content-Type": "text/html; charset=utf-8" } });
   }
 }
 
-async function staleWhileRevalidate(event, req) {
-  const cache = await caches.open(VERSION);
-  const cached = await cache.match(req, { ignoreSearch: true });
-  const network = fetch(req).then((res) => {
-    if (res && res.ok && res.type === "basic") cache.put(req, res.clone()).catch(() => {});
-    return res;
-  }).catch(() => null);
-  if (cached) {
-    event.waitUntil(network);
-    return cached;
-  }
-  const res = await network;
-  return res || new Response("", { status: 504, statusText: "Offline" });
-}
-
-async function cacheFirst(req, cacheName) {
+async function cacheFirst(req, cacheName, key) {
   const cache = await caches.open(cacheName);
-  const cached = await cache.match(req);
+  const cached = await cache.match(key);
   if (cached) return cached;
   try {
     const res = await fetch(req);
-    if (res && (res.ok || res.type === "opaque")) cache.put(req, res.clone()).catch(() => {});
+    if (res && (res.ok || res.type === "opaque")) cache.put(key, res.clone()).catch(() => {});
     return res;
   } catch (e) {
     return new Response("", { status: 504, statusText: "Offline" });

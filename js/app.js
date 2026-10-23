@@ -267,19 +267,77 @@ window.addEventListener("unhandledrejection", (ev) => {
 });
 
 // ---------- Service Worker ----------
+// Updates kommen automatisch: neuer SW übernimmt sofort (skipWaiting/claim), die Seite lädt
+// dann einmal neu – aber nie mitten in einer Eingabe oder bei offenem Blatt.
+const UPDATED_FLAG = "stempelkarte.updated";
+const RELOAD_TS_KEY = "stempelkarte.reloadTs";
+const UPDATE_EVERY_MS = 30 * 60 * 1000;
+
+function ssGet(k) { try { return sessionStorage.getItem(k); } catch { return null; } }
+function ssSet(k, v) { try { sessionStorage.setItem(k, v); } catch { /* egal */ } }
+function ssDel(k) { try { sessionStorage.removeItem(k); } catch { /* egal */ } }
+
+// Nach einem automatischen Neuladen kurz bestätigen
+if (ssGet(UPDATED_FLAG) === "1") {
+  ssDel(UPDATED_FLAG);
+  setTimeout(() => { try { ui.toast("App aktualisiert ✓", 2400); } catch { /* egal */ } }, 600);
+}
+
 if ("serviceWorker" in navigator) {
+  // War beim Laden schon ein SW aktiv? Wenn nicht, ist das die Erstinstallation → kein Neuladen nötig.
+  const hadController = !!navigator.serviceWorker.controller;
+  let reloadPending = false;
+  let reloaded = false;
+  let swReg = null;
+
+  const isBusy = () => {
+    const sheet = document.getElementById("sheet-root");
+    if (sheet && sheet.children.length > 0) return true;
+    const a = document.activeElement;
+    if (a && a !== document.body && (a.matches("input, textarea, select") || a.isContentEditable)) return true;
+    return false;
+  };
+
+  const doReload = () => {
+    if (reloaded) return;
+    // Schutz gegen Schleifen: höchstens ein automatisches Neuladen pro 30 s
+    const last = Number(ssGet(RELOAD_TS_KEY) || 0);
+    if (Date.now() - last < 30000) { reloadPending = false; return; }
+    reloaded = true;
+    reloadPending = false;
+    ssSet(RELOAD_TS_KEY, String(Date.now()));
+    ssSet(UPDATED_FLAG, "1");
+    location.reload();
+  };
+
+  const tryReload = () => {
+    if (!reloadPending || reloaded) return;
+    if (document.visibilityState === "hidden" || !isBusy()) doReload();
+    // sonst: beim nächsten Wechsel in den Hintergrund/Vordergrund erneut versuchen
+  };
+
+  navigator.serviceWorker.addEventListener("controllerchange", () => {
+    if (!hadController || reloaded) return;
+    reloadPending = true;
+    tryReload();
+  });
+
+  const checkUpdate = () => {
+    if (!swReg || !navigator.onLine) return;
+    swReg.update().catch(() => { /* offline o. ä. – egal */ });
+  };
+
+  document.addEventListener("visibilitychange", () => {
+    if (reloadPending) { tryReload(); return; }
+    if (document.visibilityState === "visible") checkUpdate();
+  });
+  window.addEventListener("online", checkUpdate);
+  setInterval(checkUpdate, UPDATE_EVERY_MS);
+
   window.addEventListener("load", () => {
-    navigator.serviceWorker.register("sw.js").then((reg) => {
-      reg.addEventListener("updatefound", () => {
-        const nw = reg.installing;
-        if (!nw) return;
-        nw.addEventListener("statechange", () => {
-          if (nw.state === "installed" && navigator.serviceWorker.controller) {
-            ui.toast("Neue Version – App neu öffnen, um sie zu laden", 6000);
-          }
-        });
-      });
-    }).catch(() => { /* ignorieren */ });
+    navigator.serviceWorker.register("sw.js", { updateViaCache: "none" })
+      .then((reg) => { swReg = reg; })
+      .catch(() => { /* ignorieren */ });
   });
 }
 

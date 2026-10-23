@@ -1,8 +1,8 @@
 // Export: Einträge als Excel-taugliche CSV (Semikolon, BOM) erzeugen und herunterladen/teilen.
-import { WD, pad, clock, netMin } from "./util.js";
+import { WD, pad, clock, netMin, creditMin, kindLabel } from "./util.js";
 
-const HEAD = ["Datum", "Wochentag", "Beginn", "Ende", "Pause (Min)", "Netto (h)",
-  "Arbeitsort", "Notiz", "Standort Beginn", "Standort Ende"];
+const HEAD = ["Datum", "Wochentag", "Art", "Beginn", "Ende", "Pause (Min)", "Netto (h)",
+  "Arbeitsort", "Notiz", "Standort Beginn", "Standort Ende", "Abschnitte"];
 
 // Feld für CSV aufbereiten: bei ; " oder Zeilenumbruch in Anführungszeichen, " verdoppeln
 function cell(v) {
@@ -29,6 +29,24 @@ function locText(loc) {
   return "";
 }
 
+// Ortsname: gespeicherter Name, sonst Adresse
+function placeText(e) {
+  if (e.place) return e.place;
+  const l = e.inLoc || e.loc;
+  return (l && l.addr) || "";
+}
+
+// "08:00-09:10 Autofahren (Hauptplatz 1, Linz); 09:10-16:30 Arbeiten (…)"
+function segmentsText(e) {
+  const segs = Array.isArray(e.segments) ? e.segments.filter(x => x && Number.isFinite(x.start)) : [];
+  return segs.map((x, i) => {
+    const end = Number.isFinite(x.end) ? x.end : (segs[i + 1] ? segs[i + 1].start : e.end);
+    const pl = placeText(x);
+    return clock(x.start) + "-" + (Number.isFinite(end) ? clock(end) : "") + " " +
+      (x.activity || "Arbeiten") + (pl ? " (" + pl + ")" : "");
+  }).join("; ");
+}
+
 function toMs(v) {
   if (v == null || v === "") return null;
   const n = v instanceof Date ? v.getTime() : Number(v);
@@ -44,24 +62,27 @@ export function entriesCSV(entries, { from, to } = {}) {
   const rows = [HEAD];
   let sumNet = 0, sumPause = 0;
   for (const e of list) {
-    const net = netMin(e);
-    const pause = Math.round(Number(e.pauseMin) || 0);
+    const work = !e.kind || e.kind === "work";
+    const net = creditMin(e); // Abwesenheit: Gutschrift
+    const pause = work ? Math.round(Number(e.pauseMin) || 0) : 0;
     sumNet += net;
     sumPause += pause;
     rows.push([
       date(e.start),
       WD[new Date(e.start).getDay()],
-      clock(e.start),
-      Number.isFinite(e.end) ? clock(e.end) : "",
+      kindLabel(e.kind),
+      work ? clock(e.start) : "",
+      work && Number.isFinite(e.end) ? clock(e.end) : "",
       pause,
       hours(net),
-      e.place || "",
+      work ? placeText(e) : "",
       e.note || "",
       locText(e.inLoc),
       locText(e.outLoc),
+      work ? segmentsText(e) : "",
     ]);
   }
-  rows.push(["Summe", "", "", "", sumPause, hours(sumNet), "", "", "", ""]);
+  rows.push(["Summe", "", "", "", "", sumPause, hours(sumNet), "", "", "", "", ""]);
 
   return "﻿" + rows.map(r => r.map(cell).join(";")).join("\r\n") + "\r\n";
 }

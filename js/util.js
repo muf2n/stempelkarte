@@ -106,3 +106,86 @@ export function fmtDist(m) {
   const km = v / 1000;
   return (km < 10 ? km.toFixed(1) : String(Math.round(km))).replace(".", ",") + " km";
 }
+
+/* ---------- Update 2: Feiertage (Österreich), Tagessoll, Gutschriften ---------- */
+
+const holidayCache = new Map();
+
+/** Ostersonntag (Gauß/Meeus, gregorianisch) → {m: 0–11, d}. */
+function easter(y) {
+  const a = y % 19, b = Math.floor(y / 100), c = y % 100;
+  const d = Math.floor(b / 4), e = b % 4, f = Math.floor((b + 8) / 25);
+  const g = Math.floor((b - f + 1) / 3);
+  const h = (19 * a + b - d - g + 15) % 30;
+  const i = Math.floor(c / 4), k = c % 4;
+  const l = (32 + 2 * e + 2 * i - h - k) % 7;
+  const m = Math.floor((a + 11 * h + 22 * l) / 451);
+  const month = Math.floor((h + l - 7 * m + 114) / 31); // 3 = März, 4 = April
+  const day = ((h + l - 7 * m + 114) % 31) + 1;
+  return { m: month - 1, d: day };
+}
+
+function holidaysOf(year) {
+  const y = Math.trunc(Number(year));
+  if (holidayCache.has(y)) return holidayCache.get(y);
+  const map = new Map();
+  const add = (m, d, name) => map.set(dayKey(new Date(y, m, d)), name);
+  const e = easter(y);
+  const rel = (off, name) => add(e.m, e.d + off, name); // Date korrigiert Überlauf
+  add(0, 1, "Neujahr");
+  add(0, 6, "Heilige Drei Könige");
+  rel(0, "Ostersonntag");
+  rel(1, "Ostermontag");
+  add(4, 1, "Staatsfeiertag");
+  rel(39, "Christi Himmelfahrt");
+  rel(49, "Pfingstsonntag");
+  rel(50, "Pfingstmontag");
+  rel(60, "Fronleichnam");
+  add(7, 15, "Mariä Himmelfahrt");
+  add(9, 26, "Nationalfeiertag");
+  add(10, 1, "Allerheiligen");
+  add(11, 8, "Mariä Empfängnis");
+  add(11, 25, "Christtag");
+  add(11, 26, "Stefanitag");
+  const sorted = new Map([...map.entries()].sort((a, b) => (a[0] < b[0] ? -1 : 1)));
+  holidayCache.set(y, sorted);
+  return sorted;
+}
+
+/** Gesetzliche Feiertage in Österreich: Map dayKey → Name. */
+export function atHolidays(year) {
+  return new Map(holidaysOf(year));
+}
+
+/** Name des Feiertags an diesem Tag oder null. */
+export function holidayName(ts) {
+  const d = toDate(ts);
+  return holidaysOf(d.getFullYear()).get(dayKey(d)) || null;
+}
+
+/** Soll-Minuten für diesen Tag (0 an Nicht-Arbeitstagen und ggf. Feiertagen). */
+export function dailyTargetMin(ts, settings) {
+  const s = settings || {};
+  const days = Array.isArray(s.workDays) ? s.workDays : [1, 2, 3, 4, 5];
+  if (!days.length) return 0;
+  const d = toDate(ts);
+  if (!days.includes(d.getDay())) return 0;
+  if (s.holidays !== false && holidayName(d)) return 0;
+  const weekly = Number(s.weeklyTarget ?? 38.5);
+  if (!Number.isFinite(weekly) || weekly <= 0) return 0;
+  return (weekly * 60) / days.length;
+}
+
+/** Gutgeschriebene Minuten: Arbeit → netMin, Abwesenheit → entry.creditMin. */
+export function creditMin(entry) {
+  if (!entry) return 0;
+  if (!entry.kind || entry.kind === "work") return netMin(entry);
+  return Math.max(0, Number(entry.creditMin ?? 0) || 0);
+}
+
+const KIND_LABELS = { work: "Arbeit", urlaub: "Urlaub", krank: "Krank", feiertag: "Feiertag", zeitausgleich: "Zeitausgleich" };
+
+/** Anzeigename einer Eintragsart. */
+export function kindLabel(kind) {
+  return KIND_LABELS[kind || "work"] || "Arbeit";
+}

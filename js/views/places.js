@@ -219,7 +219,7 @@ export function mount(el, ctx) {
   here.addEventListener("click", async () => {
     C.ui.setBusy(here, true, "Standort wird ermittelt …");
     try {
-      const loc = await C.geo.getPosition({ timeout: 12000 });
+      const loc = await C.geo.getPosition({ timeout: 12000, maxAge: 0 });
       myLoc = loc;
       drawMap(true);
       openPlaceForm(null, loc, C);
@@ -318,7 +318,7 @@ export function openPlaceForm(place, presetLoc, ctx) {
       useBtn.addEventListener("click", async () => {
         c.ui.setBusy(useBtn, true, "Standort wird ermittelt …");
         try {
-          const loc = await c.geo.getPosition({ timeout: 12000 });
+          const loc = await c.geo.getPosition({ timeout: 12000, maxAge: 0 });
           st.lat = loc.lat; st.lng = loc.lng;
           myLoc = loc;
           showCoords();

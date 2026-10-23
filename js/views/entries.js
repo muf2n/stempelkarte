@@ -74,6 +74,9 @@ function render() {
   if (!root || !C) return;
   const { util, geo } = C;
   const { esc, hm, clock, dayKey, fmtDate, netMin, MONTHS } = util;
+  const creditMin = util.creditMin || netMin;
+  const kindLabel = util.kindLabel || (() => "Arbeit");
+  const holidayName = util.holidayName || (() => null);
 
   root.querySelector('[data-ref="label"]').textContent = `${MONTHS[curM]} ${curY}`;
   const listEl = root.querySelector('[data-ref="list"]');
@@ -85,6 +88,7 @@ function render() {
     listEl.innerHTML = `<div class="empty"><h3>Lade Einträge …</h3></div>`;
     return;
   }
+  const holidaysOn = (snap.settings || {}).holidays !== false;
 
   const from = new Date(curY, curM, 1).getTime();
   const to = new Date(curY, curM + 1, 1).getTime();
@@ -93,7 +97,7 @@ function render() {
   if (!list.length) {
     sumEl.textContent = "";
     listEl.innerHTML = `<div class="empty"><h3>Keine Einträge in diesem Monat</h3>
-      <p class="note">Tippe auf „+ Nachtragen“, um Arbeitszeit von Hand einzutragen.</p></div>`;
+      <p class="note">Tippe auf „+ Nachtragen“, um Arbeitszeit, Urlaub oder Krankenstand einzutragen.</p></div>`;
     return;
   }
 
@@ -107,13 +111,28 @@ function render() {
   const keys = [...groups.keys()].sort().reverse();
 
   let total = 0;
+  let workDays = 0;
+  const absCount = new Map();
   const html = keys.map((k) => {
     const items = groups.get(k).sort((a, b) => a.start - b.start);
-    const daySum = items.reduce((s, e) => s + netMin(e), 0);
+    const daySum = items.reduce((s, e) => s + creditMin(e), 0);
     total += daySum;
+    if (items.some((e) => isWork(e) && netMin(e) > 0)) workDays++;
     const rows = items.map((e) => {
+      if (!isWork(e)) {
+        absCount.set(e.kind, (absCount.get(e.kind) || 0) + 1);
+        const p = [`<span class="tag ek-tag ek-${esc(e.kind)}">${esc(kindLabel(e.kind))}</span>`];
+        if (e.note) p.push(esc(e.note));
+        return `
+        <button type="button" class="entry ek-abs" data-id="${esc(e.id)}">
+          <span class="t">${esc(kindLabel(e.kind))}</span>
+          <span class="d">${esc(hm(creditMin(e)))} h</span>
+          <span class="p">${p.join(" · ")}</span>
+        </button>`;
+      }
       const p = [];
-      if (e.place) p.push(`<span class="tag">${esc(e.place)}</span>`);
+      const pl = placeText(e);
+      if (pl) p.push(`<span class="tag">${esc(pl)}</span>`);
       if (e.pauseMin > 0) p.push(`Pause ${esc(e.pauseMin)} Min.`);
       if (e.note) p.push(esc(e.note));
       const multi = dayKey(e.end) !== dayKey(e.start) ? " (+1 Tag)" : "";
@@ -130,17 +149,63 @@ function render() {
           <span class="d">${esc(hm(netMin(e)))} h</span>
           <span class="p">${p.join(" · ")}</span>
         </button>
+        ${segmentsHTML(e, util)}
         ${links.length ? `<div class="links">${links.join(" · ")}</div>` : ""}`;
     }).join("");
+    const hol = holidaysOn ? holidayName(items[0].start) : null;
     return `
       <div class="day">
-        <div class="day-h"><span>${esc(fmtDate(items[0].start))}</span><span class="sum">${esc(hm(daySum))} h</span></div>
+        <div class="day-h"><span>${esc(fmtDate(items[0].start))}${hol ? ` <span class="ek-hol">${esc(hol)}</span>` : ""}</span><span class="sum">${esc(hm(daySum))} h</span></div>
         ${rows}
       </div>`;
   }).join("");
 
-  sumEl.textContent = `Gesamt ${hm(total)} h · ${keys.length} ${keys.length === 1 ? "Arbeitstag" : "Arbeitstage"}`;
+  const parts = [`Gesamt ${hm(total)} h`, `${workDays} ${workDays === 1 ? "Arbeitstag" : "Arbeitstage"}`];
+  for (const kind of ["urlaub", "krank", "feiertag", "zeitausgleich"]) {
+    const n = absCount.get(kind);
+    if (n) parts.push(`${n}× ${kindLabel(kind)}`);
+  }
+  sumEl.textContent = parts.join(" · ");
   listEl.innerHTML = html;
+}
+
+// Ortsname eines Eintrags/Abschnitts: gespeicherter Name, sonst Adresse des Start-Standorts
+function placeText(e) {
+  if (!e) return "";
+  if (e.place) return e.place;
+  const l = e.inLoc || e.loc;
+  return (l && l.addr) || "";
+}
+
+// Abschnitte eines Eintrags (mit Ende); ohne segments → leer
+function segList(e) {
+  const segs = Array.isArray(e && e.segments) ? e.segments.filter((x) => x && Number.isFinite(x.start)) : [];
+  return segs.map((x, i) => ({
+    ...x,
+    end: Number.isFinite(x.end) ? x.end : (segs[i + 1] ? segs[i + 1].start : e.end),
+  }));
+}
+
+// nur zeigen, wenn mehr als ein Abschnitt oder Tätigkeit ≠ „Arbeiten“
+function showSegments(segs) {
+  return segs.length > 1 || (segs.length === 1 && (segs[0].activity || "Arbeiten") !== "Arbeiten");
+}
+
+function segmentsHTML(e, util) {
+  const segs = segList(e);
+  if (!showSegments(segs)) return "";
+  const { esc, clock, hm } = util;
+  return `<ul class="ek-segs">${segs.map((x) => {
+    const parts = [`${clock(x.start)}–${clock(x.end)}`, x.activity || "Arbeiten"];
+    const pl = placeText(x);
+    if (pl) parts.push(pl);
+    parts.push(`${hm(Math.max(0, (x.end - x.start) / 60000))} h`);
+    return `<li>${esc(parts.join(" · "))}</li>`;
+  }).join("")}</ul>`;
+}
+
+function isWork(e) {
+  return !e || !e.kind || e.kind === "work";
 }
 
 // ---------- Formular ----------
@@ -171,14 +236,31 @@ function readTimes(box) {
 
   const start = new Date(d.y, d.mo, d.d, f.h, f.mi).getTime();
   let endD = new Date(d.y, d.mo, d.d, t.h, t.mi);
-  const overnight = endD.getTime() <= start;
+  const overnight = endD.getTime() < start; // nur Ende < Beginn = über Mitternacht; gleich = 0 Min.
   if (overnight) endD = new Date(d.y, d.mo, d.d + 1, t.h, t.mi); // über Mitternacht
   const end = endD.getTime();
   const durMin = Math.round((end - start) / 60000);
-  if (pauseMin >= durMin) {
+  if (durMin > 0 ? pauseMin >= durMin : pauseMin > 0) {
     return { error: `Die Pause (${pauseMin} Min.) ist länger als die Arbeitszeit (${C ? C.util.hm(durMin) : durMin} h).` };
   }
   return { start, end, pauseMin, overnight };
+}
+
+const KINDS = ["work", "urlaub", "krank", "feiertag", "zeitausgleich"];
+
+// Stunden-Text ("7,5" / "7:30") → Minuten oder null
+function parseHours(str) {
+  const t = String(str || "").trim();
+  if (t === "") return null;
+  const hm = /^(\d{1,2}):(\d{2})$/.exec(t);
+  if (hm) return +hm[1] * 60 + Math.min(59, +hm[2]);
+  const v = Number(t.replace(",", "."));
+  if (!Number.isFinite(v) || v < 0 || v > 24) return null;
+  return Math.round(v * 60);
+}
+function fmtHours(min) {
+  const v = Math.round((Number(min) || 0) / 60 * 100) / 100;
+  return String(v).replace(".", ",");
 }
 
 export function openEntryForm(entry, ctx) {
@@ -186,8 +268,17 @@ export function openEntryForm(entry, ctx) {
   const { store, ui, util } = c;
   const { esc, hm, clock, dayKey, netMin } = util;
   const snap = store.get() || {};
+  const settings = snap.settings || {};
   const places = snap.places || [];
   const isNew = !entry;
+  const kindLabel = util.kindLabel || ((k) => k);
+  const dailyTarget = (ts) => (util.dailyTargetMin ? util.dailyTargetMin(ts, settings) : 0);
+  const holidayName = (ts) => (settings.holidays !== false && util.holidayName ? util.holidayName(ts) : null);
+  const workDays = Array.isArray(settings.workDays) ? settings.workDays : [1, 2, 3, 4, 5];
+  const nominalMin = workDays.length ? (Number(settings.weeklyTarget ?? 38.5) || 0) * 60 / workDays.length : 0;
+
+  let kind = isNew ? "work" : (KINDS.includes(entry.kind) ? entry.kind : "work");
+  let creditTouched = !isNew && kind !== "work"; // bestehende Gutschrift nicht überschreiben
 
   let selPlaceId;
   if (isNew) {
@@ -200,24 +291,40 @@ export function openEntryForm(entry, ctx) {
   // Ort eines bestehenden Eintrags, der nicht mehr existiert, trotzdem anbieten
   const orphan = !isNew && entry.placeId && !places.some((p) => p.id === entry.placeId)
     ? { id: entry.placeId, name: entry.place || "Unbekannter Ort" } : null;
+  // kein gespeicherter Ort, aber Name/Adresse vorhanden → als eigene Option anbieten
+  const freePlace = !isNew && !entry.placeId ? placeText(entry) : "";
 
-  const opts = [`<option value="">Ohne Ort</option>`]
+  const opts = [freePlace
+    ? `<option value="" selected>${esc(freePlace)}</option><option value="__none">Ohne Ort</option>`
+    : `<option value="">Ohne Ort</option>`]
     .concat(places.map((p) => `<option value="${esc(p.id)}"${p.id === selPlaceId ? " selected" : ""}>${esc(p.name)}</option>`))
     .concat(orphan ? [`<option value="${esc(orphan.id)}" selected>${esc(orphan.name)} (gelöscht)</option>`] : [])
     .join("");
 
+  const wasWork = !isNew && kind === "work";
   const vDate = isNew ? dayKey(Date.now()) : dayKey(entry.start);
-  const vFrom = isNew ? "08:00" : clock(entry.start);
-  const vTo = isNew ? "16:30" : clock(entry.end);
-  const vPause = isNew ? 30 : (entry.pauseMin || 0);
+  const vFrom = wasWork ? clock(entry.start) : "08:00";
+  const vTo = wasWork ? clock(entry.end) : "16:30";
+  const vPause = wasWork ? (entry.pauseMin || 0) : 30;
   const vNote = isNew ? "" : (entry.note || "");
+  const vCredit = !isNew && kind !== "work" ? fmtHours(entry.creditMin ?? 0) : "";
+
+  const chips = KINDS.map((k) =>
+    `<button type="button" class="chip" data-kind="${k}" aria-pressed="${k === kind}">${esc(kindLabel(k))}</button>`).join("");
 
   const bodyHTML = `
     <div class="fields">
-      <label>Datum
-        <input type="date" id="ef-date" value="${esc(vDate)}" required>
-      </label>
+      <div class="lbl">Art</div>
+      <div class="chips ek-kinds" role="group" aria-label="Art des Eintrags">${chips}</div>
       <div class="row">
+        <label>Datum
+          <input type="date" id="ef-date" value="${esc(vDate)}" required>
+        </label>
+        ${isNew ? `<label class="ek-only-abs">bis Datum (optional)
+          <input type="date" id="ef-until" value="">
+        </label>` : ""}
+      </div>
+      <div class="row ek-only-work">
         <label>Beginn
           <input type="time" id="ef-from" value="${esc(vFrom)}" required>
         </label>
@@ -225,11 +332,19 @@ export function openEntryForm(entry, ctx) {
           <input type="time" id="ef-to" value="${esc(vTo)}" required>
         </label>
       </div>
-      <label>Pause (Min.)
+      <label class="ek-only-work">Pause (Min.)
         <input type="number" id="ef-pause" inputmode="numeric" min="0" step="5" value="${esc(vPause)}">
       </label>
-      <label>Arbeitsort
+      <label class="ek-only-work">Arbeitsort
         <select id="ef-place">${opts}</select>
+      </label>
+      ${!isNew && segList(entry).length ? `<div class="ek-only-work">
+        <div class="lbl">Abschnitte</div>
+        ${segmentsHTML(entry, util) || `<p class="note">Ein Abschnitt: ${esc(segList(entry)[0].activity || "Arbeiten")}</p>`}
+        <p class="note">Abschnitte werden beim Speichern unverändert übernommen.</p>
+      </div>` : ""}
+      <label class="ek-only-abs">Gutschrift (Stunden pro Tag)
+        <input type="text" id="ef-credit" inputmode="decimal" placeholder="z. B. 7,7" value="${esc(vCredit)}">
       </label>
       <label>Notiz (optional)
         <textarea id="ef-note" rows="2" placeholder="z. B. Montage Küche">${esc(vNote)}</textarea>
@@ -241,56 +356,167 @@ export function openEntryForm(entry, ctx) {
       ${isNew ? "" : `<div class="row"><button type="button" class="btn danger sm" id="ef-del">Eintrag löschen</button></div>`}
     </div>`;
 
-  const sheet = ui.openSheet({ title: isNew ? "Arbeitszeit nachtragen" : "Eintrag bearbeiten", bodyHTML });
+  const sheet = ui.openSheet({ title: isNew ? "Eintrag nachtragen" : "Eintrag bearbeiten", bodyHTML });
   const box = sheet.el;
   const netEl = box.querySelector("#ef-net");
   const saveBtn = box.querySelector("#ef-save");
+  const creditInp = box.querySelector("#ef-credit");
+  const untilInp = box.querySelector("#ef-until");
 
-  const refresh = () => {
-    const r = readTimes(box);
-    if (r.error) {
-      netEl.textContent = r.error;
-    } else {
-      const n = netMin({ start: r.start, end: r.end, pauseMin: r.pauseMin });
-      netEl.textContent = `Netto ${hm(n)} h` + (r.overnight ? " · endet am nächsten Tag" : "");
+  // Tage einer Abwesenheit bestimmen: [{ts}] oder {error}
+  const absenceDays = () => {
+    const d = parseDate(box.querySelector("#ef-date").value);
+    if (!d) return { error: "Bitte ein Datum wählen." };
+    const first = new Date(d.y, d.mo, d.d);
+    const u = untilInp ? parseDate(untilInp.value) : null;
+    if (!u) return { days: [first.getTime()], range: false };
+    const last = new Date(u.y, u.mo, u.d);
+    if (last < first) return { error: "„bis Datum“ liegt vor dem Datum." };
+    const days = [];
+    for (let i = 0; i < 400; i++) {
+      const x = new Date(d.y, d.mo, d.d + i);
+      if (x > last) break;
+      if (!workDays.includes(x.getDay())) continue;
+      if (holidayName(x.getTime())) continue;
+      days.push(x.getTime());
+    }
+    if (days.length > 366) return { error: "Bitte höchstens ein Jahr auf einmal eintragen." };
+    if (!days.length) return { error: "In diesem Zeitraum gibt es keine Arbeitstage." };
+    return { days, range: true };
+  };
+
+  const defaultCredit = (ts) => (kind === "zeitausgleich" ? 0 : dailyTarget(ts));
+
+  const applyKind = () => {
+    box.querySelectorAll("[data-kind]").forEach((b) => b.setAttribute("aria-pressed", String(b.dataset.kind === kind)));
+    const work = kind === "work";
+    box.querySelectorAll(".ek-only-work").forEach((n) => { n.hidden = !work; });
+    box.querySelectorAll(".ek-only-abs").forEach((n) => { n.hidden = work; });
+    if (!work && !creditTouched) {
+      const r = absenceDays();
+      const ts = r.days ? r.days[0] : Date.now();
+      creditInp.value = fmtHours(r.range && kind !== "zeitausgleich" ? nominalMin : defaultCredit(ts));
     }
   };
-  for (const id of ["#ef-date", "#ef-from", "#ef-to", "#ef-pause"]) {
+
+  const refresh = () => {
+    if (kind === "work") {
+      const r = readTimes(box);
+      if (r.error) {
+        netEl.textContent = r.error;
+      } else {
+        const n = netMin({ start: r.start, end: r.end, pauseMin: r.pauseMin });
+        netEl.textContent = `Netto ${hm(n)} h` + (r.overnight ? " · endet am nächsten Tag" : "");
+      }
+      return;
+    }
+    if (!creditTouched) applyKind();
+    const r = absenceDays();
+    if (r.error) { netEl.textContent = r.error; return; }
+    const cm = parseHours(creditInp.value);
+    if (cm == null) { netEl.textContent = "Bitte die Gutschrift in Stunden eingeben (z. B. 7,7)."; return; }
+    const parts = [];
+    if (r.range) parts.push(`${r.days.length} ${r.days.length === 1 ? "Arbeitstag" : "Arbeitstage"}`);
+    parts.push(`Gutschrift ${hm(cm * r.days.length)} h`);
+    if (kind === "zeitausgleich") parts.push("verbraucht Überstunden");
+    if (!r.range) {
+      const hol = holidayName(r.days[0]);
+      if (hol) parts.push(`Feiertag: ${hol}`);
+      else if (dailyTarget(r.days[0]) === 0) parts.push("an diesem Tag kein Soll");
+    } else {
+      parts.push("Wochenenden und Feiertage werden übersprungen");
+    }
+    netEl.textContent = parts.join(" · ");
+  };
+
+  box.querySelectorAll("[data-kind]").forEach((b) => b.addEventListener("click", () => {
+    if (b.dataset.kind === kind) return;
+    const prev = kind;
+    kind = b.dataset.kind;
+    if (prev === "zeitausgleich" || kind === "zeitausgleich" || prev === "work") creditTouched = false;
+    applyKind();
+    refresh();
+  }));
+  creditInp.addEventListener("input", () => { creditTouched = true; refresh(); });
+  for (const id of ["#ef-date", "#ef-until", "#ef-from", "#ef-to", "#ef-pause"]) {
     const inp = box.querySelector(id);
+    if (!inp) continue;
     inp.addEventListener("input", refresh);
     inp.addEventListener("change", refresh);
   }
+  applyKind();
   refresh();
 
-  saveBtn.addEventListener("click", async () => {
+  const note = () => box.querySelector("#ef-note").value.trim();
+
+  const saveWork = async () => {
     const r = readTimes(box);
-    if (r.error) { netEl.textContent = r.error; ui.toast(r.error, 3500); return; }
-    const pid = box.querySelector("#ef-place").value || null;
-    let placeName = "";
+    if (r.error) { netEl.textContent = r.error; ui.toast(r.error, 3500); return null; }
+    const sel = box.querySelector("#ef-place").value;
+    const pid = sel && sel !== "__none" ? sel : null;
+    // freier Ortsname (z. B. Adresse) bleibt erhalten, außer „Ohne Ort“ wurde gewählt
+    let placeName = !pid && sel !== "__none" ? (entry && !entry.placeId ? (entry.place || "") : "") : "";
     if (pid) {
       const pl = places.find((p) => p.id === pid);
       placeName = pl ? pl.name : (orphan && orphan.id === pid ? (entry.place || "") : "");
     }
     const data = {
       ...(entry || {}),
+      kind: "work",
       start: r.start,
       end: r.end,
       pauseMin: r.pauseMin,
       placeId: pid,
       place: placeName,
-      note: box.querySelector("#ef-note").value.trim(),
+      note: note(),
       inLoc: entry ? (entry.inLoc ?? null) : null,
       outLoc: entry ? (entry.outLoc ?? null) : null,
     };
+    delete data.creditMin;
     if (entry && entry.id) data.id = entry.id;
+    await store.saveEntry(data);
+    return { ts: r.start, msg: isNew ? "Eintrag gespeichert" : "Änderung gespeichert" };
+  };
+
+  const saveAbsence = async () => {
+    const r = absenceDays();
+    if (r.error) { netEl.textContent = r.error; ui.toast(r.error, 3500); return null; }
+    const cm = parseHours(creditInp.value);
+    if (cm == null) {
+      const msg = "Bitte die Gutschrift in Stunden eingeben (z. B. 7,7).";
+      netEl.textContent = msg; ui.toast(msg, 3500); return null;
+    }
+    const base = (ts) => ({
+      kind,
+      start: ts,
+      end: ts,
+      pauseMin: 0,
+      creditMin: cm,
+      placeId: null,
+      place: "",
+      note: note(),
+      inLoc: null,
+      outLoc: null,
+    });
+    if (!isNew) {
+      await store.saveEntry({ ...entry, ...base(r.days[0]), id: entry.id });
+    } else {
+      for (const ts of r.days) await store.saveEntry(base(ts));
+    }
+    const n = r.days.length;
+    return { ts: r.days[0], msg: n > 1 ? `${n} Tage ${kindLabel(kind)} gespeichert` : `${kindLabel(kind)} gespeichert` };
+  };
+
+  saveBtn.addEventListener("click", async () => {
     ui.setBusy(saveBtn, true, "Speichern …");
     try {
-      await store.saveEntry(data);
-      const d = new Date(r.start);
+      const res = kind === "work" ? await saveWork() : await saveAbsence();
+      if (!res) { ui.setBusy(saveBtn, false); return; }
+      const d = new Date(res.ts);
       curY = d.getFullYear();
       curM = d.getMonth();
       sheet.close();
-      ui.toast(isNew ? "Eintrag gespeichert" : "Änderung gespeichert");
+      ui.toast(res.msg);
       render();
     } catch {
       ui.setBusy(saveBtn, false);

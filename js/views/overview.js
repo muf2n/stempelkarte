@@ -1,4 +1,4 @@
-// Reiter „Übersicht“: Wochenbalken mit Soll/Ist, Monatsauswertung mit CSV-Export und Einstellungen/Konto.
+// Reiter „Übersicht“: Überstundenkonto, Wochenbalken mit Soll/Ist, Monatsauswertung mit CSV-Export und Einstellungen/Konto.
 
 let ctx = null;
 let root = null;
@@ -8,6 +8,7 @@ let monthOffset = 0;  // 0 = aktueller Monat
 let targetTimer = null;
 let radiusTimer = null;
 let accountKey = "";
+let offsetTimer = null;
 
 const $ = (sel) => root.querySelector(sel);
 
@@ -16,13 +17,22 @@ export function mount(el, c) {
   root = el;
   root.innerHTML = `
     <div class="stack">
+      <div class="panel card ov-balance" id="ov-balance">
+        <div class="lbl">Überstundenkonto</div>
+        <div class="ov-saldo" id="ov-saldo">–</div>
+        <p class="note" id="ov-saldo-note"></p>
+        <div class="kv"><span>Diese Woche</span><b id="ov-bal-week"></b></div>
+        <div class="kv"><span>Diesen Monat</span><b id="ov-bal-month"></b></div>
+      </div>
+
       <div class="panel card" id="ov-week">
         <div class="nav">
           <button class="btn ghost sm" type="button" data-wk="-1" aria-label="Vorige Woche">‹</button>
           <b id="ov-week-label"></b>
           <button class="btn ghost sm" type="button" data-wk="1" aria-label="Nächste Woche">›</button>
         </div>
-        <div class="bars" id="ov-bars"></div>
+        <div class="bars ov-bars" id="ov-bars"></div>
+        <p class="note" id="ov-week-hol" hidden></p>
         <div class="kv"><span>Ist / Soll</span><b id="ov-week-ist"></b></div>
         <div class="progress"><div id="ov-week-prog"></div></div>
         <div class="kv"><span>Differenz</span><b id="ov-week-diff"></b></div>
@@ -34,11 +44,18 @@ export function mount(el, c) {
           <b id="ov-month-label"></b>
           <button class="btn ghost sm" type="button" data-mo="1" aria-label="Nächster Monat">›</button>
         </div>
-        <div class="kv"><span>Netto-Stunden</span><b id="ov-month-net"></b></div>
+        <div class="kv"><span>Ist / Soll</span><b id="ov-month-ist"></b></div>
+        <div class="kv"><span>Differenz</span><b id="ov-month-diff"></b></div>
+        <div class="kv"><span>davon Arbeitszeit (netto)</span><b id="ov-month-net"></b></div>
         <div class="kv"><span>Arbeitstage</span><b id="ov-month-days"></b></div>
+        <div class="kv"><span>Urlaubstage</span><b id="ov-month-urlaub"></b></div>
+        <div class="kv"><span>Krankentage</span><b id="ov-month-krank"></b></div>
+        <div class="kv"><span id="ov-year-urlaub-l">Urlaubstage im Jahr</span><b id="ov-year-urlaub"></b></div>
         <div class="kv"><span>Pausen gesamt</span><b id="ov-month-pause"></b></div>
         <div class="lbl">Stunden je Arbeitsort</div>
         <div id="ov-month-places"></div>
+        <div class="lbl">Stunden je Tätigkeit</div>
+        <div id="ov-month-acts"></div>
         <button class="btn primary" type="button" id="ov-csv">Als CSV (Excel) herunterladen</button>
       </div>
 
@@ -55,6 +72,25 @@ export function mount(el, c) {
           <label>Standard-Radius für Orte (m)
             <input type="number" id="ov-radius" inputmode="numeric" min="50" max="1000" step="10">
           </label>
+          <div>
+            <div class="lbl">Arbeitstage</div>
+            <div class="chips ov-wd" id="ov-workdays" role="group" aria-label="Arbeitstage"></div>
+          </div>
+          <label class="switch">
+            <input type="checkbox" id="ov-holidays">
+            <span>Feiertage (Österreich) berücksichtigen</span>
+          </label>
+          <label class="switch">
+            <input type="checkbox" id="ov-pauserem">
+            <span>Pausen-Erinnerung nach 6 Stunden</span>
+          </label>
+          <label>Überstundenkonto zählt ab
+            <input type="date" id="ov-balstart">
+          </label>
+          <label>Startsaldo (Stunden, darf negativ sein)
+            <input type="text" id="ov-baloffset" inputmode="text" placeholder="z. B. 12,5 oder -3:15">
+          </label>
+          <p class="note">Ohne Datum zählt das Konto ab deinem ersten Eintrag.</p>
         </div>
         <div class="lbl">Konto</div>
         <div id="ov-account"></div>
@@ -97,11 +133,42 @@ export function mount(el, c) {
     clearTimeout(radiusTimer);
     saveRadius(true);
   });
+
+  const wdBox = $("#ov-workdays");
+  wdBox.innerHTML = [1, 2, 3, 4, 5, 6, 0].map((d) =>
+    `<button type="button" class="chip" data-wd="${d}" aria-pressed="false">${ctx.util.WD[d]}</button>`).join("");
+  wdBox.addEventListener("click", (ev) => {
+    const b = ev.target.closest("[data-wd]");
+    if (!b) return;
+    const d = Number(b.dataset.wd);
+    const cur = new Set(workDays());
+    if (cur.has(d)) cur.delete(d); else cur.add(d);
+    const next = [...cur].sort((a, z) => a - z);
+    b.setAttribute("aria-pressed", String(cur.has(d)));
+    save({ workDays: next });
+  });
+
+  $("#ov-holidays").addEventListener("change", (ev) => save({ holidays: ev.target.checked }));
+  $("#ov-pauserem").addEventListener("change", (ev) => save({ pauseReminder: ev.target.checked }));
+  $("#ov-balstart").addEventListener("change", (ev) => {
+    const v = ev.target.value;
+    save({ balanceStart: /^\d{4}-\d{2}-\d{2}$/.test(v) ? v : null });
+  });
+  const off = $("#ov-baloffset");
+  off.addEventListener("input", () => {
+    clearTimeout(offsetTimer);
+    offsetTimer = setTimeout(() => saveOffset(false), 900);
+  });
+  off.addEventListener("change", () => {
+    clearTimeout(offsetTimer);
+    saveOffset(true);
+  });
 }
 
 export function update(s) {
   snap = s;
   if (!root || !snap) return;
+  renderBalance();
   renderWeek();
   renderMonth();
   renderSettings();
@@ -143,26 +210,187 @@ function saveRadius(fixInput) {
   save({ defaultRadius: clamped });
 }
 
-/** Alle Arbeitsstücke inkl. laufender Schicht: [{start, min, pauseMin, place}] */
+function saveOffset(fixInput) {
+  const inp = $("#ov-baloffset");
+  const v = parseSignedHours(inp.value);
+  if (v == null) {
+    if (fixInput && snap) inp.value = fmtSignedHours(Number(snap.settings?.balanceOffsetMin) || 0);
+    return;
+  }
+  if (fixInput) inp.value = fmtSignedHours(v);
+  if (snap && snap.settings && (Number(snap.settings.balanceOffsetMin) || 0) === v) return;
+  save({ balanceOffsetMin: v });
+}
+
+/** "12,5" / "-3:15" / "+2" → Minuten (gerundet) oder null; leer = 0. */
+function parseSignedHours(str) {
+  const t = String(str || "").trim().replace(/\u2212/g, "-").replace(/\s+/g, "").replace(/h$/i, "");
+  if (t === "") return 0;
+  const m = /^([+-]?)(\d{1,4}):(\d{1,2})$/.exec(t);
+  if (m) {
+    const v = +m[2] * 60 + Math.min(59, +m[3]);
+    return m[1] === "-" ? -v : v;
+  }
+  const n = Number(t.replace(",", "."));
+  if (!Number.isFinite(n) || Math.abs(n) > 10000) return null;
+  return Math.round(n * 60);
+}
+
+function fmtSignedHours(min) {
+  const v = Math.round((Number(min) || 0) / 60 * 100) / 100;
+  return String(v).replace(".", ",");
+}
+
+function settings() {
+  return (snap && snap.settings) || {};
+}
+
+function workDays() {
+  const wd = settings().workDays;
+  return Array.isArray(wd) ? wd : [1, 2, 3, 4, 5];
+}
+
+function targetOf(ts) {
+  const u = ctx.util;
+  return u.dailyTargetMin ? u.dailyTargetMin(ts, settings()) : 0;
+}
+
+function creditOf(e) {
+  const u = ctx.util;
+  return u.creditMin ? u.creditMin(e) : u.netMin(e);
+}
+
+/** Alle Stücke inkl. laufender Schicht: [{start, min (Gutschrift), net, pauseMin, place, kind}] */
 function items() {
   const u = ctx.util;
-  const out = (snap.entries || []).map((e) => ({
-    start: e.start, min: u.netMin(e), pauseMin: e.pauseMin || 0, place: e.place || "",
-  }));
+  const out = (snap.entries || []).filter((e) => e && Number.isFinite(e.start)).map((e) => {
+    const kind = e.kind || "work";
+    return {
+      start: e.start,
+      min: creditOf(e),
+      net: kind === "work" ? u.netMin(e) : 0,
+      pauseMin: kind === "work" ? (e.pauseMin || 0) : 0,
+      place: e.place || (e.inLoc && e.inLoc.addr) || "",
+      kind,
+      acts: kind === "work" ? activitiesOf(e.segments, e.start, e.end, u.netMin(e)) : null,
+    };
+  });
   const r = snap.running;
   if (r) {
+    const net = Math.max(0, ctx.timer.netMs(r) / 60000);
     out.push({
       start: r.start,
-      min: Math.max(0, ctx.timer.netMs(r) / 60000),
+      min: net,
+      net,
       pauseMin: ctx.timer.pauseMsNow(r) / 60000,
-      place: r.place || "",
+      place: r.place || (r.inLoc && r.inLoc.addr) || "",
+      kind: "work",
+      acts: activitiesOf(r.segments, r.start, Date.now(), net),
     });
   }
   return out;
 }
 
+/** Minuten je Tätigkeit aus Abschnitten (roh: end − start); ohne Abschnitte → alles „Arbeiten“. */
+function activitiesOf(segments, start, end, net) {
+  const segs = Array.isArray(segments) ? segments.filter((x) => x && Number.isFinite(x.start)) : [];
+  const m = new Map();
+  if (!segs.length) {
+    m.set("Arbeiten", net);
+    return m;
+  }
+  segs.forEach((x, i) => {
+    const e = Number.isFinite(x.end) ? x.end : (segs[i + 1] ? segs[i + 1].start : end);
+    const name = x.activity || "Arbeiten";
+    m.set(name, (m.get(name) || 0) + Math.max(0, ((e || x.start) - x.start) / 60000));
+  });
+  return m;
+}
+
 function hmRound(min) {
   return ctx.util.hm(Math.round(min));
+}
+
+/** Vorzeichen-Format: "+12:30 h" / "−3:15 h". */
+function signed(min) {
+  const m = Math.round(min);
+  return (m < 0 ? "\u2212" : "+") + ctx.util.hm(Math.abs(m)) + " h";
+}
+
+function setSigned(el, min) {
+  el.textContent = signed(min);
+  el.classList.toggle("plus", Math.round(min) >= 0);
+  el.classList.toggle("minus", Math.round(min) < 0);
+}
+
+/** Gutschriften je Tag (dayKey → Minuten), inkl. laufender Schicht. */
+function creditByDay() {
+  const u = ctx.util;
+  const map = new Map();
+  for (const it of items()) {
+    const k = u.dayKey(it.start);
+    map.set(k, (map.get(k) || 0) + it.min);
+  }
+  return map;
+}
+
+function keyToDate(k) {
+  const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(k || "");
+  return m ? new Date(+m[1], +m[2] - 1, +m[3]) : null;
+}
+
+/**
+ * Saldo (Gutschrift − Soll) von Tag `from` (Date, 00:00) bis heute.
+ * Vergangene Tage: Gutschrift − Soll; heute: nur Gutschrift (Soll erst ab morgen); Zukunft zählt nicht.
+ */
+function balanceBetween(from, credits) {
+  const u = ctx.util;
+  const today = u.startOfDay(Date.now());
+  const todayKey = u.dayKey(today);
+  let sum = 0;
+  const d = new Date(from.getFullYear(), from.getMonth(), from.getDate());
+  for (let i = 0; i < 40000 && d <= today; i++) {
+    const k = u.dayKey(d);
+    sum += credits.get(k) || 0;
+    if (k !== todayKey) sum -= targetOf(d.getTime());
+    d.setDate(d.getDate() + 1);
+  }
+  return sum;
+}
+
+/** Erster Tag des Kontos: balanceStart oder Tag des ersten Eintrags (null = keine Daten). */
+function balanceStartDate() {
+  const u = ctx.util;
+  const bs = keyToDate(settings().balanceStart);
+  if (bs) return bs;
+  let min = Infinity;
+  for (const e of snap.entries || []) if (Number.isFinite(e.start) && e.start < min) min = e.start;
+  if (snap.running && snap.running.start < min) min = snap.running.start;
+  return Number.isFinite(min) ? u.startOfDay(min) : null;
+}
+
+/* ---------- Überstundenkonto ---------- */
+
+function renderBalance() {
+  const u = ctx.util;
+  const credits = creditByDay();
+  const start = balanceStartDate();
+  const offset = Number(settings().balanceOffsetMin) || 0;
+  const total = offset + (start ? balanceBetween(start, credits) : 0);
+  setSigned($("#ov-saldo"), total);
+
+  const note = [];
+  if (start) note.push(`seit ${u.fmtDate(start.getTime())}`);
+  if (offset) note.push(`inkl. Startsaldo ${signed(offset)}`);
+  note.push("Soll von heute zählt erst ab morgen");
+  $("#ov-saldo-note").textContent = note.join(" · ");
+
+  const clip = (d) => (start && d < start ? start : d);
+  const ws = u.startOfWeek(Date.now());
+  const now = new Date();
+  const ms = u.startOfMonth(now.getFullYear(), now.getMonth());
+  setSigned($("#ov-bal-week"), start ? balanceBetween(clip(ws), credits) : 0);
+  setSigned($("#ov-bal-month"), start ? balanceBetween(clip(ms), credits) : 0);
 }
 
 /* ---------- Woche ---------- */
@@ -170,13 +398,19 @@ function hmRound(min) {
 function renderWeek() {
   if (!snap) return;
   const u = ctx.util;
+  const holOn = settings().holidays !== false;
   const ws = u.startOfWeek(Date.now());
   ws.setDate(ws.getDate() + weekOffset * 7);
   const days = [];
   for (let i = 0; i < 7; i++) {
     const d = new Date(ws);
     d.setDate(ws.getDate() + i);
-    days.push({ key: u.dayKey(d.getTime()), date: d, min: 0 });
+    const ts = d.getTime();
+    days.push({
+      key: u.dayKey(ts), date: d, min: 0,
+      target: targetOf(ts),
+      hol: holOn && u.holidayName ? u.holidayName(ts) : null,
+    });
   }
   const byKey = new Map(days.map((d) => [d.key, d]));
   for (const it of items()) {
@@ -184,7 +418,8 @@ function renderWeek() {
     if (d) d.min += it.min;
   }
   const total = days.reduce((a, d) => a + d.min, 0);
-  const maxMin = Math.max(8 * 60, ...days.map((d) => d.min));
+  const targetMin = days.reduce((a, d) => a + d.target, 0);
+  const maxMin = Math.max(8 * 60, ...days.map((d) => d.min), ...days.map((d) => d.target));
   const todayKey = u.dayKey(Date.now());
 
   const last = days[6].date;
@@ -196,15 +431,29 @@ function renderWeek() {
     const cls = ["bar"];
     if (d.min < 1) cls.push("zero");
     if (d.key === todayKey) cls.push("today");
+    if (d.hol) cls.push("ov-hol");
     const h = Math.round((d.min / maxMin) * 100);
-    return `<div class="${cls.join(" ")}">
+    const th = Math.round((d.target / maxMin) * 1000) / 10;
+    const title = [u.fmtDate(d.date.getTime())];
+    if (d.hol) title.push(d.hol);
+    title.push(`Soll ${hmRound(d.target)} h`);
+    return `<div class="${cls.join(" ")}" title="${u.esc(title.join(" · "))}">
       <span class="v">${d.min >= 1 ? u.esc(hmRound(d.min)) : ""}</span>
-      <div class="col" style="height:${h}%;--h:${h}%"></div>
-      <span class="l">${u.esc(u.WD[d.date.getDay()])}</span>
+      <div class="ov-colwrap">
+        <div class="col" style="height:${h}%;--h:${h}%"></div>
+        ${d.target > 0 ? `<i class="ov-tgt" style="bottom:${th}%" aria-hidden="true"></i>` : ""}
+      </div>
+      <span class="l">${u.esc(u.WD[d.date.getDay()])}${d.hol ? `<small class="ov-hol-l">Feiertag</small>` : ""}</span>
     </div>`;
   }).join("");
 
-  const targetMin = (Number(snap.settings && snap.settings.weeklyTarget) || 0) * 60;
+  const hols = days.filter((d) => d.hol);
+  const holEl = $("#ov-week-hol");
+  holEl.hidden = !hols.length;
+  holEl.textContent = hols.length
+    ? "Feiertag: " + hols.map((d) => `${u.WD[d.date.getDay()]} ${u.pad(d.date.getDate())}.${u.pad(d.date.getMonth() + 1)}. ${d.hol}`).join(" · ")
+    : "";
+
   $("#ov-week-ist").textContent = `${hmRound(total)} / ${hmRound(targetMin)} h`;
   const pct = targetMin > 0 ? Math.min(100, (total / targetMin) * 100) : (total > 0 ? 100 : 0);
   $("#ov-week-prog").style.width = `${pct}%`;
@@ -230,25 +479,58 @@ function renderMonth() {
   const f = from.getTime(), t = to.getTime();
   $("#ov-month-label").textContent = `${u.MONTHS[from.getMonth()]} ${from.getFullYear()}`;
 
-  let net = 0, pause = 0;
+  let credit = 0, net = 0, pause = 0;
   const dayset = new Set();
+  const urlaub = new Set(), krank = new Set();
   const perPlace = new Map();
+  const perAct = new Map();
   for (const it of items()) {
     if (it.start < f || it.start >= t) continue;
-    net += it.min;
+    credit += it.min;
+    const k = u.dayKey(it.start);
+    if (it.kind === "urlaub") { urlaub.add(k); continue; }
+    if (it.kind === "krank") { krank.add(k); continue; }
+    if (it.kind !== "work") continue;
+    net += it.net;
     pause += it.pauseMin;
-    if (it.min > 0) dayset.add(u.dayKey(it.start));
+    if (it.net > 0) dayset.add(k);
     const name = it.place || "Ohne Ort";
-    perPlace.set(name, (perPlace.get(name) || 0) + it.min);
+    perPlace.set(name, (perPlace.get(name) || 0) + it.net);
+    if (it.acts) for (const [a, m] of it.acts) perAct.set(a, (perAct.get(a) || 0) + m);
   }
+
+  let target = 0;
+  for (const d = new Date(from); d < to; d.setDate(d.getDate() + 1)) target += targetOf(d.getTime());
+
+  const y = from.getFullYear();
+  const yf = new Date(y, 0, 1).getTime(), yt = new Date(y + 1, 0, 1).getTime();
+  const yearUrlaub = new Set();
+  for (const e of snap.entries || []) {
+    if (e && e.kind === "urlaub" && e.start >= yf && e.start < yt) yearUrlaub.add(u.dayKey(e.start));
+  }
+
+  $("#ov-month-ist").textContent = `${hmRound(credit)} / ${hmRound(target)} h`;
+  const diff = Math.round(credit - target);
+  const diffEl = $("#ov-month-diff");
+  diffEl.textContent = `${diff >= 0 ? "+" : ""}${u.hm(diff)} h`;
+  diffEl.className = diff >= 0 ? "plus" : "minus";
   $("#ov-month-net").textContent = `${hmRound(net)} h`;
   $("#ov-month-days").textContent = String(dayset.size);
+  $("#ov-month-urlaub").textContent = String(urlaub.size);
+  $("#ov-month-krank").textContent = String(krank.size);
+  $("#ov-year-urlaub-l").textContent = `Urlaubstage ${y} gesamt`;
+  $("#ov-year-urlaub").textContent = String(yearUrlaub.size);
   $("#ov-month-pause").textContent = `${hmRound(pause)} h`;
 
   const rows = [...perPlace.entries()].sort((a, b) => b[1] - a[1]);
   $("#ov-month-places").innerHTML = rows.length
     ? rows.map(([n, m]) => `<div class="kv"><span>${u.esc(n)}</span><b>${u.esc(hmRound(m))} h</b></div>`).join("")
-    : `<p class="note">Keine Einträge in diesem Monat.</p>`;
+    : `<p class="note">Keine Arbeitszeit in diesem Monat.</p>`;
+
+  const acts = [...perAct.entries()].filter(([, m]) => m >= 0.5).sort((a, b) => b[1] - a[1]);
+  $("#ov-month-acts").innerHTML = acts.length
+    ? acts.map(([n, m]) => `<div class="kv"><span>${u.esc(n)}</span><b>${u.esc(hmRound(m))} h</b></div>`).join("")
+    : `<p class="note">Keine Arbeitszeit in diesem Monat.</p>`;
 }
 
 function exportCSV() {
@@ -281,6 +563,19 @@ function renderSettings() {
   $("#ov-autoloc").checked = s.autoLocate !== false;
   const radius = $("#ov-radius");
   if (document.activeElement !== radius) radius.value = s.defaultRadius ?? 150;
+
+  const wd = new Set(workDays());
+  root.querySelectorAll("#ov-workdays [data-wd]").forEach((b) =>
+    b.setAttribute("aria-pressed", String(wd.has(Number(b.dataset.wd)))));
+  $("#ov-holidays").checked = s.holidays !== false;
+  $("#ov-pauserem").checked = s.pauseReminder !== false;
+  const bs = $("#ov-balstart");
+  if (document.activeElement !== bs) bs.value = s.balanceStart || "";
+  const off = $("#ov-baloffset");
+  if (document.activeElement !== off) {
+    const v = Number(s.balanceOffsetMin) || 0;
+    off.value = v ? fmtSignedHours(v) : "";
+  }
 }
 
 function renderAccount() {
