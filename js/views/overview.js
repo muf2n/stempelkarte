@@ -1,4 +1,7 @@
-// Reiter „Übersicht“: Überstundenkonto, Wochenbalken mit Soll/Ist, Monatsauswertung mit CSV-Export und Einstellungen/Konto.
+// Reiter „Übersicht“: Überstundenkonto, Wochenbalken mit Soll/Ist, Monatsauswertung mit CSV-Export und Einstellungen/Konto;
+// am PC als Dashboard mit rechter Spalte (Heute, Wochenziel, Einstempeln, Schnelle Aktionen, Legende).
+import { icon } from "../icons.js";
+import { leaves, sparkles } from "../deco.js";
 
 let ctx = null;
 let root = null;
@@ -15,87 +18,138 @@ const $ = (sel) => root.querySelector(sel);
 export function mount(el, c) {
   ctx = c;
   root = el;
+  const qa = [
+    ["work", "plus", "Arbeitszeit nachtragen"],
+    ["urlaub", "calendar", "Urlaub eintragen"],
+    ["krank", "heart", "Krankheit eintragen"],
+    ["feiertag", "file", "Feiertag eintragen"],
+    ["zeitausgleich", "clock", "Zeitausgleich eintragen"],
+  ];
+  const legend = [
+    ["Arbeit", "var(--k-work)"], ["Krank", "var(--k-krank)"],
+    ["Autofahren", "#0EA5E9"], ["Feiertag", "var(--k-feiertag)"],
+    ["Material holen", "#F97316"], ["Zeitausgleich", "var(--k-zeitausgleich)"],
+  ];
   root.innerHTML = `
-    <div class="stack">
-      <div class="panel card ov-balance" id="ov-balance">
-        <div class="lbl">Überstundenkonto</div>
-        <div class="ov-saldo" id="ov-saldo">–</div>
-        <p class="note" id="ov-saldo-note"></p>
-        <div class="kv"><span>Diese Woche</span><b id="ov-bal-week"></b></div>
-        <div class="kv"><span>Diesen Monat</span><b id="ov-bal-month"></b></div>
-      </div>
-
-      <div class="panel card" id="ov-week">
-        <div class="nav">
-          <button class="btn ghost sm" type="button" data-wk="-1" aria-label="Vorige Woche">‹</button>
-          <b id="ov-week-label"></b>
-          <button class="btn ghost sm" type="button" data-wk="1" aria-label="Nächste Woche">›</button>
+    <div class="ov-dash">
+      <div class="ov-main">
+        <div class="panel card ov-balance" id="balance-panel">
+          ${leaves("left")}${leaves("right")}${sparkles()}
+          <div class="lbl">Überstundenkonto</div>
+          <div class="ov-saldo" id="ov-saldo">–</div>
+          <p class="note" id="ov-saldo-note"></p>
+          <div class="kv"><span>${icon("calendar", 18)}Diese Woche</span><b id="ov-bal-week"></b></div>
+          <div class="kv"><span>${icon("calendar", 18)}Diesen Monat</span><b id="ov-bal-month"></b></div>
         </div>
-        <div class="bars ov-bars" id="ov-bars"></div>
-        <p class="note" id="ov-week-hol" hidden></p>
-        <div class="kv"><span>Ist / Soll</span><b id="ov-week-ist"></b></div>
-        <div class="progress"><div id="ov-week-prog"></div></div>
-        <div class="kv"><span>Differenz</span><b id="ov-week-diff"></b></div>
-      </div>
 
-      <div class="panel card" id="ov-month">
-        <div class="nav">
-          <button class="btn ghost sm" type="button" data-mo="-1" aria-label="Voriger Monat">‹</button>
-          <b id="ov-month-label"></b>
-          <button class="btn ghost sm" type="button" data-mo="1" aria-label="Nächster Monat">›</button>
-        </div>
-        <div class="kv"><span>Ist / Soll</span><b id="ov-month-ist"></b></div>
-        <div class="kv"><span>Differenz</span><b id="ov-month-diff"></b></div>
-        <div class="kv"><span>davon Arbeitszeit (netto)</span><b id="ov-month-net"></b></div>
-        <div class="kv"><span>Arbeitstage</span><b id="ov-month-days"></b></div>
-        <div class="kv"><span>Urlaubstage</span><b id="ov-month-urlaub"></b></div>
-        <div class="kv"><span>Krankentage</span><b id="ov-month-krank"></b></div>
-        <div class="kv"><span id="ov-year-urlaub-l">Urlaubstage im Jahr</span><b id="ov-year-urlaub"></b></div>
-        <div class="kv"><span>Pausen gesamt</span><b id="ov-month-pause"></b></div>
-        <div class="lbl">Stunden je Arbeitsort</div>
-        <div id="ov-month-places"></div>
-        <div class="lbl">Stunden je Tätigkeit</div>
-        <div id="ov-month-acts"></div>
-        <button class="btn primary" type="button" id="ov-csv">Als CSV (Excel) herunterladen</button>
-      </div>
-
-      <div class="panel card" id="ov-settings">
-        <h2>Einstellungen</h2>
-        <div class="fields">
-          <label>Soll-Stunden pro Woche
-            <input type="number" id="ov-target" inputmode="decimal" min="0" max="80" step="0.5">
-          </label>
-          <label class="switch">
-            <input type="checkbox" id="ov-autoloc">
-            <span>Standort beim Stempeln erfassen</span>
-          </label>
-          <label>Standard-Radius für Orte (m)
-            <input type="number" id="ov-radius" inputmode="numeric" min="50" max="1000" step="10">
-          </label>
-          <div>
-            <div class="lbl">Arbeitstage</div>
-            <div class="chips ov-wd" id="ov-workdays" role="group" aria-label="Arbeitstage"></div>
+        <div class="panel card" id="stats-panel">
+          <div class="nav">
+            <button class="btn ghost sm" type="button" data-wk="-1" aria-label="Vorige Woche">${icon("chevron-left", 18)}</button>
+            <b id="ov-week-label"></b>
+            <button class="btn ghost sm" type="button" data-wk="1" aria-label="Nächste Woche">${icon("chevron-right", 18)}</button>
           </div>
-          <label class="switch">
-            <input type="checkbox" id="ov-holidays">
-            <span>Feiertage (Österreich) berücksichtigen</span>
-          </label>
-          <label class="switch">
-            <input type="checkbox" id="ov-pauserem">
-            <span>Pausen-Erinnerung nach 6 Stunden</span>
-          </label>
-          <label>Überstundenkonto zählt ab
-            <input type="date" id="ov-balstart">
-          </label>
-          <label>Startsaldo (Stunden, darf negativ sein)
-            <input type="text" id="ov-baloffset" inputmode="text" placeholder="z. B. 12,5 oder -3:15">
-          </label>
-          <p class="note">Ohne Datum zählt das Konto ab deinem ersten Eintrag.</p>
+          <div class="ov-chart">
+            <div class="ov-yaxis" id="ov-yaxis" aria-hidden="true"></div>
+            <div class="ov-plot">
+              <div class="ov-grid" id="ov-grid" aria-hidden="true"></div>
+              <div class="bars ov-bars" id="ov-bars"></div>
+            </div>
+          </div>
+          <p class="note" id="ov-week-hol" hidden></p>
+          <div class="kv"><span>Ist / Soll</span><b id="ov-week-ist"></b></div>
+          <div class="progress"><div id="ov-week-prog"></div></div>
+          <div class="kv"><span>Differenz</span><b id="ov-week-diff"></b></div>
         </div>
-        <div class="lbl">Konto</div>
-        <div id="ov-account"></div>
+
+        <div class="panel card" id="month-panel">
+          <div class="nav">
+            <button class="btn ghost sm" type="button" data-mo="-1" aria-label="Voriger Monat">${icon("chevron-left", 18)}</button>
+            <b id="ov-month-label"></b>
+            <button class="btn ghost sm" type="button" data-mo="1" aria-label="Nächster Monat">${icon("chevron-right", 18)}</button>
+          </div>
+          <div class="kv"><span>Ist / Soll</span><b id="ov-month-ist"></b></div>
+          <div class="kv"><span>Differenz</span><b id="ov-month-diff"></b></div>
+          <div class="kv"><span>davon Arbeitszeit (netto)</span><b id="ov-month-net"></b></div>
+          <div class="kv"><span>Arbeitstage</span><b id="ov-month-days"></b></div>
+          <div class="kv"><span>Urlaubstage</span><b id="ov-month-urlaub"></b></div>
+          <div class="kv"><span>Krankentage</span><b id="ov-month-krank"></b></div>
+          <div class="kv"><span id="ov-year-urlaub-l">Urlaubstage im Jahr</span><b id="ov-year-urlaub"></b></div>
+          <div class="kv"><span>Pausen gesamt</span><b id="ov-month-pause"></b></div>
+          <div class="lbl">Stunden je Arbeitsort</div>
+          <div id="ov-month-places"></div>
+          <div class="lbl">Stunden je Tätigkeit</div>
+          <div id="ov-month-acts"></div>
+          <button class="btn primary" type="button" id="ov-csv">Als CSV (Excel) herunterladen</button>
+        </div>
+
+        <div class="panel card" id="settings-panel">
+          <h2>${icon("gear", 20)}Einstellungen</h2>
+          <div class="fields">
+            <label>Soll-Stunden pro Woche
+              <input type="number" id="ov-target" inputmode="decimal" min="0" max="80" step="0.5">
+            </label>
+            <label class="switch">
+              <input type="checkbox" id="ov-autoloc">
+              <span>Standort beim Stempeln erfassen</span>
+            </label>
+            <label>Standard-Radius für Orte (m)
+              <input type="number" id="ov-radius" inputmode="numeric" min="50" max="1000" step="10">
+            </label>
+            <div>
+              <div class="lbl">Arbeitstage</div>
+              <div class="chips ov-wd" id="ov-workdays" role="group" aria-label="Arbeitstage"></div>
+            </div>
+            <label class="switch">
+              <input type="checkbox" id="ov-holidays">
+              <span>Feiertage (Österreich) berücksichtigen</span>
+            </label>
+            <label class="switch">
+              <input type="checkbox" id="ov-pauserem">
+              <span>Pausen-Erinnerung nach 6 Stunden</span>
+            </label>
+            <label>Überstundenkonto zählt ab
+              <input type="date" id="ov-balstart">
+            </label>
+            <label>Startsaldo (Stunden, darf negativ sein)
+              <input type="text" id="ov-baloffset" inputmode="text" placeholder="z. B. 12,5 oder -3:15">
+            </label>
+            <p class="note">Ohne Datum zählt das Konto ab deinem ersten Eintrag.</p>
+          </div>
+          <div class="lbl">Konto</div>
+          <div id="ov-account"></div>
+        </div>
       </div>
+
+      <aside class="ov-rail" aria-label="Kurzüberblick">
+        <div class="card ov-mini" id="ov-today">
+          <div class="ov-mini-h"><span class="ov-tile">${icon("clock", 22)}</span>
+            <div><div class="ov-mini-l">Heute</div><div class="ov-mini-v" id="ov-today-v">0:00 h</div></div></div>
+          <div class="progress"><div id="ov-today-prog" style="width:0%"></div></div>
+          <p class="note" id="ov-today-note"></p>
+        </div>
+        <div class="card ov-mini" id="ov-goal">
+          <div class="ov-mini-h"><span class="ov-tile">${icon("target", 22)}</span>
+            <div><div class="ov-mini-l">Wochenziel</div><div class="ov-mini-v" id="ov-goal-v">0:00 / 0:00 h</div></div></div>
+          <div class="progress"><div id="ov-goal-prog" style="width:0%"></div></div>
+          <div class="ov-goal-diff"><b id="ov-goal-diff"></b></div>
+        </div>
+        <button type="button" class="btn primary ov-go" id="ov-go">${icon("play", 20)}<span id="ov-go-l">Einstempeln</span></button>
+        <div class="card ov-quick">
+          <h3>Schnelle Aktionen</h3>
+          <div class="ov-quick-grid">
+            ${qa.map(([k, ic, t]) => `<button type="button" class="ov-qa" data-qk="${k}">${icon(ic, 20)}<span>${t}</span></button>`).join("")}
+          </div>
+        </div>
+        <div class="card ov-legend">
+          <h3>Legende</h3>
+          <ul>${legend.map(([t, c]) => `<li><i style="--c:${c}" aria-hidden="true"></i>${t}</li>`).join("")}</ul>
+        </div>
+      </aside>
     </div>`;
+
+  $("#ov-go").addEventListener("click", () => { location.hash = "#heute"; });
+  root.querySelectorAll("[data-qk]").forEach((b) =>
+    b.addEventListener("click", () => ctx.openEntryForm(null, { kind: b.dataset.qk })));
 
   root.querySelectorAll("[data-wk]").forEach((b) =>
     b.addEventListener("click", () => {
@@ -171,11 +225,22 @@ export function update(s) {
   renderBalance();
   renderWeek();
   renderMonth();
+  renderRail();
   renderSettings();
   renderAccount();
 }
 
-export function tick() {}
+let lastTick = 0;
+export function tick() {
+  // laufende Schicht: Balken/Heute/Wochenziel alle 20 s nachziehen, wenn sichtbar
+  if (!root || !snap || !snap.running || root.hidden) return;
+  const now = Date.now();
+  if (now - lastTick < 20000) return;
+  lastTick = now;
+  renderBalance();
+  renderWeek();
+  renderRail();
+}
 
 export function onShow() {
   if (snap) update(snap);
@@ -371,36 +436,105 @@ function balanceStartDate() {
 
 /* ---------- Überstundenkonto ---------- */
 
-function renderBalance() {
-  const u = ctx.util;
+function balanceNumbers() {
   const credits = creditByDay();
   const start = balanceStartDate();
   const offset = Number(settings().balanceOffsetMin) || 0;
   const total = offset + (start ? balanceBetween(start, credits) : 0);
-  setSigned($("#ov-saldo"), total);
+  const clip = (d) => (start && d < start ? start : d);
+  const ws = ctx.util.startOfWeek(Date.now());
+  const now = new Date();
+  const ms = ctx.util.startOfMonth(now.getFullYear(), now.getMonth());
+  return {
+    total, offset, start,
+    week: start ? balanceBetween(clip(ws), credits) : 0,
+    month: start ? balanceBetween(clip(ms), credits) : 0,
+  };
+}
+
+function renderBalance() {
+  const u = ctx.util;
+  const b = balanceNumbers();
+  setSigned($("#ov-saldo"), b.total);
 
   const note = [];
-  if (start) note.push(`seit ${u.fmtDate(start.getTime())}`);
-  if (offset) note.push(`inkl. Startsaldo ${signed(offset)}`);
+  if (b.start) note.push(`seit ${u.fmtDate(b.start.getTime())}`);
+  if (b.offset) note.push(`inkl. Startsaldo ${signed(b.offset)}`);
   note.push("Soll von heute zählt erst ab morgen");
   $("#ov-saldo-note").textContent = note.join(" · ");
 
-  const clip = (d) => (start && d < start ? start : d);
-  const ws = u.startOfWeek(Date.now());
-  const now = new Date();
-  const ms = u.startOfMonth(now.getFullYear(), now.getMonth());
-  setSigned($("#ov-bal-week"), start ? balanceBetween(clip(ws), credits) : 0);
-  setSigned($("#ov-bal-month"), start ? balanceBetween(clip(ms), credits) : 0);
+  setSigned($("#ov-bal-week"), b.week);
+  setSigned($("#ov-bal-month"), b.month);
+}
+
+/**
+ * Kompakte Überstundenkonto-Karte (PC-Kalenderseite, rechte Spalte).
+ * Wird von app.js bei jedem Snapshot in #rail-balance gerendert.
+ */
+export function renderBalanceCard(el, s, c) {
+  if (!el) return;
+  if (!ctx) ctx = c;
+  if (s) snap = s;
+  if (!ctx || !snap || snap.ready === false) { el.innerHTML = ""; return; }
+  const b = balanceNumbers();
+  const cls = (m) => (Math.round(m) < 0 ? "minus" : "plus");
+  const esc = ctx.util.esc;
+  el.innerHTML = `
+    <div class="card rb-card">
+      <div class="rb-h">
+        <h2>${icon("chart", 22)}Überstundenkonto</h2>
+        <button type="button" class="btn ghost sm rb-more" data-rb="details">Details</button>
+      </div>
+      <div class="rb-box">
+        ${leaves("left")}${sparkles()}
+        <div class="rb-saldo ${cls(b.total)}">${esc(signed(b.total))}</div>
+        <p class="note">Soll von heute zählt erst ab morgen</p>
+        <div class="kv"><span>Diese Woche</span><b class="${cls(b.week)}">${esc(signed(b.week))}</b></div>
+        <div class="kv"><span>Diesen Monat</span><b class="${cls(b.month)}">${esc(signed(b.month))}</b></div>
+      </div>
+    </div>`;
+  const btn = el.querySelector('[data-rb="details"]');
+  if (btn) btn.addEventListener("click", () => {
+    if (ctx.jump) ctx.jump("balance-panel"); else location.hash = "#uebersicht";
+  });
+}
+
+/* ---------- Rechte Spalte ---------- */
+
+function renderRail() {
+  if (!snap) return;
+  const u = ctx.util;
+  const todayKey = u.dayKey(Date.now());
+  const todayMin = creditByDay().get(todayKey) || 0;
+  const todayTarget = targetOf(u.startOfDay(Date.now()).getTime());
+  $("#ov-today-v").textContent = `${hmRound(todayMin)} h`;
+  const tp = todayTarget > 0 ? Math.min(100, (todayMin / todayTarget) * 100) : (todayMin > 0 ? 100 : 0);
+  $("#ov-today-prog").style.width = `${tp}%`;
+  let note;
+  if (snap.running) note = todayTarget > 0 ? `Läuft · ${Math.round(tp)} % vom Tagessoll (${hmRound(todayTarget)} h)` : "Läuft · heute kein Soll";
+  else if (todayMin < 1) note = todayTarget > 0 ? `Noch keine Arbeitszeit erfasst · Soll ${hmRound(todayTarget)} h` : "Noch keine Arbeitszeit erfasst.";
+  else note = todayTarget > 0 ? `${Math.round(tp)} % vom Tagessoll (${hmRound(todayTarget)} h)` : "Heute kein Soll";
+  $("#ov-today-note").textContent = note;
+
+  const w = weekData(0);
+  $("#ov-goal-v").textContent = `${hmRound(w.total)} / ${hmRound(w.targetMin)} h`;
+  const gp = w.targetMin > 0 ? Math.min(100, (w.total / w.targetMin) * 100) : (w.total > 0 ? 100 : 0);
+  $("#ov-goal-prog").style.width = `${gp}%`;
+  const diff = Math.round(w.total - w.targetMin);
+  const dEl = $("#ov-goal-diff");
+  dEl.textContent = `${diff >= 0 ? "+" : "\u2212"}${u.hm(Math.abs(diff))} h`;
+  dEl.className = diff >= 0 ? "plus" : "minus";
+
+  $("#ov-go-l").textContent = snap.running ? "Zur Stempeluhr" : "Einstempeln";
 }
 
 /* ---------- Woche ---------- */
 
-function renderWeek() {
-  if (!snap) return;
+function weekData(offset) {
   const u = ctx.util;
   const holOn = settings().holidays !== false;
   const ws = u.startOfWeek(Date.now());
-  ws.setDate(ws.getDate() + weekOffset * 7);
+  ws.setDate(ws.getDate() + offset * 7);
   const days = [];
   for (let i = 0; i < 7; i++) {
     const d = new Date(ws);
@@ -419,7 +553,21 @@ function renderWeek() {
   }
   const total = days.reduce((a, d) => a + d.min, 0);
   const targetMin = days.reduce((a, d) => a + d.target, 0);
-  const maxMin = Math.max(8 * 60, ...days.map((d) => d.min), ...days.map((d) => d.target));
+  return { ws, days, total, targetMin };
+}
+
+function renderWeek() {
+  if (!snap) return;
+  const u = ctx.util;
+  const { ws, days, total, targetMin } = weekData(weekOffset);
+  // y-Achse in 5-h-Schritten (mind. 0/5/10 h)
+  const peak = Math.max(...days.map((d) => d.min), ...days.map((d) => d.target));
+  const step = peak > 20 * 60 ? 600 : 300;
+  const maxMin = Math.max(600, Math.ceil(peak / step) * step);
+  const ticks = [];
+  for (let v = 0; v <= maxMin; v += step) ticks.push(v);
+  $("#ov-yaxis").innerHTML = ticks.map((v) => `<span style="bottom:${(v / maxMin) * 100}%">${v / 60} h</span>`).join("");
+  $("#ov-grid").innerHTML = ticks.map((v) => `<i style="bottom:${(v / maxMin) * 100}%"></i>`).join("");
   const todayKey = u.dayKey(Date.now());
 
   const last = days[6].date;
