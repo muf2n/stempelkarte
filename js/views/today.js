@@ -1,6 +1,9 @@
 // Reiter „Heute“: große Uhr, Stempel-Knöpfe, Ort-Auswahl, Notiz, Kennzahlen, heutige Einträge
 // und kurze Hinweis-Kärtchen (Orts-Vorschlag, vergessenes Ausstempeln, Pausen-Erinnerung).
 
+import { icon } from "../icons.js";
+import { leaves, sparkles, emptyClipboard } from "../deco.js";
+
 let ctx = null;
 let root = null;
 let snap = null;
@@ -212,6 +215,7 @@ export function mount(el, c) {
   el.innerHTML = `
 <div class="stack">
   <div class="card clock" data-r="clock">
+    <div class="clock-deco" aria-hidden="true">${sparkles()}${leaves("left")}${leaves("right")}</div>
     <span class="pill" data-r="pill">Nicht eingestempelt</span>
     <div class="big" data-r="big">0:00:00</div>
     <div class="dayprog" data-r="prog">
@@ -227,27 +231,29 @@ export function mount(el, c) {
   <div class="stack" data-r="tips" hidden></div>
   <div class="row" data-r="btns"></div>
   <div class="stack" data-r="pre">
-    <div class="lbl">Tätigkeit</div>
+    <div class="lbl lbl-ico">${icon("briefcase", 20)}<span>Tätigkeit</span></div>
     <div class="chips" data-r="acts"></div>
-    <div class="lbl">Arbeitsort</div>
+    <div class="lbl lbl-ico">${icon("pin", 20)}<span>Arbeitsort</span></div>
     <div class="hint" data-r="near" hidden></div>
     <div class="chips" data-r="chips"></div>
     <div class="fields">
-      <label>Notiz (optional)
-        <input type="text" data-r="note" maxlength="300" placeholder="z. B. Aufgabe, Kunde …" autocomplete="off">
+      <label class="note-field"><span class="lbl-ico lbl-note">${icon("note", 20)}<span>Notiz (optional)</span></span>
+        <span class="input-ico">${icon("pencil", 20)}<input type="text" data-r="note" maxlength="300" placeholder="z. B. Aufgabe, Kunde …" autocomplete="off"></span>
       </label>
     </div>
   </div>
   <div class="stats" data-r="stats">
-    <div class="stat"><span>Heute</span><strong data-r="s-day">0:00</strong></div>
-    <div class="stat"><span>Woche</span><strong data-r="s-week">0:00</strong></div>
-    <div class="stat"><span>Monat</span><strong data-r="s-month">0:00</strong></div>
+    <div class="stat stat-ico">${icon("calendar", 24)}<span>Heute</span><strong data-r="s-day">0:00</strong></div>
+    <div class="stat stat-ico">${icon("chart", 24)}<span>Woche</span><strong data-r="s-week">0:00</strong></div>
+    <div class="stat stat-ico">${icon("pie", 24)}<span>Monat</span><strong data-r="s-month">0:00</strong></div>
   </div>
-  <div class="section-h">
-    <h2>Heute erfasst</h2>
-    <button type="button" class="btn sm ghost" data-r="add">+ Nachtragen</button>
+  <div class="card today-list" data-r="todaycard">
+    <div class="section-h">
+      <h2 class="h-ico">${icon("list", 24)}<span>Heute erfasst</span></h2>
+      <button type="button" class="btn sm ghost" data-r="add">${icon("plus", 18)}<span>Nachtragen</span></button>
+    </div>
+    <div class="stack" data-r="list"></div>
   </div>
-  <div class="stack" data-r="list"></div>
 </div>`;
 
   $("btns").addEventListener("click", onButton);
@@ -712,13 +718,13 @@ function renderButtons() {
   const dis = locked ? " disabled" : "";
   let html = "";
   if (st === "idle") {
-    html = `<button type="button" class="btn go" data-act="in"${dis}>Einstempeln</button>`;
+    html = `<button type="button" class="btn go" data-act="in"${dis}>${icon("play", 22)}<span>Einstempeln</span></button>`;
   } else if (st === "done") {
-    html = `<button type="button" class="btn go" data-act="in"${dis}>Neue Schicht starten</button>`;
+    html = `<button type="button" class="btn go" data-act="in"${dis}>${icon("play", 22)}<span>Neue Schicht starten</span></button>`;
   } else {
-    html = `<button type="button" class="btn pause" data-act="pause"${dis}>${st === "paused" ? "Pause beenden" : "Pause"}</button>` +
-      `<button type="button" class="btn stop" data-act="out"${dis}>Ausstempeln</button>` +
-      `<button type="button" class="btn ghost seg-btn" data-act="seg"${dis}>Abschnitt wechseln</button>`;
+    html = `<button type="button" class="btn pause" data-act="pause"${dis}>${icon(st === "paused" ? "play" : "pause", 20)}<span>${st === "paused" ? "Pause beenden" : "Pause"}</span></button>` +
+      `<button type="button" class="btn stop" data-act="out"${dis}>${icon("stop", 20)}<span>Ausstempeln</span></button>` +
+      `<button type="button" class="btn ghost seg-btn" data-act="seg"${dis}>${icon("swap", 20)}<span>Abschnitt wechseln</span></button>`;
   }
   $("btns").innerHTML = html;
 }
@@ -1010,7 +1016,7 @@ function renderPre() {
     `<button type="button" class="chip" data-id="${util.esc(p.id)}" aria-pressed="${p.id === sel ? "true" : "false"}">${util.esc(p.name)}</button>`
   ).join("");
   html += `<button type="button" class="chip add" data-act="addplace"${locating ? " disabled" : ""}>` +
-    `${locating ? "Standort wird ermittelt …" : "+ Ort hier speichern"}</button>`;
+    `${locating ? "Standort wird ermittelt …" : `${icon("plus", 18)}<span>Ort hier speichern</span>`}</button>`;
   $("chips").innerHTML = html;
 }
 
@@ -1247,8 +1253,8 @@ function renderList() {
   if (key === listKey) return;
   listKey = key;
   if (!list.length) {
-    $("list").innerHTML = `<div class="empty"><h3>Heute noch nichts erfasst</h3>` +
-      `<p class="note">Stempel ein oder trag eine Zeit mit „+ Nachtragen“ nach.</p></div>`;
+    $("list").innerHTML = `<div class="empty empty-illu">${emptyClipboard()}<h3>Noch keine Einträge für heute</h3>` +
+      `<p class="note">Deine Arbeitszeiten werden hier angezeigt, sobald du eingestempelt hast.</p></div>`;
     return;
   }
   $("list").innerHTML = list.map((e) => {

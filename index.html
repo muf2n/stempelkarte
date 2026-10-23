@@ -17,15 +17,36 @@
   <link rel="manifest" href="manifest.webmanifest">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,700;12..96,800&family=IBM+Plex+Mono:wght@500;600&family=Instrument+Sans:wght@400;500;600;700&display=swap">
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,700;12..96,800&family=Caveat:wght@500;600&family=Fraunces:opsz,wght@9..144,500;9..144,600&family=IBM+Plex+Mono:wght@500;600&family=Instrument+Sans:wght@400;500;600;700&display=swap">
   <link rel="stylesheet" href="css/styles.css?v=20261024-0126">
   <script type="module" src="js/app.js?v=20261024-0126"></script>
 </head>
 <body>
   <header class="appbar">
-    <h1>Stempelkarte</h1>
-    <span id="sync-status" class="sync"></span>
+    <div class="brand">
+      <span class="brand-tile" aria-hidden="true"><svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" focusable="false"><rect x="3.5" y="5" width="17" height="15" rx="2.5"/><path d="M3.5 10h17M8 3v4M16 3v4"/><path d="M9 15l2 2 4-4"/></svg></span>
+      <div class="brand-txt">
+        <h1>Stempelkarte</h1>
+        <p class="brand-sub">Deine Arbeitszeiten einfach im Blick</p>
+      </div>
+    </div>
+    <div class="appbar-end">
+      <span id="sync-status" class="sync"></span>
+      <button type="button" id="btn-settings" class="icon-btn" aria-label="Einstellungen"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 1 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 1 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 1 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 1 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg></button>
+    </div>
   </header>
+  <script>
+    // Zahnrad: zur Übersicht wechseln und zum Einstellungs-Panel scrollen (Panel kann erst nach dem Rendern existieren).
+    document.getElementById("btn-settings").addEventListener("click", function () {
+      if (location.hash !== "#uebersicht") location.hash = "#uebersicht";
+      var tries = 0;
+      (function go() {
+        var p = document.getElementById("settings-panel");
+        if (p && p.offsetParent !== null) { p.scrollIntoView({ behavior: "smooth", block: "start" }); return; }
+        if (++tries < 30) setTimeout(go, 60);
+      })();
+    });
+  </script>
 
   <noscript>
     <div class="card" style="margin:16px">

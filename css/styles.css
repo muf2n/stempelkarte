@@ -1658,3 +1658,242 @@ body::before {
   .clock.running .pill::before { animation: none; }
   .card, .panel { animation: none; }
 }
+
+/* === Update 4: G === */
+/* Handy-Look nach Entwurf: Lavendel-Grund, weiße Karten mit weichem Schatten, Blattzweige + Funkeln,
+   Kopfzeile mit App-Kachel, Türkis-Einstempeln, Icon-Überschriften, Kennzahlen mit Icons.
+   Styles hängen nicht an der Fensterbreite, damit #view-heute auch als rechte PC-Spalte passt. */
+:root {
+  --bg: #F3F0FC;
+  --card: #FFFFFF;
+  --ink: #221A4D;
+  --muted: #6A6488;
+  --line: #E6E0F7;
+  --accent: #6D4AE8;
+  --accent-2: #8B5CF6;
+  --soft: #EEE8FD;
+  --grad: linear-gradient(135deg, #7C5CF2 0%, #9F5EF0 100%);
+  --clock-ink: #1E1446;
+  --grad-teal: linear-gradient(180deg, #23A08B 0%, #13806F 100%);
+  --teal-glow: rgba(19, 128, 111, .45);
+  --t1: #5B3FE0; --t2: #0E8A8A; --t3: #B0249A;
+  --t1-bg: #FFFFFF; --t2-bg: #EDF8F8; --t3-bg: #FCEFF8;
+  --leaf-a: #9C86DD; --leaf-b: #B4A2E8; --leaf-c: #C9BCF0;
+  --leaf-stem: #8E79D2; --leaf-vein: rgba(255, 255, 255, .55);
+  --sparkle: #C3B4F2;
+  --clip-shadow: #EFEAFC; --clip-board: #DCD2F8; --clip-paper: #FFFFFF; --clip-line: #A894E8;
+  --shadow: 0 1px 2px rgba(60, 40, 140, .05), 0 10px 28px -10px rgba(80, 56, 170, .18);
+  --f-serif: "Fraunces", Georgia, "Times New Roman", serif;
+  --f-hand: "Caveat", "Segoe Script", cursive;
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #120E24;
+    --card: #1C1636;
+    --ink: #ECE8FF;
+    --muted: #A69FC8;
+    --line: #2E2752;
+    --accent: #A78BFA;
+    --accent-2: #C4B5FD;
+    --soft: #261E48;
+    --grad: linear-gradient(135deg, #8B6CF6 0%, #B07CF4 100%);
+    --clock-ink: #F1EDFF;
+    --grad-teal: linear-gradient(180deg, #2BB39C 0%, #17907D 100%);
+    --teal-glow: rgba(43, 179, 156, .35);
+    --t1: #A895FF; --t2: #4FD1C5; --t3: #F08ADF;
+    --t1-bg: #1C1636; --t2-bg: #172A35; --t3-bg: #2A1838;
+    --leaf-a: #5B4A9A; --leaf-b: #4A3C80; --leaf-c: #3B3068;
+    --leaf-stem: #5A4A94; --leaf-vein: rgba(255, 255, 255, .14);
+    --sparkle: #6C5BB0;
+    --clip-shadow: #231C42; --clip-board: #3A2F6B; --clip-paper: #2A2250; --clip-line: #8C76E0;
+    --shadow: 0 1px 2px rgba(0, 0, 0, .35), 0 12px 30px -10px rgba(0, 0, 0, .55);
+  }
+}
+body::before {
+  background:
+    radial-gradient(60% 40% at 0% 0%, color-mix(in srgb, var(--accent-2) 14%, transparent), transparent 70%),
+    radial-gradient(55% 35% at 100% 15%, color-mix(in srgb, var(--accent) 10%, transparent), transparent 70%),
+    radial-gradient(70% 40% at 50% 100%, color-mix(in srgb, var(--accent-2) 10%, transparent), transparent 70%);
+}
+
+/* ---------- Kopfzeile ---------- */
+.appbar { padding-top: calc(env(safe-area-inset-top) + 14px); padding-bottom: 14px; }
+.brand { display: flex; align-items: center; gap: 12px; min-width: 0; }
+.brand-tile {
+  flex: none;
+  display: grid; place-items: center;
+  width: 46px; height: 46px;
+  border-radius: 14px;
+  background: color-mix(in srgb, var(--accent) 16%, var(--card));
+  color: var(--accent);
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--accent) 12%, transparent);
+}
+.brand-txt { min-width: 0; }
+.appbar h1 {
+  margin: 0;
+  font-family: var(--f-serif);
+  font-optical-sizing: auto;
+  font-weight: 600;
+  font-size: 1.6rem;
+  line-height: 1.1;
+  letter-spacing: -.01em;
+  background: none;
+  -webkit-text-fill-color: currentColor;
+  color: var(--ink);
+}
+.brand-sub {
+  margin: 2px 0 0;
+  font-size: .8rem;
+  color: var(--muted);
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.appbar-end { flex: none; display: flex; align-items: center; gap: 8px; }
+.sync { padding: 8px 13px; font-size: .82rem; box-shadow: var(--shadow); border-color: transparent; }
+.sync.ok { background: color-mix(in srgb, var(--k-work) 12%, var(--card)); color: color-mix(in srgb, var(--k-work) 80%, var(--ink)); }
+.icon-btn {
+  display: grid; place-items: center;
+  width: 44px; height: 44px;
+  padding: 0;
+  border: 1px solid color-mix(in srgb, var(--line) 70%, transparent);
+  border-radius: 50%;
+  background: var(--card);
+  color: var(--accent);
+  box-shadow: var(--shadow);
+  cursor: pointer;
+}
+.icon-btn:focus-visible { outline: none; box-shadow: var(--ring); }
+@media (max-width: 380px) {
+  .brand-sub { display: none; }
+  .brand-tile { width: 40px; height: 40px; }
+}
+
+/* ---------- Karten allgemein ---------- */
+.card { border-color: color-mix(in srgb, var(--line) 60%, transparent); box-shadow: var(--shadow); border-radius: 22px; }
+#settings-panel { scroll-margin-top: 90px; }
+
+/* ---------- Uhr-Karte ---------- */
+.clock {
+  padding: 18px 18px 20px;
+  gap: 6px;
+  background:
+    radial-gradient(60% 80% at 100% 30%, color-mix(in srgb, var(--accent-2) 10%, transparent), transparent 70%),
+    radial-gradient(40% 60% at 0% 100%, color-mix(in srgb, var(--accent-2) 8%, transparent), transparent 70%),
+    var(--card);
+}
+.clock-deco { position: absolute; inset: 0; z-index: -1; pointer-events: none; overflow: hidden; }
+.clock-deco .deco-sparkles { position: absolute; inset: 6% 2%; width: 96%; height: 88%; }
+.clock-deco .deco-leaves { position: absolute; bottom: -4px; height: 72%; width: auto; max-height: 130px; opacity: .95; }
+.clock-deco .deco-leaves-left { left: -6px; }
+.clock-deco .deco-leaves-right { right: -6px; height: 58%; }
+.clock > :not(.clock-deco) { position: relative; }
+.clock .pill { background: color-mix(in srgb, var(--accent) 12%, var(--card)); color: var(--muted); font-weight: 600; }
+.clock .big {
+  font-family: var(--f-display);
+  font-weight: 800;
+  font-size: clamp(3rem, 16vw, 4.6rem);
+  letter-spacing: -.01em;
+  color: var(--clock-ink);
+  margin: 2px 0;
+}
+.clock.running .big { color: var(--clock-ink); }
+.clock .dayprog span { font-weight: 700; color: var(--ink); }
+.clock .meta { max-width: 92%; }
+
+/* ---------- Stempel-Knöpfe ---------- */
+.btn .ico { flex: none; }
+.btn.go {
+  background: var(--grad-teal);
+  color: #fff;
+  min-height: 60px;
+  font-size: 1.2rem;
+  border-radius: 18px;
+  box-shadow: 0 12px 26px -12px var(--teal-glow), inset 0 1px 0 rgba(255, 255, 255, .22);
+}
+[data-r="btns"] .btn { min-height: 58px; }
+[data-r="btns"] .btn.go { min-height: 60px; }
+.btn.ghost { background: var(--card); box-shadow: var(--shadow); }
+.btn.sm .ico { margin-left: -2px; }
+
+/* ---------- Abschnittsüberschriften ---------- */
+.lbl-ico { display: flex; align-items: center; gap: 10px; }
+.lbl.lbl-ico { font-size: .82rem; letter-spacing: .06em; color: color-mix(in srgb, var(--accent) 45%, var(--muted)); margin-top: 6px; }
+.lbl-ico .ico { color: color-mix(in srgb, var(--accent) 65%, var(--muted)); }
+.lbl-note { font-size: .98rem; font-weight: 700; color: color-mix(in srgb, var(--accent) 45%, var(--muted)); }
+.note-field { gap: 12px !important; margin-top: 4px; }
+
+/* Chips wie im Entwurf: weiß, weicher Schatten, Punkt in Tätigkeitsfarbe */
+.chip { min-height: 46px; border-color: color-mix(in srgb, var(--line) 70%, transparent); box-shadow: 0 2px 8px -4px rgba(80, 56, 170, .18); }
+.chip[data-act]:not(.add) { border: 1px solid color-mix(in srgb, var(--line) 70%, transparent); padding: 8px 18px 8px 14px; gap: 10px; }
+.chip[data-act]:not(.add)::before { width: 14px; height: 14px; }
+.chip[data-act][aria-pressed="true"] { border-color: var(--act-fill); }
+.chip.add {
+  border: 1.5px dashed color-mix(in srgb, var(--accent) 35%, var(--line));
+  background: color-mix(in srgb, var(--card) 45%, transparent);
+  box-shadow: none;
+  padding: 8px 22px 8px 16px;
+  gap: 10px;
+}
+
+/* Notizfeld mit Stift innen links */
+.input-ico { position: relative; display: block; }
+.input-ico .ico { position: absolute; left: 16px; top: 50%; transform: translateY(-50%); color: var(--muted); pointer-events: none; }
+.input-ico input { padding-left: 50px; background: var(--card); border-color: color-mix(in srgb, var(--line) 80%, transparent); border-radius: 16px; min-height: 52px; box-shadow: 0 1px 2px rgba(60, 40, 140, .04); }
+
+/* ---------- Kennzahlen ---------- */
+.stat.stat-ico {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  grid-template-rows: auto auto;
+  column-gap: 10px;
+  align-items: center;
+  padding: 14px 10px 14px 16px;
+  border-radius: 16px;
+  background: var(--t1-bg);
+  border-color: color-mix(in srgb, var(--tone) 18%, var(--line));
+  box-shadow: var(--shadow);
+}
+.stat.stat-ico:nth-child(2) { background: var(--t2-bg); }
+.stat.stat-ico:nth-child(3) { background: var(--t3-bg); }
+.stat.stat-ico::before { left: 0; top: 12px; bottom: 12px; width: 4px; }
+.stat-ico .ico { grid-row: 1; grid-column: 1; color: var(--tone); }
+.stat-ico span { grid-row: 1; grid-column: 2; font-size: .78rem; }
+.stat-ico strong {
+  grid-row: 2; grid-column: 2;
+  font-family: var(--f-display);
+  font-weight: 700;
+  font-size: 1.55rem;
+  color: var(--clock-ink);
+  line-height: 1.15;
+}
+
+/* ---------- Heute erfasst ---------- */
+.today-list { display: flex; flex-direction: column; gap: 14px; padding: 16px; }
+.today-list .section-h { margin: 0; }
+.h-ico { display: flex; align-items: center; gap: 12px; font-size: 1.25rem; margin: 0; }
+.h-ico .ico { color: var(--accent); }
+.today-list [data-r="add"] { border-radius: 999px; border: 1.5px solid var(--accent); color: var(--accent); box-shadow: none; gap: 6px; }
+.empty.empty-illu {
+  border: 1px solid color-mix(in srgb, var(--line) 70%, transparent);
+  background: color-mix(in srgb, var(--bg) 35%, var(--card));
+  padding: 20px 18px 22px;
+  gap: 4px;
+}
+.empty-illu .deco-clipboard { width: 150px; height: auto; margin-bottom: 4px; }
+.empty-illu h3 { font-size: 1.05rem; margin: 0; }
+.empty-illu .note { max-width: 30ch; margin: 0; }
+
+/* Deko allgemein */
+.deco-leaves, .deco-sparkles { pointer-events: none; }
+/* Feinschliff (G, Durchgang 2) */
+.appbar h1 { font-size: clamp(1.3rem, 5.6vw, 1.6rem); overflow: visible; text-overflow: clip; }
+.brand { flex: 1 1 auto; }
+.sync { max-width: 40vw; overflow: hidden; text-overflow: ellipsis; padding: 7px 11px; font-size: .78rem; }
+.appbar-end { gap: 6px; }
+.clock-deco .deco-sparkles { inset: 8px 2% auto; height: 150px; }
+.clock .meta { max-width: 100%; font-size: .88rem; }
+.stat.stat-ico { column-gap: 8px; padding: 12px 8px 12px 13px; }
+.stat-ico .ico { width: 20px; height: 20px; }
+.stat-ico span { font-size: .72rem; letter-spacing: .04em; }
+.stat-ico strong { font-size: 1.35rem; overflow: visible; text-overflow: clip; }
+.appbar h1 { font-size: clamp(1.2rem, 5.2vw, 1.6rem); overflow: hidden; text-overflow: ellipsis; }
+.sync { max-width: 34vw; }
