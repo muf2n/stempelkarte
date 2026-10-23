@@ -1,0 +1,26 @@
+// Firestore-Sicherheitsregeln für die Stempelkarte:
+// Nur DEIN Google-Konto (E-Mail unten) darf die App nutzen – und auch nur seinen eigenen Bereich.
+// Jeder andere wird abgewiesen, selbst wenn er sich mit Google anmeldet.
+// Willst du später z. B. ein zweites Konto erlauben, ergänze es in der Liste: ['a@gmail.com', 'b@gmail.com']
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    function istErlaubt() {
+      return request.auth != null
+        && request.auth.token.email_verified == true
+        && request.auth.token.email in ['lippa.florian@gmail.com'];
+    }
+
+    // Eigener Datenbaum (Einträge, Orte, Zustand, Einstellungen)
+    match /users/{uid}/{document=**} {
+      allow read, write: if istErlaubt() && request.auth.uid == uid;
+    }
+
+    // Alles andere: gesperrt
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}
