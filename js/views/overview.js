@@ -566,8 +566,8 @@ function renderWeek() {
   const maxMin = Math.max(600, Math.ceil(peak / step) * step);
   const ticks = [];
   for (let v = 0; v <= maxMin; v += step) ticks.push(v);
-  $("#ov-yaxis").innerHTML = ticks.map((v) => `<span style="bottom:${(v / maxMin) * 100}%">${v / 60} h</span>`).join("");
-  $("#ov-grid").innerHTML = ticks.map((v) => `<i style="bottom:${(v / maxMin) * 100}%"></i>`).join("");
+  $("#ov-yaxis").innerHTML = ticks.map((v) => `<span style="--p:${v / maxMin}">${v / 60} h</span>`).join("");
+  $("#ov-grid").innerHTML = ticks.map((v) => `<i style="--p:${v / maxMin}"></i>`).join("");
   const todayKey = u.dayKey(Date.now());
 
   const last = days[6].date;

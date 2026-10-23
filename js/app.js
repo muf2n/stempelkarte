@@ -14,6 +14,7 @@ import * as overview from "./views/overview.js";
 import * as places from "./views/places.js";
 import { openEntryForm } from "./views/entries.js";
 import { openPlaceForm } from "./views/places.js";
+import { icon } from "./icons.js";
 
 const TABS = ["heute", "eintraege", "uebersicht", "orte"];
 const VIEWS = { heute: today, eintraege: entries, uebersicht: overview, orte: places };
@@ -24,6 +25,10 @@ const $ = (sel) => document.querySelector(sel);
 const syncEl = $("#sync-status");
 const loginEl = $("#login");
 const tabbarEl = $("#tabbar");
+const railBalanceEl = $("#rail-balance");
+const desktopMQ = window.matchMedia ? window.matchMedia("(min-width: 1024px)") : null;
+const isDesktop = () => !!(desktopMQ && desktopMQ.matches);
+let activeJump = "";
 
 let mounted = false;
 let appVisible = false;
@@ -55,16 +60,23 @@ function safe(fn, ...args) {
 const ctx = {
   store, timer, geo, geofence, ui, util, exporter,
   firebaseConfigured,
-  openEntryForm: (entry = null) => openEntryForm(entry, ctx),
+  openEntryForm: (entry = null, prefill = null) => openEntryForm(entry, ctx, prefill),
   openPlaceForm: (place = null, presetLoc = null) => openPlaceForm(place, presetLoc, ctx),
   go: (tab) => go(tab),
+  jump: (id) => jump(id),
   signIn: () => doSignIn(),
   signOut: () => doSignOut(),
 };
 
 // ---------- Sync-Status ----------
 function renderSync() {
+  renderSyncEl(syncEl);
+  renderSyncEl(document.getElementById("pc-sync"));
+}
+function renderSyncEl(syncEl) {
   if (!syncEl) return;
+  // Am schmalen Handy ist nur der Punkt sichtbar – Text bleibt als Titel/Vorlesetext erhalten
+  queueMicrotask(() => { syncEl.title = syncEl.textContent; syncEl.setAttribute("aria-label", syncEl.textContent); });
   syncEl.classList.remove("ok", "off");
   if (loading) { syncEl.textContent = "Lade …"; return; }
   if (!navigator.onLine) { syncEl.textContent = "Offline"; syncEl.classList.add("off"); return; }
@@ -87,6 +99,9 @@ function mountViews() {
   store.subscribe((snap) => {
     lastSnap = snap;
     for (const tab of TABS) safe(VIEWS[tab].update, snap);
+    if (railBalanceEl) safe(overview.renderBalanceCard, railBalanceEl, snap, ctx);
+    renderTopbar();
+    renderRunState();
     renderSync();
   });
   setInterval(() => safe(today.tick), 1000);
@@ -101,19 +116,87 @@ function showTab(tab) {
   if (!appVisible) return;
   const changed = tab !== currentTab;
   currentTab = tab;
+  document.body.dataset.route = tab;
+  // PC: Kalender-Seite zeigt rechts zusätzlich die Stempelkarte + Überstundenkonto
+  const split = tab === "eintraege" && isDesktop();
   for (const t of TABS) {
     const el = document.getElementById("view-" + t);
-    if (el) el.hidden = t !== tab;
+    if (el) el.hidden = !(t === tab || (split && t === "heute"));
   }
+  if (railBalanceEl) railBalanceEl.hidden = !split;
+  if (tab !== "uebersicht") activeJump = "";
   if (tabbarEl) {
     tabbarEl.querySelectorAll("[data-tab]").forEach((b) => {
-      b.setAttribute("aria-selected", b.dataset.tab === tab ? "true" : "false");
+      const on = b.dataset.tab === tab && (b.dataset.jump || "") === activeJump;
+      b.setAttribute("aria-selected", on ? "true" : "false");
     });
   }
   if (changed) {
     window.scrollTo(0, 0);
     safe(VIEWS[tab].onShow);
+    if (split) safe(today.onShow);
   }
+}
+
+// Zur Übersicht wechseln und zu einem Panel scrollen (Seitenleiste: Statistiken, Auswertungen, Einstellungen …)
+function jump(id) {
+  activeJump = id || "";
+  go("uebersicht");
+  showTab("uebersicht");
+  if (!id) { window.scrollTo({ top: 0, behavior: "smooth" }); return; }
+  let tries = 0;
+  const run = () => {
+    const p = document.getElementById(id);
+    if (p && p.offsetParent !== null) {
+      const top = p.getBoundingClientRect().top + window.scrollY - (isDesktop() ? 16 : 84);
+      window.scrollTo({ top: Math.max(0, top), behavior: "smooth" });
+      return;
+    }
+    if (++tries < 30) setTimeout(run, 50);
+  };
+  setTimeout(run, 30);
+}
+
+if (desktopMQ) {
+  const onMQ = () => { if (appVisible && currentTab) { const t = currentTab; currentTab = null; showTab(t); } };
+  if (desktopMQ.addEventListener) desktopMQ.addEventListener("change", onMQ);
+  else if (desktopMQ.addListener) desktopMQ.addListener(onMQ);
+}
+
+// ---------- PC-Kopfzeile: Begrüßung, Datum, Avatar ----------
+const DAYS_LONG = ["Sonntag", "Montag", "Dienstag", "Mittwoch", "Donnerstag", "Freitag", "Samstag"];
+function renderTopbar() {
+  const d = new Date();
+  const dateEl = $("#pc-date");
+  if (dateEl) dateEl.textContent = `${DAYS_LONG[d.getDay()]}, ${d.getDate()}. ${util.MONTHS[d.getMonth()]} ${d.getFullYear()}`;
+  const user = lastSnap && lastSnap.mode === "cloud" ? lastSnap.user : null;
+  const full = user ? String(user.name || user.email || "").trim() : "";
+  const first = full ? full.split(/[\s@]+/)[0] : "";
+  const hello = $("#pc-hello");
+  if (hello) hello.textContent = first ? `Willkommen, ${first}` : "Willkommen";
+  const av = $("#pc-avatar");
+  if (av) {
+    const ini = first ? first.charAt(0).toUpperCase() : "";
+    const key = ini || "-";
+    if (av.dataset.k !== key) {
+      av.dataset.k = key;
+      av.innerHTML = ini ? `<span>${util.esc(ini)}</span>` : icon("user", 20);
+    }
+    av.title = full ? `${full} – Einstellungen` : "Einstellungen";
+  }
+}
+setInterval(renderTopbar, 60000);
+const avatarBtn = $("#pc-avatar");
+if (avatarBtn) avatarBtn.addEventListener("click", () => jump("settings-panel"));
+
+// Status der Schicht für die kompakte Stempelkarte am PC (Pill neben dem Titel)
+function renderRunState() {
+  const v = document.getElementById("view-heute");
+  if (!v) return;
+  const r = lastSnap && lastSnap.running;
+  const st = !r ? "idle" : (r.pauseStart != null ? "paused" : "running");
+  v.dataset.run = st;
+  v.dataset.status = st === "idle" ? "Nicht eingestempelt" : st === "paused" ? "Pause" : "Eingestempelt";
 }
 
 function go(tab) {
@@ -127,7 +210,9 @@ window.addEventListener("hashchange", () => showTab(tabFromHash()));
 if (tabbarEl) {
   tabbarEl.addEventListener("click", (ev) => {
     const b = ev.target.closest("[data-tab]");
-    if (b) go(b.dataset.tab);
+    if (!b) return;
+    if (b.dataset.jump || b.dataset.tab === "uebersicht") { jump(b.dataset.jump || ""); return; }
+    go(b.dataset.tab);
   });
 }
 
@@ -149,6 +234,8 @@ function showLogin() {
     const el = document.getElementById("view-" + t);
     if (el) el.hidden = true;
   }
+  if (railBalanceEl) railBalanceEl.hidden = true;
+  delete document.body.dataset.route;
   if (tabbarEl) tabbarEl.hidden = true;
   if (loginEl) loginEl.hidden = false;
   const btn = $("#btn-login");
@@ -342,4 +429,5 @@ if ("serviceWorker" in navigator) {
 }
 
 renderSync();
+renderTopbar();
 boot();

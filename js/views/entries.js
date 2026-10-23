@@ -1,5 +1,8 @@
 // Reiter „Einträge“: Monatsliste aller Einträge nach Tagen gruppiert, plus Formular zum Nachtragen/Bearbeiten.
 
+import { icon } from "../icons.js";
+import { leaves, sparkles, emptyClipboard } from "../deco.js";
+
 const SEL_KEY = "stempelkarte.selPlace";
 
 let root = null;
@@ -20,17 +23,21 @@ export function mount(el, ctx) {
   curM = now.getMonth();
 
   el.innerHTML = `
-    <div class="stack">
-      <div class="section-h">
+    <div class="stack ek-wrap">
+      <div class="section-h ek-head">
         <h2>Einträge</h2>
         <button type="button" class="btn primary sm" data-act="add">+ Nachtragen</button>
       </div>
-      <div class="nav">
-        <button type="button" class="btn ghost sm" data-act="prev" aria-label="Vorheriger Monat">‹</button>
-        <b data-ref="label"></b>
-        <button type="button" class="btn ghost sm" data-act="next" aria-label="Nächster Monat">›</button>
+      <div class="ek-calcard">
+        <span class="ek-deco" aria-hidden="true">${leaves("left")}${leaves("right")}</span>
+        <div class="nav ek-nav">
+          <button type="button" class="btn ghost sm" data-act="prev" aria-label="Vorheriger Monat">${icon("chevron-left", 18)}</button>
+          <b data-ref="label"></b>
+          <button type="button" class="btn ghost sm" data-act="next" aria-label="Nächster Monat">${icon("chevron-right", 18)}</button>
+          <button type="button" class="btn ghost sm ek-today" data-act="today">${icon("calendar", 18)}<span>Heute</span></button>
+        </div>
+        <div class="cal" data-ref="cal"></div>
       </div>
-      <div class="cal" data-ref="cal"></div>
       <p class="note" data-ref="sum"></p>
       <div class="stack" data-ref="list"></div>
     </div>`;
@@ -56,6 +63,12 @@ export function mount(el, ctx) {
       if (act === "prev") { shiftMonth(-1); return; }
       if (act === "next") { shiftMonth(1); return; }
       if (act === "all-days") { selKey = null; render(); return; }
+      if (act === "today") {
+        const n = new Date();
+        curY = n.getFullYear(); curM = n.getMonth(); selKey = null;
+        render();
+        return;
+      }
     }
     const row = ev.target.closest("button.entry[data-id]");
     if (row && el.contains(row)) {
@@ -163,7 +176,8 @@ function calendarHTML(snap, util, holidaysOn) {
         `${hol ? ` title="${esc(hol)}"` : ""} aria-label="${esc(aria.join(" · "))}" aria-pressed="${k === selKey}">` +
         `<span class="cal-num">${dt.getDate()}</span>` +
         `<span class="cal-h">${info && info.min > 0 ? esc(hm(info.min)) : ""}</span>` +
-        `${hol ? `<span class="cal-dot" aria-hidden="true"></span>` : ""}` +
+        `${hol || (info && info.kinds.has("feiertag")) ? `<span class="cal-dot" aria-hidden="true"></span>` : ""}` +
+        `${dotsHTML(info)}` +
         `</button>`;
     }
     grid += `<span class="cal-week" title="Wochensumme">${weekMin > 0 ? esc(hm(weekMin)) : ""}</span>`;
@@ -175,6 +189,13 @@ function calendarHTML(snap, util, holidaysOn) {
   return `<div class="cal-head" aria-hidden="true">${head}</div>
     <div class="cal-grid">${grid}</div>
     <div class="cal-legend">${legend}</div>`;
+}
+
+// Tagesarten als farbige Punkte (Feiertag steckt in .cal-dot oben rechts)
+function dotsHTML(info) {
+  if (!info) return "";
+  const ks = ["work", "urlaub", "krank", "zeitausgleich"].filter((k) => info.kinds.has(k));
+  return ks.length ? `<span class="cal-dots" aria-hidden="true">${ks.map((k) => `<i class="d-${k}"></i>`).join("")}</span>` : "";
 }
 
 // ---------- Liste ----------
@@ -219,8 +240,14 @@ function render() {
         ${hol ? `<p class="note">Feiertag: ${esc(hol)}</p>` : ""}
         <p class="note">Tippe auf „+ Nachtragen“, um für diesen Tag etwas einzutragen.</p></div>${resetBtn}`;
     } else {
-      listEl.innerHTML = `<div class="empty"><h3>Keine Einträge in diesem Monat</h3>
-        <p class="note">Tippe auf „+ Nachtragen“, um Arbeitszeit, Urlaub oder Krankenstand einzutragen.</p></div>`;
+      listEl.innerHTML = `<div class="empty ek-empty">
+        <span class="ek-empty-deco" aria-hidden="true">${leaves("left")}${sparkles()}</span>
+        <div class="ek-empty-ill">${emptyClipboard()}</div>
+        <div class="ek-empty-txt">
+          <h3>Keine Einträge in diesem Monat</h3>
+          <p class="note">Tippe auf „Nachtragen“, um Arbeitszeit, Urlaub oder Krankenstand einzutragen.</p>
+          <button type="button" class="btn primary" data-act="add">${icon("plus", 18)}<span>Eintrag nachtragen</span></button>
+        </div></div>`;
     }
     return;
   }
@@ -426,7 +453,9 @@ export function openEntryForm(entry, ctx, prefill = null) {
   const workDays = Array.isArray(settings.workDays) ? settings.workDays : [1, 2, 3, 4, 5];
   const nominalMin = workDays.length ? (Number(settings.weeklyTarget ?? 38.5) || 0) * 60 / workDays.length : 0;
 
-  let kind = isNew ? "work" : (KINDS.includes(entry.kind) ? entry.kind : "work");
+  let kind = isNew
+    ? (prefill && KINDS.includes(prefill.kind) ? prefill.kind : "work")
+    : (KINDS.includes(entry.kind) ? entry.kind : "work");
   let creditTouched = !isNew && kind !== "work"; // bestehende Gutschrift nicht überschreiben
 
   let selPlaceId;
