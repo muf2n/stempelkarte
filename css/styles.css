@@ -1,31 +1,49 @@
-/* Stempelkarte – Gestaltung der App: Farben, Schriften, Layout, alle Bausteine aus der SPEC (hell + dunkel). */
+/* Stempelkarte – Gestaltung der App: Farben, Schriften, Layout, alle Bausteine aus der SPEC (hell + dunkel).
+   Stil (Update 3): „Indigo-Glow“ – Indigo→Violett-Akzentverlauf, kräftige Tätigkeitsfarben, weiche farbige Schatten. */
 
 /* ---------- Tokens ---------- */
 :root {
-  --bg: #E9EDF2;
-  --card: #FBFCFD;
-  --ink: #16202C;
-  --muted: #5B6878;
-  --line: #D3DAE3;
-  --accent: #2A47C9;
+  --bg: #EEF0F8;
+  --card: #FFFFFF;
+  --ink: #141A33;
+  --muted: #535C78;
+  --line: #DADFEE;
+  --accent: #4F46E5;
   --accent-ink: #fff;
-  --soft: #E1E7F7;
-  --run: #127A52;
+  --soft: #E8E7FD;
+  --run: #047857;
   --run-ink: #fff;
-  --run-soft: #DCF1E7;
-  --pause: #A86200;
-  --pause-soft: #F8EBD3;
-  --danger: #B42318;
+  --run-soft: #D3F4E6;
+  --pause: #B45309;
+  --pause-soft: #FDEFD3;
+  --danger: #C81E1E;
+
+  /* neu in Update 3 */
+  --accent-2: #7C3AED;
+  --grad: linear-gradient(135deg, #4F46E5 0%, #7C3AED 100%);
+  --grad-go: linear-gradient(135deg, #047857 0%, #0F766E 100%);
+  --grad-stop: linear-gradient(135deg, #1E2447 0%, #2E2A6B 100%);
+  --grad-hero: linear-gradient(140deg, #3730A3 0%, #6D28D9 55%, #A21CAF 100%);
+  --stop-ink: #fff;
+  --glow-a: rgba(124, 58, 237, .16);
+  --glow-b: rgba(14, 165, 233, .14);
+  --glow-c: rgba(16, 185, 129, .10);
+  --t1: #4F46E5; --t2: #0E7490; --t3: #A21CAF;              /* Kennzahlen Heute/Woche/Monat */
+  --k-work: #059669;  --k-work-bg: #D3F4E6;
+  --k-urlaub: #D97706; --k-urlaub-bg: #FEF0C7;
+  --k-krank: #E11D48; --k-krank-bg: #FFE1E7;
+  --k-feiertag: #7C3AED; --k-feiertag-bg: #EDE5FF;
+  --k-zeitausgleich: #0D9488; --k-zeitausgleich-bg: #D5F5F1;
 
   --f-display: "Bricolage Grotesque", "Instrument Sans", system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
   --f-body: "Instrument Sans", system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
   --f-mono: "IBM Plex Mono", ui-monospace, "SF Mono", Menlo, Consolas, "Liberation Mono", monospace;
 
-  --r: 18px;
+  --r: 20px;
   --r-sm: 12px;
-  --tabbar-h: 64px;
+  --tabbar-h: 68px;
   --side: max(16px, env(safe-area-inset-left), env(safe-area-inset-right));
-  --shadow: 0 1px 2px rgba(22, 32, 44, .05), 0 6px 20px rgba(22, 32, 44, .06);
+  --shadow: 0 1px 2px rgba(30, 27, 75, .05), 0 8px 24px -6px rgba(49, 46, 129, .12);
   --ring: 0 0 0 3px var(--bg), 0 0 0 5px var(--accent);
 
   color-scheme: light;
@@ -33,23 +51,64 @@
 
 @media (prefers-color-scheme: dark) {
   :root {
-    --bg: #0F141B;
-    --card: #171E28;
-    --ink: #E7ECF2;
-    --muted: #93A0B1;
-    --line: #2A3442;
-    --accent: #7D95FF;
-    --accent-ink: #0B1020;
-    --soft: #1F2942;
-    --run: #4CC994;
-    --run-ink: #06140E;
-    --run-soft: #163327;
-    --pause: #F0B357;
-    --pause-soft: #3A2C14;
-    --danger: #F27C70;
-    --shadow: 0 1px 2px rgba(0, 0, 0, .3), 0 6px 20px rgba(0, 0, 0, .25);
+    --bg: #0B0E1A;
+    --card: #151A2E;
+    --ink: #EDEFFA;
+    --muted: #9CA5C4;
+    --line: #283050;
+    --accent: #8E90FF;
+    --accent-ink: #0B0E1A;
+    --soft: #1F2348;
+    --run: #34D399;
+    --run-ink: #04201A;
+    --run-soft: #0F2F26;
+    --pause: #FBBF24;
+    --pause-soft: #33270C;
+    --danger: #F87171;
+
+    --accent-2: #B794FF;
+    --grad: linear-gradient(135deg, #8E90FF 0%, #B794FF 100%);
+    --grad-go: linear-gradient(135deg, #34D399 0%, #2DD4BF 100%);
+    --grad-stop: linear-gradient(135deg, #E9EBFA 0%, #D4D7F5 100%);
+    --grad-hero: linear-gradient(140deg, #312E81 0%, #5B21B6 55%, #86198F 100%);
+    --stop-ink: #141A33;
+    --glow-a: rgba(139, 92, 246, .20);
+    --glow-b: rgba(14, 165, 233, .13);
+    --glow-c: rgba(16, 185, 129, .08);
+    --t1: #A5A8FF; --t2: #5EE1F0; --t3: #F0A6F5;
+    --k-work: #34D399;  --k-work-bg: #10342A;
+    --k-urlaub: #FBBF24; --k-urlaub-bg: #3A2D0C;
+    --k-krank: #FB7185; --k-krank-bg: #3F1520;
+    --k-feiertag: #B794FF; --k-feiertag-bg: #2A1F4D;
+    --k-zeitausgleich: #2DD4BF; --k-zeitausgleich-bg: #0E3330;
+    --shadow: 0 1px 2px rgba(0, 0, 0, .35), 0 10px 28px -8px rgba(0, 0, 0, .5);
     color-scheme: dark;
   }
+}
+
+/* ---------- Tätigkeitsfarben ---------- */
+/* --act = kräftige Farbe (Punkte, Leisten, Glow), --act-fill/--act-on = gefüllte Fläche + Schrift, --act-text = Schrift auf Karte */
+[data-act] {
+  --act: hsl(var(--act-hue, 220) 75% 52%);
+  --act-fill: hsl(var(--act-hue, 220) 70% 36%);
+  --act-on: #fff;
+  --act-text: hsl(var(--act-hue, 220) 70% 32%);
+}
+[data-act="arbeiten"] { --act: #10B981; --act-fill: #047857; --act-text: #047857; }
+[data-act="autofahren"] { --act: #0EA5E9; --act-fill: #0369A1; --act-text: #0369A1; }
+[data-act="material-holen"] { --act: #F97316; --act-fill: #C2410C; --act-text: #C2410C; }
+[data-act="buro"], [data-act="buero"] { --act: #8B5CF6; --act-fill: #6D28D9; --act-text: #6D28D9; }
+@media (prefers-color-scheme: dark) {
+  [data-act] {
+    --act: hsl(var(--act-hue, 220) 85% 66%);
+    --act-fill: hsl(var(--act-hue, 220) 85% 68%);
+    --act-on: #0B0E1A;
+    --act-text: hsl(var(--act-hue, 220) 90% 76%);
+  }
+  [data-act="arbeiten"] { --act: #34D399; --act-fill: #34D399; --act-text: #6EE7B7; }
+  [data-act="autofahren"] { --act: #38BDF8; --act-fill: #38BDF8; --act-text: #7DD3FC; }
+  [data-act="material-holen"] { --act: #FB923C; --act-fill: #FB923C; --act-text: #FDBA74; }
+  [data-act="buro"], [data-act="buero"] { --act: #A78BFA; --act-fill: #A78BFA; --act-text: #C4B5FD; }
 }
 
 /* ---------- Grundlagen ---------- */
@@ -1116,3 +1175,486 @@ input[type="range"]:focus-visible { outline: 3px solid var(--accent); outline-of
   background: transparent; color: var(--muted); font-size: 1rem; cursor: pointer;
 }
 .tip-x:focus-visible { outline: none; box-shadow: var(--ring); }
+
+/* =====================================================================
+   === Update 3: Agent F – Design „Indigo-Glow“ ===
+   Überschreibt die Grundbausteine oben mit mehr Farbe; alle Klassen bleiben.
+   ===================================================================== */
+
+/* Hintergrund mit weichen Farbflächen (fix, unter allem) */
+body { position: relative; }
+body::before {
+  content: "";
+  position: fixed;
+  inset: 0;
+  z-index: -1;
+  pointer-events: none;
+  background:
+    radial-gradient(60% 40% at 0% 0%, var(--glow-a), transparent 70%),
+    radial-gradient(55% 35% at 100% 10%, var(--glow-b), transparent 70%),
+    radial-gradient(70% 40% at 50% 100%, var(--glow-c), transparent 70%);
+}
+
+/* Kopfzeile: durchscheinend, Titel im Akzentverlauf */
+.appbar {
+  background: color-mix(in srgb, var(--bg) 82%, transparent);
+  -webkit-backdrop-filter: saturate(1.6) blur(14px);
+  backdrop-filter: saturate(1.6) blur(14px);
+}
+.appbar h1 {
+  font-size: 1.55rem;
+  letter-spacing: -.02em;
+  color: var(--accent);
+  background: var(--grad);
+  -webkit-background-clip: text;
+  background-clip: text;
+  -webkit-text-fill-color: transparent;
+  padding-bottom: 2px;
+}
+.sync { background: color-mix(in srgb, var(--card) 80%, transparent); }
+.sync.ok { color: var(--run); background: var(--run-soft); }
+
+/* Tabbar: Glas + aktive Pill im Akzentverlauf */
+.tabbar {
+  background: color-mix(in srgb, var(--card) 86%, transparent);
+  -webkit-backdrop-filter: saturate(1.6) blur(16px);
+  backdrop-filter: saturate(1.6) blur(16px);
+  border-top: 1px solid color-mix(in srgb, var(--line) 70%, transparent);
+  box-shadow: 0 -6px 24px -12px rgba(49, 46, 129, .25);
+}
+.tabbar button { gap: 4px; padding-top: 8px; }
+.tabbar button svg {
+  width: 58px; height: 32px;
+  padding: 4px 17px;
+  border-radius: 999px;
+  overflow: visible;
+  transition: background-color .2s ease, color .2s ease;
+}
+.tabbar button[aria-selected="true"],
+.tabbar button.active { color: var(--accent); font-weight: 700; }
+.tabbar button[aria-selected="true"]::before,
+.tabbar button.active::before { content: none; }
+.tabbar button[aria-selected="true"] svg,
+.tabbar button.active svg {
+  background: var(--grad);
+  color: var(--accent-ink);
+  stroke: var(--accent-ink);
+  box-shadow: 0 4px 12px -4px color-mix(in srgb, var(--accent-2) 70%, transparent);
+}
+
+/* Karten */
+.card, .panel {
+  border-color: color-mix(in srgb, var(--line) 75%, transparent);
+  animation: rise .32s cubic-bezier(.2, .8, .2, 1) both;
+}
+.view > .stack > .card:nth-child(2), .view > .stack > .panel:nth-child(2) { animation-delay: .04s; }
+.view > .stack > .card:nth-child(3), .view > .stack > .panel:nth-child(3) { animation-delay: .08s; }
+@keyframes rise { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: none; } }
+
+/* ---------- Uhr-Karte ---------- */
+.clock { position: relative; overflow: hidden; isolation: isolate; }
+.clock::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  opacity: 0;
+  transition: opacity .3s ease;
+}
+.clock.running:not([data-act]) { --act: var(--run); --act-text: var(--run); }
+.clock.running {
+  border-color: color-mix(in srgb, var(--act) 55%, var(--line));
+  box-shadow: 0 0 0 1px color-mix(in srgb, var(--act) 20%, transparent),
+              0 14px 36px -12px color-mix(in srgb, var(--act) 55%, transparent);
+}
+.clock.running::before {
+  opacity: 1;
+  background:
+    radial-gradient(90% 70% at 50% 0%, color-mix(in srgb, var(--act) 24%, transparent), transparent 75%),
+    linear-gradient(180deg, color-mix(in srgb, var(--act) 8%, transparent), transparent 60%);
+}
+.clock.running .pill {
+  background: color-mix(in srgb, var(--act) 16%, var(--card));
+  color: var(--act-text);
+}
+.clock.running .pill::before {
+  background: var(--act);
+  animation: pulse 1.8s ease-out infinite;
+}
+.clock.running .big { color: var(--ink); }
+
+.clock.paused {
+  border-color: color-mix(in srgb, var(--pause) 55%, var(--line));
+  box-shadow: 0 14px 36px -14px color-mix(in srgb, var(--pause) 55%, transparent);
+}
+.clock.paused::before {
+  opacity: 1;
+  background: repeating-linear-gradient(135deg, color-mix(in srgb, var(--pause) 7%, transparent) 0 14px, transparent 14px 28px),
+              radial-gradient(90% 70% at 50% 0%, color-mix(in srgb, var(--pause) 18%, transparent), transparent 75%);
+}
+.clock.paused .pill { background: var(--pause-soft); color: var(--pause); }
+
+.clock.done { border-color: color-mix(in srgb, var(--accent) 40%, var(--line)); }
+.clock.done::before {
+  opacity: 1;
+  background: radial-gradient(90% 70% at 50% 0%, color-mix(in srgb, var(--accent-2) 16%, transparent), transparent 75%);
+}
+.clock.done .pill { background: var(--grad); color: var(--accent-ink); }
+.clock.done .big { color: var(--accent); }
+
+.big { font-size: clamp(2.8rem, 15vw, 4.3rem); }
+
+@keyframes pulse {
+  0% { box-shadow: 0 0 0 0 color-mix(in srgb, currentColor 55%, transparent); }
+  70% { box-shadow: 0 0 0 8px transparent; }
+  100% { box-shadow: 0 0 0 0 transparent; }
+}
+
+/* Aktueller Abschnitt in der Uhr */
+.seg-now b[data-act] {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--act-text);
+}
+.seg-now b[data-act]::before {
+  content: "";
+  width: 12px; height: 12px;
+  border-radius: 50%;
+  background: var(--act);
+  box-shadow: 0 0 0 4px color-mix(in srgb, var(--act) 22%, transparent);
+}
+.seg-now .seg-route { color: var(--muted); font-size: .92rem; overflow-wrap: anywhere; }
+
+/* Abschnittsliste (Uhr) + Abschnitte (Einträge) mit farbiger Leiste */
+.seg-list { gap: 6px; }
+.seg-list li { white-space: normal; overflow-wrap: anywhere; }
+.seg-list li[data-act],
+.ek-segs li[data-act] {
+  border-left: 4px solid var(--act);
+  border-radius: 4px 10px 10px 4px;
+  padding: 5px 10px;
+  background: color-mix(in srgb, var(--act) 9%, transparent);
+  line-height: 1.35;
+}
+.ek-segs { border-left: 0; margin-left: 0; padding: 4px 0 2px; gap: 4px; }
+.seg-act { color: var(--act-text, var(--ink)); font-weight: 700; }
+.seg-route i { color: var(--muted); }
+.seg-dist { font-family: var(--f-mono); font-variant-numeric: tabular-nums; font-weight: 600; color: var(--ink); white-space: nowrap; }
+.seg-dist small, .ek-segs small { font-family: var(--f-body); font-weight: 500; font-size: .78em; color: var(--muted); }
+.seg-dur { font-family: var(--f-mono); font-variant-numeric: tabular-nums; font-weight: 600; color: var(--ink); white-space: nowrap; }
+
+/* ---------- Knöpfe ---------- */
+.btn {
+  border-radius: 18px;
+  transition: transform .1s ease, box-shadow .2s ease, filter .15s ease, background-color .15s ease;
+}
+.btn:active:not(:disabled) { transform: scale(.98); }
+.btn.go {
+  background: var(--grad-go);
+  color: var(--run-ink);
+  box-shadow: 0 10px 24px -10px color-mix(in srgb, var(--run) 80%, transparent), inset 0 1px 0 rgba(255, 255, 255, .18);
+}
+.btn.primary {
+  background: var(--grad);
+  color: var(--accent-ink);
+  box-shadow: 0 10px 24px -10px color-mix(in srgb, var(--accent-2) 80%, transparent), inset 0 1px 0 rgba(255, 255, 255, .18);
+}
+.btn.stop {
+  background: var(--grad-stop);
+  color: var(--stop-ink);
+  box-shadow: 0 10px 24px -12px rgba(30, 27, 75, .6), inset 0 1px 0 rgba(255, 255, 255, .12);
+}
+.btn.pause {
+  background: linear-gradient(135deg, var(--pause-soft), color-mix(in srgb, var(--pause) 22%, var(--pause-soft)));
+  color: var(--pause);
+  border-color: color-mix(in srgb, var(--pause) 40%, transparent);
+}
+.btn.ghost {
+  background: color-mix(in srgb, var(--card) 70%, transparent);
+  border-color: color-mix(in srgb, var(--accent) 30%, var(--line));
+}
+.btn.sm.primary, .btn.sm.go { box-shadow: 0 6px 14px -8px color-mix(in srgb, var(--accent-2) 80%, transparent); }
+.btn:active:not(:disabled).go, .btn:active:not(:disabled).primary, .btn:active:not(:disabled).stop { box-shadow: none; }
+.btn:disabled { box-shadow: none; }
+
+/* ---------- Chips ---------- */
+.chip { transition: background-color .15s ease, border-color .15s ease, transform .1s ease; }
+.chip:active:not(:disabled) { transform: scale(.97); }
+.chip[aria-pressed="true"] {
+  background: var(--grad);
+  border-color: transparent;
+  color: var(--accent-ink);
+  box-shadow: 0 6px 16px -8px color-mix(in srgb, var(--accent-2) 80%, transparent);
+}
+.chip[data-act]:not(.add) {
+  border: 2px solid color-mix(in srgb, var(--act) 55%, var(--line));
+  padding-left: 14px;
+}
+.chip[data-act]:not(.add)::before {
+  content: "";
+  flex: none;
+  width: 10px; height: 10px;
+  border-radius: 50%;
+  background: var(--act);
+}
+.chip[data-act][aria-pressed="true"] {
+  background: var(--act-fill);
+  border-color: var(--act-fill);
+  color: var(--act-on);
+  box-shadow: 0 6px 16px -8px var(--act);
+}
+.chip[data-act][aria-pressed="true"]::before { background: var(--act-on); }
+.chip.add { border-color: color-mix(in srgb, var(--accent) 45%, var(--line)); }
+
+/* Hinweis */
+.hint {
+  background: linear-gradient(135deg, color-mix(in srgb, var(--accent) 12%, var(--card)), color-mix(in srgb, var(--accent-2) 10%, var(--card)));
+  border: 1px solid color-mix(in srgb, var(--accent) 22%, transparent);
+}
+.lbl { color: color-mix(in srgb, var(--accent) 55%, var(--muted)); }
+
+/* ---------- Kennzahlen: je Kachel eigene Farbe ---------- */
+.stat {
+  --tone: var(--t1);
+  position: relative;
+  overflow: hidden;
+  border-color: color-mix(in srgb, var(--tone) 28%, var(--line));
+  background: linear-gradient(160deg, color-mix(in srgb, var(--tone) 15%, var(--card)), color-mix(in srgb, var(--tone) 4%, var(--card)));
+  padding: 12px 12px 12px 14px;
+}
+.stat::before {
+  content: "";
+  position: absolute;
+  left: 0; top: 10px; bottom: 10px;
+  width: 4px;
+  border-radius: 0 4px 4px 0;
+  background: var(--tone);
+}
+.stat:nth-child(2) { --tone: var(--t2); }
+.stat:nth-child(3) { --tone: var(--t3); }
+.stat span { color: var(--tone); }
+.stat strong { color: var(--ink); font-size: 1.35rem; }
+
+/* ---------- Einträge ---------- */
+.day-h { color: var(--ink); }
+.day-h .sum {
+  padding: 1px 10px;
+  border-radius: 999px;
+  background: var(--soft);
+  color: var(--accent);
+  font-size: .9rem;
+}
+.entry {
+  border-color: color-mix(in srgb, var(--line) 80%, transparent);
+  box-shadow: 0 1px 2px rgba(30, 27, 75, .04);
+  transition: transform .1s ease, border-color .15s ease;
+}
+.entry:active { transform: scale(.99); }
+.entry .d { color: var(--accent); }
+
+/* ---------- Kalender ---------- */
+.cal {
+  --cal-week: 40px;
+  --cal-gap: 3px;
+  background: var(--card);
+  border: 1px solid color-mix(in srgb, var(--line) 75%, transparent);
+  border-radius: var(--r);
+  box-shadow: var(--shadow);
+  padding: 10px 8px 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-width: 0;
+}
+.cal:empty { display: none; }
+.cal-head, .cal-grid {
+  display: grid;
+  grid-template-columns: repeat(7, minmax(0, 1fr)) var(--cal-week);
+  gap: var(--cal-gap);
+  align-items: center;
+}
+.cal-head span {
+  text-align: center;
+  font-size: .72rem;
+  font-weight: 700;
+  letter-spacing: .06em;
+  text-transform: uppercase;
+  color: var(--muted);
+  padding: 2px 0;
+}
+.cal-head span.we { color: var(--accent-2); }
+.cal-day {
+  --k: transparent;
+  position: relative;
+  aspect-ratio: 1;
+  min-height: 40px;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 0;
+  padding: 2px 0 4px;
+  border: 0;
+  border-radius: 12px;
+  background: transparent;
+  color: var(--ink);
+  box-shadow: inset 0 -3px 0 var(--k);
+  transition: transform .1s ease, background-color .15s ease;
+  overflow: hidden;
+}
+.cal-day:active { transform: scale(.94); }
+.cal-num { font-weight: 700; font-size: .95rem; line-height: 1.1; font-variant-numeric: tabular-nums; }
+.cal-h {
+  font-family: var(--f-mono);
+  font-variant-numeric: tabular-nums;
+  font-size: .62rem;
+  font-weight: 600;
+  line-height: 1.1;
+  min-height: .7rem;
+  color: var(--muted);
+  white-space: nowrap;
+}
+.cal-dot {
+  position: absolute;
+  top: 5px; right: 5px;
+  width: 6px; height: 6px;
+  border-radius: 50%;
+  background: var(--k-feiertag);
+}
+.cal-day.we { background: color-mix(in srgb, var(--soft) 55%, transparent); }
+.cal-day.k-work { --k: var(--k-work); background: var(--k-work-bg); }
+.cal-day.k-zeitausgleich { --k: var(--k-zeitausgleich); background: var(--k-zeitausgleich-bg); }
+.cal-day.k-feiertag { --k: var(--k-feiertag); background: var(--k-feiertag-bg); }
+.cal-day.k-urlaub { --k: var(--k-urlaub); background: var(--k-urlaub-bg); }
+.cal-day.k-krank { --k: var(--k-krank); background: var(--k-krank-bg); }
+.cal-day[class*="k-"] .cal-h { color: var(--ink); }
+.cal-day.out { opacity: .38; }
+.cal-day.today { outline: 2px solid var(--accent); outline-offset: -2px; }
+.cal-day.today .cal-num { color: var(--accent); }
+.cal-day.sel, .cal-day[aria-pressed="true"] {
+  background: var(--grad);
+  color: var(--accent-ink);
+  box-shadow: 0 6px 14px -6px color-mix(in srgb, var(--accent-2) 85%, transparent), inset 0 -3px 0 var(--k);
+  opacity: 1;
+}
+.cal-day.sel .cal-num, .cal-day.sel .cal-h,
+.cal-day[aria-pressed="true"] .cal-num, .cal-day[aria-pressed="true"] .cal-h { color: var(--accent-ink); }
+.cal-day.sel .cal-dot { background: var(--accent-ink); }
+.cal-day:focus-visible { outline: 3px solid var(--accent); outline-offset: 1px; }
+.cal-week {
+  font-family: var(--f-mono);
+  font-variant-numeric: tabular-nums;
+  font-size: .66rem;
+  font-weight: 600;
+  color: var(--accent);
+  text-align: right;
+  padding-right: 2px;
+  white-space: nowrap;
+  overflow: hidden;
+}
+.cal-head .cal-week { font-family: var(--f-body); font-size: .8rem; color: var(--muted); }
+.cal-legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  padding: 4px 2px 0;
+}
+.cal-legend span {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 3px 10px 3px 8px;
+  border-radius: 999px;
+  font-size: .76rem;
+  font-weight: 600;
+  color: var(--ink);
+  background: var(--soft);
+}
+.cal-legend span::before {
+  content: "";
+  width: 9px; height: 9px;
+  border-radius: 3px;
+  background: var(--muted);
+}
+.cal-legend .k-work { background: var(--k-work-bg); }
+.cal-legend .k-work::before { background: var(--k-work); }
+.cal-legend .k-urlaub { background: var(--k-urlaub-bg); }
+.cal-legend .k-urlaub::before { background: var(--k-urlaub); }
+.cal-legend .k-krank { background: var(--k-krank-bg); }
+.cal-legend .k-krank::before { background: var(--k-krank); }
+.cal-legend .k-feiertag { background: var(--k-feiertag-bg); }
+.cal-legend .k-feiertag::before { background: var(--k-feiertag); }
+.cal-legend .k-zeitausgleich { background: var(--k-zeitausgleich-bg); }
+.cal-legend .k-zeitausgleich::before { background: var(--k-zeitausgleich); }
+@media (max-width: 359px) {
+  .cal-head, .cal-grid { grid-template-columns: repeat(7, minmax(0, 1fr)); }
+  .cal-week { display: none; }
+  .cal { padding: 8px 6px 10px; }
+}
+
+/* Abwesenheits-Tags in Einträgen in Kalenderfarben */
+.ek-tag.ek-urlaub { background: var(--k-urlaub-bg); color: var(--ink); box-shadow: inset 3px 0 0 var(--k-urlaub); }
+.ek-tag.ek-krank { background: var(--k-krank-bg); color: var(--ink); box-shadow: inset 3px 0 0 var(--k-krank); }
+.ek-tag.ek-feiertag { background: var(--k-feiertag-bg); color: var(--ink); box-shadow: inset 3px 0 0 var(--k-feiertag); }
+.ek-tag.ek-zeitausgleich { background: var(--k-zeitausgleich-bg); color: var(--ink); box-shadow: inset 3px 0 0 var(--k-zeitausgleich); }
+.ek-hol { background: var(--k-feiertag-bg); color: var(--ink); }
+
+/* ---------- Übersicht ---------- */
+.nav b { color: var(--ink); }
+.nav button { border-color: color-mix(in srgb, var(--accent) 30%, var(--line)); color: var(--accent); }
+
+.bar .col { background: var(--grad); background: linear-gradient(180deg, var(--accent-2), var(--accent)); }
+.bar.today .col { background: linear-gradient(180deg, #2DD4BF, var(--run)); box-shadow: 0 0 0 2px var(--card), 0 0 0 4px var(--run); }
+.bar.today .l { color: var(--run); }
+.bar.zero .col { background: var(--line); }
+.progress { background: color-mix(in srgb, var(--run) 14%, var(--card)); }
+.progress > div { background: linear-gradient(90deg, var(--run), #14B8A6); }
+
+/* Überstundenkonto als Hero-Karte */
+.panel.ov-balance {
+  background: var(--grad-hero);
+  border-color: transparent;
+  color: #fff;
+  box-shadow: 0 18px 40px -16px rgba(91, 33, 182, .65);
+  position: relative;
+  overflow: hidden;
+  isolation: isolate;
+}
+.panel.ov-balance::before {
+  content: "";
+  position: absolute;
+  z-index: -1;
+  width: 240px; height: 240px;
+  right: -80px; top: -110px;
+  border-radius: 50%;
+  background: radial-gradient(circle, rgba(255, 255, 255, .22), transparent 70%);
+}
+.ov-balance .lbl { color: rgba(255, 255, 255, .82); text-align: center; }
+.ov-balance .ov-saldo { color: #fff; font-size: clamp(2.6rem, 13vw, 3.4rem); text-shadow: 0 2px 18px rgba(0, 0, 0, .2); }
+.ov-balance .ov-saldo.plus { color: #A7F3D0 !important; }
+.ov-balance .ov-saldo.minus { color: #FECDD3 !important; }
+.ov-balance .note { color: rgba(255, 255, 255, .85); }
+.ov-balance .kv { border-color: rgba(255, 255, 255, .18); }
+.ov-balance .kv span { color: rgba(255, 255, 255, .82); }
+.ov-balance .kv b { color: #fff; }
+.ov-balance .kv b.plus { color: #A7F3D0 !important; }
+.ov-balance .kv b.minus { color: #FECDD3 !important; }
+
+/* Tipp-Karten */
+.tip { background: linear-gradient(135deg, color-mix(in srgb, var(--accent) 12%, var(--card)), color-mix(in srgb, var(--accent-2) 8%, var(--card))); }
+.tip.warn { background: linear-gradient(135deg, var(--pause-soft), color-mix(in srgb, var(--pause) 10%, var(--card))); }
+
+/* Blatt + Toast */
+.sheet { background: rgba(11, 14, 40, .5); -webkit-backdrop-filter: blur(3px); backdrop-filter: blur(3px); }
+.sheet .box::before { background: var(--grad); opacity: .6; }
+.toast { background: var(--grad-stop); color: var(--stop-ink); }
+
+/* Schalter in Akzentgrün, Range in Akzent */
+.switch input[type="checkbox"]:checked { background: var(--grad-go); }
+
+@media (prefers-reduced-motion: reduce) {
+  .clock.running .pill::before { animation: none; }
+  .card, .panel { animation: none; }
+}
