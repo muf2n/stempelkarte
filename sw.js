@@ -3,7 +3,7 @@
 // Icons und Schriftdateien (fonts.gstatic.com): cache-first.
 // Alle anderen fremden Domains (Firebase, Google APIs, Nominatim, OSM, unpkg) werden nicht angefasst.
 
-const VERSION = "20261024-0144"; // wird beim Veröffentlichen automatisch ersetzt
+const VERSION = "20261024-0207"; // wird beim Veröffentlichen automatisch ersetzt
 const CACHE = "stempelkarte-" + VERSION;
 const FONT_CACHE = "stempelkarte-fonts"; // versionsunabhängig, bleibt erhalten
 const NET_TIMEOUT_MS = 4000; // bei schlechtem Netz nach dieser Zeit auf den Cache ausweichen
@@ -33,6 +33,9 @@ const SHELL = [
   "js/views/places.js",
   "js/views/reminders.js",
   "js/push.js",
+  "js/views/plans.js",
+  "js/icons.js",
+  "js/deco.js",
   "js/app.js"
 ];
 

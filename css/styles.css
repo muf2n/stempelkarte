@@ -2469,3 +2469,55 @@ body::before {
 .rm-actions { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; }
 .rm-actions .btn.primary { flex: 1 1 220px; }
 .rm-actions [hidden] { display: none !important; }
+
+/* === Update 5 (Agent K): Geplante Schichten === */
+.plans-card { display: flex; flex-direction: column; gap: 12px; }
+.plans-card .section-h { margin: 0; flex-wrap: wrap; }
+.plans-card .section-h .btn.sm { flex: none; }
+.plans-limit { margin: 0; font-size: .88rem; line-height: 1.45; }
+.plans-empty { margin: 0; padding: 12px 14px; border-radius: var(--r-sm, 14px); background: var(--soft); }
+.plans-list { display: flex; flex-direction: column; gap: 10px; }
+.plan-item {
+  display: flex; align-items: stretch; gap: 6px;
+  border: 1px solid var(--line); border-radius: 16px; background: var(--card);
+  overflow: hidden;
+}
+.plan-item.off { opacity: .6; }
+.plan-main {
+  flex: 1 1 auto; min-width: 0; display: flex; align-items: flex-start; gap: 12px;
+  padding: 12px 4px 12px 14px; border: 0; background: transparent; color: var(--ink);
+  text-align: left; font: inherit; cursor: pointer;
+}
+.plan-main:focus-visible { outline: none; box-shadow: var(--ring); }
+.plan-time {
+  flex: none; font-family: var(--f-mono); font-weight: 600; font-size: 1.15rem;
+  padding: 6px 10px; border-radius: 10px; background: var(--soft); color: var(--accent);
+}
+.plan-txt { min-width: 0; display: flex; flex-direction: column; gap: 4px; }
+.plan-txt b { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.plan-sub { font-size: .85rem; color: var(--muted); }
+.plan-days { display: flex; flex-wrap: wrap; gap: 3px; }
+.plan-days i {
+  font-style: normal; font-size: .72rem; font-weight: 600; min-width: 24px; text-align: center;
+  padding: 2px 4px; border-radius: 6px; color: var(--muted); background: color-mix(in srgb, var(--line) 50%, transparent);
+}
+.plan-days i.on { color: var(--accent-ink); background: var(--accent); }
+.plan-once { font-size: .82rem; color: var(--accent); font-weight: 600; }
+.plan-warn { font-size: .8rem; color: var(--pause); line-height: 1.35; }
+.plan-side { flex: none; display: flex; flex-direction: column; align-items: center; justify-content: space-between; padding: 6px 8px 6px 0; }
+.plan-sw.switch { min-height: 44px; gap: 0; }
+.plan-del {
+  min-width: 40px; height: 36px; border: 0; border-radius: 10px; padding: 0 6px;
+  background: transparent; color: var(--muted); font-size: .9rem; cursor: pointer;
+}
+.plan-del[data-armed] { background: var(--danger); color: var(--card); font-size: .78rem; font-weight: 600; }
+.plan-form .lbl { margin-bottom: 8px; }
+.plan-form [hidden] { display: none !important; }
+.plan-wd .chip { min-width: 46px; justify-content: center; padding: 8px 10px; }
+.plan-info { margin: 0; padding: 10px 12px; border-radius: 12px; background: var(--soft); font-size: .88rem; }
+.plan-sheet .chips .chip { flex: 1 1 0; justify-content: center; }
+.plan-sheet .btn { width: 100%; }
+.tip.plan-tip { border-color: color-mix(in srgb, var(--run) 45%, var(--line)); }
+@media (min-width: 1024px) {
+  .plans-list { display: grid; grid-template-columns: repeat(auto-fill, minmax(320px, 1fr)); }
+}

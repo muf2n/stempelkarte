@@ -1,4 +1,5 @@
 // Reiter „Orte“: Karte (Leaflet, lazy geladen), Liste der Arbeitsorte und Formular zum Anlegen/Bearbeiten.
+import * as plans from "./plans.js";
 
 const LEAFLET_CSS = "https://unpkg.com/leaflet@1.9.4/dist/leaflet.css";
 const LEAFLET_JS = "https://unpkg.com/leaflet@1.9.4/dist/leaflet.js";
@@ -205,6 +206,7 @@ export function mount(el, ctx) {
   C = ctx;
   el.innerHTML =
     `<div class="stack">` +
+      `<div id="plans-panel" data-r="plans"></div>` +
       `<div class="section-h"><h2>Arbeitsorte</h2>` +
         `<button type="button" class="btn sm ghost" data-r="new">+ Neuer Ort</button></div>` +
       `<div class="map" data-r="map"></div>` +
@@ -237,12 +239,15 @@ export function mount(el, ctx) {
     if (p) openPlaceForm(p, null, C);
   });
 
+  try { plans.mount(el.querySelector("[data-r=plans]"), ctx); } catch (err) { console.error(err); }
+
   snap = ctx.store.get ? ctx.store.get() : null;
   if (snap) renderList();
 }
 
 export function update(s) {
   snap = s;
+  try { plans.update(s); } catch (err) { console.error(err); }
   if (!root) return;
   renderList();
   drawMap(false);
@@ -286,6 +291,7 @@ export function openPlaceForm(place, presetLoc, ctx) {
     `</div>` +
     `<div class="stack" style="margin-top:14px">` +
       `<button type="button" class="btn primary" data-r="save">Speichern</button>` +
+      (isNew ? "" : `<button type="button" class="btn ghost" data-r="plan">Schicht planen</button>`) +
       (isNew ? "" : `<button type="button" class="btn danger" data-r="del">Ort löschen</button>`) +
     `</div>`;
 
@@ -382,6 +388,9 @@ export function openPlaceForm(place, presetLoc, ctx) {
           c.ui.setBusy(saveBtn, false);
         }
       });
+
+      const planBtn = $("[data-r=plan]");
+      if (planBtn) planBtn.addEventListener("click", () => { close(); plans.openPlanForm(null, c, { placeId: place.id }); });
 
       const delBtn = $("[data-r=del]");
       if (delBtn) {

@@ -117,6 +117,7 @@ export function mount(el, c) {
             <p class="note">Ohne Datum zählt das Konto ab deinem ersten Eintrag.</p>
           </div>
           <div id="reminders-panel"></div>
+          <button type="button" class="btn ghost sm" id="ov-plans-link">Geplante Schichten (Auto-Stempeln) öffnen</button>
           <div class="lbl">Konto</div>
           <div id="ov-account"></div>
         </div>
@@ -167,6 +168,11 @@ export function mount(el, c) {
   $("#ov-csv").addEventListener("click", exportCSV);
 
   try { reminders.mount($("#reminders-panel"), ctx); } catch (err) { console.error(err); }
+  const pl = $("#ov-plans-link");
+  if (pl) pl.addEventListener("click", () => {
+    ctx.go("orte");
+    setTimeout(() => { const t = document.getElementById("plans-panel"); if (t) t.scrollIntoView({ behavior: "smooth", block: "start" }); }, 150);
+  });
 
   const target = $("#ov-target");
   target.addEventListener("input", () => {

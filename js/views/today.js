@@ -3,6 +3,8 @@
 
 import { icon } from "../icons.js";
 import { leaves, sparkles, emptyClipboard } from "../deco.js";
+import { readPlans, plansToday, dueTs, planKey } from "./plans.js";
+import { getFirebase } from "../firebase.js";
 
 let ctx = null;
 let root = null;
@@ -547,6 +549,8 @@ function currentTip() {
     const e = st === "done" ? doneEntry() : null;
     if (e && Date.now() - e.end < 15 * 60000) return null;
     if (!locFresh(e ? e.end : 0)) return null;
+    const early = earlyPlanTip();
+    if (early) return early;
     const m = nearMatch();
     if (!m) return null;
     const id = "here|" + m.place.id;
@@ -590,6 +594,11 @@ function renderTips() {
     html = `<div class="card tip" data-id="${util.esc(tip.id)}">${closeX()}` +
       `<p class="tip-t">Du bist bei <b>${util.esc(tip.place.name)}</b>. Jetzt einstempeln?</p>` +
       `<button type="button" class="btn go" data-act="tip-in" data-place="${util.esc(tip.place.id)}"${dis}>Hier einstempeln</button></div>`;
+  } else if (tip.kind === "plan-early") {
+    html = `<div class="card tip plan-tip" data-id="${util.esc(tip.id)}">${closeX()}` +
+      `<p class="tip-t">Du bist schon bei <b>${util.esc(tip.place.name)}</b> – jetzt einstempeln?</p>` +
+      `<p class="note">Geplant um ${util.esc(tip.plan.time)} · ${util.esc(tip.plan.activity || "Arbeiten")}. Sonst stempelt die App dich um ${util.esc(tip.plan.time)} automatisch ein.</p>` +
+      `<button type="button" class="btn go" data-act="tip-plan-in" data-plan="${util.esc(tip.plan.id)}"${dis}>Jetzt einstempeln</button></div>`;
   } else if (tip.kind === "away") {
     html = `<div class="card tip" data-id="${util.esc(tip.id)}">${closeX()}` +
       `<p class="tip-t">Du bist nicht mehr bei <b>${util.esc(tip.place.name)}</b>. Ausstempeln?</p>` +
@@ -629,6 +638,15 @@ function onTip(ev) {
   if (act === "tip-in") {
     const p = findPlace(btn.dataset.place);
     doClockIn(btn, p);
+  } else if (act === "tip-plan-in") {
+    const plan = readPlans(settings()).find((p) => p.id === btn.dataset.plan);
+    if (!plan) return;
+    const p = findPlace(plan.placeId);
+    doClockIn(btn, p, {
+      activity: plan.activity || "Arbeiten",
+      inLoc: lastLoc && Date.now() - lastLocAt < 120000 ? lastLoc : null,
+      planKey: planKey(plan.id, Date.now()),
+    });
   } else if (act === "tip-out") {
     doClockOut(btn);
   } else if (act === "tip-forgot") {
@@ -784,7 +802,8 @@ function errText(e) {
   return (e && e.message) ? e.message : "Standort nicht verfügbar";
 }
 
-async function doClockIn(btn, forcedPlace = null) {
+/** opts (geplante Schichten): { activity, inLoc, start, msg, planKey } – ohne opts unverändertes Verhalten. */
+async function doClockIn(btn, forcedPlace = null, opts = null) {
   const { store, timer, geo, geofence, ui } = ctx;
   if (snap && snap.running) return;
   lockNow();
@@ -793,7 +812,9 @@ async function doClockIn(btn, forcedPlace = null) {
   const set = settings();
   let inLoc = null;
   try {
-    if (set.autoLocate && forcedPlace && lastLoc && Date.now() - lastLocAt < 120000) {
+    if (opts && opts.inLoc) {
+      inLoc = opts.inLoc;       // Standort wurde schon für den Plan geholt
+    } else if (set.autoLocate && forcedPlace && lastLoc && Date.now() - lastLocAt < 120000) {
       inLoc = lastLoc;          // frischer Standort vom Vorschlag – nicht nochmal warten
     } else if (set.autoLocate) {
       ui.setBusy(btn, true, "Standort wird ermittelt …");
@@ -820,12 +841,27 @@ async function doClockIn(btn, forcedPlace = null) {
         place: place ? place.name : "",
         note,
         inLoc,
-        activity: getAct(),
+        activity: (opts && opts.activity) || getAct(),
       });
+      // Geplante Schicht: Beginn auf die Planzeit zurücksetzen (nur wenn noch dieselbe Schicht)
+      if (opts && Number.isFinite(opts.start)) {
+        const r = store.get().running;
+        if (r && opts.start < r.start) {
+          const sg = Array.isArray(r.segments) && r.segments.length
+            ? [{ ...r.segments[0], start: opts.start }, ...r.segments.slice(1)] : r.segments;
+          await store.setRunning({ ...r, start: opts.start, segments: sg });
+        }
+      }
+      if (opts && opts.planKey) markPlanDone(opts.planKey);
       noteEl.value = "";
       done = null;
-      buzz(40);
-      ui.toast(place ? `Eingestempelt · ${place.name}` : (inLoc ? "Eingestempelt · Adresse wird ermittelt …" : "Eingestempelt · Ort unbekannt"));
+      if (opts && opts.msg) {
+        buzz([60, 80, 60]);
+        ui.toast(opts.msg(place), 4500);
+      } else {
+        buzz(40);
+        ui.toast(place ? `Eingestempelt · ${place.name}` : (inLoc ? "Eingestempelt · Adresse wird ermittelt …" : "Eingestempelt · Ort unbekannt"));
+      }
     } catch (e) {
       ui.toast("Einstempeln fehlgeschlagen" + (e && e.message ? ": " + e.message : ""), 3500);
       inLoc = null;
@@ -1322,10 +1358,236 @@ export function tick() {
   renderTips();      // zeichnet nur, wenn sich das passende Kärtchen ändert
   renderButtons();   // zeichnet nur bei Zustandswechsel (z. B. Sperre abgelaufen)
   if (state() === "idle" || state() === "done") renderList(); // Tageswechsel
+  try { planTick(); } catch (e) { console.error(e); }
 }
 
 export function onShow() {
   if (!root || !ctx) return;
   if (snap) renderAll();
   refreshNear();
+}
+
+/* ---------------- Geplante Schichten (Auto-Stempeln) ---------------- */
+
+const PLAN_DONE_KEY = "stempelkarte.planDone";     // { "planId:YYYY-MM-DD": ts } – erledigt/übersprungen
+const PLAN_SNOOZE_KEY = "stempelkarte.planSnooze"; // { key: ts } – lokale Wiederholung, solange die App offen ist
+let planLocBusy = false;
+let planLocTry = 0;
+let planHandling = false;
+
+function lsObj(k) {
+  try { const o = JSON.parse(localStorage.getItem(k) || "{}"); return o && typeof o === "object" ? o : {}; } catch { return {}; }
+}
+function lsObjSet(k, o) {
+  // nur heutige Schlüssel behalten
+  const today = ctx.util.dayKey(Date.now());
+  const out = {};
+  for (const [kk, v] of Object.entries(o)) if (kk.endsWith(":" + today)) out[kk] = v;
+  try { localStorage.setItem(k, JSON.stringify(out)); } catch { /* egal */ }
+}
+function planDone(key) { return key in lsObj(PLAN_DONE_KEY); }
+function markPlanDone(key) {
+  const o = lsObj(PLAN_DONE_KEY); o[key] = Date.now(); lsObjSet(PLAN_DONE_KEY, o);
+  const s = lsObj(PLAN_SNOOZE_KEY); if (key in s) { delete s[key]; lsObjSet(PLAN_SNOOZE_KEY, s); }
+}
+
+function planPlace(plan) { return findPlace(plan && plan.placeId); }
+function hasXY(p) { return !!p && typeof p.lat === "number" && typeof p.lng === "number"; }
+function atPlace(loc, place) {
+  if (!loc || !hasXY(place)) return null;
+  try { return ctx.geofence.matchPlace(loc, [place], settings().defaultRadius); } catch { return null; }
+}
+/** Beginn für das Plan-Einstempeln: Planzeit, wenn höchstens 60 min vorbei; sonst jetzt. */
+function planStart(due, now = Date.now()) {
+  return Number.isFinite(due) && due <= now && now - due <= H ? due : now;
+}
+function autoMsg(start) {
+  return (place) => `Automatisch eingestempelt um ${ctx.util.clock(start)}` + (place ? ` – ${place.name}` : "");
+}
+
+/** „Früher da“: zwischen Planzeit − 60 min und Planzeit, Standort im Radius. */
+function earlyPlanTip() {
+  if (!lastLoc || Date.now() - lastLocAt > LOC_FRESH_MS) return null;
+  const now = Date.now();
+  for (const plan of plansToday(snap, ctx.util, now)) {
+    const key = planKey(plan.id, now);
+    if (planDone(key)) continue;
+    const due = dueTs(plan, now);
+    if (now < due - H || now >= due) continue;
+    const place = planPlace(plan);
+    if (!atPlace(lastLoc, place)) continue;
+    const id = "plan|" + key;
+    if (dismissed.has(id)) continue;
+    return { kind: "plan-early", id, plan, place };
+  }
+  return null;
+}
+
+/** Im Sekundentakt: Standort (max. alle 60 s) nahe der Planzeit, ggf. automatisch einstempeln. */
+function planTick() {
+  if (!snap || !snap.ready || snap.running || busyOp || planHandling || ctx.timer.isLocked()) return;
+  if (document.visibilityState !== "visible") return;
+  const now = Date.now();
+  const list = plansToday(snap, ctx.util, now).filter((p) => !planDone(planKey(p.id, now)));
+  if (!list.length) return;
+
+  // Lokales „Später erinnern“ (solange die App offen ist)
+  const sn = lsObj(PLAN_SNOOZE_KEY);
+  for (const plan of list) {
+    const key = planKey(plan.id, now);
+    if (Number(sn[key]) > 0 && now >= Number(sn[key])) {
+      delete sn[key]; lsObjSet(PLAN_SNOOZE_KEY, sn);
+      handlePlan({ planId: plan.id, due: dueTs(plan, now) }, ctx);
+      return;
+    }
+  }
+
+  const active = list.filter((p) => { const d = dueTs(p, now); return now >= d - H && now < d + H && hasXY(planPlace(p)); });
+  if (!active.length) return;
+  if (now - lastLocAt > 60000) {
+    if (planLocBusy || now - planLocTry < 60000) return;
+    planLocBusy = true;
+    planLocTry = now;
+    (async () => {
+      try {
+        if (!ctx.geo.isSupported() || ["denied", "prompt"].includes(await ctx.geo.permission())) return; // nie ungefragt nachfragen
+        const loc = await ctx.geo.getPosition({ timeout: 10000, maxAge: 30000 });
+        lastLoc = loc; lastLocAt = Date.now();
+        renderTips(); renderPre();
+      } catch { /* in 60 s erneut */ }
+      finally { planLocBusy = false; }
+    })();
+    return;
+  }
+  if (!lastLoc || now - lastLocAt > 90000) return;
+  for (const plan of active) {
+    const due = dueTs(plan, now);
+    if (now < due) continue;
+    const place = planPlace(plan);
+    if (!atPlace(lastLoc, place)) continue;
+    const start = planStart(due, now);
+    doClockIn(null, place, { activity: plan.activity || "Arbeiten", inLoc: lastLoc, start, planKey: planKey(plan.id, now), msg: autoMsg(start) });
+    return;
+  }
+}
+
+/** „Später erinnern“ / „Heute nicht“ für den Server merken (pushlog.snooze), lokal zusätzlich. */
+async function writeSnooze(key, value) {
+  if (value > 0) { const s = lsObj(PLAN_SNOOZE_KEY); s[key] = value; lsObjSet(PLAN_SNOOZE_KEY, s); }
+  const s = ctx.store.get();
+  if (!s || s.mode !== "cloud" || !s.user || !s.user.uid) return false;
+  try {
+    const f = await getFirebase();
+    if (!f) return false;
+    await f.fs.setDoc(f.fs.doc(f.db, "users", s.user.uid, "meta", "pushlog"), { snooze: { [key]: value } }, { merge: true });
+    return true;
+  } catch (e) {
+    console.warn("Snooze nicht gespeichert:", e);
+    return false;
+  }
+}
+
+function waitReady(ms = 10000) {
+  return new Promise((resolve) => {
+    const t0 = Date.now();
+    const check = () => {
+      const s = ctx.store.get();
+      if ((s && s.ready) || Date.now() - t0 > ms) resolve(s);
+      else setTimeout(check, 150);
+    };
+    check();
+  });
+}
+
+/** Aufruf über die Benachrichtigung (?plan=<id>&due=<ms>). */
+export async function handlePlan({ planId, due } = {}, c = ctx) {
+  if (c) ctx = c;
+  if (!ctx || !planId || planHandling) return;
+  const { ui, geo, util } = ctx;
+  planHandling = true;
+  try {
+    const s = await waitReady();
+    snap = s || snap;
+    const plan = readPlans((s && s.settings) || {}).find((p) => p.id === planId);
+    if (!plan) { ui.toast("Diese geplante Schicht gibt es nicht mehr.", 3500); return; }
+    if (s.running) { ui.toast("Du bist schon eingestempelt.", 3000); return; }
+    const now = Date.now();
+    let dueMs = Number(due);
+    if (!Number.isFinite(dueMs) || dueMs <= 0) dueMs = dueTs(plan, now);
+    const key = planKey(plan.id, dueMs);
+    const place = planPlace(plan);
+    const name = (place && place.name) || plan.place || "deinem Ort";
+    let loc = null, err = null;
+    if (hasXY(place)) {
+      ui.toast(`Standort wird geprüft – ${name} …`, 10000);
+      try {
+        loc = await geo.getPosition({ timeout: 12000, maxAge: 0 });
+        lastLoc = loc; lastLocAt = Date.now();
+      } catch (e) { err = errText(e); }
+    }
+    snap = ctx.store.get() || snap;
+    if (snap.running) { ui.toast("Du bist schon eingestempelt.", 3000); return; }
+    const m = atPlace(loc, place);
+    if (m) {
+      const start = planStart(dueMs, Date.now());
+      while (busyOp) await new Promise((r) => setTimeout(r, 100));
+      await doClockIn(null, place, { activity: plan.activity || "Arbeiten", inLoc: loc, start, planKey: key, msg: autoMsg(start) });
+      return;
+    }
+    { const t = document.getElementById("toast"); if (t) t.hidden = true; }
+    openNotHereSheet({ plan, place, name, loc, err, key, dueMs });
+  } finally {
+    planHandling = false;
+  }
+}
+
+function openNotHereSheet({ plan, place, name, loc, err, key, dueMs }) {
+  const { ui, util } = ctx;
+  let why = "";
+  if (!place) why = "Der geplante Ort wurde gelöscht.";
+  else if (!hasXY(place)) why = `Für „${place.name}“ ist noch keine Position gespeichert – öffne den Ort einmal vor Ort und tippe „Meinen Standort übernehmen“.`;
+  else if (err) why = err;
+  else if (loc) {
+    const d = airDist(loc, place);
+    why = d ? `Dein Standort ist ${d} entfernt.` : "Dein Standort liegt außerhalb des Orts.";
+  }
+  const cloud = snap && snap.mode === "cloud";
+  ui.openSheet({
+    title: `Du bist nicht bei ${name}`,
+    bodyHTML:
+      `<div class="fields plan-sheet">` +
+      `<p class="note">Geplant um <b>${util.esc(plan.time)}</b> · ${util.esc(plan.activity || "Arbeiten")}. ${util.esc(why)}</p>` +
+      `<div><div class="lbl">Später erinnern</div>` +
+      `<div class="chips plan-snooze"><button type="button" class="chip" data-min="15">15 Min</button>` +
+      `<button type="button" class="chip" data-min="30">30 Min</button><button type="button" class="chip" data-min="60">60 Min</button></div>` +
+      (cloud ? "" : `<p class="hint">Ohne Anmeldung erinnert dich die App nur, solange sie geöffnet ist.</p>`) +
+      `</div>` +
+      `<button type="button" class="btn go" data-f="here">${icon("play", 20)}<span>Trotzdem hier einstempeln</span></button>` +
+      `<button type="button" class="btn ghost" data-f="skip">Heute nicht</button>` +
+      `</div>`,
+    onMount(el, close) {
+      el.querySelector(".plan-snooze").addEventListener("click", async (ev) => {
+        const b = ev.target.closest("[data-min]");
+        if (!b) return;
+        const at = Date.now() + Number(b.dataset.min) * 60000;
+        close();
+        await writeSnooze(key, at);
+        ui.toast(`Ich erinnere dich um ${util.clock(at)} nochmal.`, 3000);
+      });
+      el.querySelector('[data-f="here"]').addEventListener("click", async () => {
+        close();
+        snap = ctx.store.get() || snap;
+        if (snap.running) { ui.toast("Du bist schon eingestempelt."); return; }
+        while (busyOp) await new Promise((r) => setTimeout(r, 100));
+        const fresh = loc && Date.now() - (loc.ts || 0) < 120000 ? loc : null;
+        await doClockIn(null, null, { activity: plan.activity || "Arbeiten", inLoc: fresh, planKey: key });
+      });
+      el.querySelector('[data-f="skip"]').addEventListener("click", async () => {
+        close();
+        markPlanDone(key);
+        await writeSnooze(key, -1);
+        ui.toast("Okay – heute keine Erinnerung mehr für diese Schicht.", 3000);
+      });
+    },
+  });
 }

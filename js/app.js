@@ -428,6 +428,30 @@ if ("serviceWorker" in navigator) {
   });
 }
 
+// ---------- Geplante Schicht aus Benachrichtigung (?plan=<id>&due=<ms>) ----------
+let pendingPlan = null;
+try {
+  const qs = new URLSearchParams(location.search);
+  const planId = qs.get("plan");
+  if (planId) {
+    pendingPlan = { planId, due: Number(qs.get("due")) || null };
+    qs.delete("plan");
+    qs.delete("due");
+    const rest = qs.toString();
+    history.replaceState(history.state, "", location.pathname + (rest ? "?" + rest : "") + (location.hash || "#heute"));
+  }
+} catch { /* egal */ }
+function runPendingPlan() {
+  if (!pendingPlan || !appVisible) return;
+  const p = pendingPlan;
+  pendingPlan = null;
+  if (currentTab !== "heute") go("heute");
+  safe(today.handlePlan, p, ctx);
+}
+{
+  const t = setInterval(() => { if (!pendingPlan) clearInterval(t); else runPendingPlan(); }, 300);
+}
+
 renderSync();
 renderTopbar();
 boot();
