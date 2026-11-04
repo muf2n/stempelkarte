@@ -1,0 +1,50 @@
+<!doctype html>
+<!-- Testseite für den Alltag-Bereich „Schule & Lernen“ (Update 9b): startet den lokalen Speicher und ruft mount() auf.
+     Aufruf: python3 -m http.server 8846 → http://localhost:8846/tests/school-harness.html -->
+<html lang="de">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+  <title>Test – Schule & Lernen</title>
+  <link rel="stylesheet" href="../css/styles.css">
+  <style>
+    main { max-width: 1240px; margin: 0 auto; }
+    .h-head { display: flex; align-items: center; gap: 10px; padding: 6px 0 2px; }
+    .h-head button { min-height: 44px; padding: 8px 12px; border: 1px solid var(--line); border-radius: 999px; background: var(--card); color: var(--ink); font: inherit; font-weight: 600; }
+    .h-head h2 { font-size: 1.35rem; }
+    body { padding-bottom: 40px; }
+  </style>
+</head>
+<body>
+  <main>
+    <section class="view" id="view-alltag">
+      <div class="h-head"><button type="button" id="h-remount">← Alltag</button><h2>Schule &amp; Lernen</h2></div>
+      <div id="h-mod"></div>
+    </section>
+  </main>
+  <div id="sheet-root"></div>
+  <div id="toast" class="toast" hidden></div>
+  <script type="module">
+    import * as store from "../js/store.js";
+    import * as ui from "../js/ui.js";
+    import * as util from "../js/util.js";
+    import { MODULES } from "../js/alltag/modules.js";
+
+    store.startLocal();
+    const ctx = { store, ui, util, go: () => {}, jump: (id) => ui.toast("Sprung zu " + id) };
+    const el = document.getElementById("h-mod");
+    const mod = MODULES.find((m) => m.id === "schule");
+    let cleanup = null;
+    async function mountIt() {
+      if (cleanup) { cleanup(); cleanup = null; }
+      const m = await mod.load();
+      cleanup = m.mount(el, ctx);
+      window.__schoolMounted = true;
+    }
+    document.getElementById("h-remount").addEventListener("click", mountIt);
+    window.__remount = mountIt;
+    window.__unmount = () => { if (cleanup) { cleanup(); cleanup = null; } };
+    mountIt().catch((e) => console.error(e));
+  </script>
+</body>
+</html>
