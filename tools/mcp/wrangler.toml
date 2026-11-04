@@ -1,0 +1,18 @@
+name = "stempelkarte-mcp"
+main = "src/worker.js"
+compatibility_date = "2025-09-01"
+workers_dev = true
+preview_urls = false
+
+# Geheimnisse (NICHT hier eintragen, sondern per `wrangler secret put` bzw. GitHub-Workflow):
+#   FIREBASE_SERVICE_ACCOUNT  – JSON des Firebase-Dienstkonto-Schlüssels
+#   STEMPEL_TOKEN             – langes Zufalls-Token für den Zugang
+# Optional:
+#   STEMPEL_UID               – Firebase-UID, falls die Suche per E-Mail nicht klappt
+
+[vars]
+FIREBASE_PROJECT_ID = "stempelkarte-40682"
+STEMPEL_EMAIL = "lippa.florian@gmail.com"
+
+[observability]
+enabled = false
