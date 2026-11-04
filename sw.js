@@ -43,6 +43,7 @@ const SHELL = [
   "js/motion.js",
   "js/views/drive-settings.js",
   "js/views/agenda.js",
+  "js/einsatz.js",
   "js/views/apprentice.js",
   "js/views/comfort-settings.js",
   "js/views/day.js",

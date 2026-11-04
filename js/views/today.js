@@ -7,6 +7,14 @@ import { readPlans, plansToday, dueTs, planKey } from "./plans.js";
 import { getFirebase } from "../firebase.js";
 import * as motion from "../motion.js";
 import * as myday from "./day.js";
+import { peoplePicker, cleanPeople, peopleText, rememberPeople } from "./entries.js";
+
+// Einsatzplan-Helfer (js/einsatz.js, Agent T) – dynamisch, mit Fallback (null)
+let einsatzForFn = null;
+import("../einsatz.js").then((m) => {
+  einsatzForFn = typeof m.einsatzFor === "function" ? m.einsatzFor : null;
+  if (root && snap) { chipsKey = ""; renderPre(); }
+}).catch(() => { einsatzForFn = null; });
 
 let ctx = null;
 let root = null;
@@ -32,6 +40,11 @@ let locating = false;
 let lockTimer = null;
 let tipsKey = "";         // zuletzt gezeichnetes Hinweis-Kärtchen
 let progKey = "";
+let pplPick = null;       // Personen-Auswahl vor dem Einstempeln
+let pplKey = "";          // zuletzt gezeichnete gemerkte Personen
+let pplTouched = "";      // dayKey, an dem der Nutzer die Personen selbst gewählt hat
+let pplPrefill = "";      // zuletzt übernommene Einsatz-Vorauswahl (JSON)
+let placeTouched = "";    // dayKey, an dem der Nutzer den Ort selbst gewählt hat
 const dismissed = new Set(); // in dieser Sitzung ausgeblendete Vorschläge
 const addrPending = new Set(); // Standorte (loc.ts), deren Adresse gerade geladen wird
 
@@ -192,8 +205,23 @@ function setPauseHintOff(start) {
 }
 function findPlace(id) { return id ? places().find((p) => p.id === id) || null : null; }
 
+/** Einsatz (Einsatzplan) für heute oder null. */
+function todayEinsatz() {
+  if (!einsatzForFn || !snap) return null;
+  try { return einsatzForFn(ctx.util.dayKey(Date.now()), snap.todos || []) || null; } catch { return null; }
+}
+/** Ort-Auswahl: eigene Wahl von heute hat Vorrang, sonst Ort aus dem Einsatzplan, sonst gemerkte Wahl. */
+function effSel() {
+  const today = ctx.util.dayKey(Date.now());
+  if (placeTouched !== today) {
+    const ez = todayEinsatz();
+    if (ez && ez.placeId && findPlace(ez.placeId)) return ez.placeId;
+  }
+  return getSel();
+}
+
 /** Gewählter Ort, nur wenn er noch existiert. */
-function selPlace() { return findPlace(getSel()); }
+function selPlace() { return findPlace(effSel()); }
 
 /** Beendete Schicht: aktuelle Version aus dem Store bevorzugen (z. B. mit nachgetragener Adresse). */
 function doneEntry() {
@@ -248,7 +276,8 @@ export function mount(el, c) {
     <div class="meta" data-r="meta"></div>
     <div class="meta" data-r="locline" hidden></div>
     <ol class="seg-list" data-r="seglist" hidden></ol>
-    <div class="edit-links"><button type="button" class="linkbtn" data-r="editstart" hidden>Beginn ändern</button>
+    <div class="meta ppl-note" data-r="pplnote" hidden></div>
+    <div class="edit-links"><button type="button" class="linkbtn" data-r="editnote" hidden>Notiz &amp; Personen ändern</button><button type="button" class="linkbtn" data-r="editstart" hidden>Beginn ändern</button>
     <button type="button" class="linkbtn" data-r="editend" hidden>Ausstempeln um …</button></div>
   </div>
   <div class="stack" data-r="tips" hidden></div>
@@ -258,7 +287,10 @@ export function mount(el, c) {
     <div class="chips" data-r="acts"></div>
     <div class="lbl lbl-ico">${icon("pin", 20)}<span>Arbeitsort</span></div>
     <div class="hint" data-r="near" hidden></div>
+    <div class="hint ez-hint" data-r="ezhint" hidden></div>
     <div class="chips" data-r="chips"></div>
+    <div class="lbl lbl-ico">${icon("user", 20)}<span>Mit wem?</span></div>
+    <div data-r="ppl"></div>
     <div class="fields">
       <label class="note-field"><span class="lbl-ico lbl-note">${icon("note", 20)}<span>Notiz (optional)</span></span>
         <span class="input-ico">${icon("pencil", 20)}<input type="text" data-r="note" maxlength="300" placeholder="z. B. Aufgabe, Kunde …" autocomplete="off"></span>
@@ -293,6 +325,11 @@ export function mount(el, c) {
   $("tips").addEventListener("click", onTip);
   $("editstart").addEventListener("click", openStartSheet);
   $("editend").addEventListener("click", openEndSheet);
+  $("editnote").addEventListener("click", openNoteEditSheet);
+  pplPick = peoplePicker($("ppl"), ctx, {
+    selected: [],
+    onChange: () => { pplTouched = ctx.util.dayKey(Date.now()); },
+  });
   document.addEventListener("visibilitychange", () => {
     if (document.visibilityState === "visible" && root && !root.hidden) refreshNear();
     try { driveWatchTick(); } catch (e) { console.error(e); }
@@ -372,7 +409,6 @@ function renderClock() {
     const pm = timer.pauseMsNow(r);
     metaHTML = `<span>Schicht seit <b>${util.clock(r.start)}</b></span>` +
       `<span>Pause <b data-r="pause">${util.hm(Math.floor(pm / 60000))}</b></span>`;
-    if (r.note) metaHTML += `<span>${util.esc(r.note)}</span>`;
   } else {
     pill.textContent = `Ausgestempelt um ${util.clock(e.end)}`;
     placeObj = findPlace(e.placeId);
@@ -380,7 +416,6 @@ function renderClock() {
     loc = e.inLoc;
     metaHTML = `<span><b>${util.clock(e.start)} – ${util.clock(e.end)}</b></span>` +
       `<span>Pause <b>${util.hm(e.pauseMin || 0)}</b></span>`;
-    if (e.note) metaHTML += `<span>${util.esc(e.note)}</span>`;
   }
 
   if (placeName) {
@@ -423,7 +458,19 @@ function renderClock() {
     }
   }
 
-  const key = metaHTML + "|" + locHTML + "|" + segHTML + "|" + listHTML;
+  // „mit Max, Anna · Notiz: …“ (laufende bzw. beendete Schicht)
+  let pnHTML = "";
+  {
+    const src = r || e;
+    if (src) {
+      const bits = [];
+      const pt = peopleText(src.people);
+      if (pt) bits.push(`<span>${util.esc(pt)}</span>`);
+      if (src.note) bits.push(`<span>Notiz: ${util.esc(src.note)}</span>`);
+      pnHTML = bits.join("");
+    }
+  }
+  const key = metaHTML + "|" + locHTML + "|" + segHTML + "|" + listHTML + "|" + pnHTML;
   if (key !== metaKey) {
     metaKey = key;
     const sn = $("segnow");
@@ -442,6 +489,9 @@ function renderClock() {
     sl.hidden = !listHTML;
     sl.querySelectorAll("[data-segdel]").forEach((b) => b.addEventListener("click", () => askRemoveSegment(Number(b.dataset.segdel))));
     $("meta").innerHTML = metaHTML;
+    const pn = $("pplnote");
+    pn.innerHTML = pnHTML;
+    pn.hidden = !pnHTML;
     const ll = $("locline");
     ll.innerHTML = locHTML;
     ll.hidden = !locHTML;
@@ -451,6 +501,8 @@ function renderClock() {
   if (es.hidden === showEdit) es.hidden = !showEdit;
   const ee = $("editend");
   if (ee && ee.hidden === showEdit) ee.hidden = !showEdit;
+  const en = $("editnote");
+  if (en && en.hidden === showEdit) en.hidden = !showEdit;
   updateClockText();
 }
 
@@ -736,6 +788,7 @@ export async function clockOutAt(end, btn = null) {
     id: null, start: r.start, end,
     pauseMin: Math.round(pauseMs / 60000),
     placeId: r.placeId ?? null, place: r.place || "", note: r.note || "",
+    people: cleanPeople(r.people),
     inLoc: r.inLoc ?? null, outLoc: null,
   };
   pendingOut = true;
@@ -762,6 +815,7 @@ export async function clockOutAt(end, btn = null) {
     forceButtons();
     renderAll();
   }
+  if (saved && done && done.id) askNoteAfterOut(done.id);
 }
 
 /* ---------------- Beginn ändern ---------------- */
@@ -893,11 +947,13 @@ async function doClockIn(btn, forcedPlace = null, opts = null) {
     }
     const noteEl = $("note");
     const note = (noteEl.value || "").trim();
+    const people = currentPeople();
     try {
       await timer.clockIn({
         placeId: place ? place.id : null,
         place: place ? place.name : "",
         note,
+        people,
         inLoc,
         activity: (opts && opts.activity) || clockInAct(),
       });
@@ -912,6 +968,8 @@ async function doClockIn(btn, forcedPlace = null, opts = null) {
       }
       if (opts && opts.planKey) markPlanDone(opts.planKey);
       noteEl.value = "";
+      if (people.length) rememberPeople(store, people);
+      pplTouched = ""; pplPrefill = "";
       done = null;
       if (opts && opts.msg) {
         buzz([60, 80, 60]);
@@ -1036,6 +1094,7 @@ async function doClockOut(btn) {
       id: null, start: cur.start, end: now,
       pauseMin: Math.round(timer.pauseMsNow(cur, now) / 60000),
       placeId: cur.placeId || null, place: cur.place || "", note: cur.note || "",
+      people: cleanPeople(cur.people),
       inLoc: cur.inLoc || null, outLoc,
     };
     pendingOut = true;
@@ -1068,6 +1127,7 @@ async function doClockOut(btn) {
     renderAll();
   }
   if (entry && entry.id) fillEntryAddrs(entry.id);
+  if (entry && entry.id) askNoteAfterOut(entry.id);
 }
 
 /** Adressen der beendeten Schicht (Ende, ggf. auch Beginn) nachträglich im Eintrag ergänzen. */
@@ -1131,8 +1191,9 @@ function renderPre() {
   nearEl.hidden = !near || tipsKey.startsWith("here|");
 
   renderActs();
+  renderPeoplePre();
 
-  const sel = getSel();
+  const sel = effSel();
   const ps = places();
   const key = JSON.stringify([sel, locating, ps.map((p) => [p.id, p.name])]);
   if (key === chipsKey) return;
@@ -1143,6 +1204,150 @@ function renderPre() {
   html += `<button type="button" class="chip add" data-act="addplace"${locating ? " disabled" : ""}>` +
     `${locating ? "Standort wird ermittelt …" : `${icon("plus", 18)}<span>Ort hier speichern</span>`}</button>`;
   $("chips").innerHTML = html;
+}
+
+/** Personen vor dem Einstempeln: Vorauswahl aus dem Einsatzplan, Hinweis „Laut Einsatzplan: …“. */
+function renderPeoplePre() {
+  const { util } = ctx;
+  const ez = todayEinsatz();
+  const hint = $("ezhint");
+  const where = ez ? String(ez.place || ez.title || ((findPlace(ez.placeId) || {}).name) || "").trim() : "";
+  const ht = ez ? `Laut Einsatzplan: ${where || "Einsatz"}` + (peopleText(ez.people) ? ` · ${peopleText(ez.people)}` : "") : "";
+  if (hint.textContent !== ht) hint.textContent = ht;
+  hint.hidden = !ht;
+  if (!pplPick) return;
+  const today = util.dayKey(Date.now());
+  const pre = JSON.stringify([today, ez ? ez.id : "", ez ? cleanPeople(ez.people) : []]);
+  if (pplTouched !== today && pre !== pplPrefill) {
+    pplPrefill = pre;
+    pplPick.set(ez ? ez.people : []);
+    pplKey = JSON.stringify(cleanPeople(settings().people));
+    return;
+  }
+  const k = JSON.stringify(cleanPeople(settings().people));
+  if (k !== pplKey) { pplKey = k; pplPick.redraw(); }
+}
+
+/** Personen für das Einstempeln (Einfache Ansicht: Vorauswahl aus dem Einsatzplan). */
+function currentPeople() {
+  if (pplPick) return cleanPeople(pplPick.get());
+  const ez = todayEinsatz();
+  return ez ? cleanPeople(ez.people) : [];
+}
+
+/* ---------------- Notiz & Personen (Update 8) ---------------- */
+
+/** Letzte 10 verschiedenen Notizen (neueste zuerst). */
+function recentNotes(exclude = "") {
+  const out = [];
+  const list = ((snap && snap.entries) || []).slice().sort((a, b) => b.start - a.start);
+  for (const e of list) {
+    const n = String(e.note || "").trim();
+    if (!n || n === exclude || out.some((x) => x.toLowerCase() === n.toLowerCase())) continue;
+    out.push(n);
+    if (out.length >= 10) break;
+  }
+  return out;
+}
+
+/** Während der Schicht: Notiz und Personen ändern → setRunning. */
+function openNoteEditSheet() {
+  const { ui, util, store } = ctx;
+  const r0 = store.get().running;
+  if (!r0) return;
+  let pick = null;
+  ui.openSheet({
+    title: "Notiz & Personen",
+    bodyHTML:
+      `<div class="fields ppl-sheet">` +
+      `<label>Notiz<textarea data-f="note" rows="3" maxlength="300" placeholder="z. B. Steckdosen gesetzt, Verteiler angeschlossen …">${util.esc(r0.note || "")}</textarea></label>` +
+      `<div><div class="lbl">Mit wem?</div><div data-f="ppl"></div></div>` +
+      `<button type="button" class="btn primary" data-f="save">Speichern</button>` +
+      `</div>`,
+    onMount(el, close) {
+      pick = peoplePicker(el.querySelector('[data-f="ppl"]'), ctx, { selected: r0.people || [] });
+      el.querySelector('[data-f="save"]').addEventListener("click", async () => {
+        const r = store.get().running;
+        if (!r || r.start !== r0.start) { close(); return; }
+        const note = (el.querySelector('[data-f="note"]').value || "").trim();
+        const people = cleanPeople(pick.get());
+        try {
+          await store.setRunning({ ...r, note, people });
+          rememberPeople(store, people);
+          ui.toast("Gespeichert");
+          close();
+        } catch { /* Toast kommt vom Store */ }
+        snap = store.get() || snap;
+        metaKey = "";
+        renderAll();
+      });
+    },
+  });
+}
+
+/** Nach dem Ausstempeln: „Was hast du heute gemacht?“ (abschaltbar über settings.askNoteOnOut). */
+function askNoteAfterOut(entryId) {
+  const { ui, util, store } = ctx;
+  if (settings().askNoteOnOut === false) return;
+  const e0 = ((store.get() || {}).entries || []).find((x) => x.id === entryId);
+  if (!e0) return;
+  const compact = isCompact();
+  const sugg = recentNotes(String(e0.note || "").trim()).slice(0, compact ? 5 : 10);
+  let pick = null;
+  ui.openSheet({
+    title: "Was hast du heute gemacht?",
+    bodyHTML:
+      `<div class="fields ppl-sheet note-ask">` +
+      `<label>Kurz notieren<textarea data-f="note" rows="3" maxlength="300" placeholder="z. B. Kabel eingezogen, Schalter montiert …">${util.esc(e0.note || "")}</textarea></label>` +
+      (sugg.length ? `<div><div class="lbl">Vorschläge</div><div class="chips note-sugg" data-f="sugg">${sugg.map((n) =>
+        `<button type="button" class="chip" data-n="${util.esc(n)}">${util.esc(n)}</button>`).join("")}</div></div>` : "") +
+      `<div><div class="lbl">Mit wem?</div><div data-f="ppl"></div></div>` +
+      `<div class="row"><button type="button" class="btn ghost" data-f="skip">Überspringen</button>` +
+      `<button type="button" class="btn primary" data-f="save">Speichern</button></div>` +
+      `<label class="switch note-off"><span>Nicht mehr fragen</span><input type="checkbox" data-f="off"></label>` +
+      `</div>`,
+    onMount(el, close) {
+      const ta = el.querySelector('[data-f="note"]');
+      pick = peoplePicker(el.querySelector('[data-f="ppl"]'), ctx, { selected: e0.people || [] });
+      const sg = el.querySelector('[data-f="sugg"]');
+      if (sg) sg.addEventListener("click", (ev) => {
+        const b = ev.target.closest("button[data-n]");
+        if (!b) return;
+        ta.value = b.dataset.n;
+        try { ta.focus(); } catch { /* egal */ }
+      });
+      const off = el.querySelector('[data-f="off"]');
+      const saveOff = async () => {
+        if (off.checked) {
+          try { await store.saveSettings({ askNoteOnOut: false }); } catch { /* Toast kommt vom Store */ }
+          ui.toast("Okay – die Notiz kannst du jederzeit in den Einträgen ändern.", 3500);
+        }
+      };
+      el.querySelector('[data-f="skip"]').addEventListener("click", async () => { close(); await saveOff(); });
+      el.querySelector('[data-f="save"]').addEventListener("click", async () => {
+        const btn = el.querySelector('[data-f="save"]');
+        const cur = ((store.get() || {}).entries || []).find((x) => x.id === entryId);
+        if (!cur) { close(); return; }
+        const note = (ta.value || "").trim();
+        const people = cleanPeople(pick.get());
+        ui.setBusy(btn, true, "Speichern …");
+        try {
+          await store.saveEntry({ ...cur, note, people });
+          rememberPeople(store, people);
+          close();
+          if (!off.checked) ui.toast("Notiz gespeichert");
+        } catch {
+          try { ui.setBusy(btn, false); } catch { /* egal */ }
+          return;
+        }
+        await saveOff();
+        snap = store.get() || snap;
+        if (done && done.id === entryId) done = { ...done, note, people };
+        metaKey = "";
+        renderAll();
+      });
+    },
+  });
 }
 
 let actsKey = "";
@@ -1293,12 +1498,13 @@ async function onChip(ev) {
     return;
   }
   const id = b.dataset.id;
-  setSel(getSel() === id ? null : id);
+  setSel(effSel() === id ? null : id);
+  placeTouched = ctx.util.dayKey(Date.now());
   // direkt umschalten, ohne alles neu zu zeichnen
   $("chips").querySelectorAll("button.chip[data-id]").forEach((c) => {
-    c.setAttribute("aria-pressed", c.dataset.id === getSel() ? "true" : "false");
+    c.setAttribute("aria-pressed", c.dataset.id === effSel() ? "true" : "false");
   });
-  chipsKey = JSON.stringify([getSel(), locating, places().map((p) => [p.id, p.name])]);
+  chipsKey = JSON.stringify([effSel(), locating, places().map((p) => [p.id, p.name])]);
 }
 
 async function addPlaceHere() {
@@ -1375,7 +1581,7 @@ function renderList() {
   const list = ((snap && snap.entries) || [])
     .filter((e) => util.dayKey(e.start) === today)
     .sort((a, b) => b.start - a.start);
-  const key = JSON.stringify(list.map((e) => [e.id, e.start, e.end, e.pauseMin, e.place, e.note, e.kind, e.creditMin]));
+  const key = JSON.stringify(list.map((e) => [e.id, e.start, e.end, e.pauseMin, e.place, e.note, e.kind, e.creditMin, e.people]));
   if (key === listKey) return;
   listKey = key;
   if (!list.length) {
@@ -1395,6 +1601,7 @@ function renderList() {
     if (e.place) bits.push(`<span class="tag">${util.esc(e.place)}</span>`);
     if (e.pauseMin) bits.push(`Pause ${util.hm(e.pauseMin)}`);
     if (e.note) bits.push(util.esc(e.note));
+    if (peopleText(e.people)) bits.push(util.esc(peopleText(e.people)));
     return `<button type="button" class="entry" data-id="${util.esc(e.id)}">` +
       `<span class="t">${util.clock(e.start)} – ${util.clock(e.end)}</span>` +
       `<span class="d">${util.hm(util.netMin(e))} h</span>` +

@@ -276,7 +276,7 @@ export function decideTodos(now, todos, pushlog) {
   const out = [];
   const sentMap = (pushlog && pushlog.todoSent && typeof pushlog.todoSent === "object") ? pushlog.todoSent : {};
   for (const t of (Array.isArray(todos) ? todos : [])) {
-    if (!t || !t.id || !t.remind || t.done) continue;
+    if (!t || !t.id || !t.remind || t.done || t.kind === "einsatz") continue;
     const date = String(t.date || ""), time = String(t.time || "");
     if (!/^\d{4}-\d{2}-\d{2}$/.test(date) || !/^\d{1,2}:\d{2}$/.test(time)) continue;
     const [y, m, d] = date.split("-").map(Number);

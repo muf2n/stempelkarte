@@ -3,6 +3,8 @@
 // Wendet außerdem „Einfacher bedienen“ (settings.comfort) auf <html> an.
 import { icon } from "../icons.js";
 import { plansToday } from "./plans.js";
+import { einsatzFor } from "../einsatz.js";
+import { showEinsatzplan } from "./agenda.js";
 
 const COMFORT_KEY = "stempelkarte.comfort";
 const WD_SHORT = ["Mo", "Di", "Mi", "Do", "Fr", "Sa", "So"];
@@ -108,7 +110,7 @@ function agendaInfo(now) {
   const u = util();
   const today = u.dayKey(now);
   const nowHM = u.clock(now);
-  const open = todos().filter((t) => t && !t.done);
+  const open = todos().filter((t) => t && !t.done && t.kind !== "einsatz");
   const termine = open.filter((t) => t.kind === "termin" && t.date &&
     (t.date > today || (t.date === today && (!t.time || t.time >= nowHM))));
   termine.sort((a, b) => (a.date + (a.time || "")).localeCompare(b.date + (b.time || "")));
@@ -128,6 +130,16 @@ function agendaInfo(now) {
   return { next, when, openTodos };
 }
 
+/** Heutiger Einsatz laut Einsatzplan: { place, people } oder null. */
+function einsatzInfo(todayK) {
+  let e = null;
+  try { e = einsatzFor(todayK, todos()); } catch { e = null; }
+  if (!e) return null;
+  const p = e.placeId ? ((snap && snap.places) || []).find((x) => x.id === e.placeId) : null;
+  const place = String((p && p.name) || e.place || e.title || "").trim() || "Einsatz";
+  return { place, people: Array.isArray(e.people) ? e.people.filter(Boolean) : [] };
+}
+
 /* ---------------- Markup ---------------- */
 
 export function mount(el, c) {
@@ -141,10 +153,16 @@ export function mount(el, c) {
       <div class="md-title"><span class="md-ico">${icon("sun", 18)}</span><span class="md-h">Mein Tag</span><span class="md-date" data-md="date"></span></div>
       <div class="md-hint" data-md="hint" hidden></div>
     </div>
+    <button type="button" class="md-ez" data-md="ez" data-md-ez="1" hidden></button>
     <div class="md-tiles" data-md="tiles"></div>
     <div class="md-watch" data-md="watch" hidden></div>
     <div class="md-week" data-md="week" aria-label="Diese Woche"></div>`;
   root.addEventListener("click", (ev) => {
+    if (ev.target.closest("[data-md-ez]")) {
+      try { showEinsatzplan(); } catch { /* egal */ }
+      ctx.go("agenda");
+      return;
+    }
     const b = ev.target.closest("[data-md-go]");
     if (b) ctx.go(b.dataset.mdGo);
   });
@@ -176,6 +194,7 @@ function render() {
   const ag = agendaInfo(now);
   const workMin = Math.floor(mins[todayK] || 0);
   const showWatchHint = steps === null && up === null && !watchEverUsed();
+  const ez = einsatzInfo(todayK);
 
   // Wochenleiste
   const week = [];
@@ -186,7 +205,7 @@ function render() {
     week.push({ k, label: WD_SHORT[i], min: Math.floor(mins[k] || 0), steps: dd ? num(dd.steps) : null, today: k === todayK, future: k > todayK });
   }
 
-  const key = JSON.stringify([todayK, hint, workMin, steps, up, ag.when, ag.next && ag.next.title, ag.openTodos, showWatchHint, week]);
+  const key = JSON.stringify([todayK, hint, workMin, steps, up, ag.when, ag.next && ag.next.title, ag.openTodos, showWatchHint, week, ez]);
   if (key === lastKey) return;
   lastKey = key;
 
@@ -195,6 +214,14 @@ function render() {
   hEl.hidden = !hint;
   hEl.className = "md-hint" + (hint ? " md-hint-" + hint.kind : "");
   hEl.textContent = hint ? hint.text : "";
+
+  const ezEl = root.querySelector('[data-md="ez"]');
+  ezEl.hidden = !ez;
+  ezEl.innerHTML = ez
+    ? `<span class="md-ez-ico">${icon("pin", 16)}</span><span class="md-ez-t"><b>Heute: ${u.esc(ez.place)}</b>` +
+      `${ez.people.length ? ` · mit ${u.esc(ez.people.join(", "))}` : ""}</span>`
+    : "";
+  if (ez) ezEl.setAttribute("aria-label", `Einsatzplan öffnen: heute ${ez.place}${ez.people.length ? " mit " + ez.people.join(", ") : ""}`);
 
   const dash = `<span class="md-none">–</span>`;
   // Wert: Uhrzeit (sonst Tag); Unterzeile: Tag + Titel
