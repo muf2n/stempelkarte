@@ -20,7 +20,7 @@ export const firebaseConfig = {
 // Web-Push-Zertifikat (VAPID, öffentlicher Schlüssel) für Erinnerungen per Benachrichtigung.
 // Firebase-Konsole → Projekteinstellungen → Cloud Messaging → Web-Push-Zertifikate → „Schlüsselpaar generieren“.
 // Leer = Erinnerungen werden in der App als „wird noch eingerichtet“ angezeigt.
-export const vapidKey = "";
+export const vapidKey = "BHR5werNxKDK-iS1eK9MGuEtozPw5tPxiT2Vm8aSOde-MDMpCZea02E_FQfPbp8y1PRcVSACmMadVpSX6mUNDW0";
 
 // false, solange apiKey leer ist oder noch mit "DEIN" beginnt
 export function isConfigured() {

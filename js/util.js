@@ -163,8 +163,15 @@ export function holidayName(ts) {
   return holidaysOf(d.getFullYear()).get(dayKey(d)) || null;
 }
 
-/** Soll-Minuten für diesen Tag (0 an Nicht-Arbeitstagen und ggf. Feiertagen). */
+/** Soll-Minuten für diesen Tag (0 an Nicht-Arbeitstagen, ggf. Feiertagen und – Update 6 – Berufsschultagen). */
 export function dailyTargetMin(ts, settings) {
+  const base = baseTargetMin(ts, settings);
+  if (base > 0 && isSchoolDay(ts, settings)) return 0; // Schulzeit = Arbeitszeit → Soll gilt als erfüllt
+  return base;
+}
+
+/** Tagessoll ohne Berücksichtigung der Berufsschule. */
+function baseTargetMin(ts, settings) {
   const s = settings || {};
   const days = Array.isArray(s.workDays) ? s.workDays : [1, 2, 3, 4, 5];
   if (!days.length) return 0;
@@ -183,7 +190,7 @@ export function creditMin(entry) {
   return Math.max(0, Number(entry.creditMin ?? 0) || 0);
 }
 
-const KIND_LABELS = { work: "Arbeit", urlaub: "Urlaub", krank: "Krank", feiertag: "Feiertag", zeitausgleich: "Zeitausgleich" };
+const KIND_LABELS = { work: "Arbeit", urlaub: "Urlaub", krank: "Krank", feiertag: "Feiertag", zeitausgleich: "Zeitausgleich", schule: "Schule" };
 
 /** Anzeigename einer Eintragsart. */
 export function kindLabel(kind) {
@@ -232,4 +239,48 @@ export function upcomingHolidays(fromTs, count = 3) {
     }
   }
   return out;
+}
+
+/* ---------- Update 6: Berufsschule (Lehrlinge) ---------- */
+// settings.school = { days:number[] (0..6), blocks:[{id, from:"YYYY-MM-DD", to:"YYYY-MM-DD", label}] }
+// Schulzeit zählt als Arbeitszeit. Feiertage haben Vorrang. Blockschule zählt nur an Arbeitstagen.
+
+/** Gültige Schuleinstellungen ({days, blocks}) oder null. */
+export function readSchool(settings) {
+  const sc = settings && settings.school;
+  if (!sc || typeof sc !== "object") return null;
+  const days = Array.isArray(sc.days)
+    ? [...new Set(sc.days.map(Number).filter((d) => Number.isInteger(d) && d >= 0 && d <= 6))] : [];
+  const re = /^\d{4}-\d{2}-\d{2}$/;
+  const blocks = Array.isArray(sc.blocks)
+    ? sc.blocks.filter((b) => b && re.test(String(b.from || "")) && re.test(String(b.to || "")) && b.from <= b.to) : [];
+  if (!days.length && !blocks.length) return null;
+  return { days, blocks };
+}
+
+/** Bezeichnung des Schultags ("Berufsschule" bzw. Block-Label) oder null. */
+export function schoolLabel(ts, settings) {
+  const sc = readSchool(settings);
+  if (!sc) return null;
+  const d = toDate(ts);
+  const s = settings || {};
+  if (s.holidays !== false && holidayName(d)) return null;
+  const k = dayKey(d);
+  const workDays = Array.isArray(s.workDays) ? s.workDays : [1, 2, 3, 4, 5];
+  if (workDays.includes(d.getDay())) {
+    const b = sc.blocks.find((x) => x.from <= k && k <= x.to);
+    if (b) return String(b.label || "").trim() || "Blockschule";
+  }
+  if (sc.days.includes(d.getDay())) return "Berufsschule";
+  return null;
+}
+
+/** Ist an diesem Tag Berufsschule (wöchentlich oder Block, kein Feiertag)? */
+export function isSchoolDay(ts, settings) {
+  return schoolLabel(ts, settings) != null;
+}
+
+/** Gutschrift eines Schultags: Tagessoll (ohne Schul-Abzug) an Schultagen, sonst 0. */
+export function schoolCreditMin(ts, settings) {
+  return isSchoolDay(ts, settings) ? baseTargetMin(ts, settings) : 0;
 }

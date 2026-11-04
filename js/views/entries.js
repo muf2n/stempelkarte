@@ -119,7 +119,16 @@ function actAttrs(name, esc) {
 
 // ---------- Kalender ----------
 
-const CAL_KINDS = ["urlaub", "krank", "feiertag", "zeitausgleich"];
+const CAL_KINDS = ["urlaub", "krank", "feiertag", "zeitausgleich", "schule"];
+
+// Update 6: automatischer Schultag (Berufsschule/Block) oder null
+function schoolOf(util, ts, settings) {
+  if (!util.schoolLabel) return null;
+  try { return util.schoolLabel(ts, settings); } catch { return null; }
+}
+function hasSchool(util, settings) {
+  return !!(util.readSchool && util.readSchool(settings));
+}
 
 function calendarHTML(snap, util, holidaysOn) {
   const { esc, hm, dayKey, startOfWeek } = util;
@@ -158,6 +167,7 @@ function calendarHTML(snap, util, holidaysOn) {
       const k = dayKey(dt);
       const info = days.get(k);
       const hol = holidaysOn ? holidayName(dt.getTime()) : null;
+      const sch = hol ? null : schoolOf(util, dt.getTime(), snap.settings);
       const cls = ["cal-day"];
       if (dt.getMonth() !== curM) cls.push("out");
       if (i >= 5) cls.push("we");
@@ -171,14 +181,17 @@ function calendarHTML(snap, util, holidaysOn) {
       }
       if (hol && !cls.includes("k-feiertag")) cls.push("k-feiertag");
       if (hol) cls.push("hol");
+      if (sch) { if (!cls.includes("k-schule")) cls.push("k-schule"); cls.push("schul"); }
       const aria = [util.fmtDate(dt.getTime())];
       if (hol) aria.push(hol);
+      if (sch) aria.push(`${sch} – zählt als Arbeitszeit`);
       if (labels.length) aria.push(labels.join(", "));
       if (info && info.min > 0) aria.push(`${hm(info.min)} h`);
       grid += `<button type="button" class="${cls.join(" ")}" data-day="${k}"` +
-        `${hol ? ` title="${esc(hol)}"` : ""} aria-label="${esc(aria.join(" · "))}" aria-pressed="${k === selKey}">` +
+        `${hol ? ` title="${esc(hol)}"` : sch ? ` title="${esc(sch)}"` : ""} aria-label="${esc(aria.join(" · "))}" aria-pressed="${k === selKey}">` +
         `<span class="cal-num">${dt.getDate()}</span>` +
         `${hol ? `<span class="cal-hn" aria-hidden="true">${esc(holidayShort(hol))}</span>` : ""}` +
+        `${sch ? `<span class="cal-sn" aria-hidden="true">${esc(sch === "Berufsschule" ? "Schule" : sch)}</span>` : ""}` +
         `<span class="cal-h">${info && info.min > 0 ? esc(hm(info.min)) : ""}</span>` +
         `${hol || (info && info.kinds.has("feiertag")) ? `<span class="cal-dot" aria-hidden="true"></span>` : ""}` +
         `${dotsHTML(info)}` +
@@ -187,8 +200,10 @@ function calendarHTML(snap, util, holidaysOn) {
     grid += `<span class="cal-week" title="Wochensumme">${weekMin > 0 ? esc(hm(weekMin)) : ""}</span>`;
   }
 
+  const schoolOn = hasSchool(util, snap.settings);
   const legend = ["work", ...CAL_KINDS]
-    .map((k) => `<span class="k-${k}">${esc(k === "feiertag" && holidaysOn ? "Feiertag (automatisch)" : kindLabel(k))}</span>`).join("");
+    .map((k) => `<span class="k-${k}">${esc(k === "feiertag" && holidaysOn ? "Feiertag (automatisch)"
+      : k === "schule" && schoolOn ? "Schule (automatisch)" : kindLabel(k))}</span>`).join("");
 
   return `<div class="cal-head" aria-hidden="true">${head}</div>
     <div class="cal-grid">${grid}</div>
@@ -198,7 +213,7 @@ function calendarHTML(snap, util, holidaysOn) {
 // Tagesarten als farbige Punkte (Feiertag steckt in .cal-dot oben rechts)
 function dotsHTML(info) {
   if (!info) return "";
-  const ks = ["work", "urlaub", "krank", "zeitausgleich"].filter((k) => info.kinds.has(k));
+  const ks = ["work", "urlaub", "krank", "zeitausgleich", "schule"].filter((k) => info.kinds.has(k));
   return ks.length ? `<span class="cal-dots" aria-hidden="true">${ks.map((k) => `<i class="d-${k}"></i>`).join("")}</span>` : "";
 }
 
@@ -245,6 +260,35 @@ function render() {
       if (n) monthHols.set(k, n);
     }
   }
+  // Update 6: automatische Schultage des Monats (bzw. des gewählten Tags): dayKey → Bezeichnung
+  const monthSchool = new Map();
+  {
+    const last = new Date(curY, curM + 1, 0).getDate();
+    for (let d = 1; d <= last; d++) {
+      const dt = new Date(curY, curM, d);
+      const k = dayKey(dt);
+      if (selKey && k !== selKey) continue;
+      if (monthHols.has(k)) continue;
+      const n = schoolOf(util, dt.getTime(), snap.settings);
+      if (n) monthSchool.set(k, n);
+    }
+  }
+  const keyTs = (k) => { const d = parseDate(k); return new Date(d.y, d.mo, d.d).getTime(); };
+  const schoolRow = (k, name) => {
+    const cm = util.schoolCreditMin ? util.schoolCreditMin(keyTs(k), snap.settings) : 0;
+    return `
+        <div class="entry ek-holrow ek-schoolrow" role="note">
+          <span class="t"><span class="ek-holico" aria-hidden="true">${icon("building", 18)}</span>${esc(name)}</span>
+          <span class="d">${cm > 0 ? `${esc(hm(cm))} h` : "Schule"}</span>
+          <span class="p">${esc(name === "Berufsschule" ? "Berufsschule · zählt als Arbeitszeit" : `${name} · Berufsschule · zählt als Arbeitszeit`)}</span>
+        </div>`;
+  };
+  const schoolDayHTML = (k, name) => `
+      <div class="day ek-schoolday">
+        <div class="day-h"><span>${esc(fmtDate(keyTs(k)))} <span class="ek-sch">${esc(name)}</span></span></div>
+        ${schoolRow(k, name)}
+      </div>`;
+  const specialDayHTML = (k) => (monthHols.has(k) ? holDayHTML(k, monthHols.get(k)) : schoolDayHTML(k, monthSchool.get(k)));
   const holRow = (name) => `
         <div class="entry ek-holrow" role="note">
           <span class="t"><span class="ek-holico" aria-hidden="true">${icon("calendar", 18)}</span>${esc(name)}</span>
@@ -270,6 +314,9 @@ function render() {
     if (selKey && monthHols.has(selKey)) {
       listEl.innerHTML = holDayHTML(selKey, monthHols.get(selKey)) +
         `<p class="note ek-holnote">${esc(monthHols.get(selKey))} – arbeitsfrei, zählt nicht als Fehlstunden. Du musst nichts eintragen.</p>${resetBtn}`;
+    } else if (selKey && monthSchool.has(selKey)) {
+      listEl.innerHTML = schoolDayHTML(selKey, monthSchool.get(selKey)) +
+        `<p class="note ek-holnote">${esc(monthSchool.get(selKey))} – zählt als Arbeitszeit, das Tagessoll ist damit erfüllt. Du musst nichts eintragen.</p>${resetBtn}`;
     } else if (selKey) {
       const d = parseDate(selKey);
       const ts = d ? new Date(d.y, d.mo, d.d).getTime() : Date.now();
@@ -278,8 +325,11 @@ function render() {
         ${hol ? `<p class="note">Feiertag: ${esc(hol)}</p>` : ""}
         <p class="note">Tippe auf „+ Nachtragen“, um für diesen Tag etwas einzutragen.</p></div>${resetBtn}`;
     } else {
-      const holsHTML = [...monthHols.keys()].sort().reverse().map((k) => holDayHTML(k, monthHols.get(k))).join("");
-      if (holsHTML) sumEl.textContent = `${monthHols.size} ${monthHols.size === 1 ? "Feiertag" : "Feiertage"} · automatisch eingetragen`;
+      const holsHTML = [...new Set([...monthHols.keys(), ...monthSchool.keys()])].sort().reverse().map(specialDayHTML).join("");
+      const sp = [];
+      if (monthHols.size) sp.push(`${monthHols.size} ${monthHols.size === 1 ? "Feiertag" : "Feiertage"}`);
+      if (monthSchool.size) sp.push(`${monthSchool.size} ${monthSchool.size === 1 ? "Schultag" : "Schultage"}`);
+      if (sp.length) sumEl.textContent = `${sp.join(" · ")} · automatisch eingetragen`;
       listEl.innerHTML = holsHTML + `<div class="empty ek-empty">
         <span class="ek-empty-deco" aria-hidden="true">${leaves("left")}${sparkles()}</span>
         <div class="ek-empty-ill">${emptyClipboard()}</div>
@@ -300,6 +350,7 @@ function render() {
     groups.get(k).push(e);
   }
   for (const k of monthHols.keys()) if (!groups.has(k)) groups.set(k, []);
+  for (const k of monthSchool.keys()) if (!groups.has(k)) groups.set(k, []);
   const keys = [...groups.keys()].sort().reverse();
 
   let total = 0;
@@ -307,7 +358,7 @@ function render() {
   const absCount = new Map();
   const html = keys.map((k) => {
     const items = groups.get(k).sort((a, b) => a.start - b.start);
-    if (!items.length) return holDayHTML(k, monthHols.get(k));
+    if (!items.length) return specialDayHTML(k);
     const daySum = items.reduce((s, e) => s + creditMin(e), 0);
     total += daySum;
     if (items.some((e) => isWork(e) && netMin(e) > 0)) workDays++;
@@ -346,10 +397,12 @@ function render() {
         ${links.length ? `<div class="links">${links.join(" · ")}</div>` : ""}`;
     }).join("");
     const hol = holidaysOn ? holidayName(items[0].start) : null;
+    const sch = monthSchool.get(k) || null;
     return `
-      <div class="day${hol ? " ek-holday" : ""}">
-        <div class="day-h"><span>${esc(fmtDate(items[0].start))}${hol ? ` <span class="ek-hol">${esc(hol)}</span>` : ""}</span><span class="sum">${esc(hm(daySum))} h</span></div>
+      <div class="day${hol ? " ek-holday" : ""}${sch ? " ek-schoolday" : ""}">
+        <div class="day-h"><span>${esc(fmtDate(items[0].start))}${hol ? ` <span class="ek-hol">${esc(hol)}</span>` : ""}${sch ? ` <span class="ek-sch">${esc(sch)}</span>` : ""}</span><span class="sum">${esc(hm(daySum))} h</span></div>
         ${hol ? holRow(hol) : ""}
+        ${sch ? schoolRow(k, sch) : ""}
         ${rows}
       </div>`;
   }).join("");
@@ -360,11 +413,12 @@ function render() {
     return;
   }
   const parts = [`Gesamt ${hm(total)} h`, `${workDays} ${workDays === 1 ? "Arbeitstag" : "Arbeitstage"}`];
-  for (const kind of ["urlaub", "krank", "feiertag", "zeitausgleich"]) {
+  for (const kind of ["urlaub", "krank", "feiertag", "zeitausgleich", "schule"]) {
     const n = absCount.get(kind);
     if (n) parts.push(`${n}× ${kindLabel(kind)}`);
   }
   if (monthHols.size) parts.push(`${monthHols.size} ${monthHols.size === 1 ? "Feiertag" : "Feiertage"} (automatisch)`);
+  if (monthSchool.size) parts.push(`${monthSchool.size} ${monthSchool.size === 1 ? "Schultag" : "Schultage"} (automatisch)`);
   sumEl.textContent = parts.join(" · ");
   listEl.innerHTML = html;
 }
@@ -488,7 +542,7 @@ function readTimes(box) {
   return { start, end, pauseMin, overnight };
 }
 
-const KINDS = ["work", "urlaub", "krank", "feiertag", "zeitausgleich"];
+const KINDS = ["work", "urlaub", "krank", "feiertag", "zeitausgleich", "schule"];
 
 // Stunden-Text ("7,5" / "7:30") → Minuten oder null
 function parseHours(str) {
@@ -516,6 +570,9 @@ export function openEntryForm(entry, ctx, prefill = null) {
   const kindLabel = util.kindLabel || ((k) => k);
   const dailyTarget = (ts) => (util.dailyTargetMin ? util.dailyTargetMin(ts, settings) : 0);
   const holidayName = (ts) => (settings.holidays !== false && util.holidayName ? util.holidayName(ts) : null);
+  const schoolName = (ts) => schoolOf(util, ts, settings);
+  // Tagessoll ohne Schul-Abzug (Gutschrift für einen zusätzlichen Schultag)
+  const baseTarget = (ts) => (util.dailyTargetMin ? util.dailyTargetMin(ts, { ...settings, school: null }) : 0);
   const workDays = Array.isArray(settings.workDays) ? settings.workDays : [1, 2, 3, 4, 5];
   const nominalMin = workDays.length ? (Number(settings.weeklyTarget ?? 38.5) || 0) * 60 / workDays.length : 0;
 
@@ -560,6 +617,7 @@ export function openEntryForm(entry, ctx, prefill = null) {
     <div class="fields">
       <div class="lbl">Art</div>
       <div class="chips ek-kinds" role="group" aria-label="Art des Eintrags">${chips}</div>
+      <p class="note ek-sch-hint" hidden>Deine festen Schultage und Schulblöcke (Übersicht → Einstellungen → Berufsschule) sind schon automatisch eingetragen. „Schule“ hier nur für <b>zusätzliche</b> Schultage verwenden – zählt als Arbeitszeit.</p>
       <p class="note ek-fei-hint" hidden>Gesetzliche Feiertage sind schon automatisch eingetragen. „Feiertag“ hier nur für <b>zusätzliche</b> freie Tage verwenden (z. B. 24.12. oder Betriebsfeiertag).</p>
       <div class="row">
         <label>Datum
@@ -623,6 +681,7 @@ export function openEntryForm(entry, ctx, prefill = null) {
       if (x > last) break;
       if (!workDays.includes(x.getDay())) continue;
       if (holidayName(x.getTime())) continue;
+      if (schoolName(x.getTime())) continue; // Schultag ist schon gutgeschrieben
       days.push(x.getTime());
     }
     if (days.length > 366) return { error: "Bitte höchstens ein Jahr auf einmal eintragen." };
@@ -630,7 +689,7 @@ export function openEntryForm(entry, ctx, prefill = null) {
     return { days, range: true };
   };
 
-  const defaultCredit = (ts) => (kind === "zeitausgleich" ? 0 : dailyTarget(ts));
+  const defaultCredit = (ts) => (kind === "zeitausgleich" ? 0 : kind === "schule" ? baseTarget(ts) : dailyTarget(ts));
 
   const applyKind = () => {
     box.querySelectorAll("[data-kind]").forEach((b) => b.setAttribute("aria-pressed", String(b.dataset.kind === kind)));
@@ -639,6 +698,8 @@ export function openEntryForm(entry, ctx, prefill = null) {
     box.querySelectorAll(".ek-only-abs").forEach((n) => { n.hidden = work; });
     const fh = box.querySelector(".ek-fei-hint");
     if (fh) fh.hidden = kind !== "feiertag";
+    const sh = box.querySelector(".ek-sch-hint");
+    if (sh) sh.hidden = kind !== "schule";
     if (!work && !creditTouched) {
       const r = absenceDays();
       const ts = r.days ? r.days[0] : Date.now();
@@ -668,10 +729,13 @@ export function openEntryForm(entry, ctx, prefill = null) {
     if (kind === "zeitausgleich") parts.push("verbraucht Überstunden");
     if (!r.range) {
       const hol = holidayName(r.days[0]);
+      const sch = schoolName(r.days[0]);
       if (hol) parts.push(`Feiertag: ${hol}`);
+      else if (sch) parts.push(`${sch} ist an diesem Tag schon automatisch gutgeschrieben`);
+      else if (kind === "schule") parts.push("zählt als Arbeitszeit");
       else if (dailyTarget(r.days[0]) === 0) parts.push("an diesem Tag kein Soll");
     } else {
-      parts.push("Wochenenden und Feiertage werden übersprungen");
+      parts.push(hasSchool(util, settings) ? "Wochenenden, Feiertage und Schultage werden übersprungen" : "Wochenenden und Feiertage werden übersprungen");
     }
     netEl.textContent = parts.join(" · ");
   };

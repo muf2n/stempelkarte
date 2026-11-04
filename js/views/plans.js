@@ -38,6 +38,27 @@ export function dueTs(plan, ts = Date.now()) {
   return d.getTime();
 }
 
+/** Hat der Plan eine gültige Endzeit ("HH:MM")? */
+export function hasEnd(plan) {
+  return !!plan && /^\d{1,2}:\d{2}$/.test(String(plan.endTime || ""));
+}
+
+/** Zeitpunkt (ms) des Planendes für den Plan, der am Tag von `ts` beginnt (Ende ≤ Beginn → nächster Tag); ohne endTime null. */
+export function endTs(plan, ts = Date.now()) {
+  if (!hasEnd(plan)) return null;
+  const [h, m] = String(plan.endTime).split(":").map(Number);
+  const d = new Date(ts);
+  d.setHours(h, m, 0, 0);
+  let e = d.getTime();
+  if (e <= dueTs(plan, ts)) { d.setDate(d.getDate() + 1); e = d.getTime(); }
+  return e;
+}
+
+/** Anzeige "18:00" bzw. "18:00–22:00". */
+export function timeText(plan) {
+  return hasEnd(plan) ? `${plan.time}–${plan.endTime}` : String(plan.time || "");
+}
+
 /** Schlüssel wie im Server-pushlog: "planId:YYYY-MM-DD". */
 export function planKey(planId, ts) { return `${planId}:${dayKeyOf(ts)}`; }
 
@@ -49,11 +70,14 @@ export function appliesOn(plan, ts) {
   return !!plan.date && plan.date === dayKeyOf(ts);
 }
 
-/** Pläne, die heute gelten (kein Feiertag, keine Abwesenheit heute). */
+/** Pläne, die heute gelten (kein Feiertag, kein Berufsschultag, keine Abwesenheit heute). */
 export function plansToday(s, util, now = Date.now()) {
   const settings = (s && s.settings) || {};
   if (settings.holidays !== false && util && util.holidayName) {
     try { if (util.holidayName(now)) return []; } catch { /* egal */ }
+  }
+  if (util && util.isSchoolDay) {
+    try { if (util.isSchoolDay(now, settings)) return []; } catch { /* egal */ }
   }
   const today = dayKeyOf(now);
   const absent = ((s && s.entries) || []).some((e) => e.kind && e.kind !== "work" && dayKeyOf(e.start) === today);
@@ -136,7 +160,7 @@ function render() {
       : !hasCoords(pl) ? `<span class="plan-warn">Ort ohne Position – dort einmal „Meinen Standort übernehmen“</span>` : "";
     return `<div class="plan-item${p.enabled === false ? " off" : ""}" data-id="${esc(p.id)}">` +
       `<button type="button" class="plan-main" data-act="edit">` +
-        `<span class="plan-time">${esc(p.time)}</span>` +
+        `<span class="plan-time${hasEnd(p) ? " plan-range" : ""}">${esc(timeText(p))}</span>` +
         `<span class="plan-txt"><b>${esc(name)}</b><span class="plan-sub">${esc(p.activity || "Arbeiten")}</span>${chips}${warn}</span>` +
       `</button>` +
       `<div class="plan-side">` +
@@ -190,6 +214,7 @@ export function openPlanForm(plan, ctx, preset = null) {
     days: plan && Array.isArray(plan.days) && plan.days.length ? plan.days.slice() : [1, 2, 3, 4, 5],
     date: (plan && plan.date) || dayKeyOf(Date.now()),
     activity: (plan && plan.activity) || "Arbeiten",
+    endTime: (plan && hasEnd(plan) && plan.endTime) || "",
   };
   let knownPlaceIds = new Set(((s0 && s0.places) || []).map((p) => p.id));
   if (!st.placeId && s0.places && s0.places.length === 1) st.placeId = s0.places[0].id;
@@ -199,7 +224,10 @@ export function openPlanForm(plan, ctx, preset = null) {
       `<div><div class="lbl lbl-ico">${icon("pin", 20)}<span>Ort</span></div>` +
         `<div class="chips" data-r="places"></div>` +
         `<p class="hint" data-r="nocoords" hidden></p></div>` +
-      `<label>Beginn um<input type="time" data-r="time" value="${esc(st.time)}" step="300" required></label>` +
+      `<div class="row plan-times">` +
+        `<label>Beginn um<input type="time" data-r="time" value="${esc(st.time)}" step="300" required></label>` +
+        `<label>Ende (optional)<input type="time" data-r="end" value="${esc(st.endTime)}" step="300"></label>` +
+      `</div>` +
       `<div><div class="lbl">Wiederholung</div>` +
         `<div class="chips plan-mode" data-r="mode">` +
           `<button type="button" class="chip" data-m="week">Jede Woche</button>` +
@@ -209,6 +237,7 @@ export function openPlanForm(plan, ctx, preset = null) {
       `<div><div class="lbl lbl-ico">${icon("briefcase", 20)}<span>Tätigkeit</span></div>` +
         `<div class="chips" data-r="acts"></div></div>` +
       `<p class="note plan-info" data-r="info"></p>` +
+      `<p class="note plan-school" data-r="school" hidden></p>` +
     `</div>` +
     `<div class="stack" style="margin-top:14px">` +
       `<button type="button" class="btn primary" data-r="save">Speichern</button>` +
@@ -249,8 +278,35 @@ export function openPlanForm(plan, ctx, preset = null) {
           `<button type="button" class="chip" data-a="${esc(a)}" aria-pressed="${a === st.activity}">${esc(a)}</button>`).join("");
       };
       const drawInfo = () => {
-        $("info").textContent = `Um ${st.time || "–"} bekommst du eine Benachrichtigung. Ein Tipp genügt: Bist du am Ort, stempelt die App dich automatisch ein. ` +
+        let t = `Um ${st.time || "–"} bekommst du eine Benachrichtigung. Ein Tipp genügt: Bist du am Ort, stempelt die App dich automatisch ein. ` +
           `Ist die App gerade offen, stempelt sie dich zur Planzeit von selbst ein.`;
+        if (/^\d{1,2}:\d{2}$/.test(st.endTime || "")) {
+          t += ` Um ${st.endTime} erinnert sie dich ans Ausstempeln – ein Tipp stempelt mit ${st.endTime} aus.`;
+          if (st.time && st.endTime <= st.time) t += " (Ende am nächsten Tag.)";
+        }
+        $("info").textContent = t;
+        $("school").textContent = schoolHint();
+        $("school").hidden = !$("school").textContent;
+      };
+      // Hinweis: an Berufsschultagen gilt der Plan nicht
+      const schoolHint = () => {
+        const u = c.util;
+        const settings = (c.store.get() || {}).settings || {};
+        if (!u.isSchoolDay || !u.readSchool) return "";
+        const sc = u.readSchool(settings);
+        if (!sc) return "";
+        if (st.once) {
+          const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(st.date || "");
+          if (!m) return "";
+          const ts = new Date(+m[1], +m[2] - 1, +m[3], 12).getTime();
+          const lbl = u.schoolLabel ? u.schoolLabel(ts, settings) : null;
+          return lbl ? `Achtung: An diesem Tag ist ${lbl} – der Plan gilt dann nicht.` : "";
+        }
+        const hit = WD_ORDER.filter((d) => st.days.includes(d) && sc.days.includes(d)).map((d) => WD_SHORT[d]);
+        const parts = [];
+        if (hit.length) parts.push(`An deinen Berufsschultagen (${hit.join(", ")}) gilt der Plan nicht.`);
+        if (sc.blocks.length) parts.push(hit.length ? "Ebenso nicht während der Blockschule." : "Während der Blockschule gilt der Plan nicht.");
+        return parts.join(" ");
       };
       drawPlaces(); drawMode(); drawActs(); drawInfo();
 
@@ -281,14 +337,14 @@ export function openPlanForm(plan, ctx, preset = null) {
         const b = ev.target.closest("[data-m]");
         if (!b) return;
         st.once = b.dataset.m === "once";
-        drawMode();
+        drawMode(); drawInfo();
       });
       $("days").addEventListener("click", (ev) => {
         const b = ev.target.closest("[data-d]");
         if (!b) return;
         const d = Number(b.dataset.d);
         st.days = st.days.includes(d) ? st.days.filter((x) => x !== d) : [...st.days, d].sort();
-        drawMode();
+        drawMode(); drawInfo();
       });
       $("acts").addEventListener("click", (ev) => {
         const b = ev.target.closest("[data-a]");
@@ -297,7 +353,8 @@ export function openPlanForm(plan, ctx, preset = null) {
         drawActs();
       });
       $("time").addEventListener("input", () => { st.time = $("time").value; drawInfo(); });
-      $("date").addEventListener("input", () => { st.date = $("date").value; });
+      $("date").addEventListener("input", () => { st.date = $("date").value; drawInfo(); });
+      $("end").addEventListener("input", () => { st.endTime = $("end").value; drawInfo(); });
 
       const saveBtn = $("save");
       saveBtn.addEventListener("click", async () => {
@@ -307,6 +364,9 @@ export function openPlanForm(plan, ctx, preset = null) {
         if (!/^\d{1,2}:\d{2}$/.test(t)) { c.ui.toast("Bitte eine Uhrzeit eingeben."); return; }
         if (!st.once && !st.days.length) { c.ui.toast("Bitte mindestens einen Wochentag wählen."); return; }
         if (st.once && !/^\d{4}-\d{2}-\d{2}$/.test(st.date || "")) { c.ui.toast("Bitte ein Datum wählen."); return; }
+        const et = $("end").value || "";
+        if (et && !/^\d{1,2}:\d{2}$/.test(et)) { c.ui.toast("Bitte eine gültige Endzeit eingeben oder das Feld leeren."); return; }
+        if (et && et.padStart(5, "0") === t.padStart(5, "0")) { c.ui.toast("Ende und Beginn sind gleich."); return; }
         const data = {
           id: (plan && plan.id) || c.util.newId("pl"),
           placeId: place.id,
@@ -315,6 +375,7 @@ export function openPlanForm(plan, ctx, preset = null) {
           days: st.once ? [] : st.days.slice().sort(),
           date: st.once ? st.date : null,
           activity: st.activity || "Arbeiten",
+          endTime: et ? et.padStart(5, "0") : null,
           enabled: plan ? plan.enabled !== false : true,
         };
         const list = readPlans(c.store.get().settings);
@@ -325,7 +386,7 @@ export function openPlanForm(plan, ctx, preset = null) {
           await savePlans(list);
           formHook = null;
           close();
-          c.ui.toast(hasCoords(place) ? `Geplant: ${daysText(data)}, ${data.time} · ${place.name}` : "Geplant – der Ort braucht noch eine Position.", 3200);
+          c.ui.toast(hasCoords(place) ? `Geplant: ${daysText(data)}, ${timeText(data)} · ${place.name}` : "Geplant – der Ort braucht noch eine Position.", 3200);
         } catch { c.ui.setBusy(saveBtn, false); }
       });
 

@@ -54,7 +54,7 @@ async function writeLog(ref, pairs) {
 async function pruneLog(ref, log, todayKey) {
   const limit = dayKeyVienna(Date.now() - 7 * 86400000);
   const args = [];
-  for (const field of ["planSent", "snooze", "snoozeSent"]) {
+  for (const field of ["planSent", "snooze", "snoozeSent", "planEndSent"]) {
     const m = log && log[field];
     if (!m || typeof m !== "object") continue;
     for (const k of Object.keys(m)) {

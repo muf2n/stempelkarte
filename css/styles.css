@@ -2579,3 +2579,75 @@ body::before {
 .lk-help summary::after { content: "›"; margin-left: auto; transition: transform .2s ease; font-size: 1.2rem; }
 .lk-help[open] summary::after { transform: rotate(90deg); }
 .lk-help .note { margin: 8px 0 0; font-size: .85rem; line-height: 1.45; }
+
+/* === Update 6 (Agent N): Berufsschule + Plan-Ende === */
+:root { --k-schule: #0284C7; --k-schule-bg: #DCF0FC; }
+@media (prefers-color-scheme: dark) {
+  :root { --k-schule: #38BDF8; --k-schule-bg: #0C2E44; }
+}
+.cal-day.k-schule { --k: var(--k-schule); }
+.cal .cal-day.schul {
+  background: linear-gradient(160deg, color-mix(in srgb, var(--k-schule) 30%, var(--card)), color-mix(in srgb, var(--k-schule) 16%, var(--card)));
+  border: 1px solid color-mix(in srgb, var(--k-schule) 60%, transparent);
+}
+.cal .cal-day.schul .cal-num { color: color-mix(in srgb, var(--k-schule) 60%, var(--ink)); }
+.cal .cal-day.schul.out { opacity: .6; }
+.cal .cal-day.schul.today { border: 2px solid var(--accent); }
+.cal .cal-day.schul.sel, .cal .cal-day.schul[aria-pressed="true"] {
+  background: color-mix(in srgb, var(--k-schule) 34%, var(--card));
+  border: 2px solid var(--k-schule);
+}
+.cal .cal-day.schul::after {
+  content: ""; position: absolute; top: 5px; left: 5px;
+  width: 7px; height: 7px; border-radius: 2px;
+  background: var(--k-schule); box-shadow: 0 0 0 2px var(--card);
+}
+.cal-day.schul .cal-h:empty { display: none; }
+.cal-sn {
+  display: none; max-width: 100%; padding: 0 3px;
+  font-size: .6rem; font-weight: 700; line-height: 1.15;
+  color: color-mix(in srgb, var(--k-schule) 75%, var(--ink));
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+@media (min-width: 560px) { .cal-sn { display: block; } }
+@media (min-width: 1024px) { .cal-sn { font-size: .68rem; margin-top: 2px; } }
+.cal-dots .d-schule { background: var(--k-schule); }
+.cal-legend .k-schule { background: var(--k-schule-bg); }
+.cal-legend .k-schule::before { background: var(--k-schule); }
+.ek-tag.ek-schule { background: var(--k-schule-bg); color: var(--ink); box-shadow: inset 3px 0 0 var(--k-schule); }
+.ek-sch { background: var(--k-schule-bg); color: var(--ink); padding: 1px 8px; border-radius: 999px; font-size: .8em; font-weight: 600; }
+.entry.ek-schoolrow {
+  background: color-mix(in srgb, var(--k-schule) 12%, var(--card));
+  border-color: color-mix(in srgb, var(--k-schule) 42%, transparent);
+  box-shadow: inset 4px 0 0 var(--k-schule);
+}
+.entry.ek-schoolrow .d, .entry.ek-schoolrow .ek-holico { color: var(--k-schule); }
+
+/* Einstellungen „Berufsschule“ */
+#school-panel.sc {
+  display: flex; flex-direction: column; gap: 12px;
+  margin-top: 16px; padding-top: 16px; border-top: 1px solid var(--line);
+}
+.sc-wd { padding: 2px 0 4px; }
+.sc-wd .chip { min-width: 52px; justify-content: center; }
+.sc-list { display: grid; gap: 6px; }
+.sc-item {
+  display: flex; align-items: center; gap: 10px;
+  padding: 8px 8px 8px 12px; border-radius: 12px;
+  background: var(--k-schule-bg); box-shadow: inset 3px 0 0 var(--k-schule);
+}
+.sc-item.past { opacity: .6; }
+.sc-txt { flex: 1 1 auto; min-width: 0; display: flex; flex-direction: column; gap: 1px; }
+.sc-txt b { color: var(--ink); }
+.sc-txt span { font-size: .85rem; color: var(--muted); font-variant-numeric: tabular-nums; }
+.sc-del { flex: none; min-height: 40px; }
+.sc-add { display: flex; flex-direction: column; gap: 8px; margin-top: 4px; }
+.sc-add .row label { flex: 1 1 140px; min-width: 0; }
+.sc-add .btn { align-self: flex-start; }
+.sc-empty { margin: 0; }
+
+/* Pläne: Endzeit */
+.plan-times label { flex: 1 1 140px; min-width: 0; }
+.plan-time.plan-range { font-size: .92em; white-space: nowrap; }
+.plan-school { margin: 0; color: color-mix(in srgb, var(--k-schule) 70%, var(--ink)); }
+.plan-school[hidden] { display: none; }

@@ -89,6 +89,22 @@ export function holidaysOf(y) {
   return map;
 }
 
+/* ---- Berufsschule (gleiche Regeln wie js/util.js schoolLabel) ---- */
+/** Ist am Wiener Tag v Berufsschule? Wöchentliche Schultage oder Schulblock (nur an Arbeitstagen); Feiertag hat Vorrang. */
+export function isSchoolDayVienna(settings, v) {
+  const s = settings || {};
+  const sc = s.school && typeof s.school === "object" ? s.school : null;
+  if (!sc) return false;
+  if (s.holidays !== false && holidaysOf(v.y).has(v.key)) return false;
+  const days = Array.isArray(sc.days) ? sc.days.map(Number) : [];
+  if (days.includes(v.wd)) return true;
+  const workDays = Array.isArray(s.workDays) ? s.workDays.map(Number) : [1, 2, 3, 4, 5];
+  if (!workDays.includes(v.wd)) return false;
+  const re = /^\d{4}-\d{2}-\d{2}$/;
+  return (Array.isArray(sc.blocks) ? sc.blocks : []).some((b) =>
+    b && re.test(String(b.from || "")) && re.test(String(b.to || "")) && b.from <= v.key && v.key <= b.to);
+}
+
 /* ---- Einstellungen ---- */
 export const DEFAULT_REMINDERS = Object.freeze({
   enabled: true,
@@ -136,15 +152,17 @@ export function decide(now, settings, running, todayEntries, pushlog) {
   const v = vienna(now);
 
   const isHoliday = s.holidays !== false && holidaysOf(v.y).has(v.key);
+  const isSchool = isSchoolDayVienna(s, v); // Berufsschule wie Feiertag: keine Start-/Plan-Erinnerung
   const list = (Array.isArray(todayEntries) ? todayEntries : []).filter((e) => e && dayKeyVienna(Number(e.start)) === v.key);
   const absent = list.some((e) => e.kind && e.kind !== "work");
   const plans = (Array.isArray(s.plans) ? s.plans : []).filter((p) => planAppliesOn(p, v));
+  const planEndSent = (log.planEndSent && typeof log.planEndSent === "object") ? log.planEndSent : {};
   const planSent = (log.planSent && typeof log.planSent === "object") ? log.planSent : {};
   const snooze = (log.snooze && typeof log.snooze === "object") ? log.snooze : {};
   const snoozeSent = (log.snoozeSent && typeof log.snoozeSent === "object") ? log.snoozeSent : {};
 
   // Geplante Schichten: Push zur Planzeit (nachholen höchstens bis +60 min) und bei „Später erinnern“
-  if (!running && !isHoliday && !absent) {
+  if (!running && !isHoliday && !isSchool && !absent) {
     for (const p of plans) {
       const k = `${p.id}:${v.key}`;
       const [ph, pm] = String(p.time).split(":").map(Number);
@@ -174,7 +192,7 @@ export function decide(now, settings, running, todayEntries, pushlog) {
     const [th, tm] = rem.start.time.split(":").map(Number);
     const nowMin = v.hh * 60 + v.mm;
     const startMin = th * 60 + tm;
-    if (isWorkDay && !isHoliday && list.length === 0 &&
+    if (isWorkDay && !isHoliday && !isSchool && list.length === 0 &&
         nowMin >= startMin && nowMin < startMin + 240 && log.startSent !== v.key) {
       out.push({
         type: "start",
@@ -189,6 +207,36 @@ export function decide(now, settings, running, todayEntries, pushlog) {
 
   if (running && Number(running.start) > 0) {
     const start = Number(running.start);
+    // Plan-Ende: heute gültiger Plan mit endTime, Uhrzeit ≥ Ende (bis +60 min), einmal pro Plan/Tag.
+    // Über Mitternacht (Ende ≤ Beginn): Plan von gestern, Ende heute.
+    const cands = [];
+    if (!isHoliday && !isSchool && !absent) for (const p of plans) cands.push([p, v]);
+    const vy = vienna(viennaToTs(v.y, v.m, v.d, 12, 0) - 24 * HOUR);
+    const yHoliday = s.holidays !== false && holidaysOf(vy.y).has(vy.key);
+    if (!yHoliday && !isSchoolDayVienna(s, vy)) {
+      for (const p of (Array.isArray(s.plans) ? s.plans : []).filter((p) => planAppliesOn(p, vy))) cands.push([p, vy]);
+    }
+    for (const [p, pv] of cands) {
+      if (!/^\d{1,2}:\d{2}$/.test(String(p.endTime || ""))) continue;
+      const [sh, sm] = String(p.time).split(":").map(Number);
+      const [eh, em] = String(p.endTime).split(":").map(Number);
+      const overnight = eh * 60 + em <= sh * 60 + sm;
+      if (overnight !== (pv !== v)) continue; // gestriger Plan nur, wenn er über Mitternacht geht
+      const ev = overnight ? v : pv;
+      const endAt = viennaToTs(ev.y, ev.m, ev.d, eh, em);
+      const k = `${p.id}:${pv.key}`;
+      if (now >= endAt && now < endAt + HOUR && start < endAt && !planEndSent[k]) {
+        const et = `${pad(eh)}:${pad(em)}`;
+        out.push({
+          type: "plan-end",
+          title: `Schichtende ${et}`,
+          body: `Tippe, um mit ${et} auszustempeln.`,
+          tag: `planend-${p.id}`,
+          url: `./?endplan=${encodeURIComponent(p.id)}&end=${endAt}#heute`,
+          log: [[["planEndSent", k], endAt]],
+        });
+      }
+    }
     const gross = now - start;
     // End-Erinnerung (einmal pro Schicht)
     if (rem.end.enabled && gross >= rem.end.afterHours * HOUR && log.endSentFor !== start) {
