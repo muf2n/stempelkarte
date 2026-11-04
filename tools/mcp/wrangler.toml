@@ -9,6 +9,10 @@ preview_urls = false
 #   STEMPEL_TOKEN             – langes Zufalls-Token für den Zugang
 # Optional:
 #   STEMPEL_UID               – Firebase-UID, falls die Suche per E-Mail nicht klappt
+#   ANTHROPIC_API_KEY         – In-App-Assistent (/chat)
+#   ENABLEBANKING_APP_ID      – Application-ID aus dem Enable-Banking-Control-Panel (Bankverbindung)
+#   ENABLEBANKING_KEY         – privater Schlüssel (.pem-Inhalt) dieser Application
+#   BANK_REDIRECT_URL         – (Var) Rückruf-Adresse, Standard https://muf2n.github.io/stempelkarte/bank-callback.html
 
 [vars]
 FIREBASE_PROJECT_ID = "stempelkarte-40682"
@@ -16,3 +20,8 @@ STEMPEL_EMAIL = "lippa.florian@gmail.com"
 
 [observability]
 enabled = false
+
+# Bank-Abgleich (Enable Banking) 4× täglich (UTC): 05, 11, 16, 21 Uhr ≈ 06/12/17/22 Uhr Wien (Winterzeit).
+# Viele Banken erlauben nur 4 automatische Abrufe pro Tag – nicht öfter einstellen.
+[triggers]
+crons = ["0 5,11,16,21 * * *"]

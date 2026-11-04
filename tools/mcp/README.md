@@ -61,6 +61,8 @@ Im Repository → **Settings → Secrets and variables → Actions → New repos
 | `FIREBASE_SERVICE_ACCOUNT` | **gibt es schon** (Erinnerungen) – nichts tun |
 | `ANTHROPIC_API_KEY` | *optional*, nur für den In-App-Assistenten (`/chat`): API-Schlüssel von <https://console.anthropic.com> |
 | `STEMPEL_UID` | *optional*: deine Firebase-UID, falls die automatische Suche per E-Mail nicht klappt |
+| `ENABLEBANKING_APP_ID` | *optional*, Bankverbindung: Application-ID aus dem Enable-Banking-Control-Panel (siehe unten) |
+| `ENABLEBANKING_KEY` | *optional*, Bankverbindung: kompletter Inhalt der heruntergeladenen `.pem`-Datei |
 
 Danach **Actions → „MCP-Connector veröffentlichen“ → Run workflow** (oder einfach etwas unter `tools/mcp/`
 auf `main` pushen). Der Workflow testet, veröffentlicht den Worker und überträgt die Secrets.
@@ -109,6 +111,71 @@ Für einen Chat direkt in der Web-App. Anmeldung mit dem Firebase-ID-Token der A
   über `AI_MONTHLY_USD` (Standard 3 $) wird abgelehnt. Modell über `CLAUDE_MODEL` (Standard `claude-haiku-4-5`,
   geschätzt 1 $ / 5 $ pro Mio. Eingabe-/Ausgabe-Tokens). Beides lässt sich als Variable in `wrangler.toml`
   (`[vars]`) ändern.
+
+## Bankkonto (BAWAG) automatisch abgleichen: `/bank/*`
+
+Die App holt deine Kontobewegungen von BAWAG automatisch nach **Alltag › Geld** (Buchungen mit 🏦).
+Dafür wird **Enable Banking** benutzt – ein in der EU zugelassener Kontoinformationsdienst (PSD2-AISP).
+Du meldest dich dabei **auf der Seite von BAWAG** an; die App und der Server sehen dein Passwort nie.
+Die Application läuft im **Restricted Mode**: Sie sieht ausschließlich die Konten, die du selbst im Control
+Panel verknüpfst. Die Zustimmung gilt höchstens 180 Tage, danach einmal neu verbinden (die App legt eine
+Aufgabe „Bankverbindung erneuern“ an, wenn weniger als 7 Tage übrig sind).
+
+### Einrichtung (einmalig, ca. 10 Minuten)
+
+1. **Konto anlegen:** <https://enablebanking.com/> → *Sign up* / Control Panel → mit
+   `lippa.florian@gmail.com` registrieren und die Bestätigungsmail anklicken (kann ein paar Minuten dauern).
+2. **Application anlegen:** Control Panel → **API applications** → **Register new application**
+   (bzw. „Add application“):
+   - **Environment:** **Production** (nicht Sandbox – Sandbox kennt keine echten Banken).
+   - **Name:** `Stempelkarte`, Beschreibung z. B. „Private Haushaltsbuch-App, nur eigene Konten“.
+   - **Allowed redirect URLs:** genau `https://muf2n.github.io/stempelkarte/bank-callback.html`
+     (für lokale Tests zusätzlich z. B. `http://localhost:8848/bank-callback.html`).
+   - Weitere Pflicht-Felder (Datenschutz-/AGB-Link, E-Mail) mit `https://muf2n.github.io/stempelkarte/` bzw.
+     deiner E-Mail ausfüllen.
+   - **Private key:** „Generate in the browser“ lassen → **Register**. Der Browser lädt jetzt eine Datei
+     `<Application-ID>.pem` herunter – **gut aufheben, sie wird nur dieses eine Mal angezeigt.**
+3. **Eigenes BAWAG-Konto verknüpfen (Restricted Mode aktivieren):** In der Liste der Applications bei
+   „Stempelkarte“ auf **Activate by linking accounts** (bzw. „Link accounts“) → Land **Österreich** → Bank
+   **BAWAG** (nicht „easybank“ – das sind andere Zugangsdaten) → auf der BAWAG-Seite anmelden und freigeben →
+   das Girokonto auswählen. Danach steht die Application auf *active (restricted)*.
+   Nur verknüpfte Konten liefern Daten – ein neues Konto muss hier ebenfalls verknüpft werden.
+4. **Application-ID kopieren:** steht bei der Application (Format `aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee`,
+   gleich wie der Dateiname der `.pem`).
+5. **GitHub-Secrets** (Repository → Settings → Secrets and variables → Actions → New repository secret):
+   - `ENABLEBANKING_APP_ID` = die Application-ID
+   - `ENABLEBANKING_KEY` = den **ganzen Inhalt** der `.pem`-Datei (mit Texteditor öffnen, alles von
+     `-----BEGIN …-----` bis `-----END …-----` kopieren). `BEGIN PRIVATE KEY` (PKCS#8) und
+     `BEGIN RSA PRIVATE KEY` (PKCS#1) gehen beide.
+6. **Actions → „MCP-Connector veröffentlichen“ → Run workflow.** Der Workflow überträgt die Secrets und
+   richtet den Zeitplan (4× täglich) ein.
+7. In der App: **Alltag › Geld › Übersicht → Karte „Bankkonto (BAWAG)“ → „Mit BAWAG verbinden“** → auf der
+   BAWAG-Seite anmelden und bestätigen → du landest wieder in der App; die letzten 90 Tage werden geladen.
+
+Die Bank-Anmeldung in Schritt 7 ist die eigentliche Zustimmung für die App (Schritt 3 schaltet nur die
+Application frei) – beides ist nötig.
+
+### Was passiert
+
+- `POST /bank/start` `{aspsp?}` → `{url}`: sucht die Bank in `GET /aspsps?country=AT`, fordert eine Zustimmung
+  für max. 180 Tage an (bzw. `maximum_consent_validity` der Bank), merkt sich einen zufälligen `state`
+  (nur als Hash, 15 Minuten gültig) in `users/{uid}/meta/bank_pending`.
+- `bank-callback.html` (Web-App) schickt `code` + `state` an `POST /bank/finish` → Sitzung bei Enable Banking
+  anlegen, `users/{uid}/meta/bank` speichern (nur die **letzten 4 Stellen** der IBAN) und sofort 90 Tage abgleichen.
+- `POST /bank/sync` (Knopf „Jetzt aktualisieren“), `GET /bank/status`, `POST /bank/unlink` (Sitzung bei
+  Enable Banking schließen; importierte Buchungen bleiben).
+- **Zeitplan** (`[triggers]` in `wrangler.toml`): 05/11/16/21 Uhr UTC. Abgleich ab letztem Abgleich − 3 Tage,
+  `continuation_key` wird verfolgt, nur **gebuchte** Umsätze (`status: BOOK`).
+- Buchungen landen in `users/{uid}/a_money_tx/bk_<hash>` – gleiche Felder wie in der App plus `src: "bank"`,
+  `bankRef`, `counterparty`. Kategorie über dieselben Stichwort-Regeln wie die App und deine gelernten
+  Zuordnungen (`money_rules`). Von dir geänderte Buchungen werden nie überschrieben, gelöschte nicht wieder
+  angelegt. Gleiche Beträge, die du schon von Hand oder als Abo gebucht hast (±5 Tage), werden verknüpft statt
+  doppelt eingetragen.
+- Viele Banken erlauben nur **4 automatische Abrufe pro Tag**. Bei `ASPSP_RATE_LIMIT_EXCEEDED` pausiert der
+  Zeitplan 6 Stunden; bei `EXPIRED_SESSION` zeigt die App „neu verbinden“.
+- Kosten: Laut Drittanbieter-Anleitungen ist der Restricted Mode für eigene Konten kostenlos; Enable Banking
+  selbst schreibt nur „Our pricing is volume based“ (<https://enablebanking.com/docs/faq/>) – im Control Panel
+  prüfen, ob ein Zahlungsmittel verlangt wird.
 
 ## Entwicklung
 

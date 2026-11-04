@@ -1,6 +1,7 @@
 // Cloudflare Worker: Remote-MCP-Server („Claude-Connector“) für die Stempelkarte.
 // Endpunkte: POST /mcp (Streamable HTTP, JSON-Antworten; Zugang nur mit STEMPEL_TOKEN)
-// und POST /chat (In-App-Assistent, Firebase-ID-Token, siehe chat.js).
+// und POST /chat (In-App-Assistent, Firebase-ID-Token, siehe chat.js),
+// /bank/* (Bankverbindung über Enable Banking, siehe bank.js) und scheduled() für den Bank-Abgleich.
 // /mcp:
 // (Header „Authorization: Bearer …“ oder ?key=…). Protokolliert wird nur der Werkzeugname.
 import { handleBody, SERVER_INFO } from "./mcp.js";
@@ -8,6 +9,7 @@ import { loadAccount, getAccessToken, resolveUid, DEFAULT_PROJECT } from "./goog
 import { Firestore } from "./firestore.js";
 import { Data } from "./data.js";
 import { handleChat } from "./chat.js";
+import { handleBank, runBankCron } from "./bank.js";
 
 const CORS = {
   "access-control-allow-origin": "*",
@@ -77,6 +79,7 @@ export async function handle(request, env, { fetchImpl, now, log = (n) => consol
   const path = url.pathname.replace(/\/+$/, "") || "/";
 
   if (path === "/chat") return handleChat(request, env, { fetchImpl, now: (now || (() => Date.now()))() });
+  if (path.startsWith("/bank/")) return handleBank(request, env, { fetchImpl, now: (now || (() => Date.now()))() });
 
   if (request.method === "OPTIONS") return new Response(null, { status: 204, headers: CORS });
 
@@ -114,5 +117,10 @@ export default {
     } catch {
       return json(500, { jsonrpc: "2.0", id: null, error: { code: -32603, message: "Interner Fehler." } });
     }
+  },
+  // Cron (wrangler.toml [triggers]): Bankbuchungen abholen. Nur Ergebnis-Art protokollieren, keine Inhalte.
+  async scheduled(event, env, ctx) {
+    const p = runBankCron(env).then((r) => console.log("bank-cron:", r && (r.skipped || (r.error ? "error" : "ok")))).catch(() => console.log("bank-cron: error"));
+    if (ctx && ctx.waitUntil) ctx.waitUntil(p); else await p;
   },
 };

@@ -3876,3 +3876,34 @@ label[data-ph-cam] { position: relative; cursor: pointer; }
   .gm-item { grid-template-columns: auto 1fr auto; align-items: center; }
   .gm-btns { grid-column: auto; }
 }
+
+/* Update 9 – Bankverbindung (BAWAG) */
+.bk-card { --bk: #0f766e; display: flex; flex-direction: column; gap: 12px; border: 1px solid color-mix(in srgb, var(--bk) 24%, var(--line)); }
+.bk-top { display: flex; align-items: flex-start; justify-content: space-between; gap: 10px; }
+.bk-head { display: flex; align-items: center; gap: 12px; min-width: 0; }
+.bk-head .mn-h { margin: 0; }
+.bk-ic { flex: none; width: 42px; height: 42px; border-radius: 14px; display: grid; place-items: center; font-size: 1.35rem; background: color-mix(in srgb, var(--bk) 14%, var(--card)); }
+.bk-sub { display: block; color: var(--muted); font-size: .84rem; margin-top: 2px; }
+.bk-pill { flex: none; padding: 4px 10px; border-radius: 999px; font-size: .78rem; font-weight: 700; white-space: nowrap; background: color-mix(in srgb, var(--run) 14%, var(--card)); color: var(--run); }
+.bk-pill.warn { background: var(--pause-soft); color: var(--ink); }
+.bk-pill.bad { background: color-mix(in srgb, var(--danger) 14%, var(--card)); color: var(--danger); }
+.bk-bal { display: flex; flex-direction: column; gap: 2px; padding: 14px 16px; border-radius: 16px; background: linear-gradient(135deg, color-mix(in srgb, var(--bk) 16%, var(--card)), color-mix(in srgb, var(--bk) 6%, var(--card))); }
+.bk-bal small { color: var(--muted); font-size: .8rem; font-weight: 600; }
+.bk-bal b { font-family: var(--f-mono); font-size: clamp(1.6rem, 8vw, 2.1rem); font-weight: 600; letter-spacing: -.02em; line-height: 1.15; font-variant-numeric: tabular-nums; color: var(--ink); }
+.bk-bal b.neg { color: var(--danger); }
+.bk-acc { color: var(--muted); font-size: .84rem; font-variant-numeric: tabular-nums; overflow-wrap: anywhere; }
+.bk-points { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 8px; font-size: .92rem; line-height: 1.4; color: var(--ink); }
+.bk-points li { padding: 9px 12px; border-radius: 12px; background: var(--soft); }
+.bk-actions { display: flex; flex-wrap: wrap; gap: 8px; }
+.bk-actions .bk-main { flex: 1 1 auto; min-width: 0; }
+.bk-actions .btn[disabled] { opacity: .75; cursor: progress; }
+.bk-unlink.armed { color: var(--danger); border-color: color-mix(in srgb, var(--danger) 45%, transparent); }
+.bk-err, .bk-warn { margin: 0; padding: 10px 12px; border-radius: 12px; font-size: .9rem; font-weight: 600; color: var(--ink); line-height: 1.4; }
+.bk-err { background: color-mix(in srgb, var(--danger) 12%, var(--card)); border: 1px solid color-mix(in srgb, var(--danger) 35%, transparent); }
+.bk-warn { background: var(--pause-soft); }
+.bk-note, .bk-foot { margin: 0; color: var(--muted); font-size: .84rem; line-height: 1.4; }
+.bk-off { opacity: .92; }
+.bk-skel { height: 74px; border-radius: 16px; background: var(--soft); animation: bk-pulse 1.4s ease-in-out infinite; }
+@keyframes bk-pulse { 50% { opacity: .55; } }
+@media (prefers-reduced-motion: reduce) { .bk-skel { animation: none; } }
+.bk-mark { white-space: nowrap; }

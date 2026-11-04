@@ -5,6 +5,8 @@
 #   FIREBASE_SERVICE_ACCOUNT – (schon vorhanden, wie für die Erinnerungen)
 #   STEMPEL_TOKEN          – langes Zufalls-Token für den Connector (siehe tools/mcp/README.md)
 #   ANTHROPIC_API_KEY      – optional, nur für den In-App-Assistenten (/chat)
+#   ENABLEBANKING_APP_ID   – optional, Bankverbindung (Enable Banking Application-ID)
+#   ENABLEBANKING_KEY      – optional, Bankverbindung (Inhalt der .pem-Datei mit dem privaten Schlüssel)
 # Ohne CLOUDFLARE_API_TOKEN wird der Lauf übersprungen (Hinweis, kein Fehler).
 name: MCP-Connector veröffentlichen
 
@@ -72,15 +74,18 @@ jobs:
           STEMPEL_TOKEN: ${{ secrets.STEMPEL_TOKEN }}
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
           STEMPEL_UID: ${{ secrets.STEMPEL_UID }}
+          ENABLEBANKING_APP_ID: ${{ secrets.ENABLEBANKING_APP_ID }}
+          ENABLEBANKING_KEY: ${{ secrets.ENABLEBANKING_KEY }}
         run: |
           # Nur gesetzte Secrets übertragen (leere würden vorhandene überschreiben). Inhalte werden nie ausgegeben.
           node -e '
-            const names = ["FIREBASE_SERVICE_ACCOUNT", "STEMPEL_TOKEN", "ANTHROPIC_API_KEY", "STEMPEL_UID"];
+            const names = ["FIREBASE_SERVICE_ACCOUNT", "STEMPEL_TOKEN", "ANTHROPIC_API_KEY", "STEMPEL_UID", "ENABLEBANKING_APP_ID", "ENABLEBANKING_KEY"];
             const out = {};
             for (const n of names) { const v = process.env[n]; if (v && v.trim()) out[n] = v; }
             require("fs").writeFileSync(process.env.RUNNER_TEMP + "/mcp-secrets.json", JSON.stringify(out), { mode: 0o600 });
             console.log("Secrets:", Object.keys(out).join(", ") || "keine");
             if (!out.STEMPEL_TOKEN) console.log("::warning title=MCP-Connector::STEMPEL_TOKEN fehlt – /mcp lehnt alle Anfragen ab.");
+            if (!!out.ENABLEBANKING_APP_ID !== !!out.ENABLEBANKING_KEY) console.log("::warning title=Bankverbindung::Nur eines von ENABLEBANKING_APP_ID / ENABLEBANKING_KEY ist gesetzt – es braucht beide.");
           '
           if [ "$(cat "$RUNNER_TEMP/mcp-secrets.json")" != "{}" ]; then npx wrangler secret bulk "$RUNNER_TEMP/mcp-secrets.json"; fi
           rm -f "$RUNNER_TEMP/mcp-secrets.json"

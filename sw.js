@@ -78,6 +78,9 @@ const SHELL = [
   "js/alltag/gmail.js",
   "js/alltag/subs-detect.js",
   "js/alltag/money-gmail.js",
+  // Update 9 – Bankverbindung (BAWAG über Enable Banking)
+  "js/alltag/money-bank.js",
+  "bank-callback.html",
   "js/app.js"
 ];
 
@@ -141,6 +144,9 @@ self.addEventListener("fetch", (event) => {
 
   // Nur Dateien innerhalb des App-Bereichs
   if (!req.url.startsWith(self.registration.scope)) return;
+
+  // Rückkehr von der Bank (Update 9): nie durch index.html ersetzen, sonst geht ?code=… verloren
+  if (req.mode === "navigate" && url.pathname.endsWith("/bank-callback.html")) return;
 
   if (req.mode === "navigate") {
     event.respondWith(networkFirstNav(event, req));

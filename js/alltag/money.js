@@ -7,6 +7,7 @@ import { icon } from "../icons.js";
 import { esc } from "../util.js";
 import * as ui from "../ui.js";
 import { createGmail } from "./money-gmail.js";
+import { createBank, bankMark } from "./money-bank.js";
 
 const TABS = [
   ["uebersicht", "Übersicht", "pie"],
@@ -65,6 +66,7 @@ export function mount(el, ctx) {
     catOf: (id) => catOf(id),
     goSubs: () => { S.tab = "abos"; lsSet(TAB_KEY, S.tab); render(); window.scrollTo({ top: 0 }); },
   });
+  const bk = createBank({ ui, render: () => queue() });
 
   /* ---------- Daten-Hilfen ---------- */
 
@@ -162,7 +164,7 @@ export function mount(el, ctx) {
     const sign = t.type === "in" ? "+" : "−";
     return `<li><button type="button" class="mn-tx" data-mn="tx" data-id="${esc(t.id)}">` +
       catBubble(c) +
-      `<span class="mn-tx-main"><b>${esc(t.note || c.name)}</b><small>${esc(c.name)}${t.recurringId ? ` · ${icon("repeat", 12)} Abo` : ""}${t.goalId ? " · Sparziel" : ""}</small></span>` +
+      `<span class="mn-tx-main"><b>${esc(t.note || c.name)}</b><small>${esc(c.name)}${t.recurringId ? ` · ${icon("repeat", 12)} Abo` : ""}${t.goalId ? " · Sparziel" : ""}${bankMark(t)}</small></span>` +
       `<span class="mn-tx-amt ${t.type === "in" ? "in" : "out"}">${sign}${amt(t.amount)}</span>` +
     `</button></li>`;
   }
@@ -255,7 +257,7 @@ export function mount(el, ctx) {
     const hasAny = txs().length > 0;
     return monthNav() + gm.hintHTML() +
       (hasAny ? "" : `<div class="hint mn-welcome">👋 Trag deine erste Einnahme (z. B. Lehrlingsentschädigung) oder Ausgabe ein – die Kategorie wird aus der Notiz erkannt.</div>`) +
-      `<div class="mn-ov">${hero}${donut}${bars}${warnBox}${upBox}${goalBox}</div>`;
+      `<div class="mn-ov">${hero}${bk.linked() ? bk.cardHTML() : ""}${donut}${bars}${warnBox}${upBox}${goalBox}${bk.linked() ? "" : bk.cardHTML()}</div>`;
   }
 
   const pct = (a, b) => Math.max(0, Math.min(100, ((Number(a) || 0) / Math.max(0.01, Number(b) || 0)) * 100)).toFixed(1);
@@ -277,7 +279,7 @@ export function mount(el, ctx) {
     if (q) {
       list = list.filter((t) => {
         const c = catOf(t.category, map);
-        return [t.note, c.name, M.fmtDate(t.date), String(t.amount).replace(".", ",")].some((x) => String(x || "").toLowerCase().includes(q));
+        return [t.note, c.name, M.fmtDate(t.date), String(t.amount).replace(".", ","), t.counterparty].some((x) => String(x || "").toLowerCase().includes(q));
       });
     } else list = M.monthTx(list, S.mk);
     if (S.catFilter) list = list.filter((t) => (t.category || "sonstiges") === S.catFilter);
@@ -517,7 +519,8 @@ export function mount(el, ctx) {
         (isNew ? "" : `<button type="button" class="btn danger sm" data-del>Löschen</button>`) +
         `<button type="button" class="btn primary" data-save>Speichern</button>` +
       `</div>` +
-      (tx && tx.recurringId ? `<p class="note">Automatisch aus einem Abo gebucht.</p>` : "");
+      (tx && tx.recurringId ? `<p class="note">Automatisch aus einem Abo gebucht.</p>` : "") +
+      (tx && (tx.src === "bank" || tx.bankRef) ? `<p class="note">🏦 Von der Bank übernommen${tx.counterparty ? ` – ${esc(tx.counterparty)}` : ""}${tx.bankText && tx.bankText !== tx.counterparty ? ` · „${esc(String(tx.bankText).slice(0, 120))}“` : ""}. Deine Änderungen hier überschreibt der Abgleich nicht.</p>` : "");
 
     ui.openSheet({
       title: isNew ? "Neue Buchung" : "Buchung bearbeiten",
@@ -972,6 +975,8 @@ export function mount(el, ctx) {
   function onClick(ev) {
     const g = ev.target.closest("[data-gm]");
     if (g && el.contains(g) && gm.onClick(g)) return;
+    const b = ev.target.closest("[data-bk]");
+    if (b && el.contains(b) && bk.onClick(b)) return;
     const t = ev.target.closest("[data-tab], [data-mn]");
     if (!t || !el.contains(t)) return;
     if (t.classList.contains("mn-tab")) {
@@ -1034,7 +1039,7 @@ export function mount(el, ctx) {
   render();
 
   // Tageswechsel (App bleibt offen) → fällige Abos nachholen
-  const onVis = () => { if (document.visibilityState === "visible") queue(); };
+  const onVis = () => { if (document.visibilityState === "visible") { queue(); bk.refresh(); } };
   document.addEventListener("visibilitychange", onVis);
 
   return () => {
