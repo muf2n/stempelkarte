@@ -3014,3 +3014,26 @@ html[data-compact="1"] #view-heute [data-r="btns"] .btn.go { min-height: 84px; f
 .md-tiles { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) minmax(0, .9fr) minmax(0, 1.25fr); }
 .md-l { font-size: .66rem; letter-spacing: .02em; }
 html[data-big="1"] .md-tiles { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+
+/* === Update 7 (Agent P): Uhr Bangle.js 2 === */
+#watch-panel.rm {
+  display: flex; flex-direction: column; gap: 12px;
+  margin-top: 4px; padding-top: 16px;
+  border-top: 1px solid var(--line);
+}
+#watch-panel .rm-head a { color: var(--accent); font-weight: 600; white-space: nowrap; }
+.wt-btns { display: flex; flex-direction: column; gap: 10px; }
+.wt-btns .btn { min-height: 48px; justify-content: center; text-align: center; white-space: normal; }
+.wt-btns .btn:disabled { opacity: .55; }
+.wt-last { margin: 0; font-variant-numeric: tabular-nums; }
+.wt-last[hidden], .wt-progress[hidden] { display: none; }
+.wt-progress {
+  height: 8px; border-radius: 99px; overflow: hidden;
+  background: color-mix(in srgb, var(--accent) 14%, var(--card));
+}
+.wt-progress span { display: block; height: 100%; width: 0; border-radius: inherit; background: var(--accent); transition: width .25s ease; }
+#watch-panel .wt-off { opacity: .5; }
+@media (min-width: 1024px) {
+  .wt-btns { flex-direction: row; flex-wrap: wrap; }
+  .wt-btns .btn { flex: 1 1 200px; }
+}
