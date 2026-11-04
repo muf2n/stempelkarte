@@ -45,6 +45,8 @@ export function mount(el, c) {
           <div class="kv"><span>${icon("calendar", 18)}Diesen Monat</span><b id="ov-bal-month"></b></div>
         </div>
 
+        <div class="panel card" id="leave-panel"></div>
+
         <div class="panel card" id="stats-panel">
           <div class="nav">
             <button class="btn ghost sm" type="button" data-wk="-1" aria-label="Vorige Woche">${icon("chevron-left", 18)}</button>
@@ -83,6 +85,7 @@ export function mount(el, c) {
           <div class="lbl">Stunden je Tätigkeit</div>
           <div id="ov-month-acts"></div>
           <button class="btn primary" type="button" id="ov-csv">Als CSV (Excel) herunterladen</button>
+          <button class="btn ghost" type="button" id="ov-ts">${icon("file", 20)}<span>Stundenzettel (PDF)</span></button>
         </div>
 
         <div class="panel card" id="settings-panel">
@@ -174,10 +177,16 @@ export function mount(el, c) {
     }));
 
   $("#ov-csv").addEventListener("click", exportCSV);
+  // Update 9: Stundenzettel für den gewählten Monat
+  $("#ov-ts").addEventListener("click", () => {
+    const { from } = monthRange();
+    import("./timesheet.js").then((m) => m.openTimesheet(ctx, { year: from.getFullYear(), month: from.getMonth() }))
+      .catch((err) => { console.error(err); ctx.ui.toast("Stundenzettel konnte nicht geladen werden."); });
+  });
 
   try { reminders.mount($("#reminders-panel"), ctx); } catch (err) { console.error(err); }
   // Update 6: Fahrerkennung + Sperrbildschirm – Module werden dynamisch geladen
-  for (const [mod, sel] of [["./drive-settings.js", "#drive-panel"], ["./lock-settings.js", "#lock-panel"], ["./school-settings.js", "#school-panel"], ["./apprentice.js", "#apprentice-panel"], ["./watch-settings.js", "#watch-panel"], ["./comfort-settings.js", "#comfort-panel"]]) {
+  for (const [mod, sel] of [["./drive-settings.js", "#drive-panel"], ["./lock-settings.js", "#lock-panel"], ["./school-settings.js", "#school-panel"], ["./apprentice.js", "#apprentice-panel"], ["./watch-settings.js", "#watch-panel"], ["./comfort-settings.js", "#comfort-panel"], ["./leave.js", "#leave-panel"]]) {
     import(mod).then((m) => { extraPanels.push(m); m.mount($(sel), ctx); if (lastSnapForExtras) m.update(lastSnapForExtras); })
       .catch((err) => console.error(err));
   }
