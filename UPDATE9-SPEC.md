@@ -25,3 +25,34 @@ Firebase Storage ist NICHT verfügbar (kostenpflichtig) → Fotos verkleinert in
 UI: In „Heute“ während eingestempelt ein Kamera-Knopf (input type=file accept=image/* capture=environment) → Foto + optionale Notiz, automatisch mit aktuellem Ort/Tag verknüpft. Im Tag-Blatt (day.js) und im Ort-Blatt (places.js) Galerie (Thumbnails, Tippen → Vollbild mit Notiz, Löschen mit Bestätigung, Teilen über navigator.share mit Datei). Im Berichtsheft (report.js) optional pro Tag kleine Foto-Anzahl „📷 3“ (nur Anzeige). Datenschutz-Hinweis nicht nötig (nur eigenes Konto).
 
 ## Agent Y (Android, Wecker) – siehe Prompt.
+
+# Update 9b – Tab „Alltag“ (Geld, Schule & Lernen)
+
+Neuer Tab **„Alltag“** mit Kacheln; jeder Bereich ist ein eigenes Modul. Grundlage existiert schon (NICHT umbauen, nur nutzen; Bugs darin dürfen behoben werden):
+- `js/alltag/db.js` – gemeinsamer Speicher: `collection("<name>")` → `watch(cb)`, `put(item)`, `patch(id, partial)`, `remove(id)`, `all()`, `get(id)`. Cloud: `users/{uid}/a_<name>/{id}`, lokal: localStorage. Sammlungsnamen mit Bereichs-Präfix (`money_tx`, `school_exams` …). Firestore-Regeln erlauben `users/{uid}/**` bereits.
+- `js/alltag/modules.js` – Register; jedes Modul exportiert `mount(el, ctx) → cleanup`.
+Gestaltung: modern, farbig wie die bestehende App (Karten, Pillen, Sheets aus css/styles.css wiederverwenden: .card, .sheet, ui.openSheet o. ä. – in js/ui.js nachsehen), Handy zuerst, PC breiter (2–3 Spalten). Zahlen in € österreichisch (1.234,56 €), Datum TT.MM.JJJJ. Leere Zustände freundlich mit „+ Hinzufügen“.
+
+## Agent D – Alltag-Seite + Geld (Worktree /home/claude/skweb-d, Port 8845)
+1. **Tab „Alltag“**: in index.html Tabbar ein neuer Knopf „Alltag“ (Symbol passend, Reihenfolge nach „Planer“/agenda), View `#view-alltag`, Routing in app.js wie die anderen Tabs (Hash `#alltag`, `#alltag/geld`). `js/views/alltag.js`: Kachel-Raster aus MODULES (Titel, Untertitel, Farbe, Icon aus icons.js – fehlende Icons „wallet“, „book“ dort ergänzen), Tippen → Modul laden (load()), Kopfzeile „← Alltag“ + Titel, `mount`/cleanup beim Wechsel. Handy: Tabbar darf nicht überlaufen – wenn zu eng, Beschriftungen kürzen oder „Orte“ in „Übersicht“ verschieben NICHT; stattdessen prüfen, wie viele Tabs passen (390 px) und notfalls Icon-only kleiner. Screenshot prüfen!
+2. **`js/alltag/money.js` – Geld**: Unterreiter Übersicht · Buchungen · Budget · Sparziele · Abos · Teilen.
+   - Buchungen (`money_tx`: {id, date, amount (positiv), type "in"|"out", category, note, recurringId?}): schnelles Eintragen (Betrag-Tastatur, Ein/Aus, Kategorie-Chips), Liste nach Monat, Suche.
+   - **Automatische Kategorien**: Vorschlag aus Notiz per Stichwort-Regeln (Spar/Billa/Hofer/Lidl → Essen, OMV/BP/Shell/Tanken → Auto, Netflix/Spotify → Abos, Lehrlingsentschädigung/Lohn → Einkommen, McDonald's/Döner → Essen gehen …) + lernt aus eigenen Zuordnungen (`money_rules`). Kategorien mit Farbe/Emoji, editierbar.
+   - Monatliches Budget pro Kategorie + gesamt (`money_budget`), Fortschrittsbalken, Warnung bei 80 %/100 %.
+   - Sparziele (`money_goals`: Ziel, Betrag, Stand, Datum; Einzahlen-Knopf, „noch X € pro Monat“).
+   - Abos & wiederkehrende Zahlungen (`money_subs`: Name, Betrag, Intervall monatlich/jährlich/wöchentlich, nächster Termin, Kategorie): Liste mit Monats-/Jahreskosten, „nächste Zahlungen“, automatisch als Buchung eintragen wenn fällig (beim Öffnen nachholen, nie doppelt).
+   - Übersicht: Monat Einnahmen/Ausgaben/Saldo, Ringdiagramm „Wofür gebe ich mein Geld aus?“ (SVG selbst zeichnen, keine Bibliothek), Verlauf 6 Monate (Balken).
+   - Teilen mit Freunden (`money_split`: Gruppe/Personen, Ausgaben „wer hat bezahlt, für wen“, Ausgleich-Rechnung „Max schuldet dir 12,50 €“, als Text teilen, „Beglichen“).
+## Agent E – Schule & Lernen (Worktree /home/claude/skweb-e, Port 8846)
+`js/alltag/school.js` (+ ggf. Untermodule `js/alltag/school-*.js`) mit Unterreitern Heute · Stundenplan · Aufgaben · Prüfungen · Noten · Lernen · Projekte · Dokumente.
+- Vorher js/views/school-settings.js und js/views/apprentice.js lesen: Berufsschul-Tage/Blockwochen existieren schon (settings.school) – Stundenplan baut darauf auf (zeigt an Schultagen), nicht doppelt.
+- Stundenplan (`school_timetable`: Wochentag, Stunde/Zeit von–bis, Fach, Raum, Lehrer, Farbe; A/B-Wochen optional) als Wochenraster.
+- Hausaufgaben & Abgabefristen (`school_tasks`: Fach, Titel, fällig, erledigt, Priorität) mit „überfällig/heute/diese Woche“.
+- Prüfungen & Schularbeiten (`school_exams`: Fach, Art, Datum, Stoff, Lernfortschritt) mit Countdown „noch 5 Tage“.
+- Notenübersicht (`school_grades`: Fach, Note 1–5, Gewicht, Art, Datum) mit Schnitt pro Fach und gesamt (österr. Noten 1 = Sehr gut … 5 = Nicht genügend).
+- Lernplan: aus Prüfungsdatum + Stoff automatisch Lerneinheiten auf die Tage davor verteilen (`school_plan`), abhakbar.
+- Lern-Timer Pomodoro (25/5, einstellbar, Zähler pro Fach in `school_sessions`, Ton/Vibration am Ende, läuft bei Tab-Wechsel weiter über Zeitstempel).
+- Projekte (`school_projects`: Titel, Fälligkeit, Schritte-Checkliste, Fortschritt).
+- Dokumente & PDFs (`school_docs`: Titel, Fach, Datei als dataURL in eigener Sammlung, Limit 700 kB pro Datei – größere ablehnen mit Hinweis; Bilder vorher verkleinern; öffnen/teilen/löschen).
+- „Heute“-Unterreiter: heutige Stunden, fällige Aufgaben, nächste Prüfung.
+Da Agent D parallel die Alltag-Seite baut: zum Testen eine eigene Testseite `tests/school-harness.html` anlegen, die nach Start (#btn-local-Logik nicht nötig: store.startLocal() direkt aufrufen) `mount()` in einen Container ruft. In modules.js steht der Eintrag schon.
