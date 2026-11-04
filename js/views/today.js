@@ -6,6 +6,7 @@ import { leaves, sparkles, emptyClipboard } from "../deco.js";
 import { readPlans, plansToday, dueTs, planKey } from "./plans.js";
 import { getFirebase } from "../firebase.js";
 import * as motion from "../motion.js";
+import * as myday from "./day.js";
 
 let ctx = null;
 let root = null;
@@ -58,6 +59,16 @@ function getAct() {
 }
 function setAct(a) {
   try { localStorage.setItem(ACT_KEY, a); } catch { /* egal */ }
+}
+/** Einfache Ansicht (settings.comfort.compact): Tätigkeits-Chips sind ausgeblendet → Standard „Arbeiten“. */
+function isCompact() {
+  const c = settings().comfort;
+  return !!(c && c.compact === true);
+}
+function clockInAct() {
+  if (!isCompact()) return getAct();
+  const list = activities();
+  return list.includes("Arbeiten") ? "Arbeiten" : list[0];
 }
 function activities() {
   const a = settings().activities;
@@ -223,6 +234,7 @@ export function mount(el, c) {
   root = el;
   el.innerHTML = `
 <div class="stack">
+  <section data-r="myday"></section>
   <div class="card clock" data-r="clock">
     <div class="clock-deco" aria-hidden="true">${sparkles()}${leaves("left")}${leaves("right")}</div>
     <span class="pill" data-r="pill">Nicht eingestempelt</span>
@@ -267,6 +279,7 @@ export function mount(el, c) {
   </div>
 </div>`;
 
+  try { myday.mount($("myday"), ctx); } catch (e) { console.error(e); }
   $("btns").addEventListener("click", onButton);
   $("chips").addEventListener("click", onChip);
   $("acts").addEventListener("click", onActChip);
@@ -297,6 +310,7 @@ export function mount(el, c) {
 export function update(s) {
   snap = s;
   if (!root) return;
+  try { myday.update(s); } catch (e) { console.error(e); }
   if (s.running) {
     done = null;              // neue/andere Schicht läuft
   }
@@ -885,7 +899,7 @@ async function doClockIn(btn, forcedPlace = null, opts = null) {
         place: place ? place.name : "",
         note,
         inLoc,
-        activity: (opts && opts.activity) || getAct(),
+        activity: (opts && opts.activity) || clockInAct(),
       });
       // Geplante Schicht: Beginn auf die Planzeit zurücksetzen (nur wenn noch dieselbe Schicht)
       if (opts && Number.isFinite(opts.start)) {
@@ -1400,6 +1414,7 @@ export function tick() {
   }
   updateClockText();
   renderStats();
+  try { myday.tick(); } catch (e) { console.error(e); }
   renderTips();      // zeichnet nur, wenn sich das passende Kärtchen ändert
   renderButtons();   // zeichnet nur bei Zustandswechsel (z. B. Sperre abgelaufen)
   if (state() === "idle" || state() === "done") renderList(); // Tageswechsel
@@ -2000,4 +2015,34 @@ export async function handleEndPlan({ planId, end } = {}) {
       el.querySelector('[data-r="ep-yes"]').addEventListener("click", async () => { close(); await clockOutAt(end); });
     },
   });
+}
+
+/* ---------------- App-Schnellstart (Update 7, manifest shortcuts ?action=) ---------------- */
+
+/** Aktion vom Startbildschirm-Symbol: "in" | "pause" | "seg" | "add". Wartet kurz auf die Daten. */
+export async function handleAction(name, c = ctx) {
+  if (c && !ctx) ctx = c;
+  if (!ctx) return;
+  const a = String(name || "").toLowerCase();
+  if (a === "add") { ctx.openEntryForm(null); return; }
+  if (!["in", "pause", "seg"].includes(a)) return;
+  const s = await waitReady();
+  if (s) snap = s;
+  if (!root) return;
+  // Doppeltipp-Sperre bzw. laufender Vorgang: kurz warten statt verwerfen
+  for (let i = 0; i < 20 && (busyOp || ctx.timer.isLocked()); i++) await new Promise((r) => setTimeout(r, 100));
+  if (busyOp) return;
+  const r = snap && snap.running;
+  const btnOf = (act) => $("btns").querySelector(`button[data-act="${act}"]`);
+  if (a === "in") {
+    if (r) { ctx.ui.toast(r.pauseStart ? "Du bist schon eingestempelt (Pause)." : "Du bist schon eingestempelt."); return; }
+    forceButtons();
+    doClockIn(btnOf("in"));
+  } else if (a === "pause") {
+    if (!r) { ctx.ui.toast("Du bist nicht eingestempelt."); return; }
+    doPause();
+  } else if (a === "seg") {
+    if (!r) { ctx.ui.toast("Du bist nicht eingestempelt."); return; }
+    openSegSheet();
+  }
 }

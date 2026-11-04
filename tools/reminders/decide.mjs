@@ -140,10 +140,11 @@ function fmtHours(ms) {
  * @param settings     users/{uid}/meta/settings (oder null)
  * @param running      laufende Schicht ({start, pauseMs, pauseStart}) oder null
  * @param todayEntries Einträge mit Beginn am heutigen Wiener Tag
- * @param pushlog      users/{uid}/meta/pushlog ({startSent, endSentFor, pauseSentFor, planSent{}, snooze{}, snoozeSent{}}) oder null
+ * @param pushlog      users/{uid}/meta/pushlog ({startSent, endSentFor, pauseSentFor, planSent{}, snooze{}, snoozeSent{}, todoSent{}}) oder null
+ * @param todos        users/{uid}/todos (Aufgaben/Termine; optional)
  * @returns Array von {type, title, body, tag, url, log: [[Feldpfad[], Wert], …]} (für pushlog-update)
  */
-export function decide(now, settings, running, todayEntries, pushlog) {
+export function decide(now, settings, running, todayEntries, pushlog, todos = []) {
   const s = settings || {};
   const log = pushlog || {};
   const rem = normReminders(s.reminders);
@@ -261,6 +262,40 @@ export function decide(now, settings, running, todayEntries, pushlog) {
         log: [[["pauseSentFor"], start]],
       });
     }
+  }
+
+  out.push(...decideTodos(now, todos, log));
+  return out;
+}
+
+/**
+ * Termin-/Aufgaben-Erinnerungen: date+time gesetzt, remind an, nicht erledigt;
+ * fällig ab (Uhrzeit − remindMin) bis Uhrzeit + 60 min, einmal pro Todo und Zeitpunkt (pushlog.todoSent[id]).
+ */
+export function decideTodos(now, todos, pushlog) {
+  const out = [];
+  const sentMap = (pushlog && pushlog.todoSent && typeof pushlog.todoSent === "object") ? pushlog.todoSent : {};
+  for (const t of (Array.isArray(todos) ? todos : [])) {
+    if (!t || !t.id || !t.remind || t.done) continue;
+    const date = String(t.date || ""), time = String(t.time || "");
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(date) || !/^\d{1,2}:\d{2}$/.test(time)) continue;
+    const [y, m, d] = date.split("-").map(Number);
+    const [hh, mm] = time.split(":").map(Number);
+    const at = viennaToTs(y, m, d, hh, mm);
+    let before = Number(t.remindMin);
+    if (!Number.isFinite(before) || before < 0) before = 30;
+    const stamp = `${date} ${time}`;
+    if (now < at - before * 60000 || now >= at + HOUR || sentMap[t.id] === stamp) continue;
+    const title = String(t.title || "").trim() || (t.kind === "termin" ? "Termin" : "Aufgabe");
+    const label = t.kind === "termin" ? "Termin" : "Aufgabe";
+    out.push({
+      type: "todo",
+      title: `${label}: ${title}`,
+      body: `um ${pad(hh)}:${pad(mm)}`,
+      tag: `todo-${t.id}`,
+      url: "./#agenda",
+      log: [[["todoSent", t.id], stamp]],
+    });
   }
   return out;
 }

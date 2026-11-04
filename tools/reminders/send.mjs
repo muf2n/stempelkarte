@@ -106,6 +106,14 @@ async function writeLog(ref, pairs) {
 async function pruneLog(ref, log, todayKey) {
   const limit = dayKeyVienna(Date.now() - 7 * 86400000);
   const args = [];
+  // todoSent: {todoId: "YYYY-MM-DD HH:MM"} – nach dem Datum im Wert aufräumen
+  const ts = log && log.todoSent;
+  if (ts && typeof ts === "object") {
+    for (const [k, v] of Object.entries(ts)) {
+      const day = String(v || "").slice(0, 10);
+      if (!/^\d{4}-\d{2}-\d{2}$/.test(day) || day < limit) args.push(new FieldPath("todoSent", k), FieldValue.delete());
+    }
+  }
   for (const field of ["planSent", "snooze", "snoozeSent", "planEndSent"]) {
     const m = log && log[field];
     if (!m || typeof m !== "object") continue;
@@ -132,18 +140,24 @@ for (const userRef of refs) {
     if (!tokens.length) continue;
     users++;
 
-    const [setSnap, stateSnap, logSnap, entSnap] = await Promise.all([
+    const [setSnap, stateSnap, logSnap, entSnap, todoSnap] = await Promise.all([
       meta.doc("settings").get(),
       meta.doc("state").get(),
       meta.doc("pushlog").get(),
       userRef.collection("entries").where("start", ">=", now - 36 * 3600000).get(),
+      userRef.collection("todos").where("remind", "==", true).get().catch((e) => {
+        console.warn(`[${uid}] Aufgaben nicht lesbar:`, e && e.message ? e.message : e);
+        return { docs: [] };
+      }),
     ]);
     const settings = setSnap.exists ? setSnap.data() : {};
     const running = stateSnap.exists ? (stateSnap.get("running") || null) : null;
     const pushlog = logSnap.exists ? logSnap.data() : {};
     const todayEntries = entSnap.docs.map((d) => d.data()).filter((e) => dayKeyVienna(Number(e.start)) === todayKey);
 
-    const due = decide(now, settings, running, todayEntries, pushlog);
+    const todos = todoSnap.docs.map((d) => ({ ...d.data(), id: d.id })).filter((t) => !t.done);
+
+    const due = decide(now, settings, running, todayEntries, pushlog, todos);
     if (logSnap.exists) await pruneLog(meta.doc("pushlog"), pushlog, todayKey);
     let live = tokens;
     for (const n of due) {

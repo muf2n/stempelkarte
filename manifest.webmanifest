@@ -11,10 +11,82 @@
   "orientation": "portrait",
   "background_color": "#EEF0F8",
   "theme_color": "#4F46E5",
-  "categories": ["productivity", "business"],
+  "categories": [
+    "productivity",
+    "business"
+  ],
   "icons": [
-    { "src": "icons/wecker-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
-    { "src": "icons/wecker-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any" },
-    { "src": "icons/wecker-maskable-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+    {
+      "src": "icons/wecker-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "icons/wecker-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "icons/wecker-maskable-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "maskable"
+    }
+  ],
+  "shortcuts": [
+    {
+      "name": "Einstempeln",
+      "short_name": "Einstempeln",
+      "description": "Schicht jetzt beginnen",
+      "url": "./?action=in#heute",
+      "icons": [
+        {
+          "src": "icons/wecker-192.png",
+          "sizes": "192x192",
+          "type": "image/png"
+        }
+      ]
+    },
+    {
+      "name": "Pause / Weiter",
+      "short_name": "Pause",
+      "description": "Pause starten oder beenden",
+      "url": "./?action=pause#heute",
+      "icons": [
+        {
+          "src": "icons/wecker-192.png",
+          "sizes": "192x192",
+          "type": "image/png"
+        }
+      ]
+    },
+    {
+      "name": "Abschnitt wechseln",
+      "short_name": "Abschnitt",
+      "description": "Tätigkeit wechseln, z. B. Autofahren",
+      "url": "./?action=seg#heute",
+      "icons": [
+        {
+          "src": "icons/wecker-192.png",
+          "sizes": "192x192",
+          "type": "image/png"
+        }
+      ]
+    },
+    {
+      "name": "Eintrag nachtragen",
+      "short_name": "Nachtragen",
+      "description": "Arbeitszeit nachträglich eintragen",
+      "url": "./?action=add#eintraege",
+      "icons": [
+        {
+          "src": "icons/wecker-192.png",
+          "sizes": "192x192",
+          "type": "image/png"
+        }
+      ]
+    }
   ]
 }
