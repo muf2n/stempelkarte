@@ -32,13 +32,27 @@ function parseAccount(text) {
   throw new Error(`Lesefehler an Stelle ${pos}` + (ch != null ? ` (Zeichen dort: U+${ch.toString(16).toUpperCase().padStart(4, "0")})` : "") + `, Länge gesamt ${t.length}, beginnt mit „{“: ${t.startsWith("{")}`);
 }
 
+// Privaten Schlüssel neu zusammensetzen: Handy-Kopien enthalten oft zusätzliche Leerzeichen,
+// Umbrüche oder „schöne“ Bindestriche. Gibt nur Längen aus, nie den Inhalt.
+function repairPem(k) {
+  const t = k.replace(/\\n/g, "\n").replace(/[\u2010-\u2015\u2212]/g, "-");
+  const m = /-+\s*BEGIN ([A-Z ]*?PRIVATE KEY)\s*-+([\s\S]*?)-+\s*END \1\s*-+/.exec(t);
+  if (!m) { console.error("Privater Schlüssel: BEGIN/END-Zeilen nicht gefunden."); return t; }
+  const label = m[1].trim();
+  const body = m[2].replace(/[^A-Za-z0-9+/=]/g, "");
+  const ok = body.length % 4 === 0;
+  console.log(`Privater Schlüssel: ${label}, ${body.length} Zeichen Base64${ok ? "" : " (Länge unvollständig – vermutlich abgeschnitten)"}.`);
+  const lines = body.match(/.{1,64}/g) || [];
+  return `-----BEGIN ${label}-----\n${lines.join("\n")}\n-----END ${label}-----\n`;
+}
+
 let account;
 try {
   account = parseAccount(raw);
   if (account.type !== "service_account" || !account.private_key || !account.client_email) {
     throw new Error("Inhalt ist kein Firebase-Dienstkonto-Schlüssel (type/private_key/client_email fehlt)");
   }
-  account.private_key = String(account.private_key).replace(/\\n/g, "\n");
+  account.private_key = repairPem(String(account.private_key));
 } catch (e) {
   console.error("FIREBASE_SERVICE_ACCOUNT ist kein gültiges JSON:", e.message);
   process.exit(1);
