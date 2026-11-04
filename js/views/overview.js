@@ -3,6 +3,8 @@
 import { icon } from "../icons.js";
 import { leaves, sparkles } from "../deco.js";
 import * as reminders from "./reminders.js";
+const extraPanels = [];
+let lastSnapForExtras = null;
 
 let ctx = null;
 let root = null;
@@ -117,6 +119,8 @@ export function mount(el, c) {
             <p class="note">Ohne Datum zählt das Konto ab deinem ersten Eintrag.</p>
           </div>
           <div id="reminders-panel"></div>
+          <div id="drive-panel"></div>
+          <div id="lock-panel"></div>
           <button type="button" class="btn ghost sm" id="ov-plans-link">Geplante Schichten (Auto-Stempeln) öffnen</button>
           <div class="lbl">Konto</div>
           <div id="ov-account"></div>
@@ -168,6 +172,11 @@ export function mount(el, c) {
   $("#ov-csv").addEventListener("click", exportCSV);
 
   try { reminders.mount($("#reminders-panel"), ctx); } catch (err) { console.error(err); }
+  // Update 6: Fahrerkennung + Sperrbildschirm – Module werden dynamisch geladen
+  for (const [mod, sel] of [["./drive-settings.js", "#drive-panel"], ["./lock-settings.js", "#lock-panel"]]) {
+    import(mod).then((m) => { extraPanels.push(m); m.mount($(sel), ctx); if (lastSnapForExtras) m.update(lastSnapForExtras); })
+      .catch((err) => console.error(err));
+  }
   const pl = $("#ov-plans-link");
   if (pl) pl.addEventListener("click", () => {
     ctx.go("orte");
@@ -239,6 +248,8 @@ export function update(s) {
   renderSettings();
   renderAccount();
   try { reminders.update(snap); } catch (err) { console.error(err); }
+  lastSnapForExtras = snap;
+  for (const m of extraPanels) { try { m.update(snap); } catch (err) { console.error(err); } }
 }
 
 let lastTick = 0;
