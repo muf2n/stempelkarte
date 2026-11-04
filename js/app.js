@@ -12,13 +12,14 @@ import * as today from "./views/today.js";
 import * as entries from "./views/entries.js";
 import * as overview from "./views/overview.js";
 import * as places from "./views/places.js";
+import * as agenda from "./views/agenda.js";
 import { openEntryForm } from "./views/entries.js";
 import { openPlaceForm } from "./views/places.js";
 import { icon } from "./icons.js";
 import * as lockscreen from "./lockscreen.js";
 
-const TABS = ["heute", "eintraege", "uebersicht", "orte"];
-const VIEWS = { heute: today, eintraege: entries, uebersicht: overview, orte: places };
+const TABS = ["heute", "eintraege", "agenda", "uebersicht", "orte"];
+const VIEWS = { heute: today, eintraege: entries, agenda, uebersicht: overview, orte: places };
 const FORCE_LOCAL_KEY = "stempelkarte.forceLocal";
 const firebaseConfigured = isConfigured();
 
@@ -63,6 +64,7 @@ const ctx = {
   firebaseConfigured,
   openEntryForm: (entry = null, prefill = null) => openEntryForm(entry, ctx, prefill),
   openPlaceForm: (place = null, presetLoc = null) => openPlaceForm(place, presetLoc, ctx),
+  openTodoForm: (todo = null, preset = null) => agenda.openTodoForm(todo, ctx, preset),
   go: (tab) => go(tab),
   jump: (id) => jump(id),
   signIn: () => doSignIn(),
@@ -105,6 +107,7 @@ function mountViews() {
     renderRunState();
     renderSync();
     safe(lockscreen.sync, snap);
+    if (snap && snap.ready) { runPendingAction(); maybeAutoSync(); }
   });
   setInterval(() => safe(today.tick), 1000);
 }
@@ -468,6 +471,41 @@ function runPendingPlan() {
 {
   const t = setInterval(() => { if (!pendingPlan && !pendingEndPlan) clearInterval(t); else runPendingPlan(); }, 300);
 }
+
+// ---------- App-Schnellstart (?action=in|pause|seg|add aus manifest-shortcuts) ----------
+let pendingAction = null;
+try {
+  const qs = new URLSearchParams(location.search);
+  const a = qs.get("action");
+  if (a) {
+    pendingAction = String(a);
+    qs.delete("action");
+    const rest = qs.toString();
+    history.replaceState(history.state, "", location.pathname + (rest ? "?" + rest : "") + (location.hash || "#heute"));
+  }
+} catch { /* egal */ }
+function runPendingAction() {
+  if (!pendingAction || !appVisible) return;
+  const a = pendingAction;
+  pendingAction = null;
+  // kurz warten, bis der Reiter gezeichnet ist
+  setTimeout(() => {
+    if (typeof today.handleAction === "function") safe(today.handleAction, a);
+    else if (a === "add") safe(ctx.openEntryForm, null);
+  }, 50);
+}
+
+// ---------- Uhr (Bangle.js): automatischer Abgleich beim Start/Sichtbarwerden ----------
+let lastAutoSync = 0;
+function maybeAutoSync() {
+  if (!appVisible || document.visibilityState === "hidden") return;
+  if (Date.now() - lastAutoSync < 60000) return;
+  lastAutoSync = Date.now();
+  import("./watch.js").then(m => m.autoSync(ctx)).catch(()=>{});
+}
+document.addEventListener("visibilitychange", () => {
+  if (document.visibilityState === "visible" && lastSnap && lastSnap.ready) maybeAutoSync();
+});
 
 renderSync();
 renderTopbar();

@@ -116,7 +116,7 @@ export function buildWeek(snap, ws) {
     if (hol) tags.push({ kind: "feiertag", text: `Feiertag: ${hol}` });
     const sch = schoolLabel(d, settings);
     if (sch) {
-      addUniq(acts, sch === "Berufsschule" ? "Berufsschule" : `Berufsschule (${sch})`);
+      if (sch !== "Berufsschule") addUniq(acts, sch);
       tags.push({ kind: "schule", text: "Berufsschule" });
       min += schoolCreditMin(d, settings);
     }
@@ -127,7 +127,7 @@ export function buildWeek(snap, ws) {
         const lbl = e.kind === "schule" ? "Berufsschule" : kindLabel(e.kind);
         if (e.kind !== "schule") tags.push({ kind: e.kind, text: lbl });
         else if (!tags.some((t) => t.kind === "schule")) tags.push({ kind: "schule", text: lbl });
-        addUniq(acts, e.note ? `${lbl}: ${e.note}` : lbl);
+        if (e.note) addUniq(acts, e.note);
         continue;
       }
       if (e.note) addUniq(acts, e.note);
@@ -189,12 +189,12 @@ function renderPaper() {
 
   el.querySelector(".rp-tbody").innerHTML = rows.map((r) => {
     const tags = r.tags.map((t) => `<span class="rp-tag rp-${esc(t.kind)}">${esc(t.text)}</span>`).join("");
-    const acts = r.acts.length ? r.acts.map(esc).join("; ") : `<span class="rp-none">–</span>`;
+    const acts = r.acts.length ? r.acts.map(esc).join("; ") : (tags ? "" : `<span class="rp-none">–</span>`);
     const pl = r.places.length ? r.places.map(esc).join(", ") : `<span class="rp-none">–</span>`;
     return `<tr class="${r.empty ? "rp-empty" : ""}${r.date.getDay() === 0 || r.date.getDay() === 6 ? " rp-we" : ""}">
       <td class="rp-day"><b>${esc(r.wd)}</b><span>${esc(fmtD(r.date, false))}</span></td>
-      <td class="rp-act">${tags ? `<div class="rp-tags">${tags}</div>` : ""}<div>${acts}</div></td>
-      <td class="rp-pl" data-l="Ort">${pl}</td>
+      <td class="rp-act">${tags ? `<div class="rp-tags">${tags}</div>` : ""}${acts ? `<div>${acts}</div>` : ""}</td>
+      <td class="rp-pl${r.places.length ? "" : " rp-pl-empty"}">${pl}</td>
       <td class="rp-h">${r.min > 0 ? esc(hm(r.min)) : "–"}</td>
     </tr>`;
   }).join("");
@@ -235,7 +235,7 @@ function weekText(snap) {
   ].filter((x) => x !== null);
   for (const r of rows) {
     const parts = [];
-    const tagTxt = r.tags.filter((t) => t.kind !== "schule").map((t) => t.text);
+    const tagTxt = r.tags.map((t) => t.text);
     if (tagTxt.length) parts.push(tagTxt.join(", "));
     if (r.acts.length) parts.push(r.acts.join("; "));
     if (r.places.length) parts.push(`Ort: ${r.places.join(", ")}`);

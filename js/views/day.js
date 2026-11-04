@@ -197,14 +197,17 @@ function render() {
   hEl.textContent = hint ? hint.text : "";
 
   const dash = `<span class="md-none">–</span>`;
-  const agVal = ag.next ? u.esc(ag.when) : (ag.openTodos ? String(ag.openTodos) : "–");
+  // Wert: Uhrzeit (sonst Tag); Unterzeile: Tag + Titel
+  const agTime = ag.next && ag.next.time ? ag.next.time : "";
+  const agDay = ag.next ? (agTime ? ag.when.slice(0, -agTime.length).trim() : ag.when) : "";
+  const agVal = ag.next ? u.esc(agTime || agDay) : (ag.openTodos ? String(ag.openTodos) : "–");
   const agSub = ag.next
-    ? `${u.esc(ag.next.title || "Termin")}${ag.openTodos ? ` · ${ag.openTodos} offen` : ""}`
+    ? `${agTime && agDay ? u.esc(agDay) + " · " : ""}${u.esc(ag.next.title || "Termin")}${ag.openTodos ? ` · ${ag.openTodos} offen` : ""}`
     : (ag.openTodos ? (ag.openTodos === 1 ? "Aufgabe offen" : "Aufgaben offen") : "nichts offen");
   root.querySelector('[data-md="tiles"]').innerHTML =
     `<div class="md-tile md-t-work"><span class="md-l">Arbeit</span><strong>${u.hm(workMin)}<small> h</small></strong></div>` +
     `<div class="md-tile md-t-steps"><span class="md-l">Schritte</span><strong>${steps === null ? dash : fmtInt(steps)}</strong></div>` +
-    `<div class="md-tile md-t-alt"><span class="md-l">Höhenmeter</span><strong>${up === null ? dash : `↑${fmtInt(up)}<small> m</small>`}</strong></div>` +
+    `<div class="md-tile md-t-alt"><span class="md-l" title="Höhenmeter aufwärts">Höhe</span><strong>${up === null ? dash : `↑${fmtInt(up)}<small> m</small>`}</strong></div>` +
     `<button type="button" class="md-tile md-t-agenda" data-md-go="agenda" aria-label="Planer öffnen: ${ag.next ? "nächster Termin " + u.esc(ag.when) + " " + u.esc(ag.next.title || "") : "keine Termine"}, ${ag.openTodos} Aufgaben offen">` +
     `<span class="md-l">${ag.next ? "Termin" : "To-dos"}</span><strong class="md-ag">${agVal}</strong><span class="md-sub">${agSub}</span></button>`;
 

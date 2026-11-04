@@ -1,5 +1,5 @@
 <!doctype html>
-<!-- Stempelkarte: Grundgerüst der App (Kopfzeile, vier Reiter, Anmeldeseite, Tabbar, Blatt- und Toast-Container). -->
+<!-- Stempelkarte: Grundgerüst der App (Kopfzeile, fünf Reiter, Anmeldeseite, Tabbar, Blatt- und Toast-Container). -->
 <html lang="de">
 <head>
   <meta charset="utf-8">
@@ -78,6 +78,7 @@
 
     <section class="view" id="view-heute" hidden></section>
     <section class="view" id="view-eintraege" hidden></section>
+    <section class="view" id="view-agenda" hidden></section>
     <section class="view" id="view-uebersicht" hidden></section>
     <section class="view" id="view-orte" hidden></section>
     <div class="rail-balance" id="rail-balance" hidden></div>
@@ -96,6 +97,10 @@
     <button type="button" role="tab" data-tab="eintraege" style="--o:2" aria-selected="false">
       <span class="ic-m"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M9 6h11M9 12h11M9 18h11"/><circle cx="4.5" cy="6" r="1"/><circle cx="4.5" cy="12" r="1"/><circle cx="4.5" cy="18" r="1"/></svg></span><span class="ic-pc"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><rect x="3.5" y="5" width="17" height="15" rx="2.5"/><path d="M3.5 10h17M8 3v4M16 3v4"/><path d="M8 14h3M8 17h6"/></svg></span>
       <span class="lb-m">Einträge</span><span class="lb-pc">Kalender</span>
+    </button>
+    <button type="button" role="tab" data-tab="agenda" style="--o:3" aria-selected="false">
+      <span class="ic-m"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><rect x="4" y="4" width="16" height="17" rx="2.5"/><path d="M9 2.5v3M15 2.5v3"/><path d="M8 11l1.5 1.5L12 10M8 16.5l1.5 1.5 2.5-2.5M14 11.5h3M14 17h3"/></svg></span><span class="ic-pc"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><rect x="4" y="4" width="16" height="17" rx="2.5"/><path d="M9 2.5v3M15 2.5v3"/><path d="M8 11l1.5 1.5L12 10M8 16.5l1.5 1.5 2.5-2.5M14 11.5h3M14 17h3"/></svg></span>
+      <span class="lb-m">Planer</span><span class="lb-pc">Planer</span>
     </button>
     <button type="button" role="tab" data-tab="uebersicht" style="--o:1" aria-selected="false">
       <span class="ic-m"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M4 20h16"/><path d="M7 16v-5M12 16V6M17 16v-8"/></svg></span><span class="ic-pc"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M4 10.5L12 4l8 6.5V19a1.5 1.5 0 0 1-1.5 1.5H15v-6H9v6H5.5A1.5 1.5 0 0 1 4 19z"/></svg></span>
