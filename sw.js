@@ -78,6 +78,11 @@ const SHELL = [
   "js/alltag/gmail.js",
   "js/alltag/subs-detect.js",
   "js/alltag/money-gmail.js",
+  // Update 9 – Passwort-Tresor
+  "js/alltag/vault.js",
+  "js/alltag/vault-crypto.js",
+  "js/alltag/vault-core.js",
+  "js/alltag/qr.js",
   "js/app.js"
 ];
 
