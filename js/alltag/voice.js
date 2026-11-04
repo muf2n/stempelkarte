@@ -10,6 +10,7 @@ const LS_KEY = "stempelkarte.ai.voice";
 export const NAME_KEY = "stempelkarte.ai.name";
 const LANG = "de-AT";
 
+// Test-Haken für Zeiten (nur localhost): window.__aiTest = { gapMs, earlyMs, listenMs, wakeWaitMs, wakeBackoffMs }
 const T = () => { try { return ["localhost", "127.0.0.1"].includes(location.hostname) && window.__aiTest || {}; } catch { return {}; } };
 const wait = (ms) => new Promise((r) => setTimeout(r, ms));
 const gap = () => (T().gapMs ?? 350);

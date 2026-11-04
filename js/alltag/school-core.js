@@ -114,6 +114,29 @@ export function subjectColor(data, s) {
     .sort((a, b) => (b.updated || 0) - (a.updated || 0))[0];
   return l ? l.color : PALETTE[hash(key) % PALETTE.length];
 }
+/* ---------- Fach-Symbole (Emoji) – Auswahl in prefs.subjectEmoji { "fach klein": "⚡" } ---------- */
+const EMOJI_RULES = [
+  [/elektrotechn|elektronik|^et$/, "⚡"], [/installation/, "🔌"], [/mathe|^am$|rechnen/, "📐"],
+  [/informatik|digital|edv|computer/, "💻"], [/deutsch|kommunikation/, "📝"], [/englisch|english/, "🇬🇧"],
+  [/politisch|geschichte|^pb$/, "🏛️"], [/wirtschaft|rechnungswesen|^wk$/, "💶"], [/sport|bewegung/, "🏃"],
+  [/werkst|labor|praxis/, "🛠️"], [/zeichn|cad/, "✏️"], [/fachkunde|gebäudetechn|anlagentechn/, "🏠"],
+  [/religion|ethik/, "🕊️"], [/physik/, "🧲"], [/chemie/, "🧪"], [/sicherheit|schutz/, "🦺"],
+];
+export const EMOJI_CHOICES = [
+  "⚡", "🔌", "💡", "🔋", "🧲", "📐", "🧮", "💻", "🖥️", "📟", "📝", "📖", "🇬🇧", "🗣️", "🏛️", "⚖️",
+  "💶", "📊", "🏃", "⚽", "🛠️", "🔧", "🪛", "🔩", "🏠", "🦺", "✏️", "📏", "🧪", "🌍", "🕊️", "🎨", "🎵", "📚", "🎯", "⭐",
+];
+export function defaultSubjectEmoji(s) {
+  const k = String(s || "").trim().toLowerCase();
+  for (const [re, e] of EMOJI_RULES) if (re.test(k)) return e;
+  return "📚";
+}
+export function subjectEmoji(data, s) {
+  const map = prefs(data).subjectEmoji || {};
+  return map[String(s || "").trim().toLowerCase()] || defaultSubjectEmoji(s);
+}
+export const sameSubj = (a, b) => String(a || "").trim().toLowerCase() === String(b || "").trim().toLowerCase();
+
 /** Kürzel: „Angewandte Mathematik“ → „AM“, „Elektrotechnik“ → „Elek“. */
 export function abbr(s) {
   const w = String(s || "").trim().split(/\s+/).filter((x) => /^[A-ZÄÖÜ]/.test(x));

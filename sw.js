@@ -3,7 +3,7 @@
 // Icons und Schriftdateien (fonts.gstatic.com): cache-first.
 // Alle anderen fremden Domains (Firebase, Google APIs, Nominatim, OSM, unpkg) werden nicht angefasst.
 
-const VERSION = "20261105-0045"; // wird beim Veröffentlichen automatisch ersetzt
+const VERSION = "20261105-0055"; // wird beim Veröffentlichen automatisch ersetzt
 const CACHE = "stempelkarte-" + VERSION;
 const FONT_CACHE = "stempelkarte-fonts"; // versionsunabhängig, bleibt erhalten
 const NET_TIMEOUT_MS = 4000; // bei schlechtem Netz nach dieser Zeit auf den Cache ausweichen
@@ -66,7 +66,12 @@ const SHELL = [
   "js/alltag/school-exams.js",
   "js/alltag/school-learn.js",
   "js/alltag/school-docs.js",
+  "js/alltag/school-subjects.js",
+  "js/alltag/school-planner.js",
+  "js/alltag/ai-client.js",
   "css/alltag-school.css",
+  "js/native-sync.js",
+  "js/views/android-settings.js",
   "icons/wecker-192.png",
   "js/views/alltag.js",
   "js/alltag/db.js",

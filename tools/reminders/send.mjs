@@ -136,8 +136,11 @@ for (const userRef of refs) {
   try {
     const meta = userRef.collection("meta");
     const pushSnap = await meta.doc("push").get();
-    const tokens = Object.keys((pushSnap.exists && pushSnap.get("tokens")) || {});
+    const tokenMap = (pushSnap.exists && pushSnap.get("tokens")) || {};
+    const tokens = Object.keys(tokenMap);
     if (!tokens.length) continue;
+    // Android-App (Capacitor): eigener Payload mit sichtbarer Benachrichtigung im Kanal „erinnerungen“
+    const isAndroid = (t) => !!(tokenMap[t] && tokenMap[t].platform === "android");
     users++;
 
     const [setSnap, stateSnap, logSnap, entSnap, todoSnap] = await Promise.all([
@@ -162,16 +165,34 @@ for (const userRef of refs) {
     let live = tokens;
     for (const n of due) {
       if (!live.length) break;
-      const res = await messaging.sendEachForMulticast({
-        tokens: live,
-        data: { title: n.title, body: n.body, url: n.url, tag: n.tag },
+      const data = { title: n.title, body: n.body, url: n.url, tag: n.tag };
+      const webTokens = live.filter((t) => !isAndroid(t));
+      const androidTokens = live.filter(isAndroid);
+      const batches = [];
+      if (webTokens.length) batches.push([webTokens, {
+        tokens: webTokens,
+        data,
         webpush: { headers: { Urgency: "high", TTL: "3600" } },
-      });
+      }]);
+      if (androidTokens.length) batches.push([androidTokens, {
+        tokens: androidTokens,
+        data,
+        android: {
+          priority: "high",
+          ttl: 3600 * 1000,
+          notification: { title: n.title, body: n.body, channelId: "erinnerungen", tag: n.tag },
+        },
+      }]);
+      const res = { successCount: 0 };
       const bad = [];
-      res.responses.forEach((r, i) => {
-        if (!r.success && r.error && BAD_TOKEN.has(r.error.code)) bad.push(live[i]);
-        else if (!r.success) console.warn(`[${uid}] Senden fehlgeschlagen:`, r.error && r.error.code);
-      });
+      for (const [list, msg] of batches) {
+        const r0 = await messaging.sendEachForMulticast(msg);
+        res.successCount += r0.successCount;
+        r0.responses.forEach((r, i) => {
+          if (!r.success && r.error && BAD_TOKEN.has(r.error.code)) bad.push(list[i]);
+          else if (!r.success) console.warn(`[${uid}] Senden fehlgeschlagen:`, r.error && r.error.code);
+        });
+      }
       if (bad.length) {
         const args = [];
         for (const t of bad) args.push(new FieldPath("tokens", t), FieldValue.delete());

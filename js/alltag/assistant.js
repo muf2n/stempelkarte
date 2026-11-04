@@ -2,7 +2,7 @@
 // Der Server prüft das Firebase-Anmelde-Token, ruft Claude auf und darf über Werkzeuge die App-Daten lesen/ändern.
 // Verlauf bleibt nur auf diesem Gerät (localStorage), max. 40 Nachrichten.
 import * as store from "../store.js";
-import { getFirebase } from "../firebase.js";
+import { askClaude, serverUrl, aiAvailable, URL_KEY, DEFAULT_URL } from "./ai-client.js";
 import { icon } from "../icons.js";
 import { esc } from "../util.js";
 import * as ui from "../ui.js";
@@ -10,8 +10,6 @@ import { speakable } from "./voice-core.js";
 import * as voice from "./voice.js";
 
 const HIST_KEY = "stempelkarte.ai.history";
-const URL_KEY = "stempelkarte.ai.url";
-const DEFAULT_URL = "https://stempelkarte-mcp.lippa-florian.workers.dev";
 const MAX_MSGS = 40;
 
 const SUGGEST = [
@@ -23,22 +21,12 @@ const SUGGEST = [
   "Welche Prüfungen kommen als Nächstes?",
 ];
 
-// Test-Haken (nur localhost): window.__aiTest = { forceCloud, fakeServer(body) → {reply, actions}, gapMs, earlyMs, … }
-function testHook() {
-  try { return ["localhost", "127.0.0.1"].includes(location.hostname) && window.__aiTest || null; } catch { return null; }
-}
-
 const lsGet = (k) => { try { return localStorage.getItem(k); } catch { return null; } };
 const lsSet = (k, v) => { try { localStorage.setItem(k, v); } catch { /* egal */ } };
 
 function loadHist() {
   try { const a = JSON.parse(lsGet(HIST_KEY) || "[]"); return Array.isArray(a) ? a.filter((m) => m && m.role && typeof m.content === "string") : []; }
   catch { return []; }
-}
-
-function serverUrl(snap) {
-  const s = (snap && snap.settings && snap.settings.ai && snap.settings.ai.url) || lsGet(URL_KEY) || DEFAULT_URL;
-  return String(s).replace(/\/+$/, "").replace(/\/(mcp|chat)$/, "");
 }
 
 // sehr kleines, sicheres Markdown: **fett**, Listen, Zeilenumbrüche
@@ -113,7 +101,8 @@ export function mount(el, ctx) {
   let conv = null;
   let wake = null;
 
-  const blocked = () => store.get().mode === "local" && !(testHook() && testHook().forceCloud);
+  // lokaler Modus sperrt (Test-Haken window.__skAiTest in ai-client.js hebt das auf localhost auf)
+  const blocked = () => !aiAvailable(store.get());
 
   function render() {
     const snap = store.get();
@@ -153,40 +142,12 @@ export function mount(el, ctx) {
     save(); busy = true; if (alive) render();
     let reply, actions = [];
     try {
-      const hook = testHook();
-      const body = { messages: hist.filter((m) => !m.err).map((m) => ({ role: m.role, content: m.content })) };
-      body.assistantName = voice.assistantName();
-      if (spoken) { body.mode = "voice"; body.short = voice.loadVoice().short; }
-      let token = "test";
-      if (!(hook && hook.forceCloud)) {
-        const f = await getFirebase();
-        const u = f && f.auth.currentUser;
-        if (!u) throw new Error("Bitte zuerst mit Google anmelden.");
-        token = await u.getIdToken();
-      }
-      let res, data = null;
-      if (hook && typeof hook.fakeServer === "function") {
-        data = await hook.fakeServer(body);
-        res = { ok: !(data && data.error), status: data && data.error ? 500 : 200 };
-      } else {
-        res = await fetch(serverUrl(store.get()) + "/chat", {
-          method: "POST",
-          headers: { "Content-Type": "application/json", Authorization: "Bearer " + token },
-          body: JSON.stringify(body),
-        });
-        try { data = await res.json(); } catch { /* leer */ }
-      }
-      if (!res.ok) {
-        const map = {
-          401: "Anmeldung abgelehnt – bitte ab- und wieder anmelden.",
-          503: "Der Server ist noch nicht fertig eingerichtet (Claude-Schlüssel fehlt).",
-          502: "Claude ist gerade nicht erreichbar. Bitte gleich nochmal probieren.",
-        };
-        throw new Error((data && (data.reply || data.error)) || map[res.status] || "Fehler " + res.status);
-      }
-      reply = String((data && data.reply) || "(keine Antwort)");
-      actions = (data && data.actions) || [];
-      if (data && data.usage) {
+      const extra = { assistantName: voice.assistantName() };
+      if (spoken) { extra.mode = "voice"; extra.short = voice.loadVoice().short; }
+      const data = await askClaude(hist.filter((m) => !m.err).map((m) => ({ role: m.role, content: m.content })), { body: extra });
+      reply = data.reply;
+      actions = data.actions;
+      if (data.usage) {
         usageEl.textContent = `Diesen Monat: ${Number(data.usage.usd || 0).toFixed(2).replace(".", ",")} $ von ${data.usage.capUsd} $`;
       }
       if (actions.length && ctx && ctx.toast) ctx.toast(`${voice.assistantName()} hat etwas eingetragen ✓`);

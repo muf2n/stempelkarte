@@ -1,6 +1,7 @@
 // Playwright-Test für den Sprachmodus des Claude-Assistenten (Alltag › Claude-Assistent), lokaler Modus.
 //   cd <worktree> && python3 -m http.server 8851 &   then   node tests/voice-e2e.cjs [screenshot-dir]
-// Test-Haken window.__aiTest (nur localhost): forceCloud umgeht die Sperre im lokalen Modus, /chat wird per page.route gestubbt.
+// Test-Haken (nur localhost): window.__skAiTest (ai-client.js) umgeht die Sperre im lokalen Modus, /chat wird per page.route gestubbt;
+// window.__aiTest verkürzt die Wartezeiten des Sprachmodus.
 // speechSynthesis und webkitSpeechRecognition werden in addInitScript durch steuerbare Attrappen ersetzt.
 const { chromium } = require("playwright");
 const path = require("path");
@@ -8,7 +9,8 @@ const BASE = "http://localhost:8851/";
 const OUT = process.argv[2] || require("os").tmpdir();
 
 function fakes() {
-  window.__aiTest = { forceCloud: true, gapMs: 40, earlyMs: 400, wakeWaitMs: 300, wakeBackoffMs: 120 };
+  window.__skAiTest = { token: "test" };
+  window.__aiTest = { gapMs: 40, earlyMs: 400, wakeWaitMs: 300, wakeBackoffMs: 120 };
   // ---- Spracherkennung ----
   const sr = (window.__sr = { instances: [], overlap: 0, earlyEnd: 0 });
   class FakeSR {
@@ -71,7 +73,7 @@ function fakes() {
 }
 
 function noSpeech() {
-  window.__aiTest = { forceCloud: true };
+  window.__skAiTest = { token: "test" };
   delete window.webkitSpeechRecognition; delete window.SpeechRecognition;
   Object.defineProperty(window, "speechSynthesis", { value: undefined, configurable: true });
   window.SpeechSynthesisUtterance = undefined;
