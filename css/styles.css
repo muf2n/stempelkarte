@@ -2651,3 +2651,14 @@ body::before {
 .plan-time.plan-range { font-size: .92em; white-space: nowrap; }
 .plan-school { margin: 0; color: color-mix(in srgb, var(--k-schule) 70%, var(--ink)); }
 .plan-school[hidden] { display: none; }
+
+/* === Update 6: Abschnitt löschen === */
+#view-heute .seg-list li, .sheet .ek-segs-edit li { position: relative; padding-right: 48px !important; overflow-wrap: anywhere; }
+.seg-del {
+  position: absolute; right: 4px; top: 50%; transform: translateY(-50%);
+  width: 36px; height: 36px; border-radius: 50%; border: 1px solid var(--line);
+  background: var(--card); color: var(--muted); display: inline-flex; align-items: center; justify-content: center;
+  cursor: pointer; touch-action: manipulation;
+}
+.seg-del:hover, .seg-del:focus-visible { color: var(--danger); border-color: var(--danger); }
+.edit-links { display: flex; justify-content: center; gap: 18px; flex-wrap: wrap; }

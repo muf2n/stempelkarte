@@ -107,6 +107,48 @@ export async function addSegment({ activity = DEFAULT_ACTIVITY, placeId = null, 
   return seg;
 }
 
+/** Versehentlich gewählten Abschnitt entfernen (reine Funktion, ändert `running` nicht).
+ *  Die Zeit des gelöschten Abschnitts geht an den NÄCHSTEN Abschnitt; ist es der letzte,
+ *  läuft der vorige weiter. Gibt null zurück, wenn nur ein Abschnitt existiert. */
+export function removeSegment(running, index) {
+  const segs = segmentsOf(running).map((x) => ({ ...x }));
+  if (segs.length < 2 || index < 0 || index >= segs.length) return null;
+  const gone = segs[index];
+  if (index < segs.length - 1) {
+    const nxt = segs[index + 1];
+    nxt.start = gone.start;
+    if (index === 0) nxt.start = running.start;
+    if (!nxt.loc && gone.loc) { nxt.loc = gone.loc; nxt.place = gone.place; nxt.placeId = gone.placeId ?? null; }
+    if (index > 0) {
+      const prev = segs[index - 1];
+      prev.endLoc = nxt.loc ?? prev.endLoc ?? null;
+      prev.endPlace = endPlaceOf(nxt.place, nxt.loc);
+    }
+  } else {
+    const prev = segs[index - 1];
+    prev.endLoc = null; prev.endPlace = "";
+  }
+  segs.splice(index, 1);
+  return { ...running, segments: segs };
+}
+
+/** Wie removeSegment, aber für abgeschlossene Einträge (mit end je Abschnitt). */
+export function removeEntrySegment(entry, index) {
+  const segs = (Array.isArray(entry.segments) ? entry.segments : []).map((x) => ({ ...x }));
+  if (segs.length < 2 || index < 0 || index >= segs.length) return null;
+  const gone = segs[index];
+  if (index < segs.length - 1) {
+    const nxt = segs[index + 1];
+    nxt.start = index === 0 ? entry.start : gone.start;
+    if (!nxt.loc && gone.loc) { nxt.loc = gone.loc; nxt.place = gone.place; nxt.placeId = gone.placeId ?? null; }
+  } else {
+    const prev = segs[index - 1];
+    prev.end = gone.end; prev.endLoc = gone.endLoc ?? null; prev.endPlace = gone.endPlace || "";
+  }
+  segs.splice(index, 1);
+  return { ...entry, segments: segs };
+}
+
 /** Abschnitte mit Ende für den Eintrag (nur Abschnitte, die vor dem Schichtende beginnen).
  *  Der letzte Abschnitt endet am Ausstempel-Standort (wenn bekannt). */
 function closeSegments(r, end, outLoc = null, outPlace = "") {

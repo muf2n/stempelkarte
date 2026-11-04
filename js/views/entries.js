@@ -643,8 +643,8 @@ export function openEntryForm(entry, ctx, prefill = null) {
       </label>
       ${!isNew && segList(entry).length ? `<div class="ek-only-work">
         <div class="lbl">Abschnitte</div>
-        ${segmentsHTML(entry, util) || `<p class="note">Ein Abschnitt: ${esc(segList(entry)[0].activity || "Arbeiten")}</p>`}
-        <p class="note">Abschnitte werden beim Speichern unverändert übernommen.</p>
+        <div data-r="ef-segs"></div>
+        <p class="note">Versehentlich gewählt? Tippe auf ✕ – die Zeit geht an den nächsten Abschnitt (beim letzten an den vorigen). Wirksam nach „Speichern“.</p>
       </div>` : ""}
       <label class="ek-only-abs">Gutschrift (Stunden pro Tag)
         <input type="text" id="ef-credit" inputmode="decimal" placeholder="z. B. 7,7" value="${esc(vCredit)}">
@@ -661,6 +661,33 @@ export function openEntryForm(entry, ctx, prefill = null) {
 
   const sheet = ui.openSheet({ title: isNew ? "Eintrag nachtragen" : "Eintrag bearbeiten", bodyHTML });
   const box = sheet.el;
+  // Abschnitte im Formular: Kopie, in der man versehentliche Abschnitte löschen kann
+  let segEdit = entry && Array.isArray(entry.segments) ? segList(entry) : null;
+  const renderSegEdit = () => {
+    const host = box.querySelector('[data-r="ef-segs"]');
+    if (!host || !segEdit) return;
+    const { esc, clock, hm } = util;
+    if (segEdit.length < 2) {
+      host.innerHTML = `<p class="note">Ein Abschnitt: ${esc((segEdit[0] && segEdit[0].activity) || "Arbeiten")}</p>`;
+      return;
+    }
+    host.innerHTML = `<ul class="ek-segs ek-segs-edit">${segEdit.map((x, i) => {
+      const act = x.activity || "Arbeiten";
+      const pl = placeText(x);
+      return `<li ${actAttrs(act, esc)}>${esc(`${clock(x.start)}–${clock(x.end)}`)} · ${esc(act)}${pl ? " · " + esc(pl) : ""} · ${esc(hm(Math.max(0, (x.end - x.start) / 60000)))} h` +
+        `<button type="button" class="seg-del" data-segdel="${i}" aria-label="Abschnitt ${esc(act)} löschen"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg></button></li>`;
+    }).join("")}</ul>`;
+    host.querySelectorAll("[data-segdel]").forEach((b) => b.addEventListener("click", () => {
+      const i = Number(b.dataset.segdel);
+      const next = c.timer.removeEntrySegment({ ...entry, segments: segEdit }, i);
+      if (!next) return;
+      const gone = segEdit[i];
+      segEdit = next.segments;
+      renderSegEdit();
+      ui.toast(`„${gone.activity || "Arbeiten"}“ entfernt – mit „Speichern“ übernehmen`);
+    }));
+  };
+  renderSegEdit();
   const netEl = box.querySelector("#ef-net");
   const saveBtn = box.querySelector("#ef-save");
   const creditInp = box.querySelector("#ef-credit");
@@ -783,6 +810,13 @@ export function openEntryForm(entry, ctx, prefill = null) {
       inLoc: entry ? (entry.inLoc ?? null) : null,
       outLoc: entry ? (entry.outLoc ?? null) : null,
     };
+    if (segEdit) {
+      // Zeiten an geänderte Beginn/Ende anpassen: erster Abschnitt beginnt mit dem Eintrag, letzter endet mit ihm
+      const sg = segEdit.map((x) => ({ ...x }));
+      if (sg.length) { sg[0].start = r.start; sg[sg.length - 1].end = r.end; }
+      data.segments = sg.filter((x) => x.start < r.end);
+      if (data.segments.length) data.segments[data.segments.length - 1].end = r.end;
+    }
     delete data.creditMin;
     if (entry && entry.id) data.id = entry.id;
     await store.saveEntry(data);

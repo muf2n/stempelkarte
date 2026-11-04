@@ -432,9 +432,18 @@ if ("serviceWorker" in navigator) {
 
 // ---------- Geplante Schicht aus Benachrichtigung (?plan=<id>&due=<ms>) ----------
 let pendingPlan = null;
+let pendingEndPlan = null;
 try {
   const qs = new URLSearchParams(location.search);
   const planId = qs.get("plan");
+  const endPlanId = qs.get("endplan");
+  if (endPlanId) {
+    pendingEndPlan = { planId: endPlanId, end: Number(qs.get("end")) || null };
+    qs.delete("endplan");
+    qs.delete("end");
+    const rest = qs.toString();
+    history.replaceState(history.state, "", location.pathname + (rest ? "?" + rest : "") + (location.hash || "#heute"));
+  }
   if (planId) {
     pendingPlan = { planId, due: Number(qs.get("due")) || null };
     qs.delete("plan");
@@ -444,6 +453,12 @@ try {
   }
 } catch { /* egal */ }
 function runPendingPlan() {
+  if (pendingEndPlan && appVisible && lastSnap && lastSnap.ready) {
+    const p = pendingEndPlan;
+    pendingEndPlan = null;
+    if (currentTab !== "heute") go("heute");
+    safe(today.handleEndPlan, p);
+  }
   if (!pendingPlan || !appVisible) return;
   const p = pendingPlan;
   pendingPlan = null;
@@ -451,7 +466,7 @@ function runPendingPlan() {
   safe(today.handlePlan, p, ctx);
 }
 {
-  const t = setInterval(() => { if (!pendingPlan) clearInterval(t); else runPendingPlan(); }, 300);
+  const t = setInterval(() => { if (!pendingPlan && !pendingEndPlan) clearInterval(t); else runPendingPlan(); }, 300);
 }
 
 renderSync();

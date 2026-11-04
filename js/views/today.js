@@ -21,6 +21,12 @@ let listKey = "";
 let metaKey = "";
 let lastLoc = null;       // zuletzt bekannter Standort (für „In der Nähe“)
 let lastLocAt = 0;
+/** Zuletzt gemessene Position, wenn sie frisch und genau genug ist (z. B. von der Fahrerkennung). */
+function freshLoc(maxAgeMs = 20000) {
+  if (!lastLoc || Date.now() - lastLocAt > maxAgeMs) return null;
+  if (Number.isFinite(lastLoc.acc) && lastLoc.acc > 100) return null;
+  return { ...lastLoc, ts: Date.now() };
+}
 let locating = false;
 let lockTimer = null;
 let tipsKey = "";         // zuletzt gezeichnetes Hinweis-Kärtchen
@@ -230,7 +236,8 @@ export function mount(el, c) {
     <div class="meta" data-r="meta"></div>
     <div class="meta" data-r="locline" hidden></div>
     <ol class="seg-list" data-r="seglist" hidden></ol>
-    <button type="button" class="linkbtn" data-r="editstart" hidden>Beginn ändern</button>
+    <div class="edit-links"><button type="button" class="linkbtn" data-r="editstart" hidden>Beginn ändern</button>
+    <button type="button" class="linkbtn" data-r="editend" hidden>Ausstempeln um …</button></div>
   </div>
   <div class="stack" data-r="tips" hidden></div>
   <div class="row" data-r="btns"></div>
@@ -272,6 +279,7 @@ export function mount(el, c) {
   $("add").addEventListener("click", () => ctx.openEntryForm(null));
   $("tips").addEventListener("click", onTip);
   $("editstart").addEventListener("click", openStartSheet);
+  $("editend").addEventListener("click", openEndSheet);
   document.addEventListener("visibilitychange", () => {
     if (document.visibilityState === "visible" && root && !root.hidden) refreshNear();
     try { driveWatchTick(); } catch (e) { console.error(e); }
@@ -395,7 +403,8 @@ function renderClock() {
         const last = i + 1 === ss.length;
         const route = routeHTML(g, { current: last, end: last ? null : ss[i + 1].start });
         return `<li${actAttrs(g.activity)}><b>${util.clock(g.start)}</b> ` +
-          `<span class="seg-act">${util.esc(g.activity || "Arbeiten")}</span> – <span class="seg-route">${route}</span></li>`;
+          `<span class="seg-act">${util.esc(g.activity || "Arbeiten")}</span> – <span class="seg-route">${route}</span>` +
+          `<button type="button" class="seg-del" data-segdel="${i}" aria-label="Abschnitt ${util.esc(g.activity || "Arbeiten")} um ${util.clock(g.start)} löschen">${segDelIcon()}</button></li>`;
       }).join("");
     }
   }
@@ -417,6 +426,7 @@ function renderClock() {
     const sl = $("seglist");
     sl.innerHTML = listHTML;
     sl.hidden = !listHTML;
+    sl.querySelectorAll("[data-segdel]").forEach((b) => b.addEventListener("click", () => askRemoveSegment(Number(b.dataset.segdel))));
     $("meta").innerHTML = metaHTML;
     const ll = $("locline");
     ll.innerHTML = locHTML;
@@ -425,6 +435,8 @@ function renderClock() {
   const es = $("editstart");
   const showEdit = st === "running" || st === "paused";
   if (es.hidden === showEdit) es.hidden = !showEdit;
+  const ee = $("editend");
+  if (ee && ee.hidden === showEdit) ee.hidden = !showEdit;
   updateClockText();
 }
 
@@ -464,7 +476,9 @@ function renderProgress() {
   renderHoliday(now);
   if (target <= 0) {
     free = true;
-    txt = "Heute frei"; // Feiertagsname steht deutlich im Hinweis darüber
+    let school = null;
+    try { school = util.schoolLabel ? util.schoolLabel(now, settings()) : null; } catch { school = null; }
+    txt = school ? `Heute ${school} – zählt als Arbeitszeit` : "Heute frei"; // Feiertagsname steht im Hinweis darüber
     if (doneMin > 0) txt += ` · ${util.hm(doneMin)} h erfasst`;
   } else {
     txt = `heute ${util.hm(doneMin)} von ${util.hm(target)} h`;
@@ -689,11 +703,20 @@ async function doForgotOut(btn) {
   const end = d.getTime();
   if (end <= r.start) { ui.toast(`Das Ende muss nach dem Beginn (${util.clock(r.start)}) liegen.`, 3500); return; }
   if (end > Date.now()) { ui.toast("Das Ende darf nicht in der Zukunft liegen.", 3500); return; }
+  await clockOutAt(end, btn);
+}
 
+/** Schicht mit einer bestimmten Endzeit abschließen (Ausstempeln um …, Plan-Ende, vergessen). */
+export async function clockOutAt(end, btn = null) {
+  const { store, ui, util } = ctx;
+  const r = store.get().running;
+  if (!r) return;
+  end = Math.min(end, Date.now());
+  if (end <= r.start) { ui.toast(`Das Ende muss nach dem Beginn (${util.clock(r.start)}) liegen.`, 3500); return; }
   lockNow();
   busyOp = "out";
   disableAllButtons();
-  ui.setBusy(btn, true, "Wird gespeichert …");
+  if (btn) ui.setBusy(btn, true, "Wird gespeichert …");
   const pauseMs = (Number(r.pauseMs) || 0) + (r.pauseStart != null && end > r.pauseStart ? end - r.pauseStart : 0);
   done = {
     id: null, start: r.start, end,
@@ -716,7 +739,7 @@ async function doForgotOut(btn) {
   } finally {
     pendingOut = false;
     busyOp = null;
-    try { ui.setBusy(btn, false); } catch { /* egal */ }
+    try { if (btn) ui.setBusy(btn, false); } catch { /* egal */ }
     snap = store.get() || snap;
     if (snap.running) done = null;
     if (!saved) done = null;
@@ -985,7 +1008,7 @@ async function doClockOut(btn) {
     if (set.autoLocate) {
       ui.setBusy(btn, true, "Standort wird ermittelt …");
       try {
-        outLoc = await withTimeout(geo.getPosition({ timeout: 8000, maxAge: 5000 }), 8000);
+        outLoc = freshLoc() || await withTimeout(geo.getPosition({ timeout: 8000, maxAge: 15000 }), 8000);
         lastLoc = outLoc; lastLocAt = Date.now();
       } catch (e) {
         ui.toast("Ohne Standort ausgestempelt: " + errText(e), 3500);
@@ -1189,7 +1212,8 @@ async function startSegment(activity) {
     if (set.autoLocate) {
       if (btn) ui.setBusy(btn, true, "Standort wird ermittelt …");
       try {
-        loc = await withTimeout(geo.getPosition({ timeout: 10000, maxAge: 0 }), 10000);
+        // Frische Position der Fahrerkennung nutzen (sonst wartet ein neuer GPS-Abruf bis zu 10 s)
+        loc = freshLoc() || await withTimeout(geo.getPosition({ timeout: 8000, maxAge: 15000 }), 8000);
         lastLoc = loc; lastLocAt = Date.now();
       } catch (e) {
         ui.toast("Ohne Standort gewechselt: " + errText(e), 3500);
@@ -1873,4 +1897,107 @@ function undoToast(msg, onUndo) {
   const hide = () => { clearTimeout(undoTimer); undoTimer = null; el.hidden = true; };
   el.querySelector("button").addEventListener("click", () => { hide(); onUndo(); }, { once: true });
   undoTimer = setTimeout(hide, UNDO_MS);
+}
+
+
+/* ---------- Abschnitt löschen (versehentlich gewählt) ---------- */
+function segDelIcon() {
+  return `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg>`;
+}
+
+function askRemoveSegment(index) {
+  const { util, ui, timer, store } = ctx;
+  const r = snap && snap.running;
+  if (!r) return;
+  const ss = segs(r);
+  const g = ss[index];
+  if (!g) return;
+  const name = g.activity || "Arbeiten";
+  const until = index + 1 < ss.length ? util.clock(ss[index + 1].start) : "jetzt";
+  const target = index + 1 < ss.length
+    ? `Die Zeit geht an „${util.esc(ss[index + 1].activity || "Arbeiten")}“ (danach gewählt), das dann schon ab ${util.clock(index === 0 ? r.start : g.start)} zählt.`
+    : `„${util.esc(ss[index - 1].activity || "Arbeiten")}“ läuft dann einfach weiter.`;
+  const sheet = ui.openSheet({
+    title: "Abschnitt löschen?",
+    bodyHTML: `<p>„<b>${util.esc(name)}</b>“ von ${util.clock(g.start)} bis ${until} wird entfernt.</p>
+      <p class="note">${target}</p>
+      <div class="row"><button type="button" class="btn ghost" data-r="sd-no">Abbrechen</button>
+      <button type="button" class="btn danger" data-r="sd-yes">Löschen</button></div>`,
+    onMount(el, close) {
+      el.querySelector('[data-r="sd-no"]').addEventListener("click", close);
+      el.querySelector('[data-r="sd-yes"]').addEventListener("click", async () => {
+        const cur = store.get().running;
+        if (!cur || cur.start !== r.start) { close(); return; }
+        const next = timer.removeSegment(cur, index);
+        if (!next) { ui.toast("Ein einzelner Abschnitt kann nicht gelöscht werden – wechsle stattdessen den Abschnitt."); close(); return; }
+        try { await store.setRunning(next); ui.toast(`„${name}“ gelöscht`); } catch { /* Toast kommt vom Store */ }
+        close();
+      });
+    },
+  });
+  return sheet;
+}
+
+
+/* ---------- Ausstempeln um … (Uhrzeit selbst wählen) ---------- */
+export function openEndSheet() {
+  const { ui, util, store } = ctx;
+  const r = store.get().running;
+  if (!r) return;
+  const pad = util.pad || ((n) => String(n).padStart(2, "0"));
+  const now = new Date();
+  const val = `${pad(now.getHours())}:${pad(now.getMinutes())}`;
+  ui.openSheet({
+    title: "Ausstempeln um …",
+    bodyHTML: `<p class="note">Schicht seit ${util.clock(r.start)}. Wähle, wann du aufgehört hast (nicht in der Zukunft).</p>
+      <div class="fields"><label>Ende<input type="time" id="end-at" value="${val}"></label></div>
+      <p class="hint" data-r="end-at-info"></p>
+      <div class="row"><button type="button" class="btn ghost" data-r="end-no">Abbrechen</button>
+      <button type="button" class="btn stop" data-r="end-yes">Ausstempeln</button></div>`,
+    onMount(el, close) {
+      const inp = el.querySelector("#end-at");
+      const info = el.querySelector('[data-r="end-at-info"]');
+      const toTs = () => {
+        const m = /^(\d{1,2}):(\d{2})/.exec(inp.value || "");
+        if (!m) return null;
+        const d = new Date(); d.setHours(Number(m[1]), Number(m[2]), 0, 0);
+        let t = d.getTime();
+        if (t > Date.now() + 60000) t -= 86400000;           // Uhrzeit von gestern (Nachtschicht)
+        return t;
+      };
+      const upd = () => {
+        const t = toTs();
+        if (t == null) { info.textContent = ""; return; }
+        if (t <= r.start) { info.textContent = `Muss nach dem Beginn (${util.clock(r.start)}) liegen.`; return; }
+        const pauseMs = (Number(r.pauseMs) || 0) + (r.pauseStart != null && t > r.pauseStart ? t - r.pauseStart : 0);
+        info.textContent = `Netto ${util.hm(Math.max(0, (t - r.start - pauseMs) / 60000))} h`;
+      };
+      inp.addEventListener("input", upd); upd();
+      el.querySelector('[data-r="end-no"]').addEventListener("click", close);
+      el.querySelector('[data-r="end-yes"]').addEventListener("click", async () => {
+        const t = toTs();
+        if (t == null || t <= r.start) { upd(); return; }
+        close();
+        await clockOutAt(t);
+      });
+    },
+  });
+}
+
+/** Aufruf aus der Plan-Ende-Benachrichtigung (?endplan=<id>&end=<ms>). */
+export async function handleEndPlan({ planId, end } = {}) {
+  const { ui, util, store } = ctx;
+  const r = store.get().running;
+  if (!r) { ui.toast("Du bist bereits ausgestempelt."); return; }
+  if (!Number.isFinite(end) || end <= r.start) { openEndSheet(); return; }
+  ui.openSheet({
+    title: "Schichtende",
+    bodyHTML: `<p>Mit <b>${util.clock(Math.min(end, Date.now()))}</b> ausstempeln (geplantes Ende)?</p>
+      <div class="row"><button type="button" class="btn ghost" data-r="ep-other">Andere Uhrzeit</button>
+      <button type="button" class="btn stop" data-r="ep-yes">Ausstempeln</button></div>`,
+    onMount(el, close) {
+      el.querySelector('[data-r="ep-other"]').addEventListener("click", () => { close(); openEndSheet(); });
+      el.querySelector('[data-r="ep-yes"]').addEventListener("click", async () => { close(); await clockOutAt(end); });
+    },
+  });
 }
