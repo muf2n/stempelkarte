@@ -1,5 +1,5 @@
 // Alltag-Bereich „Schule & Lernen“ (Update 9b). Unterreiter:
-// Heute · Stundenplan · Aufgaben · Prüfungen · Noten · Lernen · Projekte · Dokumente.
+// Fächer · Heute · Stundenplan · Aufgaben · Prüfungen · Planer · Noten · Lernen · Projekte · Dokumente.
 // Modul-Vertrag (modules.js): export function mount(el, ctx) → cleanup.
 // Daten: js/alltag/db.js, Sammlungen school_* (siehe school-core.js). Schultage kommen aus settings.school.
 import {
@@ -11,10 +11,12 @@ import { renderTasks, renderProjects, taskRowHTML, wireTasks, openTaskForm, sort
 import { renderExams, renderGrades, upcomingExams, examCardHTML, wireExams, gradeStats, openExamForm } from "./school-exams.js";
 import { renderLearn, ensureEngine, tick, pomoMiniHTML, planDue, planRowHTML, wirePlan, sessionsStats, fmtMin } from "./school-learn.js";
 import { renderDocs } from "./school-docs.js";
+import { renderSubjects } from "./school-subjects.js";
+import { renderPlanner } from "./school-planner.js";
 
 const TABS = [
-  ["heute", "Heute", "☀️"], ["stundenplan", "Stundenplan", "🗓️"], ["aufgaben", "Aufgaben", "📝"], ["pruefungen", "Prüfungen", "🎯"],
-  ["noten", "Noten", "⭐"], ["lernen", "Lernen", "🍅"], ["projekte", "Projekte", "🛠️"], ["dokumente", "Dokumente", "📚"],
+  ["faecher", "Fächer", "📚"], ["heute", "Heute", "☀️"], ["stundenplan", "Stundenplan", "🗓️"], ["aufgaben", "Aufgaben", "📝"], ["pruefungen", "Prüfungen", "🎯"], ["planer", "Planer", "📅"],
+  ["noten", "Noten", "⭐"], ["lernen", "Lernen", "🍅"], ["projekte", "Projekte", "🛠️"], ["dokumente", "Dokumente", "📂"],
 ];
 const LS_TAB = "sk-school-tab";
 const MONTHS = ["Jänner", "Februar", "März", "April", "Mai", "Juni", "Juli", "August", "September", "Oktober", "November", "Dezember"];
@@ -124,7 +126,7 @@ function renderToday(body, S) {
 }
 
 const VIEWS = {
-  heute: renderToday, stundenplan: renderTimetable, aufgaben: renderTasks, pruefungen: renderExams,
+  faecher: renderSubjects, planer: renderPlanner, heute: renderToday, stundenplan: renderTimetable, aufgaben: renderTasks, pruefungen: renderExams,
   noten: renderGrades, lernen: renderLearn, projekte: renderProjects, dokumente: renderDocs,
 };
 
@@ -135,7 +137,7 @@ export function mount(el, ctx) {
   setToast((m) => { try { ctx.ui.toast(m); } catch { /* egal */ } });
   ensureEngine(ctx);
 
-  let tab = "heute";
+  let tab = "faecher";
   try { const t = localStorage.getItem(LS_TAB); if (VIEWS[t]) tab = t; } catch { /* egal */ }
   if (ctx && typeof ctx.sub === "string" && VIEWS[ctx.sub]) tab = ctx.sub;
 
@@ -172,7 +174,7 @@ export function mount(el, ctx) {
     const top = el.getBoundingClientRect().top + window.scrollY - 90;
     if (window.scrollY > top) window.scrollTo(0, Math.max(0, top));
   };
-  nav.addEventListener("click", (ev) => { const b = ev.target.closest("[data-tab]"); if (b) S.go(b.dataset.tab); });
+  nav.addEventListener("click", (ev) => { const b = ev.target.closest("[data-tab]"); if (!b) return; if (b.dataset.tab === "faecher") S.view.subject = null; S.go(b.dataset.tab); });
 
   const offs = COLS.map((n) => col(n).watch((items) => { S.data[n] = items; S.rerender(); }));
   const offStore = ctx.store.subscribe(() => S.rerender()); // Schultage/Einstellungen geändert

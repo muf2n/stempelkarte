@@ -146,8 +146,8 @@ export function examCardHTML(S, e, { compact = false } = {}) {
   </section>`;
 }
 
-export function openExamForm(S, exam = null) {
-  const e = exam || { subject: "", kind: "Schularbeit", date: addDays(todayKey(), 7), time: "", topics: "", progress: 0 };
+export function openExamForm(S, exam = null, preset = {}) {
+  const e = exam || { subject: "", kind: "Schularbeit", date: addDays(todayKey(), 7), time: "", topics: "", progress: 0, ...preset };
   S.ctx.ui.openSheet({
     title: exam ? "Prüfung bearbeiten" : "Neue Prüfung",
     bodyHTML: `<form class="fields ss-form" novalidate>
