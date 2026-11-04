@@ -45,6 +45,8 @@ const SHELL = [
   "js/views/drive-settings.js",
   "js/views/agenda.js",
   "js/einsatz.js",
+  "js/planer-core.js",
+  "js/views/planer-cal.js",
   "js/views/apprentice.js",
   "js/views/comfort-settings.js",
   "js/views/day.js",

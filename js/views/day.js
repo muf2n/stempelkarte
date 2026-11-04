@@ -120,7 +120,7 @@ function agendaInfo(now) {
     (t.date > today || (t.date === today && (!t.time || t.time >= nowHM))));
   termine.sort((a, b) => (a.date + (a.time || "")).localeCompare(b.date + (b.time || "")));
   const next = termine[0] || null;
-  const openTodos = open.filter((t) => t.kind !== "termin").length;
+  const openTodos = open.filter((t) => t.kind !== "termin" && t.kind !== "geburtstag").length;
   let when = "";
   if (next) {
     if (next.date === today) when = next.time ? next.time : "heute";
