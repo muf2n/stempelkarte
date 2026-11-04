@@ -13,14 +13,15 @@ import * as entries from "./views/entries.js";
 import * as overview from "./views/overview.js";
 import * as places from "./views/places.js";
 import * as agenda from "./views/agenda.js";
+import * as alltag from "./views/alltag.js";
 import { openEntryForm } from "./views/entries.js";
 import { openPlaceForm } from "./views/places.js";
 import { icon } from "./icons.js";
 import * as lockscreen from "./lockscreen.js";
 import * as native from "./native.js";
 
-const TABS = ["heute", "eintraege", "agenda", "uebersicht", "orte"];
-const VIEWS = { heute: today, eintraege: entries, agenda, uebersicht: overview, orte: places };
+const TABS = ["heute", "eintraege", "agenda", "alltag", "uebersicht", "orte"];
+const VIEWS = { heute: today, eintraege: entries, agenda, alltag, uebersicht: overview, orte: places };
 const FORCE_LOCAL_KEY = "stempelkarte.forceLocal";
 const firebaseConfigured = isConfigured();
 
@@ -114,7 +115,7 @@ function mountViews() {
 }
 
 function tabFromHash() {
-  const h = (location.hash || "").replace(/^#/, "");
+  const h = (location.hash || "").replace(/^#/, "").split("/")[0]; // #alltag/geld → alltag
   return TABS.includes(h) ? h : "heute";
 }
 
@@ -207,7 +208,7 @@ function renderRunState() {
 
 function go(tab) {
   if (!TABS.includes(tab)) tab = "heute";
-  if (location.hash !== "#" + tab) location.hash = tab; // löst hashchange aus
+  if (location.hash !== "#" + tab) location.hash = tab; // löst hashchange aus (#alltag/geld → #alltag = Kacheln)
   else showTab(tab);
 }
 
