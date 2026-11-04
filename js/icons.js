@@ -39,6 +39,7 @@ const P = {
   search: '<circle cx="11" cy="11" r="6.5"/><path d="M20 20l-4.2-4.2"/>',
   trash: '<path d="M4.5 7h15M9.5 7V4.5h5V7M6.5 7l1 13h9l1-13"/><path d="M10 11v5M14 11v5"/>',
   share: '<circle cx="18" cy="5.5" r="2.5"/><circle cx="6" cy="12" r="2.5"/><circle cx="18" cy="18.5" r="2.5"/><path d="M8.2 10.8l7.6-4.1M8.2 13.2l7.6 4.1"/>',
+  mail: '<rect x="3" y="5" width="18" height="14" rx="2.5"/><path d="M3.5 7l8.5 6 8.5-6"/>',
   repeat: '<path d="M17 3.5l3 3-3 3"/><path d="M4 11.5v-1a4 4 0 0 1 4-4h12"/><path d="M7 20.5l-3-3 3-3"/><path d="M20 12.5v1a4 4 0 0 1-4 4H4"/>',
   piggy: '<path d="M5 11.5a6.5 5.5 0 0 1 11.5-3.5H19l-.8 2.6a5 5 0 0 1 1.3 2.4H21v3h-1.8a6 6 0 0 1-2.2 2V21h-3v-1.6a8 8 0 0 1-3 0V21H8v-2.6A5.5 5.5 0 0 1 5 13.5"/><path d="M5 11.5c-1.5 0-2-1-2-2"/><circle cx="15.5" cy="11.5" r=".9" fill="currentColor"/>',
   users: '<circle cx="9" cy="8.5" r="3.5"/><path d="M2.5 20a6.5 6.5 0 0 1 13 0"/><path d="M15.5 5.2a3.5 3.5 0 0 1 0 6.6M17.5 14.2a6.5 6.5 0 0 1 4 5.8"/>',
