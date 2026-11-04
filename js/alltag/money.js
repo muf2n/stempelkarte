@@ -6,6 +6,7 @@ import * as M from "./money-core.js";
 import { icon } from "../icons.js";
 import { esc } from "../util.js";
 import * as ui from "../ui.js";
+import { createGmail } from "./money-gmail.js";
 
 const TABS = [
   ["uebersicht", "Übersicht", "pie"],
@@ -33,6 +34,7 @@ export function mount(el, ctx) {
     goals: collection("money_goals"),
     subs: collection("money_subs"),
     split: collection("money_split"),
+    gmail: collection("money_gmail"), // nur {connected, lastScan, handled} – keine Mails
   };
   const S = {
     tab: TABS.some((t) => t[0] === lsGet(TAB_KEY)) ? lsGet(TAB_KEY) : "uebersicht",
@@ -56,6 +58,13 @@ export function mount(el, ctx) {
     `</div>`;
   const page = el.querySelector(".mn-page");
   const tabsEl = el.querySelector(".mn-tabs");
+  const gm = createGmail({
+    col, ui,
+    render: () => queue(),
+    openSub: (sub, preset, onSaved) => openSub(sub, preset, onSaved),
+    catOf: (id) => catOf(id),
+    goSubs: () => { S.tab = "abos"; lsSet(TAB_KEY, S.tab); render(); window.scrollTo({ top: 0 }); },
+  });
 
   /* ---------- Daten-Hilfen ---------- */
 
@@ -244,7 +253,7 @@ export function mount(el, ctx) {
     `</section>` : "";
 
     const hasAny = txs().length > 0;
-    return monthNav() +
+    return monthNav() + gm.hintHTML() +
       (hasAny ? "" : `<div class="hint mn-welcome">👋 Trag deine erste Einnahme (z. B. Lehrlingsentschädigung) oder Ausgabe ein – die Kategorie wird aus der Notiz erkannt.</div>`) +
       `<div class="mn-ov">${hero}${donut}${bars}${warnBox}${upBox}${goalBox}</div>`;
   }
@@ -385,13 +394,13 @@ export function mount(el, ctx) {
 
   function pageSubs() {
     const map = catMap();
-    const subs = col.subs.all().sort((a, b) => String(a.next || "9").localeCompare(String(b.next || "9")));
-    if (!subs.length) return emptyBox("Noch keine Abos", "Netflix, Spotify, Handyvertrag, Fitnessstudio … – trag sie ein, sie werden am Fälligkeitstag automatisch gebucht.", "newsub");
+    const subs = col.subs.all().sort((a, b) => (!!a.ended - !!b.ended) || String(a.next || "9").localeCompare(String(b.next || "9")));
+    if (!subs.length) return gm.cardHTML() + emptyBox("Noch keine Abos", "Netflix, Spotify, Handyvertrag, Fitnessstudio … – trag sie ein, sie werden am Fälligkeitstag automatisch gebucht.", "newsub");
     const active = subs.filter((s) => !s.paused);
     const perMonth = active.reduce((s, x) => s + M.monthlyCost(x), 0);
     const perYear = active.reduce((s, x) => s + M.yearlyCost(x), 0);
     const up = M.upcoming(active, M.todayKey(), 31);
-    return `<div class="mn-sub-sum">` +
+    return gm.cardHTML() + `<div class="mn-sub-sum">` +
         `<div class="card"><small>pro Monat</small><b>${amt(perMonth)}</b></div>` +
         `<div class="card"><small>pro Jahr</small><b>${amt(perYear)}</b></div>` +
       `</div>` +
@@ -401,7 +410,7 @@ export function mount(el, ctx) {
         const c = catOf(s.category || "abos", map);
         return `<li><button type="button" class="mn-tx${s.paused ? " paused" : ""}" data-mn="editsub" data-id="${esc(s.id)}">` +
           catBubble(c) +
-          `<span class="mn-tx-main"><b>${esc(s.name)}</b><small>${esc(M.INTERVALS[s.interval] || "monatlich")} · ${s.paused ? "pausiert" : esc(M.fmtDate(s.next))}</small></span>` +
+          `<span class="mn-tx-main"><b>${esc(s.name)}</b><small>${esc(M.INTERVALS[s.interval] || "monatlich")} · ${s.ended ? "beendet " + esc(M.fmtDate(s.ended)) : s.paused ? "pausiert" : esc(M.fmtDate(s.next))}${s.source === "gmail" ? " · aus Gmail" : ""}</small></span>` +
           `<span class="mn-tx-amt out">${amt(s.amount)}<small>${s.interval !== "month" ? "≈ " + amt(M.monthlyCost(s)) + "/Mon." : ""}</small></span>` +
         `</button></li>`;
       }).join("") + `</ul>` +
@@ -781,9 +790,9 @@ export function mount(el, ctx) {
     });
   }
 
-  function openSub(sub = null) {
+  function openSub(sub = null, preset = null, onSaved = null) {
     const isNew = !sub;
-    const s = sub || { name: "", amount: "", interval: "month", next: M.todayKey(), category: "abos", paused: false };
+    const s = sub || { name: "", amount: "", interval: "month", next: M.todayKey(), category: "abos", paused: false, ...(preset || {}) };
     const outCats = cats().filter((c) => c.type !== "in");
     ui.openSheet({
       title: isNew ? "Neues Abo / Fixkosten" : "Abo bearbeiten",
@@ -794,6 +803,7 @@ export function mount(el, ctx) {
           `<div class="row"><label>Nächster Termin<input id="mn-s-next" type="date" value="${esc(s.next || M.todayKey())}"></label>` +
           `<label>Kategorie<select id="mn-s-cat">${outCats.map((c) => `<option value="${esc(c.id)}"${c.id === s.category ? " selected" : ""}>${esc(c.emoji)} ${esc(c.name)}</option>`).join("")}</select></label></div>` +
           `<label class="mn-check"><input type="checkbox" id="mn-s-pause"${s.paused ? " checked" : ""}> Pausiert (wird nicht gebucht)</label>` +
+          (s.ended ? `<p class="note">Beendet am ${esc(M.fmtDate(s.ended))} (Kündigung). Häkchen weg = wieder aktiv.</p>` : "") +
           `<p class="note">Liegt der Termin heute oder in der Vergangenheit, wird die Zahlung sofort gebucht.</p>` +
         `</div>` +
         `<div class="row">${isNew ? "" : `<button type="button" class="btn danger sm" data-del>Löschen</button>`}<button type="button" class="btn primary" data-save>Speichern</button></div>`,
@@ -816,7 +826,10 @@ export function mount(el, ctx) {
           const interval = sheet.querySelector("#mn-s-int").value;
           const day = interval === "week" ? null : M.dateOf(next).getDate();
           close();
-          await safeWrite(col.subs.put({ ...(sub || {}), name: n, amount: a, interval, next, day, category: catSel.value, paused: sheet.querySelector("#mn-s-pause").checked }), "Gespeichert ✓");
+          const paused = sheet.querySelector("#mn-s-pause").checked;
+          const extra = isNew && preset ? { source: preset.source, gmail: preset.gmail } : {};
+          const ok = await safeWrite(col.subs.put({ ...(sub || {}), ...extra, name: n, amount: a, interval, next, day, category: catSel.value, paused, ...(paused ? {} : { ended: null }) }), "Gespeichert ✓");
+          if (ok && onSaved) onSaved();
         });
         const del = sheet.querySelector("[data-del]");
         if (del) ui.confirmButton(del, "Wirklich löschen?", async () => { close(); await safeWrite(col.subs.remove(sub.id), "Abo gelöscht – bisherige Buchungen bleiben"); });
@@ -957,6 +970,8 @@ export function mount(el, ctx) {
   /* ---------- Ereignisse ---------- */
 
   function onClick(ev) {
+    const g = ev.target.closest("[data-gm]");
+    if (g && el.contains(g) && gm.onClick(g)) return;
     const t = ev.target.closest("[data-tab], [data-mn]");
     if (!t || !el.contains(t)) return;
     if (t.classList.contains("mn-tab")) {
@@ -1012,6 +1027,8 @@ export function mount(el, ctx) {
   }
   el.addEventListener("click", onClick);
   el.addEventListener("input", onInput);
+  const onToggle = (ev) => { if (ev.target.classList && ev.target.classList.contains("gm-help")) gm.onToggleHelp(ev.target.open); };
+  el.addEventListener("toggle", onToggle, true);
 
   const offs = Object.values(col).map((c) => c.watch(queue));
   render();
@@ -1025,6 +1042,7 @@ export function mount(el, ctx) {
     offs.forEach((off) => off());
     el.removeEventListener("click", onClick);
     el.removeEventListener("input", onInput);
+    el.removeEventListener("toggle", onToggle, true);
     document.removeEventListener("visibilitychange", onVis);
     el.innerHTML = "";
   };

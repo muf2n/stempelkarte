@@ -3833,3 +3833,46 @@ label[data-ph-cam] { position: relative; cursor: pointer; }
 .ai-foot { display:flex; justify-content:space-between; align-items:center; gap:8px; font-size:.8rem; opacity:.7; }
 .ai-link { background:none; border:0; color:inherit; font:inherit; text-decoration:underline; cursor:pointer; padding:4px; }
 @media (min-width: 900px) { .ai { max-width:760px; margin:0 auto; min-height:calc(100dvh - 160px); } .ai-form { bottom:16px; } }
+/* Update 9 – Abos aus Gmail */
+.gm-card { --gm: #ea4335; display: flex; flex-direction: column; gap: 12px; border: 1px solid color-mix(in srgb, var(--gm) 22%, var(--line)); }
+.gm-head { display: flex; align-items: center; gap: 12px; }
+.gm-head .mn-h { margin: 0; }
+.gm-ic { flex: none; width: 42px; height: 42px; border-radius: 14px; display: grid; place-items: center; color: var(--gm); background: color-mix(in srgb, var(--gm) 13%, var(--card)); }
+.gm-last { display: block; color: var(--muted); font-size: .84rem; margin-top: 2px; }
+.gm-actions { display: flex; flex-wrap: wrap; gap: 8px; }
+.gm-actions .gm-scan { flex: 1 1 auto; min-width: 0; }
+.gm-actions .gm-scan[disabled] { opacity: .8; cursor: progress; }
+.gm-err, .gm-warn { margin: 0; padding: 10px 12px; border-radius: 12px; font-size: .9rem; font-weight: 600; color: var(--ink); }
+.gm-err { background: color-mix(in srgb, var(--danger) 12%, var(--card)); border: 1px solid color-mix(in srgb, var(--danger) 35%, transparent); }
+.gm-warn { background: var(--pause-soft); }
+.gm-link { border: 0; background: none; padding: 0; color: var(--accent); font: inherit; font-weight: 700; text-decoration: underline; cursor: pointer; min-height: 0; }
+.gm-none { margin: 0; display: flex; align-items: center; gap: 6px; color: var(--run); font-weight: 600; font-size: .92rem; }
+.gm-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 8px; }
+.gm-item { display: grid; grid-template-columns: auto 1fr; gap: 6px 12px; align-items: start; padding: 12px; border-radius: 16px; background: var(--soft); }
+.gm-item.gm-cancel { background: color-mix(in srgb, var(--danger) 8%, var(--card)); }
+.gm-item.gm-trial { background: var(--pause-soft); }
+.gm-item.gm-price { background: color-mix(in srgb, #0ea5e9 12%, var(--card)); }
+.gm-item.gm-new { background: color-mix(in srgb, #8b5cf6 10%, var(--card)); }
+.gm-txt { min-width: 0; }
+.gm-txt p { margin: 0; line-height: 1.35; color: var(--ink); overflow-wrap: anywhere; }
+.gm-txt .gm-line { font-size: .9rem; font-weight: 600; font-variant-numeric: tabular-nums; color: var(--muted); margin-top: 2px; }
+.gm-txt small { display: block; color: var(--muted); font-size: .78rem; margin-top: 3px; }
+.gm-btns { grid-column: 1 / -1; display: flex; gap: 8px; justify-content: flex-end; }
+.gm-btns .btn { min-width: 0; }
+.gm-btns .btn.ghost { background: var(--card); }
+.gm-privacy { margin: 0; color: var(--muted); font-size: .84rem; }
+.gm-help { border-top: 1px solid var(--line); padding-top: 8px; font-size: .9rem; }
+.gm-help summary { cursor: pointer; font-weight: 700; color: var(--accent); min-height: 32px; display: flex; align-items: center; }
+.gm-help ol { margin: 6px 0 4px; padding-left: 20px; display: flex; flex-direction: column; gap: 6px; line-height: 1.4; }
+.gm-help code { font-family: var(--f-mono); font-size: .82rem; background: var(--soft); padding: 1px 5px; border-radius: 6px; overflow-wrap: anywhere; }
+.gm-help a { color: var(--accent); font-weight: 600; }
+.gm-help .note { margin: 4px 0 0; }
+.gm-hint { display: flex; align-items: center; gap: 10px; padding: 10px 8px 10px 14px; border-radius: 16px; background: var(--card); border: 1px solid var(--line); color: var(--ink); font-size: .9rem; font-weight: 600; }
+.gm-hint > svg { flex: none; color: #ea4335; }
+.gm-hint span { flex: 1; min-width: 0; }
+.gm-hint .btn { flex: none; }
+.gm-x { flex: none; border: 0; background: none; color: var(--muted); font-size: 1.3rem; width: 36px; height: 36px; border-radius: 10px; cursor: pointer; }
+@media (min-width: 720px) {
+  .gm-item { grid-template-columns: auto 1fr auto; align-items: center; }
+  .gm-btns { grid-column: auto; }
+}

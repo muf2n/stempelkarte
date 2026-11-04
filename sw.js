@@ -74,6 +74,10 @@ const SHELL = [
   "js/alltag/money-core.js",
   "js/alltag/money.js",
   "js/alltag/assistant.js",
+  // Update 9 – Abos aus Gmail
+  "js/alltag/gmail.js",
+  "js/alltag/subs-detect.js",
+  "js/alltag/money-gmail.js",
   "js/app.js"
 ];
 
