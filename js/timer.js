@@ -47,8 +47,18 @@ export function segmentsOf(running) {
   }];
 }
 
+/** Personen-Liste säubern: nur nicht-leere Texte, ohne Doppelte. */
+function cleanPeople(list) {
+  const out = [];
+  for (const x of Array.isArray(list) ? list : []) {
+    const v = String(x == null ? "" : x).trim();
+    if (v && !out.some((y) => y.toLowerCase() === v.toLowerCase())) out.push(v);
+  }
+  return out;
+}
+
 /** Schicht beginnen (legt den ersten Abschnitt an). Wirft, wenn bereits eine Schicht läuft. */
-export async function clockIn({ placeId = null, place = "", note = "", inLoc = null, activity = DEFAULT_ACTIVITY } = {}) {
+export async function clockIn({ placeId = null, place = "", note = "", inLoc = null, activity = DEFAULT_ACTIVITY, people = [] } = {}) {
   if (store.get().running) throw new Error("Du bist schon eingestempelt.");
   const start = Date.now();
   const running = {
@@ -63,6 +73,7 @@ export async function clockIn({ placeId = null, place = "", note = "", inLoc = n
     placeId: placeId ?? null,
     place: place || "",
     note: note || "",
+    people: cleanPeople(people),
     pauseStart: null,
     pauseMs: 0,
     inLoc: inLoc ?? null,
@@ -193,6 +204,7 @@ export async function clockOut({ outLoc = null, end = null, outPlace = "" } = {}
     placeId: r.placeId ?? null,
     place: r.place || "",
     note: r.note || "",
+    people: cleanPeople(r.people),
     inLoc: r.inLoc ?? null,
     outLoc: outLoc ?? null,
     segments: closeSegments(r, now, outLoc ?? null, outPlace || ""),

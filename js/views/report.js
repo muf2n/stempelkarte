@@ -121,27 +121,35 @@ export function buildWeek(snap, ws) {
       min += schoolCreditMin(d, settings);
     }
     const list = entries.filter((e) => e && dayKey(e.start) === k).sort((a, b) => a.start - b.start);
+    const notes = [], segActs = [], people = [];
+    let workCount = 0, noteCount = 0;
     for (const e of list) {
       min += creditMin(e);
+      for (const n of Array.isArray(e.people) ? e.people : []) addUniq(people, n);
       if (e.kind && e.kind !== "work") {
         const lbl = e.kind === "schule" ? "Berufsschule" : kindLabel(e.kind);
         if (e.kind !== "schule") tags.push({ kind: e.kind, text: lbl });
         else if (!tags.some((t) => t.kind === "schule")) tags.push({ kind: "schule", text: lbl });
-        if (e.note) addUniq(acts, e.note);
+        if (e.note) addUniq(notes, e.note);
         continue;
       }
-      if (e.note) addUniq(acts, e.note);
+      workCount++;
+      if (String(e.note || "").trim()) { noteCount++; addUniq(notes, e.note); }
       const segs = Array.isArray(e.segments) ? e.segments.filter((x) => x && Number.isFinite(x.start)) : [];
       for (const x of segs) {
         const a = x.activity || WORK;
-        if (a !== WORK) addUniq(acts, a);
+        if (a !== WORK) addUniq(segActs, a);
         addUniq(places, placeText(x));
         addUniq(places, endPlaceText(x));
       }
       addUniq(places, placeText(e));
-      if (!e.note && !segs.some((x) => (x.activity || WORK) !== WORK)) addUniq(acts, WORK);
     }
-    rows.push({ date: d, key: k, wd: WD[d.getDay()], acts, places, tags, min, hol, empty: !list.length && !sch && !hol });
+    // Tätigkeiten: zuerst die Notizen, dann Abschnitt-Tätigkeiten außer „Arbeiten“
+    for (const n of notes) addUniq(acts, n);
+    for (const a of segActs) addUniq(acts, a);
+    if (workCount && !acts.length) addUniq(acts, WORK);
+    const noNote = workCount > 0 && noteCount === 0;
+    rows.push({ date: d, key: k, wd: WD[d.getDay()], acts, places, people, tags, min, hol, noNote, empty: !list.length && !sch && !hol });
   }
   return rows;
 }
@@ -176,6 +184,8 @@ function renderPaper() {
 
   el.querySelector(".rp-wk").textContent = `KW ${week} · ${fmtD(ws, false)} – ${fmtD(we)}`;
   el.querySelector(".rp-hint").hidden = !missing;
+  const tip = el.querySelector(".rp-tip");
+  if (tip) tip.hidden = !rows.some((r) => r.noNote);
 
   el.querySelector(".rp-head").innerHTML = `
     <div class="rp-title"><h1>Ausbildungsnachweis</h1><span>Berichtsheft · Woche ${week}</span></div>
@@ -193,7 +203,7 @@ function renderPaper() {
     const pl = r.places.length ? r.places.map(esc).join(", ") : `<span class="rp-none">–</span>`;
     return `<tr class="${r.empty ? "rp-empty" : ""}${r.date.getDay() === 0 || r.date.getDay() === 6 ? " rp-we" : ""}">
       <td class="rp-day"><b>${esc(r.wd)}</b><span>${esc(fmtD(r.date, false))}</span></td>
-      <td class="rp-act">${tags ? `<div class="rp-tags">${tags}</div>` : ""}${acts ? `<div>${acts}</div>` : ""}</td>
+      <td class="rp-act">${tags ? `<div class="rp-tags">${tags}</div>` : ""}${acts ? `<div>${acts}</div>` : ""}${r.people.length ? `<div class="rp-ppl">mit: ${r.people.map(esc).join(", ")}</div>` : ""}</td>
       <td class="rp-pl${r.places.length ? "" : " rp-pl-empty"}">${pl}</td>
       <td class="rp-h">${r.min > 0 ? esc(hm(r.min)) : "–"}</td>
     </tr>`;
@@ -238,6 +248,7 @@ function weekText(snap) {
     const tagTxt = r.tags.map((t) => t.text);
     if (tagTxt.length) parts.push(tagTxt.join(", "));
     if (r.acts.length) parts.push(r.acts.join("; "));
+    if (r.people.length) parts.push(`mit: ${r.people.join(", ")}`);
     if (r.places.length) parts.push(`Ort: ${r.places.join(", ")}`);
     lines.push(`${r.wd} ${fmtD(r.date, false)}: ${parts.length ? parts.join(" · ") : "–"}${r.min > 0 ? ` (${hm(r.min)} h)` : ""}`);
   }
@@ -318,6 +329,7 @@ export function openReport(ctx, { weekStart } = {}) {
       <button type="button" class="btn ghost sm rp-arrow" data-rp="next" aria-label="Nächste Woche">${icon("chevron-right", 20)}</button>
       <button type="button" class="btn ghost sm rp-now" data-rp="now">Diese Woche</button>
     </div>
+    <p class="note rp-tip" hidden>Tipp: Beim Ausstempeln kurz notieren, was du gemacht hast.</p>
     <p class="note rp-hint" hidden>Tipp: Name, Lehrberuf und Lehrbetrieb trägst du unter Übersicht → Einstellungen → Lehre ein.</p>
     <article class="rp-paper">
       <header class="rp-head"></header>

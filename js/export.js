@@ -2,7 +2,7 @@
 import { WD, pad, clock, netMin, creditMin, kindLabel } from "./util.js";
 
 const HEAD = ["Datum", "Wochentag", "Art", "Beginn", "Ende", "Pause (Min)", "Netto (h)",
-  "Arbeitsort", "Notiz", "Standort Beginn", "Standort Ende", "Abschnitte"];
+  "Arbeitsort", "Notiz", "Mit wem", "Standort Beginn", "Standort Ende", "Abschnitte"];
 
 // Feld für CSV aufbereiten: bei ; " oder Zeilenumbruch in Anführungszeichen, " verdoppeln
 function cell(v) {
@@ -77,12 +77,13 @@ export function entriesCSV(entries, { from, to } = {}) {
       hours(net),
       work ? placeText(e) : "",
       e.note || "",
+      Array.isArray(e.people) ? e.people.filter(Boolean).join(", ") : "",
       locText(e.inLoc),
       locText(e.outLoc),
       work ? segmentsText(e) : "",
     ]);
   }
-  rows.push(["Summe", "", "", "", "", sumPause, hours(sumNet), "", "", "", "", ""]);
+  rows.push(["Summe", "", "", "", "", sumPause, hours(sumNet), "", "", "", "", "", ""]);
 
   return "﻿" + rows.map(r => r.map(cell).join(";")).join("\r\n") + "\r\n";
 }

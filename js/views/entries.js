@@ -101,6 +101,102 @@ export function onShow() {
   render();
 }
 
+// ---------- Personen „Mit wem“ (Update 8; auch für today.js) ----------
+
+/** Personen-Liste säubern (Text, ohne Leere/Doppelte). */
+export function cleanPeople(list) {
+  const out = [];
+  for (const x of Array.isArray(list) ? list : []) {
+    const v = String(x == null ? "" : x).trim().replace(/\s+/g, " ");
+    if (v && !out.some((y) => y.toLowerCase() === v.toLowerCase())) out.push(v);
+  }
+  return out;
+}
+
+/** „mit Max, Anna“ bzw. "". */
+export function peopleText(list) {
+  const p = cleanPeople(list);
+  return p.length ? `mit ${p.join(", ")}` : "";
+}
+
+/** Neue Namen alphabetisch in settings.people übernehmen (nie werfen). */
+export async function rememberPeople(store, list) {
+  try {
+    const s = (store.get() && store.get().settings) || {};
+    const known = cleanPeople(s.people);
+    const add = cleanPeople(list).filter((n) => !known.some((k) => k.toLowerCase() === n.toLowerCase()));
+    if (!add.length) return;
+    const next = [...known, ...add].sort((a, b) => a.localeCompare(b, "de", { sensitivity: "base" }));
+    await store.saveSettings({ people: next });
+  } catch { /* Toast kommt vom Store */ }
+}
+
+/** Personen-Chips (Mehrfachauswahl) + „+ Person“ in host zeichnen.
+ *  Gibt { get(), set(list) } zurück; onChange(list) bei jeder Änderung. */
+export function peoplePicker(host, ctx, { selected = [], onChange = null } = {}) {
+  const { util, store } = ctx;
+  const esc = util.esc;
+  let sel = cleanPeople(selected);
+  let adding = false;
+  const all = () => {
+    const known = cleanPeople(((store.get() || {}).settings || {}).people);
+    for (const n of sel) if (!known.some((k) => k.toLowerCase() === n.toLowerCase())) known.push(n);
+    return known.sort((a, b) => a.localeCompare(b, "de", { sensitivity: "base" }));
+  };
+  const isSel = (n) => sel.some((x) => x.toLowerCase() === n.toLowerCase());
+  const draw = () => {
+    host.classList.add("chips", "ppl-chips");
+    host.innerHTML = all().map((n) =>
+      `<button type="button" class="chip ppl-chip" data-ppl="${esc(n)}" aria-pressed="${isSel(n)}">${esc(n)}</button>`).join("") +
+      (adding
+        ? `<span class="ppl-add"><input type="text" maxlength="40" placeholder="Name" autocomplete="off" aria-label="Name der Person">` +
+          `<button type="button" class="btn sm primary" data-ppl-ok>Dazu</button></span>`
+        : `<button type="button" class="chip add" data-ppl-add>${icon("plus", 18)}<span>Person</span></button>`);
+    if (adding) {
+      const inp = host.querySelector(".ppl-add input");
+      try { inp.focus(); } catch { /* egal */ }
+      inp.addEventListener("keydown", (ev) => {
+        if (ev.key === "Enter") { ev.preventDefault(); commit(); }
+        else if (ev.key === "Escape") { ev.preventDefault(); ev.stopPropagation(); adding = false; draw(); }
+      });
+    }
+  };
+  const changed = () => { if (onChange) { try { onChange(sel.slice()); } catch (e) { console.error(e); } } };
+  const commit = () => {
+    const inp = host.querySelector(".ppl-add input");
+    const name = cleanPeople([inp ? inp.value : ""])[0];
+    adding = false;
+    if (name) {
+      if (!isSel(name)) sel.push(name);
+      rememberPeople(store, [name]);
+      changed();
+    }
+    draw();
+  };
+  host.addEventListener("click", (ev) => {
+    const b = ev.target.closest("button");
+    if (!b || !host.contains(b)) return;
+    if (b.hasAttribute("data-ppl-add")) { adding = true; draw(); return; }
+    if (b.hasAttribute("data-ppl-ok")) { commit(); return; }
+    const n = b.dataset.ppl;
+    if (n == null) return;
+    sel = isSel(n) ? sel.filter((x) => x.toLowerCase() !== n.toLowerCase()) : [...sel, n];
+    b.setAttribute("aria-pressed", String(isSel(n)));
+    changed();
+  });
+  draw();
+  return {
+    get: () => {
+      // halb eingetippten Namen nicht verlieren
+      const inp = adding ? host.querySelector(".ppl-add input") : null;
+      const extra = inp ? cleanPeople([inp.value])[0] : null;
+      return extra && !isSel(extra) ? [...sel, extra] : sel.slice();
+    },
+    set: (list) => { sel = cleanPeople(list); if (!adding) draw(); },
+    redraw: () => { if (!adding) draw(); },
+  };
+}
+
 // ---------- Tätigkeitsfarben ----------
 
 export function actSlug(name) {
@@ -379,6 +475,7 @@ function render() {
       if (pl) p.push(`<span class="tag">${esc(pl)}</span>`);
       if (e.pauseMin > 0) p.push(`Pause ${esc(e.pauseMin)} Min.`);
       if (e.note) p.push(esc(e.note));
+      { const pt = peopleText(e.people); if (pt) p.push(`<span class="ppl-line">${esc(pt)}</span>`); }
       const multi = dayKey(e.end) !== dayKey(e.start) ? " (+1 Tag)" : "";
       const links = [];
       if (e.inLoc && e.inLoc.lat != null) {
@@ -646,6 +743,10 @@ export function openEntryForm(entry, ctx, prefill = null) {
         <div data-r="ef-segs"></div>
         <p class="note">Versehentlich gewählt? Tippe auf ✕ – die Zeit geht an den nächsten Abschnitt (beim letzten an den vorigen). Wirksam nach „Speichern“.</p>
       </div>` : ""}
+      <div class="ek-only-work">
+        <div class="lbl">Mit wem</div>
+        <div data-r="ef-ppl"></div>
+      </div>
       <label class="ek-only-abs">Gutschrift (Stunden pro Tag)
         <input type="text" id="ef-credit" inputmode="decimal" placeholder="z. B. 7,7" value="${esc(vCredit)}">
       </label>
@@ -688,6 +789,7 @@ export function openEntryForm(entry, ctx, prefill = null) {
     }));
   };
   renderSegEdit();
+  const pplPick = peoplePicker(box.querySelector('[data-r="ef-ppl"]'), c, { selected: entry ? entry.people : [] });
   const netEl = box.querySelector("#ef-net");
   const saveBtn = box.querySelector("#ef-save");
   const creditInp = box.querySelector("#ef-credit");
@@ -807,6 +909,7 @@ export function openEntryForm(entry, ctx, prefill = null) {
       placeId: pid,
       place: placeName,
       note: note(),
+      people: cleanPeople(pplPick.get()),
       inLoc: entry ? (entry.inLoc ?? null) : null,
       outLoc: entry ? (entry.outLoc ?? null) : null,
     };
@@ -820,6 +923,7 @@ export function openEntryForm(entry, ctx, prefill = null) {
     delete data.creditMin;
     if (entry && entry.id) data.id = entry.id;
     await store.saveEntry(data);
+    rememberPeople(store, data.people);
     return { ts: r.start, msg: isNew ? "Eintrag gespeichert" : "Änderung gespeichert" };
   };
 

@@ -87,7 +87,7 @@ function compareTodos(a, b) {
 }
 
 function normTodo(t, id) {
-  const kind = t?.kind === "termin" ? "termin" : "todo";
+  const kind = t?.kind === "termin" || t?.kind === "einsatz" ? t.kind : "todo";
   const rm = Number(t?.remindMin);
   return {
     ...t,
