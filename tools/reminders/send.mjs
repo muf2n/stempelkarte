@@ -36,15 +36,17 @@ function parseAccount(text) {
 // Umbrüche oder „schöne“ Bindestriche. Gibt nur Längen aus, nie den Inhalt.
 function repairPem(k) {
   const t = k.replace(/\\n/g, "\n").replace(/[\u2010-\u2015\u2212]/g, "-");
-  const m = /-+\s*BEGIN ([A-Z ]*?PRIVATE KEY)\s*-+([\s\S]*?)-+\s*END \1\s*-+/.exec(t);
+  // Tolerant: zwischen BEGIN … PRIVATE … KEY dürfen beliebige Nicht-Base64-Zeichen stehen
+  const NB = "[^A-Za-z0-9+/=]*";
+  const m = new RegExp("BEGIN" + NB + "PRIVATE" + NB + "KEY([\\s\\S]*?)END" + NB + "PRIVATE").exec(t);
   if (!m) {
-    console.error(`Privater Schlüssel: BEGIN/END-Zeilen nicht gefunden (Länge ${t.length}, enthält BEGIN: ${/BEGIN/.test(t)}, enthält END: ${/END/.test(t)}, Felder im Schlüssel: ${Object.keys(accountForDiag || {}).join(",")}).`);
+    console.error(`Privater Schlüssel: BEGIN/END-Zeilen nicht gefunden (Länge ${t.length}, enthält BEGIN: ${/BEGIN/.test(t)}, enthält END: ${/END/.test(t)}).`);
     return t;
   }
-  const label = m[1].trim();
-  const body = m[2].replace(/[^A-Za-z0-9+/=]/g, "");
+  const label = "PRIVATE KEY";
+  const body = m[1].replace(/[^A-Za-z0-9+/=]/g, "");
   const ok = body.length % 4 === 0;
-  console.log(`Privater Schlüssel: ${label}, ${body.length} Zeichen Base64${ok ? "" : " (Länge unvollständig – vermutlich abgeschnitten)"}.`);
+  console.log(`Privater Schlüssel: ${body.length} Zeichen Base64${ok ? "" : " (Länge passt nicht – vermutlich verändert)"}.`);
   const lines = body.match(/.{1,64}/g) || [];
   return `-----BEGIN ${label}-----\n${lines.join("\n")}\n-----END ${label}-----\n`;
 }
