@@ -49,6 +49,8 @@ const SHELL = [
   "js/views/comfort-settings.js",
   "js/views/day.js",
   "js/views/report.js",
+  "js/views/timesheet.js",
+  "js/views/leave.js",
   "js/watch.js",
   "js/views/watch-settings.js",
   "icons/wecker-192.png",
