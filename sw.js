@@ -86,6 +86,15 @@ const SHELL = [
   "js/alltag/vault-crypto.js",
   "js/alltag/vault-core.js",
   "js/alltag/qr.js",
+  // Update 9 – Unterwegs
+  "js/alltag/unterwegs.js",
+  "js/alltag/unterwegs-core.js",
+  "js/alltag/unterwegs-shared.js",
+  "js/alltag/unterwegs-pack.js",
+  "js/alltag/unterwegs-park.js",
+  "js/alltag/unterwegs-fuel.js",
+  "js/alltag/unterwegs-places.js",
+  "css/alltag-unterwegs.css",
   "js/app.js"
 ];
 
