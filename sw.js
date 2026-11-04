@@ -51,6 +51,15 @@ const SHELL = [
   "js/views/report.js",
   "js/watch.js",
   "js/views/watch-settings.js",
+  // Update 9b – Schule & Lernen
+  "js/alltag/school.js",
+  "js/alltag/school-core.js",
+  "js/alltag/school-timetable.js",
+  "js/alltag/school-tasks.js",
+  "js/alltag/school-exams.js",
+  "js/alltag/school-learn.js",
+  "js/alltag/school-docs.js",
+  "css/alltag-school.css",
   "icons/wecker-192.png",
   "js/app.js"
 ];
