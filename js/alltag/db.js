@@ -8,6 +8,7 @@
 //   await col.patch(id, { feld: wert }); // Teil-Änderung
 //   await col.remove(id);
 //   col.all();                            // letzter bekannter Stand (Array)
+//   col.loaded                            // true, sobald der erste echte Stand geladen ist
 
 import * as store from "../store.js";
 import { getFirebase } from "../firebase.js";
@@ -31,6 +32,7 @@ class Collection {
     this.unsub = null;
     this.key = null; // mode+uid, für den das geladen ist
     this.started = false;
+    this.loaded = false; // true, sobald der erste echte Stand da ist (lokal sofort, Cloud nach erstem Snapshot)
     store.subscribe((s) => this._sync(s));
   }
 
@@ -47,6 +49,7 @@ class Collection {
     this._stop();
     this.key = k;
     this.items = new Map();
+    this.loaded = false;
     if (!k) { this._emit(); return; }
     if (k === "local") this._startLocal(); else this._startCloud(s.user.uid);
   }
@@ -66,6 +69,7 @@ class Collection {
     const onStorage = (ev) => { if (ev.key === this._lsKey()) { this.key = null; this._sync(store.get()); } };
     window.addEventListener("storage", onStorage);
     this.unsub = () => window.removeEventListener("storage", onStorage);
+    this.loaded = true;
     this._emit();
   }
 
@@ -84,6 +88,7 @@ class Collection {
       const m = new Map();
       qs.forEach((d) => m.set(d.id, { ...d.data(), id: d.id }));
       this.items = m;
+      this.loaded = true;
       this._emit();
     }, (err) => console.error("Alltag-Listener „" + this.name + "“:", err));
     this._emit();

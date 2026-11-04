@@ -59,6 +59,11 @@ const SHELL = [
   "js/photos.js",
   "js/views/gallery.js",
   "icons/wecker-192.png",
+  "js/views/alltag.js",
+  "js/alltag/db.js",
+  "js/alltag/modules.js",
+  "js/alltag/money-core.js",
+  "js/alltag/money.js",
   "js/app.js"
 ];
 
