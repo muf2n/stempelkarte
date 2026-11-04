@@ -36,11 +36,13 @@ function parseAccount(text) {
 // Umbrüche oder „schöne“ Bindestriche. Gibt nur Längen aus, nie den Inhalt.
 function repairPem(k) {
   const t = k.replace(/\\n/g, "\n").replace(/[\u2010-\u2015\u2212]/g, "-");
-  // Tolerant: zwischen BEGIN … PRIVATE … KEY dürfen beliebige Nicht-Base64-Zeichen stehen
-  const NB = "[^A-Za-z0-9+/=]*";
-  const m = new RegExp("BEGIN" + NB + "PRIVATE" + NB + "KEY([\\s\\S]*?)END" + NB + "PRIVATE").exec(t);
+  // Tolerant: Die Beschriftung kann beim Kopieren verändert sein (z. B. übersetzt). Ein Google-
+  // Schlüssel (PKCS#8, RSA) beginnt in Base64 immer mit „MII“ – von dort bis „END“ ist der Inhalt.
+  const b = t.indexOf("BEGIN"), e = t.lastIndexOf("END");
+  const start = b >= 0 ? t.indexOf("MII", b) : -1;
+  const m = start >= 0 && e > start ? [null, t.slice(start, e)] : null;
   if (!m) {
-    console.error(`Privater Schlüssel: BEGIN/END-Zeilen nicht gefunden (Länge ${t.length}, enthält BEGIN: ${/BEGIN/.test(t)}, enthält END: ${/END/.test(t)}).`);
+    console.error(`Privater Schlüssel: Inhalt nicht gefunden (Länge ${t.length}, BEGIN: ${b >= 0}, END: ${e >= 0}, MII: ${start >= 0}).`);
     return t;
   }
   const label = "PRIVATE KEY";
