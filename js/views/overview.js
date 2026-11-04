@@ -3,6 +3,7 @@
 import { icon } from "../icons.js";
 import { leaves, sparkles } from "../deco.js";
 import * as reminders from "./reminders.js";
+import { isNative } from "../native.js";
 const extraPanels = [];
 let lastSnapForExtras = null;
 
@@ -123,6 +124,7 @@ export function mount(el, c) {
             </label>
             <p class="note">Ohne Datum zählt das Konto ab deinem ersten Eintrag.</p>
           </div>
+          <div id="android-panel" hidden></div>
           <div id="reminders-panel"></div>
           <div id="drive-panel"></div>
           <div id="lock-panel"></div>
@@ -189,7 +191,7 @@ export function mount(el, c) {
 
   try { reminders.mount($("#reminders-panel"), ctx); } catch (err) { console.error(err); }
   // Update 6: Fahrerkennung + Sperrbildschirm – Module werden dynamisch geladen
-  for (const [mod, sel] of [["./drive-settings.js", "#drive-panel"], ["./lock-settings.js", "#lock-panel"], ["./school-settings.js", "#school-panel"], ["./apprentice.js", "#apprentice-panel"], ["./watch-settings.js", "#watch-panel"], ["./comfort-settings.js", "#comfort-panel"], ["./leave.js", "#leave-panel"], ["./trips.js", "#trips-panel"], ["./allowance-settings.js", "#allowance-panel"]]) {
+  for (const [mod, sel] of [["./drive-settings.js", "#drive-panel"], ["./lock-settings.js", "#lock-panel"], ["./school-settings.js", "#school-panel"], ["./apprentice.js", "#apprentice-panel"], ["./watch-settings.js", "#watch-panel"], ["./comfort-settings.js", "#comfort-panel"], ["./leave.js", "#leave-panel"], ["./trips.js", "#trips-panel"], ["./allowance-settings.js", "#allowance-panel"], ...(isNative() ? [["./android-settings.js", "#android-panel"]] : [])]) {
     import(mod).then((m) => { extraPanels.push(m); m.mount($(sel), ctx); if (lastSnapForExtras) m.update(lastSnapForExtras); })
       .catch((err) => console.error(err));
   }

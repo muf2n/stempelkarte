@@ -67,6 +67,8 @@ const SHELL = [
   "js/alltag/school-learn.js",
   "js/alltag/school-docs.js",
   "css/alltag-school.css",
+  "js/native-sync.js",
+  "js/views/android-settings.js",
   "icons/wecker-192.png",
   "js/views/alltag.js",
   "js/alltag/db.js",
