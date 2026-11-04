@@ -5,6 +5,7 @@ import { icon } from "../icons.js";
 import {
   esc, hm, dayKey, startOfWeek, holidayName, schoolLabel, schoolCreditMin, creditMin, kindLabel, WD,
 } from "../util.js";
+import { countByDays } from "../photos.js"; // Update 9 – Foto-Anzahl je Tag
 
 const DAY = 86400000;
 const RE_DATE = /^\d{4}-\d{2}-\d{2}$/;
@@ -202,18 +203,48 @@ function renderPaper() {
     const acts = r.acts.length ? r.acts.map(esc).join("; ") : (tags ? "" : `<span class="rp-none">–</span>`);
     const pl = r.places.length ? r.places.map(esc).join(", ") : `<span class="rp-none">–</span>`;
     return `<tr class="${r.empty ? "rp-empty" : ""}${r.date.getDay() === 0 || r.date.getDay() === 6 ? " rp-we" : ""}">
-      <td class="rp-day"><b>${esc(r.wd)}</b><span>${esc(fmtD(r.date, false))}</span></td>
+      <td class="rp-day" data-rp-day="${esc(r.key)}"><b>${esc(r.wd)}</b><span>${esc(fmtD(r.date, false))}</span></td>
       <td class="rp-act">${tags ? `<div class="rp-tags">${tags}</div>` : ""}${acts ? `<div>${acts}</div>` : ""}${r.people.length ? `<div class="rp-ppl">mit: ${r.people.map(esc).join(", ")}</div>` : ""}</td>
       <td class="rp-pl${r.places.length ? "" : " rp-pl-empty"}">${pl}</td>
       <td class="rp-h">${r.min > 0 ? esc(hm(r.min)) : "–"}</td>
     </tr>`;
   }).join("");
   el.querySelector(".rp-sum").textContent = `${hm(sum)} h`;
+  photoCounts(rows);
 
   const ta = el.querySelector("#rp-notes");
   const note = String(ap.notes[weekKey(ws)] || "");
   if (document.activeElement !== ta && !cur.saveTimer && ta.value !== note) ta.value = note;
   el.querySelector(".rp-notes-print").textContent = ta.value;
+}
+
+/** Update 9: kleine Foto-Anzahl „📷 3“ je Tag (nur Anzeige, nicht im Druck). */
+let photoKey = "";
+let photoCache = {};
+async function photoCounts(rows) {
+  if (!cur) return;
+  const el = cur.el;
+  const keys = rows.map((r) => r.key);
+  const k = keys.join(",");
+  const paint = (counts) => {
+    for (const td of el.querySelectorAll("[data-rp-day]")) {
+      const n = counts[td.dataset.rpDay] || 0;
+      let b = td.querySelector(".rp-ph");
+      if (!n) { if (b) b.remove(); continue; }
+      if (!b) { b = document.createElement("span"); b.className = "rp-ph"; td.appendChild(b); }
+      b.textContent = `📷 ${n}`;
+      b.title = `${n} ${n === 1 ? "Foto" : "Fotos"}`;
+    }
+  };
+  if (k === photoKey) { paint(photoCache); return; }
+  photoKey = k;
+  photoCache = {};
+  try {
+    const counts = await countByDays(keys);
+    if (!cur || photoKey !== k) return;
+    photoCache = counts;
+    paint(counts);
+  } catch { /* nur Anzeige */ }
 }
 
 async function flushNote() {
@@ -297,6 +328,7 @@ export function closeReport(fromPop = false) {
   const c = cur;
   flushNote();
   cur = null;
+  photoKey = "";
   try { c.unsub && c.unsub(); } catch { /* egal */ }
   document.removeEventListener("keydown", onKey);
   window.removeEventListener("popstate", onPop);
