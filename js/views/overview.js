@@ -88,6 +88,8 @@ export function mount(el, c) {
           <button class="btn ghost" type="button" id="ov-ts">${icon("file", 20)}<span>Stundenzettel (PDF)</span></button>
         </div>
 
+        <div class="panel card" id="trips-panel"></div>
+
         <div class="panel card" id="settings-panel">
           <h2>${icon("gear", 20)}Einstellungen</h2>
           <div class="fields">
@@ -125,6 +127,7 @@ export function mount(el, c) {
           <div id="drive-panel"></div>
           <div id="lock-panel"></div>
           <div id="school-panel"></div>
+          <div id="allowance-panel"></div>
           <div id="apprentice-panel"></div>
           <div id="watch-panel"></div>
           <div id="comfort-panel"></div>
@@ -186,7 +189,7 @@ export function mount(el, c) {
 
   try { reminders.mount($("#reminders-panel"), ctx); } catch (err) { console.error(err); }
   // Update 6: Fahrerkennung + Sperrbildschirm – Module werden dynamisch geladen
-  for (const [mod, sel] of [["./drive-settings.js", "#drive-panel"], ["./lock-settings.js", "#lock-panel"], ["./school-settings.js", "#school-panel"], ["./apprentice.js", "#apprentice-panel"], ["./watch-settings.js", "#watch-panel"], ["./comfort-settings.js", "#comfort-panel"], ["./leave.js", "#leave-panel"]]) {
+  for (const [mod, sel] of [["./drive-settings.js", "#drive-panel"], ["./lock-settings.js", "#lock-panel"], ["./school-settings.js", "#school-panel"], ["./apprentice.js", "#apprentice-panel"], ["./watch-settings.js", "#watch-panel"], ["./comfort-settings.js", "#comfort-panel"], ["./leave.js", "#leave-panel"], ["./trips.js", "#trips-panel"], ["./allowance-settings.js", "#allowance-panel"]]) {
     import(mod).then((m) => { extraPanels.push(m); m.mount($(sel), ctx); if (lastSnapForExtras) m.update(lastSnapForExtras); })
       .catch((err) => console.error(err));
   }
@@ -728,7 +731,7 @@ function exportCSV() {
     ctx.ui.toast("Keine Einträge in diesem Monat.");
     return;
   }
-  const csv = ctx.exporter.entriesCSV(list, { from: f, to: t - 1 });
+  const csv = ctx.exporter.entriesCSV(list, { from: f, to: t - 1, settings: snap.settings, days: snap.days, places: snap.places });
   ctx.exporter.download(`Arbeitszeiten-${from.getFullYear()}-${u.pad(from.getMonth() + 1)}.csv`, csv);
   if (snap.running && snap.running.start >= f && snap.running.start < t) {
     ctx.ui.toast("Laufende Schicht ist noch nicht enthalten.");

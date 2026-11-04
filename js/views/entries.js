@@ -2,6 +2,8 @@
 
 import { icon } from "../icons.js";
 import { leaves, sparkles, emptyClipboard } from "../deco.js";
+import { segmentKm, isDriving, fmtKm, fmtEur, entryKm, allowanceByDay, LEVEL_LABELS } from "../travel.js"; // Update 9
+import { openAllowanceDay } from "./trips.js"; // Update 9
 
 const SEL_KEY = "stempelkarte.selPlace";
 
@@ -57,6 +59,8 @@ export function mount(el, ctx) {
       render();
       return;
     }
+    const tgBtn = ev.target.closest("[data-tgday]"); // Update 9: Taggeld des Tages festlegen
+    if (tgBtn && el.contains(tgBtn)) { openAllowanceDay(tgBtn.dataset.tgday, C); return; }
     const actEl = ev.target.closest("[data-act]");
     if (actEl && el.contains(actEl)) {
       const act = actEl.dataset.act;
@@ -343,6 +347,9 @@ function render() {
   const to = new Date(curY, curM + 1, 1).getTime();
   const monthList = (snap.entries || []).filter((e) => e.start >= from && e.start < to);
   const list = selKey ? monthList.filter((e) => dayKey(e.start) === selKey) : monthList;
+  // Update 9: Taggeld je Tag des Monats
+  let tgMap = new Map();
+  try { tgMap = allowanceByDay({ entries: monthList, places: snap.places, days: snap.days, settings: snap.settings, dayKey }, from, to); } catch { tgMap = new Map(); }
 
   // gesetzliche Feiertage des Monats (bzw. des gewählten Tags): dayKey → Name
   const monthHols = new Map();
@@ -498,6 +505,7 @@ function render() {
     return `
       <div class="day${hol ? " ek-holday" : ""}${sch ? " ek-schoolday" : ""}">
         <div class="day-h"><span>${esc(fmtDate(items[0].start))}${hol ? ` <span class="ek-hol">${esc(hol)}</span>` : ""}${sch ? ` <span class="ek-sch">${esc(sch)}</span>` : ""}</span><span class="sum">${esc(hm(daySum))} h</span></div>
+        ${dayExtraHTML(k, items, tgMap, snap.settings, esc)}
         ${hol ? holRow(hol) : ""}
         ${sch ? schoolRow(k, sch) : ""}
         ${rows}
@@ -583,15 +591,17 @@ function segmentsHTML(e, util, geo) {
     const pl = placeText(x);
     const ep = endPlaceText(x);
     const driving = actSlug(act) === "autofahren";
+    const sk = driving ? segmentKm(x, C && C.store ? C.store.get().settings : null) : null; // Update 9
     if ((x.endLoc || ep) && ep && (driving || ep !== pl)) {
       parts.push(`von ${esc(pl || "?")} → nach ${esc(ep)}`);
       const a = x.loc, b = x.endLoc;
-      if (g && g.distanceM && a && b && a.lat != null && b.lat != null) {
+      if (!sk && g && g.distanceM && a && b && a.lat != null && b.lat != null) {
         parts.push(`ca. ${esc(fmtDist(g.distanceM(a, b)))} <small>Luftlinie</small>`);
       }
     } else if (pl) {
       parts.push(esc(pl));
     }
+    if (sk) parts.push(`<b class="tg-km">${sk.manual ? "" : "≈ "}${esc(fmtKm(sk.km))} km</b>${sk.manual ? " <small>manuell</small>" : ""}`);
     parts.push(esc(`${hm(Math.max(0, (x.end - x.start) / 60000))} h`));
     return `<li ${actAttrs(act, esc)}>${parts.join(" · ")}</li>`;
   }).join("")}</ul>`;
@@ -599,6 +609,23 @@ function segmentsHTML(e, util, geo) {
 
 function isWork(e) {
   return !e || !e.kind || e.kind === "work";
+}
+
+// Update 9: Zeile unter dem Tageskopf: Fahrt-km und Taggeld (antippbar)
+function dayExtraHTML(k, items, tgMap, settings, esc) {
+  const work = items.filter((e) => isWork(e));
+  if (!work.length) return "";
+  const km = work.reduce((s, e) => s + entryKm(e, settings), 0);
+  const tg = tgMap && tgMap.get(k);
+  if (km <= 0 && !tg) return "";
+  const bits = [];
+  if (km > 0) bits.push(`<span class="tg-dkm">${icon("car", 16)}≈ ${esc(fmtKm(km))} km</span>`);
+  if (tg) {
+    const amt = tg.level === "none" ? "" : (tg.amount == null ? "" : ` · ${fmtEur(tg.amount)}`);
+    bits.push(`<button type="button" class="tg-dbtn lvl-${esc(tg.level)}" data-tgday="${esc(k)}" aria-label="Taggeld für diesen Tag ändern">` +
+      `Taggeld: ${esc({ none: "keins", part: "teilweise", full: "voll" }[tg.level] || LEVEL_LABELS[tg.level])}${esc(amt)}${tg.manual ? " <small>manuell</small>" : ""}</button>`);
+  }
+  return `<div class="tg-dayline">${bits.join("")}</div>`;
 }
 
 // ---------- Formular ----------
@@ -769,15 +796,18 @@ export function openEntryForm(entry, ctx, prefill = null) {
     if (!host || !segEdit) return;
     const { esc, clock, hm } = util;
     if (segEdit.length < 2) {
-      host.innerHTML = `<p class="note">Ein Abschnitt: ${esc((segEdit[0] && segEdit[0].activity) || "Arbeiten")}</p>`;
+      host.innerHTML = `<p class="note">Ein Abschnitt: ${esc((segEdit[0] && segEdit[0].activity) || "Arbeiten")}</p>` + kmEditHTML(0);
+      bindKm();
       return;
     }
     host.innerHTML = `<ul class="ek-segs ek-segs-edit">${segEdit.map((x, i) => {
       const act = x.activity || "Arbeiten";
       const pl = placeText(x);
       return `<li ${actAttrs(act, esc)}>${esc(`${clock(x.start)}–${clock(x.end)}`)} · ${esc(act)}${pl ? " · " + esc(pl) : ""} · ${esc(hm(Math.max(0, (x.end - x.start) / 60000)))} h` +
-        `<button type="button" class="seg-del" data-segdel="${i}" aria-label="Abschnitt ${esc(act)} löschen"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg></button></li>`;
+        `<button type="button" class="seg-del" data-segdel="${i}" aria-label="Abschnitt ${esc(act)} löschen"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg></button>` +
+        kmEditHTML(i) + `</li>`;
     }).join("")}</ul>`;
+    bindKm();
     host.querySelectorAll("[data-segdel]").forEach((b) => b.addEventListener("click", () => {
       const i = Number(b.dataset.segdel);
       const next = c.timer.removeEntrySegment({ ...entry, segments: segEdit }, i);
@@ -788,6 +818,24 @@ export function openEntryForm(entry, ctx, prefill = null) {
       ui.toast(`„${gone.activity || "Arbeiten"}“ entfernt – mit „Speichern“ übernehmen`);
     }));
   };
+  // Update 9: km je Fahrt-Abschnitt (manuell, leer = Schätzung)
+  function kmEditHTML(i) {
+    const x = segEdit && segEdit[i];
+    if (!x || !isDriving(x)) return "";
+    const est = segmentKm({ ...x, km: null }, store.get().settings);
+    const v = x.km === null || x.km === undefined || x.km === "" ? "" : String(x.km).replace(".", ",");
+    return `<label class="rm-inline tg-kmedit"><span>km</span><input type="text" inputmode="decimal" data-segkm="${i}" value="${util.esc(v)}" placeholder="${est ? "≈ " + util.esc(fmtKm(est.km)) : "z. B. 23"}"><span>${est ? "leer = Schätzung" : "selbst eintragen"}</span></label>`;
+  }
+  function bindKm() {
+    box.querySelectorAll("[data-segkm]").forEach((inp) => inp.addEventListener("input", () => {
+      const i = Number(inp.dataset.segkm);
+      if (!segEdit || !segEdit[i]) return;
+      const t = inp.value.trim().replace(",", ".");
+      const n = Number(t);
+      if (t === "") delete segEdit[i].km;
+      else if (Number.isFinite(n) && n >= 0 && n < 10000) segEdit[i].km = Math.round(n * 10) / 10;
+    }));
+  }
   renderSegEdit();
   const pplPick = peoplePicker(box.querySelector('[data-r="ef-ppl"]'), c, { selected: entry ? entry.people : [] });
   const netEl = box.querySelector("#ef-net");

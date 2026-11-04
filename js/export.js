@@ -1,8 +1,10 @@
 // Export: Einträge als Excel-taugliche CSV (Semikolon, BOM) erzeugen und herunterladen/teilen.
-import { WD, pad, clock, netMin, creditMin, kindLabel } from "./util.js";
+import { WD, pad, clock, netMin, creditMin, kindLabel, dayKey } from "./util.js";
+import { entryKm, allowanceByDay } from "./travel.js";
 
 const HEAD = ["Datum", "Wochentag", "Art", "Beginn", "Ende", "Pause (Min)", "Netto (h)",
-  "Arbeitsort", "Notiz", "Mit wem", "Standort Beginn", "Standort Ende", "Abschnitte"];
+  "Arbeitsort", "Notiz", "Mit wem", "Standort Beginn", "Standort Ende", "Abschnitte",
+  "km", "Taggeld €"]; // Update 9: km + Taggeld angehängt
 
 // Feld für CSV aufbereiten: bei ; " oder Zeilenumbruch in Anführungszeichen, " verdoppeln
 function cell(v) {
@@ -13,6 +15,14 @@ function cell(v) {
 // Stunden mit Komma, zwei Nachkommastellen
 function hours(min) {
   return (Math.round(min / 60 * 100) / 100).toFixed(2).replace(".", ",");
+}
+
+function kmText(km) {
+  return (Math.round(km * 10) / 10).toFixed(1).replace(".", ",");
+}
+
+function money(v) {
+  return (Math.round((Number(v) || 0) * 100) / 100).toFixed(2).replace(".", ",");
 }
 
 function date(ts) {
@@ -53,20 +63,35 @@ function toMs(v) {
   return Number.isFinite(n) ? n : null;
 }
 
-export function entriesCSV(entries, { from, to } = {}) {
+export function entriesCSV(entries, { from, to, settings = null, days = null, places = null } = {}) {
   const f = toMs(from), t = toMs(to);
   const list = (entries || [])
     .filter(e => e && Number.isFinite(e.start) && (f == null || e.start >= f) && (t == null || e.start < t))
     .sort((a, b) => a.start - b.start);
 
   const rows = [HEAD];
-  let sumNet = 0, sumPause = 0;
+  let sumNet = 0, sumPause = 0, sumKm = 0, sumTg = 0, anyTg = false;
+  // Update 9: Taggeld je Tag – steht in der ersten Arbeitszeile des Tages
+  const tgMap = list.length
+    ? allowanceByDay({ entries: list, places, days: days || {}, settings, dayKey }, list[0].start, list[list.length - 1].start + 1)
+    : new Map();
+  const tgDone = new Set();
   for (const e of list) {
     const work = !e.kind || e.kind === "work";
     const net = creditMin(e); // Abwesenheit: Gutschrift
     const pause = work ? Math.round(Number(e.pauseMin) || 0) : 0;
     sumNet += net;
     sumPause += pause;
+    const km = work ? entryKm(e, settings) : 0;
+    sumKm += km;
+    let tg = "";
+    const dk = dayKey(e.start);
+    if (work && !tgDone.has(dk) && tgMap.has(dk)) {
+      tgDone.add(dk);
+      const d = tgMap.get(dk);
+      if (d.level !== "none" && d.amount != null) { tg = money(d.amount); sumTg += d.amount; anyTg = true; }
+      else if (d.level !== "none") tg = d.level === "full" ? "voll" : "teilweise"; // Betrag fehlt
+    }
     rows.push([
       date(e.start),
       WD[new Date(e.start).getDay()],
@@ -81,9 +106,12 @@ export function entriesCSV(entries, { from, to } = {}) {
       locText(e.inLoc),
       locText(e.outLoc),
       work ? segmentsText(e) : "",
+      km > 0 ? kmText(km) : "",
+      tg,
     ]);
   }
-  rows.push(["Summe", "", "", "", "", sumPause, hours(sumNet), "", "", "", "", "", ""]);
+  rows.push(["Summe", "", "", "", "", sumPause, hours(sumNet), "", "", "", "", "", "",
+    sumKm > 0 ? kmText(sumKm) : "", anyTg ? money(sumTg) : ""]);
 
   return "﻿" + rows.map(r => r.map(cell).join(";")).join("\r\n") + "\r\n";
 }
