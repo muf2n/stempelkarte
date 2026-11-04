@@ -15,6 +15,7 @@ import * as places from "./views/places.js";
 import { openEntryForm } from "./views/entries.js";
 import { openPlaceForm } from "./views/places.js";
 import { icon } from "./icons.js";
+import * as lockscreen from "./lockscreen.js";
 
 const TABS = ["heute", "eintraege", "uebersicht", "orte"];
 const VIEWS = { heute: today, eintraege: entries, uebersicht: overview, orte: places };
@@ -103,6 +104,7 @@ function mountViews() {
     renderTopbar();
     renderRunState();
     renderSync();
+    safe(lockscreen.sync, snap);
   });
   setInterval(() => safe(today.tick), 1000);
 }
@@ -454,4 +456,5 @@ function runPendingPlan() {
 
 renderSync();
 renderTopbar();
+safe(lockscreen.init, ctx);
 boot();

@@ -5,6 +5,7 @@ import { icon } from "../icons.js";
 import { leaves, sparkles, emptyClipboard } from "../deco.js";
 import { readPlans, plansToday, dueTs, planKey } from "./plans.js";
 import { getFirebase } from "../firebase.js";
+import * as motion from "../motion.js";
 
 let ctx = null;
 let root = null;
@@ -273,6 +274,7 @@ export function mount(el, c) {
   $("editstart").addEventListener("click", openStartSheet);
   document.addEventListener("visibilitychange", () => {
     if (document.visibilityState === "visible" && root && !root.hidden) refreshNear();
+    try { driveWatchTick(); } catch (e) { console.error(e); }
   });
 
   if (ctx.store && ctx.store.get) {
@@ -530,7 +532,9 @@ function currentTip() {
     // Weg vom Ort der laufenden Schicht?
     const ss = segs(r);
     const curSeg = ss[ss.length - 1];
-    const p = findPlace(curSeg.placeId);
+    // Fahrerkennung (Update 6): Fahrt erkannt / angekommen
+    if (driveTip && r.pauseStart == null && driveTip.seg === curSeg.start && !dismissed.has(driveTip.id)) return driveTip;
+    const p = isDrive(curSeg.activity) ? null : findPlace(curSeg.placeId);
     if (p && typeof p.lat === "number" && typeof p.lng === "number" && locFresh(curSeg.start)) {
       const rad = Number(p.radius) > 0 ? Number(p.radius) : set.defaultRadius;
       let d = 0;
@@ -613,6 +617,15 @@ function renderTips() {
       `<div class="fields"><label>Ende um` +
       `<input type="time" data-r="fend" value="${util.clock(end)}" required></label></div>` +
       `<button type="button" class="btn stop" data-act="tip-forgot"${dis}>Mit dieser Endzeit ausstempeln</button></div>`;
+  } else if (tip.kind === "drive-ask") {
+    html = `<div class="card tip drive-tip" data-id="${util.esc(tip.id)}">${closeX()}` +
+      `<p class="tip-t">${icon("car", 22)} Du fährst gerade – zu <b>Autofahren</b> wechseln?</p>` +
+      `<button type="button" class="btn go" data-act="tip-drive"${dis}>${icon("car", 20)}<span>Zu Autofahren wechseln</span></button></div>`;
+  } else if (tip.kind === "arrive") {
+    const where = tip.place ? tip.place.name : (tip.loc && tip.loc.addr) || "";
+    html = `<div class="card tip drive-tip" data-id="${util.esc(tip.id)}">${closeX()}` +
+      `<p class="tip-t">${where ? `Angekommen bei <b>${util.esc(where)}</b>?` : "Angekommen?"}</p>` +
+      `<button type="button" class="btn go drive-big" data-act="tip-arrive"${dis}>${icon("play", 20)}<span>Weiter mit ${util.esc(tip.act)}</span></button></div>`;
   } else if (tip.kind === "pause") {
     html = `<div class="card tip" data-id="${util.esc(tip.id)}">${closeX()}` +
       `<p class="tip-t">Nach 6 Stunden steht dir eine Pause von 30 Minuten zu.</p></div>`;
@@ -651,6 +664,14 @@ function onTip(ev) {
     doClockOut(btn);
   } else if (act === "tip-forgot") {
     doForgotOut(btn);
+  } else if (act === "tip-drive" && driveTip && driveTip.kind === "drive-ask") {
+    const t = driveTip;
+    driveTip = null;
+    driveSwitch("Autofahren", { loc: t.loc, start: t.start });
+  } else if (act === "tip-arrive" && driveTip && driveTip.kind === "arrive") {
+    const t = driveTip;
+    driveTip = null;
+    driveSwitch(t.act, { place: t.place, loc: t.loc });
   }
 }
 
@@ -1359,6 +1380,7 @@ export function tick() {
   renderButtons();   // zeichnet nur bei Zustandswechsel (z. B. Sperre abgelaufen)
   if (state() === "idle" || state() === "done") renderList(); // Tageswechsel
   try { planTick(); } catch (e) { console.error(e); }
+  try { driveWatchTick(); } catch (e) { console.error(e); }
 }
 
 export function onShow() {
@@ -1590,4 +1612,265 @@ function openNotHereSheet({ plan, place, name, loc, err, key, dueMs }) {
       });
     },
   });
+}
+
+/* ---------------- Fahrerkennung (Update 6) ---------------- */
+
+const AUTO_GAP_MS = 5 * 60000;     // höchstens ein automatischer Wechsel pro 5 Minuten
+const UNDO_MS = 10000;
+let samples = [];                  // Standortproben der laufenden Beobachtung
+let geoPerm = "unknown";
+let geoPermAt = 0;
+let permBusy = false;
+let lastAutoAt = 0;
+let driveSuppressed = false;       // nach „Rückgängig“: bis zum nächsten Stillstand nicht erneut
+let arriveSuppressed = "";         // nach „Rückgängig“ der Ankunft: Ort-ID, bis man ihn verlässt
+let driveSeg = null;               // { start, startPid, left } – Fahrt-Abschnitt, für die Ankunft
+let driveTip = null;               // { kind: "drive-ask"|"arrive", id, seg, … }
+let wakeLock = null;
+let wakeBusy = false;
+let undoTimer = null;
+
+function plainLoc(s) {
+  return s ? { lat: s.lat, lng: s.lng, acc: Math.round(s.acc || 0), ts: s.ts } : null;
+}
+
+async function checkPerm() {
+  if (permBusy) return;
+  permBusy = true;
+  try { geoPerm = ctx.geo.isSupported() ? await ctx.geo.permission() : "unsupported"; } catch { geoPerm = "unknown"; }
+  geoPermAt = Date.now();
+  permBusy = false;
+}
+
+/** Im Sekundentakt und bei Sichtbarkeitswechsel: Beobachtung starten/stoppen, Wake Lock pflegen. */
+function driveWatchTick() {
+  if (!ctx || !snap) return;
+  const r = snap.running;
+  const ad = motion.readAutoDrive(settings());
+  const visible = document.visibilityState === "visible";
+  const want = !!r && r.pauseStart == null && ad.enabled && visible;
+  if (!r) { driveTip = null; driveSeg = null; driveSuppressed = false; arriveSuppressed = ""; }
+  else if (r.pauseStart != null) driveTip = null;
+  if (want) {
+    if (Date.now() - geoPermAt > (geoPerm === "granted" ? 30000 : 10000)) checkPerm();
+    if (geoPerm === "granted" && !motion.watching()) {
+      samples = [];
+      motion.startWatch(onDriveSample);   // Berechtigung liegt schon vor → keine Nachfrage
+    } else if (geoPerm !== "granted" && motion.watching()) {
+      motion.stopWatch();
+    }
+  } else if (motion.watching()) {
+    motion.stopWatch();
+    samples = [];
+  }
+  // Bildschirm während der Fahrt wach halten (optional)
+  const cur = r ? segs(r)[segs(r).length - 1] : null;
+  const wantWake = want && ad.keepAwake && cur && isDrive(cur.activity);
+  if (wantWake && !wakeLock && !wakeBusy && navigator.wakeLock && navigator.wakeLock.request) {
+    wakeBusy = true;
+    navigator.wakeLock.request("screen").then((l) => {
+      wakeLock = l;
+      try { l.addEventListener("release", () => { if (wakeLock === l) wakeLock = null; }); } catch { /* egal */ }
+    }).catch(() => { /* nicht erlaubt – egal */ }).finally(() => { wakeBusy = false; });
+  } else if (!wantWake && wakeLock) {
+    const l = wakeLock;
+    wakeLock = null;
+    try { l.release(); } catch { /* egal */ }
+  }
+}
+
+function onDriveSample(s) {
+  samples.push(s);
+  motion.prune(samples);
+  lastLoc = plainLoc(s); lastLocAt = Date.now();
+  try { driveEval(); } catch (e) { console.error(e); }
+  renderTips();
+}
+
+function setDriveTip(t) {
+  driveTip = t;   // renderTips zeichnet neu, sobald sich die Kärtchen-ID ändert
+}
+
+/** Vorige Tätigkeit vor der Fahrt (Standard „Arbeiten“). */
+function actBeforeDrive(ss) {
+  for (let i = ss.length - 2; i >= 0; i--) if (!isDrive(ss[i].activity)) return ss[i].activity || "Arbeiten";
+  return "Arbeiten";
+}
+
+function matchLoc(loc) {
+  if (!loc) return null;
+  try { return ctx.geofence.matchPlace(loc, places(), settings().defaultRadius); } catch { return null; }
+}
+
+function driveEval() {
+  const r = snap && snap.running;
+  if (!r || r.pauseStart != null || !samples.length) return;
+  const ad = motion.readAutoDrive(settings());
+  if (!ad.enabled) return;
+  const ss = segs(r);
+  const cur = ss[ss.length - 1];
+  const now = Date.now();
+  const last = samples[samples.length - 1];
+  const cls = motion.classify(samples, { minKmh: ad.minKmh, now });
+  if (cls === "stopped") driveSuppressed = false;
+
+  if (!isDrive(cur.activity)) {
+    driveSeg = null;
+    if (cls !== "driving" || driveSuppressed) {
+      if (driveTip && (driveTip.kind !== "drive-ask" || cls === "stopped" || driveTip.seg !== cur.start)) setDriveTip(null);
+      return;
+    }
+    const first = motion.driveStart(samples, { minKmh: ad.minKmh }) || samples[0];
+    const from = first.ts >= cur.start ? first : (samples.find((x) => x.ts >= cur.start) || last);
+    const start = Math.max(cur.start, first.ts);
+    if (ad.mode === "auto" && now - lastAutoAt >= AUTO_GAP_MS && !busyOp && !ctx.timer.isLocked()) {
+      setDriveTip(null);
+      driveSwitch("Autofahren", { loc: plainLoc(from), start, auto: true });
+      return;
+    }
+    if (!driveTip || driveTip.kind !== "drive-ask" || driveTip.seg !== cur.start) {
+      setDriveTip({ kind: "drive-ask", id: "drive|" + cur.start, seg: cur.start, loc: plainLoc(from), start });
+    }
+    return;
+  }
+
+  // Während „Autofahren“: Ankunft an gespeichertem Ort oder Stillstand
+  if (!driveSeg || driveSeg.start !== cur.start) {
+    const m0 = cur.placeId ? { place: findPlace(cur.placeId) } : matchLoc(cur.loc);
+    driveSeg = { start: cur.start, startPid: (m0 && m0.place && m0.place.id) || null, left: false };
+  }
+  if (last.ts < cur.start) return;
+  const m = matchLoc(last);
+  const pid = m ? m.place.id : null;
+  if (pid !== driveSeg.startPid) driveSeg.left = true;
+  if (arriveSuppressed && pid !== arriveSuppressed) arriveSuppressed = "";
+  const act = actBeforeDrive(ss);
+  const arrived = m && driveSeg.left && pid !== arriveSuppressed;
+  if (arrived) {
+    if (ad.mode === "auto" && now - lastAutoAt >= AUTO_GAP_MS && !busyOp && !ctx.timer.isLocked()) {
+      setDriveTip(null);
+      driveSwitch(act, { place: m.place, loc: plainLoc(last), auto: true });
+      return;
+    }
+    const id = "arrive|" + cur.start + "|" + pid;
+    if (!driveTip || driveTip.id !== id) setDriveTip({ kind: "arrive", id, seg: cur.start, place: m.place, loc: plainLoc(last), act });
+    return;
+  }
+  const since = samples.filter((x) => x.ts >= cur.start);
+  if (motion.classify(since, { minKmh: ad.minKmh, now }) === "stopped") {
+    if (driveTip && driveTip.kind === "arrive") return;
+    const loc = plainLoc(last);
+    const t = { kind: "arrive", id: "arrive|" + cur.start + "|stop", seg: cur.start, place: null, loc, act };
+    setDriveTip(t);
+    ctx.geo.reverseGeocode(loc.lat, loc.lng).then((addr) => {
+      if (addr && driveTip === t) { t.loc = { ...loc, addr }; tipsKey = ""; renderTips(); }
+    }).catch(() => { /* ohne Adresse */ });
+  } else if (driveTip && driveTip.kind === "arrive" && cls === "driving") {
+    setDriveTip(null);
+  }
+}
+
+/** Abschnitt wechseln wie „Abschnitt wechseln“ (timer.addSegment), aber mit bekanntem Standort.
+ *  `start` (ms): früherer Beginn (erkannter Fahrtbeginn), frühestens Start des aktuellen Abschnitts.
+ *  `auto`: automatisch ausgelöst → Toast mit „Rückgängig“. */
+async function driveSwitch(activity, { place = null, loc = null, start = null, auto = false } = {}) {
+  const { store, timer, ui } = ctx;
+  const r0 = store.get().running;
+  if (!r0 || r0.pauseStart != null || busyOp || timer.isLocked() || !timer.addSegment) return false;
+  const ss0 = segs(r0);
+  const prevLast = ss0[ss0.length - 1];
+  const shiftStart = r0.start;
+  lockNow();
+  busyOp = "seg";
+  disableAllButtons();
+  let segStart = 0;
+  let ok = false;
+  try {
+    if (!place && loc) { const m = matchLoc(loc); if (m) place = m.place; }
+    const seg = await timer.addSegment({ activity, placeId: place ? place.id : null, place: place ? place.name : "", loc });
+    segStart = seg && seg.start;
+    if (Number.isFinite(start) && segStart && start < segStart) {
+      const ns = Math.max(start, (prevLast.start || 0) + 1000);
+      const r = store.get().running;
+      if (ns < segStart && r && Array.isArray(r.segments)) {
+        const list = r.segments.map((g) => (g.start === segStart ? { ...g, start: ns } : g));
+        await store.setRunning({ ...r, segments: list });
+        segStart = ns;
+      }
+    }
+    ok = true;
+    if (auto) lastAutoAt = Date.now();
+    buzz(30);
+    const where = place ? ` · ${place.name}` : "";
+    if (auto) {
+      const msg = isDrive(activity)
+        ? "Fahrt erkannt – Abschnitt „Autofahren“ gestartet"
+        : `Angekommen${where} – weiter mit „${activity}“`;
+      const mySeg = segStart;
+      undoToast(msg, () => undoSwitch({ shiftStart, segStart: mySeg, prevLast, drive: isDrive(activity), placeId: place ? place.id : "" }));
+    } else {
+      ui.toast(`${activity}` + where);
+    }
+  } catch (e) {
+    ui.toast("Wechsel fehlgeschlagen" + (e && e.message ? ": " + e.message : ""), 3500);
+  } finally {
+    busyOp = null;
+    snap = store.get() || snap;
+    metaKey = "";
+    tipsKey = "";
+    forceButtons();
+    renderAll();
+  }
+  if (ok && segStart && loc && !place) fillSegmentAddr(segStart, loc);
+  return ok;
+}
+
+/** Automatisch angelegten Abschnitt wieder entfernen (der vorige läuft weiter wie zuvor). */
+async function undoSwitch({ shiftStart, segStart, prevLast, drive, placeId }) {
+  const { store, ui } = ctx;
+  const r = store.get().running;
+  if (!r || r.start !== shiftStart) return;
+  const list = segs(r);
+  if (!list.length || list[list.length - 1].start !== segStart || list.length < 2) {
+    ui.toast("Das lässt sich nicht mehr rückgängig machen.", 3000);
+    return;
+  }
+  const rest = list.slice(0, -1);
+  const pl = rest[rest.length - 1];
+  rest[rest.length - 1] = { ...pl, endLoc: prevLast.endLoc ?? null, endPlace: prevLast.endPlace || "" };
+  if (!("endLoc" in prevLast)) { delete rest[rest.length - 1].endLoc; delete rest[rest.length - 1].endPlace; }
+  lastAutoAt = 0;                 // rückgängig gemachter Wechsel zählt nicht
+  if (drive) driveSuppressed = true;
+  else arriveSuppressed = placeId || "";
+  try {
+    await store.setRunning({ ...r, segments: rest });
+    ui.toast("Rückgängig gemacht");
+  } catch { /* Toast kommt vom Store */ }
+  snap = store.get() || snap;
+  metaKey = "";
+  tipsKey = "";
+  renderAll();
+}
+
+/** Toast mit „Rückgängig“-Knopf (10 s). */
+function undoToast(msg, onUndo) {
+  let el = document.getElementById("drive-toast");
+  if (!el) {
+    el = document.createElement("div");
+    el.id = "drive-toast";
+    el.className = "toast drive-toast";
+    el.setAttribute("role", "status");
+    el.setAttribute("aria-live", "polite");
+    el.hidden = true;
+    document.body.appendChild(el);
+  }
+  const base = document.getElementById("toast");
+  if (base) base.hidden = true;
+  clearTimeout(undoTimer);
+  el.innerHTML = `<span>${ctx.util.esc(msg)}</span><button type="button" class="drive-undo">Rückgängig</button>`;
+  el.hidden = false;
+  const hide = () => { clearTimeout(undoTimer); undoTimer = null; el.hidden = true; };
+  el.querySelector("button").addEventListener("click", () => { hide(); onUndo(); }, { once: true });
+  undoTimer = setTimeout(hide, UNDO_MS);
 }

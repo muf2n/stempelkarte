@@ -3,7 +3,7 @@
 // Icons und Schriftdateien (fonts.gstatic.com): cache-first.
 // Alle anderen fremden Domains (Firebase, Google APIs, Nominatim, OSM, unpkg) werden nicht angefasst.
 
-const VERSION = "20261024-0207"; // wird beim Veröffentlichen automatisch ersetzt
+const VERSION = "20261104-1700"; // wird beim Veröffentlichen automatisch ersetzt
 const CACHE = "stempelkarte-" + VERSION;
 const FONT_CACHE = "stempelkarte-fonts"; // versionsunabhängig, bleibt erhalten
 const NET_TIMEOUT_MS = 4000; // bei schlechtem Netz nach dieser Zeit auf den Cache ausweichen
@@ -36,8 +36,17 @@ const SHELL = [
   "js/views/plans.js",
   "js/icons.js",
   "js/deco.js",
+  "js/lock-core.js",
+  "js/lockscreen.js",
+  "js/views/lock-settings.js",
+  "js/motion.js",
+  "js/views/drive-settings.js",
   "js/app.js"
 ];
+
+// Gemeinsamer Kern für die Sperrbildschirm-Steuerung (Codec + Aktionslogik).
+// Fehlertolerant: fehlt die Datei, funktionieren Updates, Offline und Erinnerungen trotzdem.
+try { importScripts("js/lock-core.js"); } catch (e) { /* ohne Sperrbildschirm-Knöpfe */ }
 
 function scopeUrl(path) {
   return new URL(path, self.registration.scope).href;
@@ -215,6 +224,14 @@ self.addEventListener("push", (event) => {
 });
 
 self.addEventListener("notificationclick", (event) => {
+  // Update 6: Knöpfe der Status-Benachrichtigung („Pause“, „Weiter“, „Autofahren“ …) ohne App-Öffnen.
+  // Antippen der Benachrichtigung selbst (ohne Knopf) und alle anderen Benachrichtigungen: alter Weg.
+  const nd = event.notification.data || {};
+  if (nd.kind === "status" && event.action && self.LockCore) {
+    const p = handleStatusAction(event.action).catch((e) => console.error(e));
+    try { event.waitUntil(p); } catch (e) { /* synthetisches Ereignis (Tests) */ }
+    return;
+  }
   event.notification.close();
   const rel = (event.notification.data && event.notification.data.url) || "./#heute";
   const target = new URL(rel, self.registration.scope).href;
@@ -232,3 +249,170 @@ self.addEventListener("notificationclick", (event) => {
     if (self.clients.openWindow) await self.clients.openWindow(target);
   })());
 });
+
+// ---------- Steuerung am Sperrbildschirm (Update 6) ----------
+// Die App schickt beim Start {apiKey, projectId} (postMessage) und legt sie zusätzlich in IndexedDB
+// "stempelkarte-sw"/"config" ab ("firebase"); bei jedem Zustand schreibt sie "last" = {mode, uid, running, rev, enabled}.
+// Cloud-Modus: Token aus der Firebase-Auth-IndexedDB, Firestore per REST lesen/schreiben.
+// Lokaler Modus oder Fehler: Aktion mit Zeitstempel in die Warteschlange "queue" – die App holt sie nach.
+
+let lockConfig = null;
+
+self.addEventListener("message", (event) => {
+  const d = event.data;
+  if (d && d.type === "lock-config" && d.config && d.config.apiKey && d.config.projectId) {
+    lockConfig = { apiKey: String(d.config.apiKey), projectId: String(d.config.projectId) };
+  }
+});
+
+const AUTH_DB = "firebaseLocalStorageDb";
+const AUTH_STORE = "firebaseLocalStorage";
+
+function readAuthUser(apiKey) {
+  return new Promise((resolve) => {
+    let req;
+    try { req = indexedDB.open(AUTH_DB); } catch (e) { resolve(null); return; }
+    req.onupgradeneeded = () => { try { req.transaction.abort(); } catch (e) { /* egal */ } };
+    req.onerror = () => resolve(null);
+    req.onsuccess = () => {
+      const db = req.result;
+      if (!db.objectStoreNames.contains(AUTH_STORE)) { db.close(); resolve(null); return; }
+      try {
+        const all = db.transaction(AUTH_STORE, "readonly").objectStore(AUTH_STORE).getAll();
+        all.onsuccess = () => {
+          db.close();
+          const prefix = "firebase:authUser:" + apiKey + ":";
+          const row = (all.result || []).find((r) => r && typeof r.fbase_key === "string" && r.fbase_key.startsWith(prefix));
+          resolve(row ? row.value : null);
+        };
+        all.onerror = () => { db.close(); resolve(null); };
+      } catch (e) { db.close(); resolve(null); }
+    };
+  });
+}
+
+function lockError(code, msg) { const e = new Error(msg || code); e.code = code; return e; }
+
+async function idToken(cfg, uid) {
+  const user = await readAuthUser(cfg.apiKey);
+  if (!user || !user.stsTokenManager) throw lockError("no-auth", "Nicht angemeldet");
+  if (uid && user.uid && user.uid !== uid) throw lockError("no-auth", "Anderes Konto");
+  const tm = user.stsTokenManager;
+  if (tm.accessToken && Number(tm.expirationTime) > Date.now() + 60000) return { token: tm.accessToken, uid: user.uid };
+  // Zuvor selbst erneuertes Token (in eigener DB, nicht in der Auth-DB) wiederverwenden
+  try {
+    const t = await LockCore.configGet("token");
+    if (t && t.uid === user.uid && t.exp > Date.now() + 60000) return { token: t.idToken, uid: user.uid };
+  } catch (e) { /* egal */ }
+  if (!tm.refreshToken) throw lockError("no-auth", "Kein Refresh-Token");
+  const res = await fetch("https://securetoken.googleapis.com/v1/token?key=" + encodeURIComponent(cfg.apiKey), {
+    method: "POST",
+    headers: { "Content-Type": "application/x-www-form-urlencoded" },
+    body: "grant_type=refresh_token&refresh_token=" + encodeURIComponent(tm.refreshToken),
+  });
+  if (!res.ok) throw lockError("token", "Token-Erneuerung fehlgeschlagen (" + res.status + ")");
+  const j = await res.json();
+  if (!j.id_token) throw lockError("token", "Kein Token erhalten");
+  const exp = Date.now() + (Number(j.expires_in) || 3600) * 1000;
+  LockCore.configSet("token", { uid: user.uid, idToken: j.id_token, exp }).catch(() => {});
+  return { token: j.id_token, uid: user.uid };
+}
+
+/** Cloud: Zustand lesen, Aktion anwenden, mit rev zurückschreiben (Vorbedingung updateTime, 1 Wiederholung). */
+async function cloudApply(cfg, uid, action, ts) {
+  const auth = await idToken(cfg, uid);
+  const docUrl = "https://firestore.googleapis.com/v1/projects/" + encodeURIComponent(cfg.projectId) +
+    "/databases/(default)/documents/users/" + encodeURIComponent(auth.uid) + "/meta/state";
+  const headers = { Authorization: "Bearer " + auth.token };
+  for (let attempt = 0; attempt < 2; attempt++) {
+    const g = await fetch(docUrl, { headers, cache: "no-store" });
+    let doc = null;
+    if (g.status === 404) doc = { fields: {} };
+    else if (g.ok) doc = await g.json();
+    else throw lockError("http", "Lesen fehlgeschlagen (" + g.status + ")");
+    const data = LockCore.decodeFields(doc.fields || {});
+    const res = LockCore.applyAction(data.running || null, action, ts); // wirft not-running
+    const rev = LockCore.nextRev(data.rev, Date.now());
+    let url = docUrl + "?updateMask.fieldPaths=running&updateMask.fieldPaths=rev";
+    if (doc.updateTime) url += "&currentDocument.updateTime=" + encodeURIComponent(doc.updateTime);
+    const p = await fetch(url, {
+      method: "PATCH",
+      headers: { ...headers, "Content-Type": "application/json" },
+      body: JSON.stringify({ fields: LockCore.encodeFields({ running: res.running, rev }) }),
+    });
+    if (p.ok) return { running: res.running, rev, uid: auth.uid };
+    if ((p.status === 400 || p.status === 409) && attempt === 0) continue; // inzwischen geändert → neu lesen
+    throw lockError("http", "Speichern fehlgeschlagen (" + p.status + ")");
+  }
+  throw lockError("http", "Speichern fehlgeschlagen");
+}
+
+function maxNotifActions() {
+  const m = self.Notification && Number(self.Notification.maxActions);
+  return Number.isFinite(m) && m > 0 ? m : 2;
+}
+
+async function showStatus(running, note) {
+  if (!running) return closeStatus();
+  const n = LockCore.statusNotification(running, { note, maxActions: maxNotifActions() });
+  await self.registration.showNotification(n.title, n.options);
+}
+
+async function closeStatus() {
+  const list = await self.registration.getNotifications({ tag: LockCore.TAG });
+  list.forEach((n) => n.close());
+}
+
+async function showLockMessage(body) {
+  await self.registration.showNotification("Stempelkarte", {
+    tag: LockCore.TAG, body, icon: LockCore.ICON, badge: LockCore.ICON,
+    silent: true, renotify: false, requireInteraction: false,
+    data: { kind: "status-info", url: "./#heute" },
+  });
+}
+
+async function tellClients(msg) {
+  try {
+    const list = await self.clients.matchAll({ type: "window", includeUncontrolled: true });
+    list.forEach((c) => c.postMessage(msg));
+  } catch (e) { /* egal */ }
+}
+
+async function handleStatusAction(actionStr) {
+  const action = LockCore.parseAction(actionStr);
+  if (!action) return;
+  const ts = Date.now();
+  let last = null;
+  try { last = await LockCore.configGet("last"); } catch (e) { last = null; }
+  let cfg = lockConfig;
+  if (!cfg) { try { cfg = await LockCore.configGet("firebase"); } catch (e) { cfg = null; } }
+
+  // 1./2. Cloud: direkt in Firestore
+  if (last && last.mode === "cloud" && last.uid && cfg && cfg.apiKey && cfg.projectId) {
+    try {
+      const r = await cloudApply(cfg, last.uid, action, ts);
+      LockCore.configSet("last", { ...last, running: r.running, rev: r.rev, at: Date.now() }).catch(() => {});
+      await showStatus(r.running, LockCore.feedback(action, ts));
+      await tellClients({ type: "lock-changed", running: r.running });
+      return;
+    } catch (e) {
+      if (e && e.code === "not-running") { await showLockMessage("Du bist nicht (mehr) eingestempelt."); return; }
+      console.warn("Sperrbildschirm: Cloud-Speichern fehlgeschlagen, nutze Warteschlange:", e);
+    }
+  }
+
+  // 3. Lokal/offline: Warteschlange; angezeigter Zustand = letzter bekannter Zustand + Warteschlange
+  try {
+    const queued = (await LockCore.queueAll()).filter((q) => q.mode === (last && last.mode) && q.uid === (last && last.uid));
+    const base = LockCore.applyQueue(last ? last.running : null, queued).running;
+    if (!base) { await showLockMessage("Du bist nicht eingestempelt – öffne die App."); return; }
+    const res = LockCore.applyAction(base, action, ts);
+    await LockCore.queueAdd({ ts, action: LockCore.actionString(action), mode: last.mode, uid: last.uid || null });
+    const note = LockCore.feedback(action, ts) + (last.mode === "cloud" ? " · wird beim Öffnen der App gespeichert" : "");
+    await showStatus(res.running, note);
+    await tellClients({ type: "lock-queue", running: res.running });
+  } catch (e) {
+    console.error("Sperrbildschirm: Aktion nicht gespeichert:", e);
+    try { await showLockMessage("Konnte nicht speichern – öffne die App"); } catch (e2) { /* egal */ }
+  }
+}
