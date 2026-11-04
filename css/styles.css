@@ -3158,3 +3158,76 @@ html[data-big="1"] .md-tiles { grid-template-columns: repeat(2, minmax(0, 1fr));
   .ez-bar { font-size: .74rem; }
   .ez-ini { font-size: .7rem; }
 }
+
+/* Update 9 – Taggeld & Kilometer */
+#trips-panel.tg { display: flex; flex-direction: column; gap: 10px; }
+.tg-h h2 { display: flex; align-items: center; gap: 8px; margin: 0; }
+.tg-h h2 .ico { color: var(--accent); }
+.tg-tiles { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+.tg-tile {
+  display: flex; flex-direction: column; gap: 2px; min-width: 0;
+  padding: 12px 14px; border-radius: var(--r-sm);
+  background: color-mix(in srgb, #0EA5E9 10%, var(--card));
+  border: 1px solid color-mix(in srgb, #0EA5E9 28%, var(--line));
+}
+.tg-tile.tg-t-money {
+  background: color-mix(in srgb, var(--run) 10%, var(--card));
+  border-color: color-mix(in srgb, var(--run) 28%, var(--line));
+}
+.tg-tile.off { background: color-mix(in srgb, var(--soft) 50%, var(--card)); border-color: var(--line); }
+.tg-tile.off strong { color: var(--muted); }
+.tg-l { font-size: .8rem; font-weight: 600; color: var(--muted); text-transform: uppercase; letter-spacing: .04em; }
+.tg-tile strong { font-family: var(--f-display); font-size: 1.55rem; line-height: 1.15; color: var(--ink); font-variant-numeric: tabular-nums; overflow-wrap: anywhere; }
+.tg-tile strong small { font-size: .6em; font-weight: 600; color: var(--muted); }
+.tg-sub { font-size: .84rem; color: var(--muted); }
+.tg-actions { display: flex; flex-wrap: wrap; gap: 8px; }
+.tg-actions .btn { flex: 1 1 120px; white-space: nowrap; }
+.tg-actions .btn[hidden] { display: none; }
+.tg-legal { font-size: .8rem; margin: 0; }
+/* Blätter: Fahrtenbuch / Taggeld-Tage */
+.tg-sheet { display: flex; flex-direction: column; gap: 10px; }
+.tg-sheet .note { margin: 0; }
+.tg-log, .tg-days { list-style: none; margin: 0; padding: 0; display: grid; gap: 6px; }
+.tg-trip, .tg-day-row {
+  display: grid; grid-template-columns: 6.2em minmax(0, 1fr) auto; align-items: center; gap: 10px;
+  width: 100%; min-height: 52px; padding: 8px 12px; text-align: left; font: inherit; color: var(--ink);
+  border-radius: var(--r-sm); border: 1px solid var(--line); background: var(--card); cursor: pointer;
+  box-shadow: inset 3px 0 0 #0EA5E9;
+}
+.tg-trip:focus-visible, .tg-day-row:focus-visible, .tg-dbtn:focus-visible { outline: none; box-shadow: var(--ring); }
+.tg-trip-d { display: flex; flex-direction: column; font-weight: 700; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.tg-trip-d small, .tg-trip-r small, .tg-trip-km small { font-weight: 500; font-size: .8rem; color: var(--muted); }
+.tg-trip-r { display: flex; flex-direction: column; min-width: 0; }
+.tg-trip-r b { font-weight: 600; overflow-wrap: anywhere; }
+.tg-trip-km { display: flex; flex-direction: column; align-items: flex-end; font-weight: 700; white-space: nowrap; font-variant-numeric: tabular-nums; }
+.tg-trip-km.none { color: var(--muted); }
+.tg-day-row.lvl-none { box-shadow: inset 3px 0 0 var(--line); }
+.tg-day-row.lvl-part { box-shadow: inset 3px 0 0 color-mix(in srgb, var(--run) 55%, var(--card)); }
+.tg-day-row.lvl-full { box-shadow: inset 3px 0 0 var(--run); }
+.tg-lvls .chip { flex: 1 1 40%; justify-content: center; }
+/* Einträge: Zeile unter dem Tageskopf */
+.tg-dayline { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 10px; margin: 2px 0 6px; font-size: .86rem; color: var(--muted); }
+.tg-dkm { display: inline-flex; align-items: center; gap: 5px; font-weight: 600; color: var(--ink); font-variant-numeric: tabular-nums; }
+.tg-dkm .ico { color: #0EA5E9; }
+.tg-dbtn {
+  display: inline-flex; align-items: center; gap: 4px; min-height: 32px; padding: 4px 10px;
+  font: inherit; font-size: .84rem; font-weight: 600; color: var(--ink); cursor: pointer;
+  border-radius: 999px; border: 1px solid var(--line); background: color-mix(in srgb, var(--soft) 50%, var(--card));
+}
+.tg-dbtn.lvl-part, .tg-dbtn.lvl-full { background: var(--run-soft); border-color: color-mix(in srgb, var(--run) 35%, transparent); }
+.tg-dbtn small { font-weight: 500; color: var(--muted); }
+.tg-km { font-weight: 700; color: var(--ink); }
+.fields label.tg-kmedit, label.tg-kmedit {
+  display: flex; flex-direction: row; flex-wrap: wrap; align-items: center; gap: 8px;
+  margin-top: 6px; font-size: .84rem; font-weight: 600; color: var(--muted);
+}
+.tg-kmedit input { width: 6.5em; flex: 0 0 auto; min-height: 40px; padding: 6px 10px; }
+.tg-kmedit span:last-child { font-weight: 500; }
+/* Einstellungen */
+#allowance-panel.al {
+  display: flex; flex-direction: column; gap: 12px;
+  margin-top: 16px; padding-top: 16px; border-top: 1px solid var(--line);
+}
+.al .rm-inline input[type="text"] { width: 6em; }
+.al [hidden] { display: none !important; }
+.al-places .chip { max-width: 100%; overflow: hidden; text-overflow: ellipsis; }
