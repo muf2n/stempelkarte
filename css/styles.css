@@ -2598,9 +2598,9 @@ body::before {
   border: 2px solid var(--k-schule);
 }
 .cal .cal-day.schul::after {
-  content: ""; position: absolute; top: 5px; left: 5px;
-  width: 7px; height: 7px; border-radius: 2px;
-  background: var(--k-schule); box-shadow: 0 0 0 2px var(--card);
+  content: ""; position: absolute; top: 2px; left: 50%; transform: translateX(-50%);
+  width: 16px; height: 3px; border-radius: 2px;
+  background: var(--k-schule);
 }
 .cal-day.schul .cal-h:empty { display: none; }
 .cal-sn {
@@ -2628,8 +2628,8 @@ body::before {
   display: flex; flex-direction: column; gap: 12px;
   margin-top: 16px; padding-top: 16px; border-top: 1px solid var(--line);
 }
-.sc-wd { padding: 2px 0 4px; }
-.sc-wd .chip { min-width: 52px; justify-content: center; }
+.sc-wd { display: flex; flex-wrap: nowrap; gap: 6px; padding: 2px 0 4px; }
+.sc-wd .chip { flex: 1 1 0; min-width: 0; padding: 8px 0; justify-content: center; }
 .sc-list { display: grid; gap: 6px; }
 .sc-item {
   display: flex; align-items: center; gap: 10px;

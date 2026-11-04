@@ -34,6 +34,7 @@ const SHELL = [
   "js/views/reminders.js",
   "js/push.js",
   "js/views/plans.js",
+  "js/views/school-settings.js",
   "js/icons.js",
   "js/deco.js",
   "js/lock-core.js",
