@@ -109,16 +109,41 @@ export function anthropicTools() {
   return TOOLS.map((t) => ({ name: t.name, description: t.description, input_schema: t.inputSchema }));
 }
 
-export function systemPrompt(now) {
+/** Zusatz für den Sprachmodus der App (Antwort wird vorgelesen). */
+export const VOICE_PROMPT = [
+  "SPRACHMODUS: Deine Antwort wird laut vorgelesen.",
+  "Schreib so, wie man spricht: keine Listen, keine Aufzählungszeichen, keine Überschriften, kein Markdown, keine Emojis, keine Tabellen.",
+  "Zahlen und Zeiten so, dass man sie gut vorlesen kann (z. B. „4 Stunden 30 Minuten“ statt „4:30 h“).",
+].join("\n");
+export const VOICE_SHORT_PROMPT = "Halte dich kurz: höchstens 1–3 kurze, gesprochene Sätze. Stell nur dann eine kurze Rückfrage, wenn es wirklich nötig ist.";
+export const VOICE_GENERAL_PROMPT = "Allgemeine Wissensfragen (auch ohne Bezug zur App) sind erlaubt – beantworte sie ganz normal aus deinem Wissen.";
+
+/** Eigener Name des Assistenten: nur Buchstaben, Leerzeichen, Bindestriche, max. 24 Zeichen. "" = keiner. */
+export function sanitizeName(n) {
+  if (typeof n !== "string") return "";
+  return n.normalize("NFC").replace(/[^\p{L} -]+/gu, "").replace(/\s+/g, " ").replace(/^[\s-]+|[\s-]+$/g, "").slice(0, 24).trim();
+}
+
+/** Nur bekannte Modi übernehmen, alles andere still ignorieren. */
+export function chatMode(body) {
+  const mode = body && body.mode === "voice" ? "voice" : "text";
+  return { mode, short: mode === "voice" ? body.short !== false : false, name: sanitizeName(body && body.assistantName) };
+}
+
+export function systemPrompt(now, { mode = "text", short = true, name = "" } = {}) {
   const v = vienna(now);
+  const nm = sanitizeName(name);
+  const extra = mode === "voice" ? ["", VOICE_PROMPT, ...(short ? [VOICE_SHORT_PROMPT] : []), VOICE_GENERAL_PROMPT] : [];
   return [
     "Du bist der Assistent in der Stempelkarte-App von Florian, einem Elektriker-Lehrling in Österreich.",
+    ...(nm ? [`Du heißt ${nm}. Stell dich so vor, wenn gefragt.`] : []),
     "Die App erfasst Arbeitszeiten (Ein-/Ausstempeln, Pausen, Abschnitte wie Autofahren/Arbeiten), Überstunden, Urlaub/Krankenstand, den Planer (Aufgaben, Termine, Einsätze), Geld und Schule.",
     `Jetzt ist ${fmtKeyWd(v.key)}, ${clock(now)} Uhr (Wiener Zeit).`,
     "Antworte kurz, freundlich und auf Deutsch (österreichisch, Du-Form). Zeiten im 24-h-Format, Datum TT.MM.JJJJ, Beträge wie 1.234,56 €.",
     "Für alle Daten benutzt du die Werkzeuge – erfinde nie Zahlen, Zeiten oder Einträge.",
     "Bei Änderungen (einstempeln, ausstempeln, nachtragen, anlegen, abhaken …) führe das Werkzeug aus, wenn die Absicht klar ist, und bestätige danach knapp, was gespeichert wurde. Ist etwas unklar (z. B. welcher Tag, welche Uhrzeit), frag kurz nach statt zu raten.",
     "Löschen kannst du nichts – dafür auf die App verweisen. Keine Rechts- oder Steuerberatung; bei Taggeld/Kollektivvertrag auf den Lohnzettel bzw. Betrieb verweisen.",
+    ...extra,
   ].join("\n");
 }
 
@@ -171,7 +196,7 @@ export function cleanMessages(list) {
 const monthOf = (now) => { const v = vienna(now); return `${v.y}-${pad(v.m)}`; };
 
 /** Haupt-Ablauf (ohne HTTP-Details). → {reply, actions, usage} */
-export async function runChat({ env, fetchImpl, now, data, messages }) {
+export async function runChat({ env, fetchImpl, now, data, messages, mode = "text", short = true, name = "" }) {
   const model = String(env.CLAUDE_MODEL || DEFAULT_MODEL);
   const cap = Number(env.AI_MONTHLY_USD ?? 3);
   const capUsd = Number.isFinite(cap) && cap >= 0 ? cap : 3;
@@ -186,7 +211,7 @@ export async function runChat({ env, fetchImpl, now, data, messages }) {
     };
   }
   const tools = anthropicTools();
-  const system = systemPrompt(now);
+  const system = systemPrompt(now, { mode, short, name });
   const conv = messages.map((m) => ({ ...m }));
   const actions = [];
   let inTok = 0, outTok = 0;
@@ -268,7 +293,7 @@ export async function handleChat(request, env, { fetchImpl = (...a) => fetch(...
   const fs = new Firestore({ projectId, getToken: () => getAccessToken(acc, fetchImpl, now), fetchImpl });
   const data = new Data(fs, who.uid, now);
   try {
-    const out = await runChat({ env, fetchImpl, now, data, messages });
+    const out = await runChat({ env, fetchImpl, now, data, messages, ...chatMode(body) });
     return json(out.limited ? 429 : 200, out.limited ? { ...out, error: out.reply } : out);
   } catch (e) {
     if (e instanceof HttpError) return json(e.status, { error: e.message });

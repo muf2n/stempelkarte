@@ -26,7 +26,7 @@ function gridHTML() {
   const tiles = MODULES.map((m, i) =>
     `<a class="al-tile" href="#alltag/${esc(m.id)}" style="--al-c:${esc(m.color || "#4F46E5")};--i:${i}" data-id="${esc(m.id)}">` +
       `<span class="al-tile-ic">${icon(m.icon, 30) || icon("grid", 30)}</span>` +
-      `<span class="al-tile-txt"><b>${esc(m.title)}</b><small>${esc(m.sub || "")}</small></span>` +
+      `<span class="al-tile-txt"><b>${esc(m.title)}</b><small>${esc((m.subFn && m.subFn()) || m.sub || "")}</small></span>` +
       `<span class="al-tile-go" aria-hidden="true">${icon("chevron-right", 20)}</span>` +
     `</a>`).join("");
   return `<div class="al-home">` +

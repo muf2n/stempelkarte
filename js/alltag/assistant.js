@@ -6,6 +6,8 @@ import { getFirebase } from "../firebase.js";
 import { icon } from "../icons.js";
 import { esc } from "../util.js";
 import * as ui from "../ui.js";
+import { speakable } from "./voice-core.js";
+import * as voice from "./voice.js";
 
 const HIST_KEY = "stempelkarte.ai.history";
 const URL_KEY = "stempelkarte.ai.url";
@@ -20,6 +22,11 @@ const SUGGEST = [
   "Wofür hab ich diesen Monat Geld ausgegeben?",
   "Welche Prüfungen kommen als Nächstes?",
 ];
+
+// Test-Haken (nur localhost): window.__aiTest = { forceCloud, fakeServer(body) → {reply, actions}, gapMs, earlyMs, … }
+function testHook() {
+  try { return ["localhost", "127.0.0.1"].includes(location.hostname) && window.__aiTest || null; } catch { return null; }
+}
 
 const lsGet = (k) => { try { return localStorage.getItem(k); } catch { return null; } };
 const lsSet = (k, v) => { try { localStorage.setItem(k, v); } catch { /* egal */ } };
@@ -59,6 +66,12 @@ export function mount(el, ctx) {
     <div class="ai">
       <div class="ai-log" aria-live="polite"></div>
       <div class="ai-sugg"></div>
+      <div class="ai-voicebar">
+        <button type="button" class="ai-talk" aria-label="Gesprächsmodus starten"><span class="ai-orb" aria-hidden="true">${icon("mic", 20)}</span><span class="ai-talk-t">🎙️ Sprechen</span></button>
+        <span class="ai-wake" hidden title="Hört nur, solange der Assistent offen und der Bildschirm an ist. Ein Weckwort im Hintergrund geht nur mit der nativen App."><i></i><span class="ai-wake-t">Hört auf „Hey Claude“</span></span>
+        <span class="ai-vnote" hidden></span>
+        <button type="button" class="ai-link ai-vset">Stimme</button>
+      </div>
       <form class="ai-form" autocomplete="off">
         <button type="button" class="ai-mic" aria-label="Sprechen">${icon("mic", 22)}</button>
         <textarea class="ai-in" rows="1" placeholder="Frag Claude …" aria-label="Nachricht an Claude"></textarea>
@@ -76,18 +89,46 @@ export function mount(el, ctx) {
   const input = el.querySelector(".ai-in");
   const usageEl = el.querySelector(".ai-usage");
   const mic = el.querySelector(".ai-mic");
+  const vbar = el.querySelector(".ai-voicebar");
+  const talkBtn = el.querySelector(".ai-talk");
+  const wakeEl = el.querySelector(".ai-wake");
+  const vnote = el.querySelector(".ai-vnote");
+  const sup = voice.support();
+
+  /** Name des Assistenten in Platzhalter, Kopfzeile, Orb-Knopf und Weckwort-Anzeige */
+  function applyName() {
+    const n = voice.assistantName();
+    input.placeholder = `Frag ${n} …`;
+    input.setAttribute("aria-label", `Nachricht an ${n}`);
+    talkBtn.setAttribute("aria-label", `Gespräch mit ${n} starten`);
+    talkBtn.querySelector(".ai-talk-t").textContent = `Mit ${n} sprechen`;
+    wakeEl.querySelector(".ai-wake-t").textContent = `Hört auf „Hey ${n}“`;
+    const head = el.closest(".al-mod")?.querySelector(".al-title");
+    if (head) {
+      const t = [...head.childNodes].find((x) => x.nodeType === 3);
+      const label = voice.customName() || "Claude-Assistent";
+      if (t) t.textContent = label; else head.append(label);
+    }
+  }
+  let conv = null;
+  let wake = null;
+
+  const blocked = () => store.get().mode === "local" && !(testHook() && testHook().forceCloud);
 
   function render() {
     const snap = store.get();
-    if (snap.mode === "local") {
+    if (blocked()) {
+      vbar.hidden = true;
       log.innerHTML = `<div class="ai-empty"><div class="ai-badge">✨</div><h3>Claude-Assistent</h3>
         <p>Der Assistent braucht die Anmeldung mit Google, weil er deine gespeicherten Daten liest. Im lokalen Modus geht das nicht.</p></div>`;
       sugg.innerHTML = ""; form.hidden = true; return;
     }
     form.hidden = false;
+    vbar.hidden = false;
     if (!hist.length) {
-      log.innerHTML = `<div class="ai-empty"><div class="ai-badge">✨</div><h3>Frag Claude</h3>
-        <p>Claude kennt deine Zeiten, Termine, To-dos, Geld und Schule – und kann auch eintragen (z. B. „Trag mir morgen 7 Uhr Baustelle ein“).</p></div>`;
+      const nm = esc(voice.assistantName());
+      log.innerHTML = `<div class="ai-empty"><div class="ai-badge">✨</div><h3>Frag ${nm}</h3>
+        <p>${nm} kennt deine Zeiten, Termine, To-dos, Geld und Schule – und kann auch eintragen (z. B. „Trag mir morgen 7 Uhr Baustelle ein“).</p></div>`;
     } else {
       log.innerHTML = hist.map((m) => m.role === "user"
         ? `<div class="ai-msg me">${esc(m.content).replace(/\n/g, "<br>")}</div>`
@@ -103,24 +144,38 @@ export function mount(el, ctx) {
     lsSet(HIST_KEY, JSON.stringify(hist));
   }
 
-  async function send(text) {
+  /** Frage stellen, Verlauf führen. → {reply, actions, error} */
+  async function ask(text, { spoken = false } = {}) {
     text = String(text || "").trim();
-    if (!text || busy) return;
+    if (!text) return { reply: "", actions: [], error: true };
+    if (busy) return { reply: "Moment, ich bin noch bei der letzten Frage.", actions: [], error: true };
     hist.push({ role: "user", content: text });
-    save(); busy = true; input.value = ""; autosize(); render();
+    save(); busy = true; if (alive) render();
     let reply, actions = [];
     try {
-      const f = await getFirebase();
-      const u = f && f.auth.currentUser;
-      if (!u) throw new Error("Bitte zuerst mit Google anmelden.");
-      const token = await u.getIdToken();
-      const res = await fetch(serverUrl(store.get()) + "/chat", {
-        method: "POST",
-        headers: { "Content-Type": "application/json", Authorization: "Bearer " + token },
-        body: JSON.stringify({ messages: hist.filter((m) => !m.err).map((m) => ({ role: m.role, content: m.content })) }),
-      });
-      let data = null;
-      try { data = await res.json(); } catch { /* leer */ }
+      const hook = testHook();
+      const body = { messages: hist.filter((m) => !m.err).map((m) => ({ role: m.role, content: m.content })) };
+      body.assistantName = voice.assistantName();
+      if (spoken) { body.mode = "voice"; body.short = voice.loadVoice().short; }
+      let token = "test";
+      if (!(hook && hook.forceCloud)) {
+        const f = await getFirebase();
+        const u = f && f.auth.currentUser;
+        if (!u) throw new Error("Bitte zuerst mit Google anmelden.");
+        token = await u.getIdToken();
+      }
+      let res, data = null;
+      if (hook && typeof hook.fakeServer === "function") {
+        data = await hook.fakeServer(body);
+        res = { ok: !(data && data.error), status: data && data.error ? 500 : 200 };
+      } else {
+        res = await fetch(serverUrl(store.get()) + "/chat", {
+          method: "POST",
+          headers: { "Content-Type": "application/json", Authorization: "Bearer " + token },
+          body: JSON.stringify(body),
+        });
+        try { data = await res.json(); } catch { /* leer */ }
+      }
       if (!res.ok) {
         const map = {
           401: "Anmeldung abgelehnt – bitte ab- und wieder anmelden.",
@@ -134,17 +189,28 @@ export function mount(el, ctx) {
       if (data && data.usage) {
         usageEl.textContent = `Diesen Monat: ${Number(data.usage.usd || 0).toFixed(2).replace(".", ",")} $ von ${data.usage.capUsd} $`;
       }
-      if (actions.length && ctx && ctx.toast) ctx.toast("Claude hat etwas eingetragen ✓");
+      if (actions.length && ctx && ctx.toast) ctx.toast(`${voice.assistantName()} hat etwas eingetragen ✓`);
     } catch (err) {
       const msg = err && err.name === "TypeError"
         ? "Server nicht erreichbar. Ist er schon eingerichtet und bist du online?"
         : (err && err.message) || String(err);
       hist.push({ role: "assistant", content: "⚠️ " + msg, err: true });
-      save(); busy = false; if (alive) render(); return;
+      save(); busy = false; if (alive) render();
+      return { reply: msg, actions: [], error: true };
     }
     hist.push({ role: "assistant", content: reply, actions });
     save(); busy = false;
     if (alive) render();
+    return { reply, actions };
+  }
+
+  async function send(text) {
+    text = String(text || "").trim();
+    if (!text || busy) return;
+    input.value = ""; autosize();
+    voice.cancelSpeech();
+    const r = await ask(text);
+    if (alive && !conv && r.reply && sup.tts && voice.loadVoice().readAloud) voice.speak(speakable(r.reply));
   }
 
   function autosize() {
@@ -165,6 +231,8 @@ export function mount(el, ctx) {
   mic.addEventListener("click", () => {
     if (!SR) return;
     if (rec) { try { rec.stop(); } catch {} return; }
+    voice.cancelSpeech();
+    if (wake) wake.pause();
     rec = new SR();
     rec.lang = "de-AT"; rec.interimResults = true; rec.maxAlternatives = 1;
     const base = input.value ? input.value + " " : "";
@@ -176,8 +244,8 @@ export function mount(el, ctx) {
       if (ev.results[ev.results.length - 1].isFinal) { try { rec.stop(); } catch {} }
     };
     rec.onerror = () => {};
-    rec.onend = () => { mic.classList.remove("on"); rec = null; if (input.value.trim()) send(input.value); };
-    try { rec.start(); } catch { mic.classList.remove("on"); rec = null; }
+    rec.onend = () => { mic.classList.remove("on"); rec = null; if (wake && !conv) wake.resume(); if (input.value.trim()) send(input.value); };
+    try { rec.start(); } catch { mic.classList.remove("on"); rec = null; if (wake && !conv) wake.resume(); }
   });
 
   el.querySelector(".ai-foot").addEventListener("click", (e) => {
@@ -205,7 +273,69 @@ export function mount(el, ctx) {
     }
   });
 
-  const off = store.subscribe(() => { if (alive && !busy) render(); });
+  /* ---------- Sprache: Gesprächsmodus, „Hey Claude“, Einstellungen ---------- */
+
+  function showWake(on) {
+    wakeEl.hidden = !on;
+    if (on) { const v = voice.loadVoice(); if (!v.wakeGranted) voice.saveVoice({ wakeGranted: true }); }
+  }
+
+  async function startTalk(first = "") {
+    if (!sup.talk || conv || !alive) return;
+    if (rec) { try { rec.abort(); } catch {} rec = null; mic.classList.remove("on"); }
+    voice.cancelSpeech();
+    conv = new voice.Conversation({
+      ask: (t) => ask(t, { spoken: true }),
+      onEnd: () => { conv = null; if (wake && alive) wake.resume(); },
+    });
+    const c = conv;
+    if (wake) await wake.pause();
+    if (conv === c) c.start(first);
+  }
+
+  if (!sup.talk) {
+    talkBtn.hidden = true;
+    vnote.hidden = false;
+    vnote.textContent = sup.tts
+      ? "Sprachmodus geht in diesem Browser nicht (am Handy: Chrome)."
+      : "Sprechen und Vorlesen gehen in diesem Browser nicht.";
+  }
+  if (!sup.tts && !sup.sr) el.querySelector(".ai-vset").hidden = true;
+  talkBtn.addEventListener("click", () => startTalk(""));
+
+  if (sup.talk) {
+    wake = new voice.WakeListener({
+      onWake: (rest) => startTalk(rest),
+      onChange: showWake,
+      onDenied: () => {
+        voice.saveVoice({ wake: false, wakeGranted: false });
+        ui.toast(`Kein Mikrofon-Zugriff – „Hey ${voice.assistantName()}“ ist aus.`);
+      },
+    });
+    const v = voice.loadVoice();
+    // Beim ersten Mal nur über den Schalter (Tipp) starten – danach automatisch beim Öffnen
+    if (v.wake && v.wakeGranted && !blocked()) wake.setWanted(true);
+  }
+
+  el.querySelector(".ai-vset").addEventListener("click", () => {
+    voice.openVoiceSettings(ui, {
+      onWakeToggle: (on) => {
+        if (!wake) return;
+        wake.setWanted(on && !blocked());
+        if (on) ui.toast(`„Hey ${voice.assistantName()}“ ist an – nur solange die App offen ist.`);
+      },
+      onName: () => { applyName(); if (!busy && !hist.length) render(); },
+    });
+  });
+
+  const off = store.subscribe(() => { if (alive && !busy) { render(); applyName(); } });
   render();
-  return () => { alive = false; off(); if (rec) { try { rec.stop(); } catch {} } };
+  applyName();
+  return () => {
+    alive = false; off();
+    if (rec) { try { rec.stop(); } catch {} }
+    if (conv) conv.stop("unmount");
+    if (wake) wake.destroy();
+    voice.cancelSpeech();
+  };
 }

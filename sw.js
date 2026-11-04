@@ -74,6 +74,9 @@ const SHELL = [
   "js/alltag/money-core.js",
   "js/alltag/money.js",
   "js/alltag/assistant.js",
+  // Update 9 – Claude-Sprachmodus
+  "js/alltag/voice.js",
+  "js/alltag/voice-core.js",
   // Update 9 – Abos aus Gmail
   "js/alltag/gmail.js",
   "js/alltag/subs-detect.js",
