@@ -1,6 +1,7 @@
 // Google-Anmeldung über Firebase Auth: Anmelden (Popup, sonst Weiterleitung), Abmelden, Statusänderungen melden.
 
 import { getFirebase } from "./firebase.js";
+import { isNative, nativeGoogleCredential, nativeSignOut } from "./native.js";
 
 function toUser(u) {
   if (!u) return null;
@@ -35,7 +36,7 @@ export async function initAuth(onUser) {
   const { auth, fa } = fb;
   try { await fa.setPersistence(auth, fa.browserLocalPersistence); }
   catch (err) { console.warn("setPersistence fehlgeschlagen:", err); }
-  try { await fa.getRedirectResult(auth); }
+  if (!isNative()) try { await fa.getRedirectResult(auth); }
   catch (err) { console.warn("Anmeldung per Weiterleitung fehlgeschlagen:", err && err.code, err); }
   return fa.onAuthStateChanged(auth, (u) => onUser(toUser(u)));
 }
@@ -44,6 +45,18 @@ export async function signIn() {
   const fb = await getFirebase();
   if (!fb) throw new Error("Firebase ist noch nicht eingerichtet – siehe Anleitung.");
   const { auth, fa } = fb;
+  if (isNative()) {
+    try {
+      const cred = await nativeGoogleCredential(fa);
+      if (!cred) return null;
+      const res = await fa.signInWithCredential(auth, cred);
+      return toUser(res.user);
+    } catch (err) {
+      const msg = String((err && (err.message || err.code)) || "");
+      if (/cancel|abgebrochen|12501/i.test(msg)) return null;
+      throw err && err.code && String(err.code).startsWith("auth/") ? germanError(err) : new Error("Anmeldung in der App fehlgeschlagen: " + msg);
+    }
+  }
   const provider = new fa.GoogleAuthProvider();
   provider.setCustomParameters({ prompt: "select_account" });
   try {
@@ -64,4 +77,5 @@ export async function signOut() {
   const fb = await getFirebase();
   if (!fb) return;
   await fb.fa.signOut(fb.auth);
+  if (isNative()) await nativeSignOut();
 }

@@ -17,6 +17,7 @@ import { openEntryForm } from "./views/entries.js";
 import { openPlaceForm } from "./views/places.js";
 import { icon } from "./icons.js";
 import * as lockscreen from "./lockscreen.js";
+import * as native from "./native.js";
 
 const TABS = ["heute", "eintraege", "agenda", "uebersicht", "orte"];
 const VIEWS = { heute: today, eintraege: entries, agenda, uebersicht: overview, orte: places };
@@ -510,4 +511,5 @@ document.addEventListener("visibilitychange", () => {
 renderSync();
 renderTopbar();
 safe(lockscreen.init, ctx);
+if (native.isNative()) { document.documentElement.classList.add("is-native"); setTimeout(() => native.checkApkUpdate((m) => ui.toast(m, 4000)), 4000); }
 boot();

@@ -39,6 +39,7 @@ const SHELL = [
   "js/deco.js",
   "js/lock-core.js",
   "js/lockscreen.js",
+  "js/native.js",
   "js/views/lock-settings.js",
   "js/motion.js",
   "js/views/drive-settings.js",

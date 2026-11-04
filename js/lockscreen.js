@@ -4,6 +4,7 @@
 // Warteschlange (lokal/offline) mit Original-Zeitstempeln anwenden und Standort nachtragen.
 import "./lock-core.js";
 import { firebaseConfig, isConfigured } from "./firebase-config.js";
+import { isNative } from "./native.js";
 
 const Core = globalThis.LockCore;
 const LOC_WINDOW_MS = 15 * 60 * 1000;
@@ -28,6 +29,7 @@ export function readLock(settings) {
 }
 
 export function isSupported() {
+  if (isNative()) return false;
   return typeof window !== "undefined" && "Notification" in window && "serviceWorker" in navigator;
 }
 

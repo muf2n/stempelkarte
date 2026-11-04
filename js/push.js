@@ -2,6 +2,7 @@
 // Ohne vapidKey (js/firebase-config.js) bleibt alles still – die Einstellungen zeigen dann „wird noch eingerichtet“.
 import { getFirebase } from "./firebase.js";
 import { vapidKey } from "./firebase-config.js";
+import { isNative } from "./native.js";
 
 const MESSAGING_SDK = "https://www.gstatic.com/firebasejs/10.12.2/firebase-messaging.js";
 const TOKEN_KEY = "stempelkarte.pushToken";
@@ -12,6 +13,7 @@ function lsSet(k, v) { try { localStorage.setItem(k, v); } catch { /* egal */ } 
 
 /** Unterstützt dieser Browser Benachrichtigungen + Push? */
 export function isSupported() {
+  if (isNative()) return false; // in der Android-App: native Benachrichtigungen
   return typeof window !== "undefined" &&
     "Notification" in window &&
     "serviceWorker" in navigator &&
