@@ -37,7 +37,10 @@ function parseAccount(text) {
 function repairPem(k) {
   const t = k.replace(/\\n/g, "\n").replace(/[\u2010-\u2015\u2212]/g, "-");
   const m = /-+\s*BEGIN ([A-Z ]*?PRIVATE KEY)\s*-+([\s\S]*?)-+\s*END \1\s*-+/.exec(t);
-  if (!m) { console.error("Privater Schlüssel: BEGIN/END-Zeilen nicht gefunden."); return t; }
+  if (!m) {
+    console.error(`Privater Schlüssel: BEGIN/END-Zeilen nicht gefunden (Länge ${t.length}, enthält BEGIN: ${/BEGIN/.test(t)}, enthält END: ${/END/.test(t)}, Felder im Schlüssel: ${Object.keys(accountForDiag || {}).join(",")}).`);
+    return t;
+  }
   const label = m[1].trim();
   const body = m[2].replace(/[^A-Za-z0-9+/=]/g, "");
   const ok = body.length % 4 === 0;
@@ -47,8 +50,11 @@ function repairPem(k) {
 }
 
 let account;
+let accountForDiag = null;
 try {
   account = parseAccount(raw);
+  accountForDiag = account;
+  console.log(`Schlüssel-Text: ${String(raw).length} Zeichen (vollständig ca. 2300–2400).`);
   if (account.type !== "service_account" || !account.private_key || !account.client_email) {
     throw new Error("Inhalt ist kein Firebase-Dienstkonto-Schlüssel (type/private_key/client_email fehlt)");
   }
