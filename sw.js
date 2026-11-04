@@ -42,6 +42,14 @@ const SHELL = [
   "js/views/lock-settings.js",
   "js/motion.js",
   "js/views/drive-settings.js",
+  "js/views/agenda.js",
+  "js/views/apprentice.js",
+  "js/views/comfort-settings.js",
+  "js/views/day.js",
+  "js/views/report.js",
+  "js/watch.js",
+  "js/views/watch-settings.js",
+  "icons/wecker-192.png",
   "js/app.js"
 ];
 
