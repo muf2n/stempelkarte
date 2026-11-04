@@ -18,6 +18,8 @@ let ready = false;
 let user = null;
 let entries = new Map(); // id → Entry
 let places = new Map();  // id → Place
+let todos = new Map();   // id → Todo (Aufgaben & Termine)
+let days = new Map();    // dayKey → Tageswerte (Uhr)
 let running = null;
 let rev = 0;             // rev des zuletzt übernommenen state
 let lastLocalRev = 0;    // rev des zuletzt lokal geschriebenen state
@@ -74,6 +76,35 @@ function fail(err) {
   return err instanceof Error ? err : new Error(String(err));
 }
 
+/** Sortierung: offene zuerst, dann nach Datum/Uhrzeit (ohne Datum zuletzt), dann Anlagezeit. */
+function compareTodos(a, b) {
+  const da = a.done ? 1 : 0, db = b.done ? 1 : 0;
+  if (da !== db) return da - db;
+  const ka = a.date ? `${a.date} ${a.time || "99:99"}` : "~";
+  const kb = b.date ? `${b.date} ${b.time || "99:99"}` : "~";
+  if (ka !== kb) return ka < kb ? -1 : 1;
+  return (Number(a.createdAt) || 0) - (Number(b.createdAt) || 0);
+}
+
+function normTodo(t, id) {
+  const kind = t?.kind === "termin" ? "termin" : "todo";
+  const rm = Number(t?.remindMin);
+  return {
+    ...t,
+    id,
+    title: String(t?.title ?? ""),
+    kind,
+    date: t?.date || null,
+    time: t?.time || null,
+    remind: !!t?.remind,
+    remindMin: Number.isFinite(rm) && rm >= 0 ? rm : 30,
+    done: !!t?.done,
+    doneAt: t?.doneAt ?? null,
+    note: String(t?.note ?? ""),
+    createdAt: Number(t?.createdAt) || Date.now(),
+  };
+}
+
 function buildSnapshot() {
   const sortedPlaces = [...places.values()].sort((a, b) =>
     String(a.name || "").localeCompare(String(b.name || ""), "de", { sensitivity: "base" }));
@@ -81,6 +112,8 @@ function buildSnapshot() {
     mode, ready, user,
     entries: [...entries.values()],
     places: sortedPlaces,
+    todos: [...todos.values()].sort(compareTodos),
+    days: Object.fromEntries(days),
     running,
     settings: { ...settings },
   };
@@ -105,6 +138,8 @@ function resetState(newMode) {
   user = null;
   entries = new Map();
   places = new Map();
+  todos = new Map();
+  days = new Map();
   running = null;
   rev = 0;
   lastLocalRev = 0;
@@ -137,6 +172,8 @@ function writeLocalNow() {
   const data = {
     entries: [...entries.values()],
     places: [...places.values()],
+    todos: [...todos.values()],
+    days: Object.fromEntries(days),
     running,
     rev,
     settings,
@@ -175,6 +212,10 @@ function loadLocalInto(data) {
     .filter((e) => e && e.id).map((e) => [e.id, e]));
   places = new Map((Array.isArray(data?.places) ? data.places : [])
     .filter((p) => p && p.id).map((p) => [p.id, p]));
+  todos = new Map((Array.isArray(data?.todos) ? data.todos : [])
+    .filter((t) => t && t.id).map((t) => [t.id, normTodo(t, t.id)]));
+  days = new Map(Object.entries(data?.days && typeof data.days === "object" ? data.days : {})
+    .filter(([, d]) => d && typeof d === "object"));
   applyState({ running: data?.running ?? null, rev: data?.rev ?? 0 });
   settings = mergeSettings(data?.settings);
 }
@@ -262,6 +303,23 @@ export async function startCloud(u) {
     markSeen("places");
     changed();
   }, onErr("places")));
+
+  // Aufgaben/Termine und Tageswerte: blockieren „ready“ nicht (Zusatzdaten).
+  unsubs.push(fs.onSnapshot(fs.collection(db, "users", uid, "todos"), (qs) => {
+    if (myGen !== gen) return;
+    const m = new Map();
+    qs.forEach((d) => m.set(d.id, normTodo(d.data(), d.id)));
+    todos = m;
+    changed();
+  }, (err) => console.warn("Firestore-Listener „todos“ fehlgeschlagen:", err)));
+
+  unsubs.push(fs.onSnapshot(fs.collection(db, "users", uid, "days"), (qs) => {
+    if (myGen !== gen) return;
+    const m = new Map();
+    qs.forEach((d) => m.set(d.id, { ...d.data() }));
+    days = m;
+    changed();
+  }, (err) => console.warn("Firestore-Listener „days“ fehlgeschlagen:", err)));
 
   unsubs.push(fs.onSnapshot(fs.doc(db, "users", uid, "meta", "state"), (ds) => {
     if (myGen !== gen) return;
@@ -377,4 +435,40 @@ export async function saveSettings(partial) {
   changed();
   await persist((db, fs, uid) =>
     fs.setDoc(fs.doc(db, "users", uid, "meta", "settings"), p, { merge: true }));
+}
+
+// ---------- Aufgaben & Termine ----------
+
+export async function saveTodo(todo) {
+  requireStarted();
+  const id = todo?.id || newId("t");
+  const prev = todos.get(id);
+  const full = normTodo({ ...(prev || {}), ...withoutId(todo), createdAt: todo?.createdAt ?? prev?.createdAt ?? Date.now() }, id);
+  const data = clean(withoutId(full));
+  todos.set(id, { ...data, id });
+  changed();
+  await persist((db, fs, uid) => fs.setDoc(fs.doc(db, "users", uid, "todos", id), data));
+  return id;
+}
+
+export async function deleteTodo(id) {
+  requireStarted();
+  if (!id) return;
+  todos.delete(id);
+  changed();
+  await persist((db, fs, uid) => fs.deleteDoc(fs.doc(db, "users", uid, "todos", id)));
+}
+
+// ---------- Tageswerte (Uhr) ----------
+
+/** Ergänzt die Tageswerte eines Tages (merge); dayKey = "YYYY-MM-DD". */
+export async function saveDay(dayKey, partial) {
+  requireStarted();
+  if (!dayKey) return;
+  const key = String(dayKey);
+  const p = clean(partial || {});
+  days.set(key, { ...(days.get(key) || {}), ...p });
+  changed();
+  await persist((db, fs, uid) =>
+    fs.setDoc(fs.doc(db, "users", uid, "days", key), p, { merge: true }));
 }
