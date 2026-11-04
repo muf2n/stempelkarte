@@ -9,7 +9,7 @@ import * as ui from "../ui.js";
 
 const HIST_KEY = "stempelkarte.ai.history";
 const URL_KEY = "stempelkarte.ai.url";
-const DEFAULT_URL = "https://stempelkarte-mcp.muf2n.workers.dev";
+const DEFAULT_URL = "https://stempelkarte-mcp.lippa-florian.workers.dev";
 const MAX_MSGS = 40;
 
 const SUGGEST = [
