@@ -2,14 +2,12 @@
 // Der Server prüft das Firebase-Anmelde-Token, ruft Claude auf und darf über Werkzeuge die App-Daten lesen/ändern.
 // Verlauf bleibt nur auf diesem Gerät (localStorage), max. 40 Nachrichten.
 import * as store from "../store.js";
-import { getFirebase } from "../firebase.js";
+import { askClaude, serverUrl, aiAvailable, URL_KEY, DEFAULT_URL } from "./ai-client.js";
 import { icon } from "../icons.js";
 import { esc } from "../util.js";
 import * as ui from "../ui.js";
 
 const HIST_KEY = "stempelkarte.ai.history";
-const URL_KEY = "stempelkarte.ai.url";
-const DEFAULT_URL = "https://stempelkarte-mcp.lippa-florian.workers.dev";
 const MAX_MSGS = 40;
 
 const SUGGEST = [
@@ -27,11 +25,6 @@ const lsSet = (k, v) => { try { localStorage.setItem(k, v); } catch { /* egal */
 function loadHist() {
   try { const a = JSON.parse(lsGet(HIST_KEY) || "[]"); return Array.isArray(a) ? a.filter((m) => m && m.role && typeof m.content === "string") : []; }
   catch { return []; }
-}
-
-function serverUrl(snap) {
-  const s = (snap && snap.settings && snap.settings.ai && snap.settings.ai.url) || lsGet(URL_KEY) || DEFAULT_URL;
-  return String(s).replace(/\/+$/, "").replace(/\/(mcp|chat)$/, "");
 }
 
 // sehr kleines, sicheres Markdown: **fett**, Listen, Zeilenumbrüche
@@ -79,7 +72,7 @@ export function mount(el, ctx) {
 
   function render() {
     const snap = store.get();
-    if (snap.mode === "local") {
+    if (!aiAvailable(snap)) {
       log.innerHTML = `<div class="ai-empty"><div class="ai-badge">✨</div><h3>Claude-Assistent</h3>
         <p>Der Assistent braucht die Anmeldung mit Google, weil er deine gespeicherten Daten liest. Im lokalen Modus geht das nicht.</p></div>`;
       sugg.innerHTML = ""; form.hidden = true; return;
@@ -110,28 +103,10 @@ export function mount(el, ctx) {
     save(); busy = true; input.value = ""; autosize(); render();
     let reply, actions = [];
     try {
-      const f = await getFirebase();
-      const u = f && f.auth.currentUser;
-      if (!u) throw new Error("Bitte zuerst mit Google anmelden.");
-      const token = await u.getIdToken();
-      const res = await fetch(serverUrl(store.get()) + "/chat", {
-        method: "POST",
-        headers: { "Content-Type": "application/json", Authorization: "Bearer " + token },
-        body: JSON.stringify({ messages: hist.filter((m) => !m.err).map((m) => ({ role: m.role, content: m.content })) }),
-      });
-      let data = null;
-      try { data = await res.json(); } catch { /* leer */ }
-      if (!res.ok) {
-        const map = {
-          401: "Anmeldung abgelehnt – bitte ab- und wieder anmelden.",
-          503: "Der Server ist noch nicht fertig eingerichtet (Claude-Schlüssel fehlt).",
-          502: "Claude ist gerade nicht erreichbar. Bitte gleich nochmal probieren.",
-        };
-        throw new Error((data && (data.reply || data.error)) || map[res.status] || "Fehler " + res.status);
-      }
-      reply = String((data && data.reply) || "(keine Antwort)");
-      actions = (data && data.actions) || [];
-      if (data && data.usage) {
+      const data = await askClaude(hist.filter((m) => !m.err).map((m) => ({ role: m.role, content: m.content })));
+      reply = data.reply;
+      actions = data.actions;
+      if (data.usage) {
         usageEl.textContent = `Diesen Monat: ${Number(data.usage.usd || 0).toFixed(2).replace(".", ",")} $ von ${data.usage.capUsd} $`;
       }
       if (actions.length && ctx && ctx.toast) ctx.toast("Claude hat etwas eingetragen ✓");

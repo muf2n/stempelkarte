@@ -114,7 +114,7 @@ function fileName(d) {
   const ext = d.type === "application/pdf" ? ".pdf" : /^image\/jpeg/.test(d.type) ? ".jpg" : "";
   return (d.title || "Dokument").replace(/[\\/:*?"<>|]+/g, "_") + ext;
 }
-const kindIcon = (d) => (d.type === "application/pdf" ? "📄" : /^image\//.test(d.type || "") ? "🖼️" : /word|document/.test(d.type || "") ? "📝" : /sheet|excel/.test(d.type || "") ? "📊" : "📎");
+export const kindIcon = (d) => (d.type === "application/pdf" ? "📄" : /^image\//.test(d.type || "") ? "🖼️" : /word|document/.test(d.type || "") ? "📝" : /sheet|excel/.test(d.type || "") ? "📊" : "📎");
 
 /* ---------- Formulare ---------- */
 
@@ -189,7 +189,7 @@ function download(blob, name) {
   setTimeout(() => URL.revokeObjectURL(url), 60000);
 }
 
-function openDoc(S, d) {
+export function openDoc(S, d) {
   S.ctx.ui.openSheet({
     title: d.title || "Dokument",
     bodyHTML: `<div class="ss-doc-view">
