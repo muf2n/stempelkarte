@@ -3398,3 +3398,104 @@ html[data-big="1"] .md-tiles { grid-template-columns: repeat(2, minmax(0, 1fr));
 .al .rm-inline input[type="text"] { width: 6em; }
 .al [hidden] { display: none !important; }
 .al-places .chip { max-width: 100%; overflow: hidden; text-overflow: ellipsis; }
+/* Update 9 – Fotos pro Baustelle */
+.ph-sr { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+.ph-file { position: absolute; width: 1px; height: 1px; opacity: 0; pointer-events: none; overflow: hidden; }
+label[data-ph-cam] { position: relative; cursor: pointer; }
+.ph-bar { display: flex; gap: 10px; }
+.ph-bar[hidden] { display: none; }
+.ph-bar .ph-cam { flex: 1 1 auto; min-height: 56px; }
+.ph-bar .ph-count { flex: 0 0 auto; width: auto; min-height: 56px; padding: 8px 16px; gap: 6px; font-variant-numeric: tabular-nums; }
+.ph-bar .ph-count[hidden] { display: none; }
+.ph-count-l { font-weight: 600; font-size: .9rem; color: var(--muted); }
+
+.ph-gal { display: flex; flex-direction: column; gap: 10px; }
+.ph-gal-h { display: flex; align-items: center; justify-content: space-between; gap: 10px; min-height: 44px; }
+.ph-gal-t { display: inline-flex; align-items: center; gap: 8px; font-weight: 700; color: var(--ink); }
+.ph-gal-t .ico { color: var(--accent); }
+.ph-add { flex: 0 0 auto; }
+.ph-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(92px, 1fr)); gap: 8px; }
+.ph-empty { grid-column: 1 / -1; }
+.ph-th {
+  position: relative; display: block; padding: 0; margin: 0; border: 1px solid var(--line); border-radius: var(--r-sm);
+  overflow: hidden; aspect-ratio: 1 / 1; background: var(--soft); cursor: pointer; touch-action: manipulation;
+}
+.ph-th img { display: block; width: 100%; height: 100%; object-fit: cover; }
+.ph-th:focus-visible { outline: 3px solid var(--accent); outline-offset: 2px; }
+.ph-th:active { transform: scale(.98); }
+.ph-th-n {
+  position: absolute; right: 4px; bottom: 4px; width: 22px; height: 22px; border-radius: 50%;
+  display: grid; place-items: center; font-size: .75rem; background: rgba(0, 0, 0, .55); color: #fff;
+}
+.ph-daynav { margin-bottom: 4px; }
+
+/* Aufnahme-Blatt */
+.ph-cap { display: flex; flex-direction: column; gap: 12px; }
+.ph-cap-img {
+  display: grid; place-items: center; min-height: 180px; max-height: 46vh; border-radius: var(--r-sm);
+  overflow: hidden; background: var(--soft); border: 1px solid var(--line);
+}
+.ph-cap-img img { display: block; max-width: 100%; max-height: 46vh; object-fit: contain; }
+.ph-cap-where { display: flex; align-items: center; gap: 6px; margin: 0; }
+.ph-cap-where .ico { flex: none; color: var(--accent); }
+
+/* Vollbild */
+.ph-view {
+  position: fixed; inset: 0; z-index: 55; display: flex; flex-direction: column; /* über Blättern (50), unter dem Toast (60) */
+  background: #05070F; color: #EDEFFA; outline: none;
+  padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left);
+}
+.ph-v-bar { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 8px 12px; min-height: 60px; }
+.ph-v-n { font-variant-numeric: tabular-nums; color: #B9BFD8; font-size: .95rem; padding-left: 4px; }
+.ph-v-x {
+  width: 48px; height: 48px; border: 0; border-radius: 50%; background: rgba(255, 255, 255, .12); color: #fff;
+  font-size: 1.35rem; line-height: 1; display: inline-flex; align-items: center; justify-content: center; cursor: pointer;
+}
+.ph-v-x:focus-visible, .ph-v-arr:focus-visible { outline: 3px solid #8E90FF; outline-offset: 2px; }
+.ph-v-stage { position: relative; flex: 1 1 auto; min-height: 0; display: flex; align-items: center; justify-content: center; padding: 0 8px; }
+.ph-v-stage img { max-width: 100%; max-height: 100%; object-fit: contain; border-radius: 6px; user-select: none; -webkit-user-select: none; }
+.ph-v-arr {
+  position: absolute; top: 50%; transform: translateY(-50%); width: 48px; height: 64px; border: 0; border-radius: 14px;
+  background: rgba(0, 0, 0, .45); color: #fff; font-size: 2rem; line-height: 1; cursor: pointer; z-index: 1;
+}
+.ph-v-arr[hidden] { display: none; }
+.ph-v-prev { left: 10px; }
+.ph-v-next { right: 10px; }
+.ph-v-panel {
+  flex: none; display: flex; flex-direction: column; gap: 10px; padding: 12px 16px 16px;
+  background: #11152A; border-top: 1px solid rgba(255, 255, 255, .08);
+}
+.ph-v-meta { font-size: .92rem; color: #B9BFD8; }
+.ph-v-meta b { color: #EDEFFA; font-weight: 700; }
+.ph-v-note textarea {
+  width: 100%; min-height: 48px; resize: vertical; padding: 10px 12px; border-radius: var(--r-sm);
+  border: 1px solid rgba(255, 255, 255, .16); background: rgba(255, 255, 255, .06); color: #EDEFFA; font: inherit;
+}
+.ph-v-note textarea::placeholder { color: #8890AD; }
+.ph-v-note textarea:focus { outline: none; border-color: #8E90FF; box-shadow: 0 0 0 3px rgba(142, 144, 255, .3); }
+.ph-v-acts { display: flex; flex-wrap: wrap; gap: 8px; justify-content: flex-end; }
+.ph-v-acts .btn.ghost { background: rgba(255, 255, 255, .06); color: #C7C9FF; border-color: rgba(255, 255, 255, .2); }
+.ph-v-acts .btn.danger { background: transparent; }
+.ph-v-acts .btn.danger { color: #FCA5A5; border-color: rgba(248, 113, 113, .5); }
+.ph-v-acts .btn.danger[data-armed] { background: #DC2626; color: #fff; }
+.ph-v-acts .btn[hidden] { display: none; }
+@media (min-width: 1024px) {
+  .ph-v-panel { width: min(720px, 100%); align-self: center; border-radius: 16px 16px 0 0; }
+  .ph-grid { grid-template-columns: repeat(auto-fill, minmax(110px, 1fr)); }
+}
+
+/* „Mein Tag“: Fotos von heute */
+.ph-strip { display: flex; align-items: center; gap: 10px; margin: 0 0 10px; }
+.ph-strip[hidden] { display: none; }
+.ph-strip-l {
+  flex: none; display: inline-flex; align-items: center; gap: 6px; min-height: 44px; padding: 6px 12px;
+  border: 1px solid var(--line); border-radius: var(--r-sm); background: transparent; color: var(--accent);
+  font: inherit; font-weight: 700; font-size: .9rem; cursor: pointer; touch-action: manipulation;
+}
+.ph-strip-l:focus-visible { outline: 3px solid var(--accent); outline-offset: 2px; }
+.ph-strip-row { display: flex; gap: 6px; min-width: 0; overflow: hidden; }
+.ph-th.ph-th-s { width: 44px; height: 44px; flex: none; border-radius: 10px; }
+
+/* Berichtsheft: Foto-Anzahl je Tag (nur Anzeige) */
+.rp-day .rp-ph { display: block; margin-top: 2px; font-size: .76rem; color: var(--muted); white-space: nowrap; }
+@media print { .rp-ph { display: none !important; } }

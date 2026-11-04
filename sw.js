@@ -56,6 +56,8 @@ const SHELL = [
   "js/travel.js",
   "js/views/trips.js",
   "js/views/allowance-settings.js",
+  "js/photos.js",
+  "js/views/gallery.js",
   "icons/wecker-192.png",
   "js/app.js"
 ];

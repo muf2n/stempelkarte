@@ -5,6 +5,10 @@ import { icon } from "../icons.js";
 import { plansToday } from "./plans.js";
 import { einsatzFor } from "../einsatz.js";
 import { showEinsatzplan } from "./agenda.js";
+import { mountDayStrip, openDayPhotos } from "./gallery.js"; // Update 9 – Fotos
+
+/** Update 9: Fotos eines Tages als Blatt (mit Tag vor/zurück). */
+export function openDayPhotoSheet(dayKey, c) { openDayPhotos(dayKey, c || ctx); }
 
 const COMFORT_KEY = "stempelkarte.comfort";
 const WD_SHORT = ["Mo", "Di", "Mi", "Do", "Fr", "Sa", "So"];
@@ -14,6 +18,7 @@ let ctx = null;
 let root = null;
 let snap = null;
 let lastKey = "";
+let photoStrip = null; // Update 9 – Fotos von heute
 
 /* ---------------- Einfacher bedienen ---------------- */
 
@@ -155,6 +160,7 @@ export function mount(el, c) {
     </div>
     <button type="button" class="md-ez" data-md="ez" data-md-ez="1" hidden></button>
     <div class="md-tiles" data-md="tiles"></div>
+    <div data-md="photos" hidden></div>
     <div class="md-watch" data-md="watch" hidden></div>
     <div class="md-week" data-md="week" aria-label="Diese Woche"></div>`;
   root.addEventListener("click", (ev) => {
@@ -166,6 +172,7 @@ export function mount(el, c) {
     const b = ev.target.closest("[data-md-go]");
     if (b) ctx.go(b.dataset.mdGo);
   });
+  try { photoStrip = mountDayStrip(root.querySelector('[data-md="photos"]'), ctx); } catch (e) { console.error(e); }
 }
 
 export function update(s) {
@@ -195,6 +202,7 @@ function render() {
   const workMin = Math.floor(mins[todayK] || 0);
   const showWatchHint = steps === null && up === null && !watchEverUsed();
   const ez = einsatzInfo(todayK);
+  try { if (photoStrip) photoStrip.update(todayK, snap); } catch (e) { console.error(e); }
 
   // Wochenleiste
   const week = [];

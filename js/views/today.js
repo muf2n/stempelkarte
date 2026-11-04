@@ -8,6 +8,7 @@ import { getFirebase } from "../firebase.js";
 import * as motion from "../motion.js";
 import * as myday from "./day.js";
 import { peoplePicker, cleanPeople, peopleText, rememberPeople } from "./entries.js";
+import { mountPhotoBar } from "./gallery.js"; // Update 9 – Fotos
 
 // Einsatzplan-Helfer (js/einsatz.js, Agent T) – dynamisch, mit Fallback (null)
 let einsatzForFn = null;
@@ -45,6 +46,7 @@ let pplKey = "";          // zuletzt gezeichnete gemerkte Personen
 let pplTouched = "";      // dayKey, an dem der Nutzer die Personen selbst gewählt hat
 let pplPrefill = "";      // zuletzt übernommene Einsatz-Vorauswahl (JSON)
 let placeTouched = "";    // dayKey, an dem der Nutzer den Ort selbst gewählt hat
+let photoBar = null;      // Update 9 – Kamera-Knopf (nur eingestempelt)
 const dismissed = new Set(); // in dieser Sitzung ausgeblendete Vorschläge
 const addrPending = new Set(); // Standorte (loc.ts), deren Adresse gerade geladen wird
 
@@ -282,6 +284,7 @@ export function mount(el, c) {
   </div>
   <div class="stack" data-r="tips" hidden></div>
   <div class="row" data-r="btns"></div>
+  <div data-r="photo" hidden></div>
   <div class="stack" data-r="pre">
     <div class="lbl lbl-ico">${icon("briefcase", 20)}<span>Tätigkeit</span></div>
     <div class="chips" data-r="acts"></div>
@@ -312,6 +315,7 @@ export function mount(el, c) {
 </div>`;
 
   try { myday.mount($("myday"), ctx); } catch (e) { console.error(e); }
+  try { photoBar = mountPhotoBar($("photo"), ctx); } catch (e) { console.error(e); }
   $("btns").addEventListener("click", onButton);
   $("chips").addEventListener("click", onChip);
   $("acts").addEventListener("click", onActChip);
@@ -348,6 +352,7 @@ export function update(s) {
   snap = s;
   if (!root) return;
   try { myday.update(s); } catch (e) { console.error(e); }
+  try { if (photoBar) photoBar.update(s); } catch (e) { console.error(e); }
   if (s.running) {
     done = null;              // neue/andere Schicht läuft
   }
