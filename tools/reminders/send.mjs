@@ -8,9 +8,37 @@ if (!raw) {
   process.exit(0);
 }
 
+// Beim Kopieren am Handy werden oft Anführungszeichen „verschönert“, unsichtbare Zeichen
+// eingefügt oder Zeilen umgebrochen – das hier repariert die üblichen Fälle.
+function parseAccount(text) {
+  const tries = [];
+  let t = String(text).replace(/^\uFEFF/, "").trim();
+  tries.push(t);
+  t = t.replace(/[\u200B-\u200D\u2060\u00AD]/g, "")
+       .replace(/[\u201C\u201D\u201E\u201F\u2033\u00AB\u00BB]/g, '"')
+       .replace(/[\u2018\u2019\u201A\u201B\u2032]/g, "'")
+       .replace(/\u00A0/g, " ");
+  tries.push(t);
+  // echte Zeilenumbrüche innerhalb von Strings (z. B. im private_key) maskieren
+  tries.push(t.replace(/"(?:[^"\\]|\\.)*"/gs, (m) => m.replace(/\r?\n/g, "\\n")));
+  let lastErr;
+  for (const c of tries) {
+    try { return JSON.parse(c); } catch (e) { lastErr = e; }
+  }
+  const m = /position (\d+)/.exec(lastErr && lastErr.message || "");
+  const pos = m ? Number(m[1]) : -1;
+  const ch = pos >= 0 ? t.codePointAt(pos) : null;
+  // Bewusst NICHT lastErr.message ausgeben: Node hängt dort einen Ausschnitt des (geheimen) Inhalts an.
+  throw new Error(`Lesefehler an Stelle ${pos}` + (ch != null ? ` (Zeichen dort: U+${ch.toString(16).toUpperCase().padStart(4, "0")})` : "") + `, Länge gesamt ${t.length}, beginnt mit „{“: ${t.startsWith("{")}`);
+}
+
 let account;
 try {
-  account = JSON.parse(raw);
+  account = parseAccount(raw);
+  if (account.type !== "service_account" || !account.private_key || !account.client_email) {
+    throw new Error("Inhalt ist kein Firebase-Dienstkonto-Schlüssel (type/private_key/client_email fehlt)");
+  }
+  account.private_key = String(account.private_key).replace(/\\n/g, "\n");
 } catch (e) {
   console.error("FIREBASE_SERVICE_ACCOUNT ist kein gültiges JSON:", e.message);
   process.exit(1);
