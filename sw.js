@@ -81,6 +81,11 @@ const SHELL = [
   // Update 9 – Bankverbindung (BAWAG über Enable Banking)
   "js/alltag/money-bank.js",
   "bank-callback.html",
+  // Update 9 – Passwort-Tresor
+  "js/alltag/vault.js",
+  "js/alltag/vault-crypto.js",
+  "js/alltag/vault-core.js",
+  "js/alltag/qr.js",
   "js/app.js"
 ];
 
