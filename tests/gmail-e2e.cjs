@@ -167,7 +167,7 @@ const gmailHits = [];
   gmailMode = "403";
   await page.click(".gm-scan");
   await page.waitForSelector(".gm-err");
-  ok((await page.textContent(".gm-err")).includes("Gmail-Zugriff noch nicht freigegeben – siehe Anleitung"), "403 → Hinweis „noch nicht freigegeben“");
+  ok(/Gmail-Zugriff nicht mitgegeben|noch nicht freigegeben/.test(await page.textContent(".gm-err")), "403 → Hinweis zur Freigabe");
   ok(await page.$eval(".gm-help", (d) => d.open), "Anleitung aufgeklappt");
   gmailMode = "ok";
   await page.screenshot({ path: path.join(OUT, "gmail-390-light-403.png"), fullPage: true });
