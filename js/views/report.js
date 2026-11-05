@@ -4,6 +4,7 @@
 import { icon } from "../icons.js";
 import {
   esc, hm, dayKey, startOfWeek, holidayName, schoolLabel, schoolCreditMin, creditMin, kindLabel, WD,
+  isPrivateTrip,
 } from "../util.js";
 import { countByDays } from "../photos.js"; // Update 9 – Foto-Anzahl je Tag
 import { verbautOn, shortLine } from "../alltag/material-core.js"; // Update 9 – Material je Tag (rein, ohne DOM)
@@ -107,7 +108,7 @@ function addUniq(list, v) {
 /** Zeilen Mo–So für die Woche ab ws (Montag). */
 export function buildWeek(snap, ws) {
   const settings = (snap && snap.settings) || {};
-  const entries = (snap && snap.entries) || [];
+  const entries = ((snap && snap.entries) || []).filter((e) => !isPrivateTrip(e)); // Update 9 – Privatfahrten nicht im Berichtsheft
   const rows = [];
   for (let i = 0; i < 7; i++) {
     const d = new Date(ws.getFullYear(), ws.getMonth(), ws.getDate() + i);

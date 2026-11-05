@@ -9,7 +9,7 @@
 // - Nachgetragene Fahrt: liegt sie innerhalb einer Arbeitszeit desselben Tages (in EINEM Abschnitt),
 //   wird dieser Abschnitt geteilt und die Fahrt dort eingefügt (Arbeitszeit bleibt gleich).
 //   Sonst entsteht ein eigener Arbeitseintrag mit genau diesem Abschnitt (`tripOnly: true`):
-//   beruflich → zählt als Arbeitszeit, privat → pauseMin = Dauer (0 h netto).
+//   beruflich → zählt als Arbeitszeit, privat → `privateTrip: true` (util.netMin = 0; pauseMin = Dauer bleibt für ältere Stände).
 import { icon } from "../icons.js";
 import { tripsBetween, segmentKm, fmtKm, fmtEur, parseNum, KM_SOURCE } from "../travel.js";
 import {
@@ -70,7 +70,8 @@ function render() {
   const esc = u.esc;
   const s = snap.settings || {};
   const all = monthTrips(snap, cur.from);
-  const list = filterTrips(all, cur.q, s);
+  // Update 9 – Privat: Filter „alle / nur beruflich / nur privat“
+  const list = filterTrips(all, cur.q, s).filter((t) => cur.art === "biz" ? !t.private : cur.art === "priv" ? t.private : true);
   cur.trips = new Map(all.map((t) => [t.key, t]));
   const tot = totals(all, s);
   const ts = readTripSettings(s);
@@ -107,7 +108,8 @@ function render() {
       <p class="note">Fahrten entstehen aus Abschnitten „Autofahren“ beim Stempeln – oder du trägst sie nach.</p>
       <button type="button" class="btn primary sm" data-fb="add">${icon("plus", 18)}<span>Fahrt nachtragen</span></button></div>`;
   } else if (!list.length) {
-    host.innerHTML = `<p class="note fb-none">Keine Fahrt passt zu „${esc(cur.q)}“.</p>`;
+    host.innerHTML = cur.q ? `<p class="note fb-none">Keine Fahrt passt zu „${esc(cur.q)}“.</p>`
+      : `<p class="note fb-none">Keine ${cur.art === "priv" ? "privaten" : "beruflichen"} Fahrten in diesem Monat.</p>`;
   } else {
     const groups = groupByDay(list, u.dayKey);
     host.innerHTML = groups.map((g) => {
@@ -127,7 +129,7 @@ function render() {
 function rowHTML(t, s, esc, u) {
   const a = fromLabel(t), b = toLabel(t);
   const v = tripVehicle(t, s);
-  const sub = [b.sub, t.purpose !== b.main ? t.purpose : ""].filter(Boolean);
+  const sub = [b.sub, t.purpose !== b.main && !(t.private && t.purpose === "Privat") ? t.purpose : ""].filter(Boolean);
   if (t.private) sub.push("privat");
   const title = `${a.full || a.main} → ${b.full || b.main}`;
   return `<li><button type="button" class="fb-row${t.isReturn ? " is-ret" : ""}${t.private ? " is-priv" : ""}" data-key="${esc(t.key)}" title="${esc(title)}">
@@ -218,6 +220,11 @@ export function openTripLog(ctx, { year, month } = {}) {
       <aside class="fb-side">
         <div class="fb-sum card"></div>
         <label class="fb-search">${icon("search", 18)}<input type="search" data-fb="q" placeholder="Suchen: Ort, Zweck, Fahrzeug" aria-label="Fahrten durchsuchen" autocomplete="off"></label>
+        <div class="chips fb-artf" role="group" aria-label="Fahrten zeigen">
+          <button type="button" class="chip" data-fbart="all" aria-pressed="true">Alle</button>
+          <button type="button" class="chip" data-fbart="biz" aria-pressed="false">nur beruflich</button>
+          <button type="button" class="chip" data-fbart="priv" aria-pressed="false">nur privat</button>
+        </div>
         <div class="fb-tools">
           <button type="button" class="btn ghost sm" data-fb="veh">${icon("car", 18)}<span>Fahrzeuge</span></button>
           <button type="button" class="btn ghost sm" data-fb="csv">${icon("download", 18)}<span>CSV</span></button>
@@ -227,7 +234,7 @@ export function openTripLog(ctx, { year, month } = {}) {
       <div class="fb-list"></div>
     </div>`;
 
-  cur = { ctx, from, el, q: "", unsub: null, io: null, pushed: false, trips: new Map(),
+  cur = { ctx, from, el, q: "", art: "all", unsub: null, io: null, pushed: false, trips: new Map(),
     prevOverflow: document.body.style.overflow || "", prevFocus: document.activeElement };
   document.body.appendChild(el);
   document.body.classList.add("fb-open");
@@ -242,6 +249,13 @@ export function openTripLog(ctx, { year, month } = {}) {
     if (!cur) return;
     const row = ev.target.closest(".fb-row[data-key]");
     if (row) { const t = cur.trips.get(row.dataset.key); if (t) openTripDetail(ctx, t); return; }
+    const af = ev.target.closest("[data-fbart]");
+    if (af) {
+      cur.art = af.dataset.fbart;
+      el.querySelectorAll("[data-fbart]").forEach((c) => c.setAttribute("aria-pressed", String(c === af)));
+      render();
+      return;
+    }
     const b = ev.target.closest("[data-fb]");
     if (!b) return;
     const a = b.dataset.fb;
@@ -278,7 +292,16 @@ async function saveSeg(ctx, t, patch) {
   if (!e) throw new Error("Eintrag nicht gefunden");
   const segs = patchSegment(e, t.rawIndex, patch);
   if (!segs) throw new Error("Abschnitt nicht gefunden");
-  await ctx.store.saveEntry({ ...e, segments: segs });
+  const next = { ...e, segments: segs };
+  // Update 9 – Privat: eigene Fahrt-Einträge (tripOnly) folgen der Art: privat = 0 h, beruflich = Arbeitszeit
+  if (e.tripOnly && "private" in patch && segs.length === 1) {
+    const priv = patch.private === true;
+    if (priv !== ctx.util.isPrivateTrip(e)) {
+      next.privateTrip = priv;
+      next.pauseMin = priv ? Math.max(0, Math.round((e.end - e.start) / 60000)) : 0;
+    }
+  }
+  await ctx.store.saveEntry(next);
 }
 
 function vehicleOptions(s, selId, esc) {
@@ -501,7 +524,7 @@ export function openManualTrip(ctx, { from } = {}) {
           placeId: tp.placeId, place: tp.place || tp.label || "",
           note: state.private ? "Privatfahrt (nachgetragen)" : "Fahrt (nachgetragen)",
           people: [], inLoc: fp.loc && fp.loc.lat != null ? fp.loc : null, outLoc: tp.loc && tp.loc.lat != null ? tp.loc : null,
-          segments: [drive], tripOnly: true,
+          segments: [drive], tripOnly: true, ...(state.private ? { privateTrip: true } : {}), // Update 9 – Privat: zählt nie als Arbeitszeit
         });
         ctx.ui.toast("Fahrt gespeichert");
       }

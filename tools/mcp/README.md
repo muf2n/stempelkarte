@@ -12,7 +12,8 @@ Er läuft kostenlos als **Cloudflare Worker** und liest/schreibt dieselben Fires
 
 | Werkzeug | Was es macht |
 |---|---|
-| `status_heute` | eingestempelt? seit wann, Ort, Abschnitt, Pause, heutige Stunden, Woche Ist/Soll, Überstundenkonto |
+| `status_heute` | eingestempelt? seit wann, Ort, Abschnitt, Pause, heutige Stunden, Woche Ist/Soll, Überstundenkonto, Modus Arbeit/Privat |
+| `modus_setzen` | Privat / Arbeit umschalten (`modus`: "privat" \| "arbeit", optional `bis`: "1h", "abend", "morgen", HH:MM) – eingestempelt wird nicht umgeschaltet |
 | `eintraege_lesen` | Arbeitszeiten im Zeitraum (Zeiten, Ort, Abschnitte, Personen, Notizen, Urlaub/Krank …) |
 | `wochen_zusammenfassung` | Daten fürs Berichtsheft (wie die Berichtsheft-Ansicht der App) |
 | `einstempeln`, `ausstempeln`, `pause`, `abschnitt_wechseln` | Stempeluhr – gleiche Logik wie die App (`js/timer.js`) |

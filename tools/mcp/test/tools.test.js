@@ -460,3 +460,63 @@ test("Update 9 – Kalender: termin_anlegen mit Wiederholung, Ort, Endzeit, mehr
   r = await t.tool("todos_lesen");
   assert.match(r.text, /Fußballtraining – Termin · Mo, 09\.11\.2026 18:30 · Wöchentlich am Montag, bis 30\.11\.2026 – nächster Mo, 09\.11\.2026 18:30 · Ort: Sportplatz Wels · Erinnerungen 15, 120 min vorher/);
 });
+
+/* ---------- Update 9 – Privat / Arbeit ---------- */
+
+test("Update 9 – Privat: modus_setzen + status_heute; eingestempelt → kein stilles Ausstempeln", async () => {
+  let t = await seeded();
+  let r = await t.tool("modus_setzen", { modus: "privat" });
+  assert.ok(r.isError, "eingestempelt → Fehler");
+  assert.match(r.text, /zuerst ausstempeln/);
+  assert.ok(t.g.get(`${t.base}/meta/state`).running, "Schicht läuft weiter");
+  r = await t.tool("status_heute");
+  assert.match(r.text, /Modus: Arbeit \(eingestempelt\)/);
+
+  t = await seeded({ running: null });
+  r = await t.tool("modus_setzen", { modus: "privat", bis: "1h" });
+  assert.equal(r.isError, false, r.text);
+  assert.match(r.text, /Privat-Modus an bis 11:00/);
+  const m = t.g.get(`${t.base}/meta/settings`).mode;
+  assert.deepEqual(m, { privat: true, since: NOW, until: NOW + 3600000, source: "manual" });
+  assert.equal(t.g.get(`${t.base}/meta/settings`).weeklyTarget, 38.5, "settings nur zusammengeführt");
+  r = await t.tool("status_heute");
+  assert.match(r.text, /Nicht eingestempelt\.\nModus: Privat bis 11:00 \(selbst gewählt\)/);
+  r = await t.tool("modus_setzen", { modus: "privat", bis: "morgen" });
+  assert.match(r.text, /bis morgen 06:00/);
+  r = await t.tool("modus_setzen", { modus: "privat", bis: "18:30" });
+  assert.match(r.text, /bis 18:30/);
+  r = await t.tool("modus_setzen", { modus: "privat" });
+  assert.match(r.text, /bis du wieder auf Arbeit schaltest/);
+  assert.equal(t.g.get(`${t.base}/meta/settings`).mode.until, null);
+  r = await t.tool("modus_setzen", { modus: "egal" });
+  assert.ok(r.isError);
+  // Einstempeln beendet Privat
+  r = await t.tool("einstempeln", { ort: "huber" });
+  assert.match(r.text, /Privat-Modus beendet/);
+  assert.equal(t.g.get(`${t.base}/meta/settings`).mode.privat, false);
+  // zurück auf Arbeit
+  t = await seeded({ running: null });
+  await t.tool("modus_setzen", { modus: "privat" });
+  r = await t.tool("modus_setzen", { modus: "arbeit" });
+  assert.match(r.text, /Arbeit-Modus an/);
+  assert.match(r.text, /Modus: Arbeit \(selbst gewählt\)/);
+});
+
+test("Update 9 – Privat: Zeitplan (Wochenende) in status_heute; Privatfahrt ändert Überstundenkonto nicht", async () => {
+  const t = await seeded({ running: null });
+  const sat = vt(2026, 11, 7, 11, 0);
+  t.g.set(`${t.base}/meta/settings`, { ...SETTINGS, modeSchedule: { enabled: true, from: "06:00", to: "17:00" } });
+  const before = (await t.tool("status_heute")).text.match(/Überstundenkonto: [^\n]+/)[0];
+  t.g.set(`${t.base}/entries/pt1`, { kind: "work", start: vt(2026, 11, 2, 18, 0), end: vt(2026, 11, 2, 18, 40), pauseMin: 40, privateTrip: true, tripOnly: true,
+    segments: [{ start: vt(2026, 11, 2, 18, 0), end: vt(2026, 11, 2, 18, 40), activity: "Autofahren", private: true }] });
+  t.g.set(`${t.base}/entries/pt2`, { kind: "work", start: vt(2026, 11, 3, 19, 0), end: vt(2026, 11, 3, 19, 30), pauseMin: 0, privateTrip: true, tripOnly: true,
+    segments: [{ start: vt(2026, 11, 3, 19, 0), end: vt(2026, 11, 3, 19, 30), activity: "Autofahren", private: true }] });
+  const r = await t.tool("status_heute");
+  assert.equal(r.text.match(/Überstundenkonto: [^\n]+/)[0], before, "Privatfahrten (auch ohne Pausen-Trick) zählen 0 h");
+  assert.match(r.text, /Modus: Arbeit\n/, "Mi 10:00 = Arbeitszeit");
+  const t2 = await setup({ now: sat });
+  t2.g.set(`${t2.base}/meta/settings`, { ...SETTINGS, modeSchedule: { enabled: true } });
+  const r2 = await t2.tool("status_heute");
+  assert.match(r2.text, /Modus: Privat bis Mo, 09\.11\.2026 06:00 \(automatisch außerhalb der Arbeitszeit\)/);
+  assert.equal(L.netMin({ start: 0, end: 3600000, pauseMin: 0, privateTrip: true }), 0);
+});

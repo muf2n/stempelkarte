@@ -481,6 +481,7 @@ function render() {
           <span class="p">${p.join(" · ")}</span>
         </button>`;
       }
+      if (util.isPrivateTrip && util.isPrivateTrip(e)) return privTripRow(e, util, snap.settings); // Update 9 – Privatfahrt
       const p = [];
       const pl = placeText(e);
       if (pl) p.push(`<span class="tag">${esc(pl)}</span>`);
@@ -692,6 +693,24 @@ function renderUpcoming(util, holidaysOn) {
 }
 
 // Ortsname eines Eintrags/Abschnitts: gespeicherter Name, sonst Adresse des Start-Standorts
+// Update 9 – Privat: Privatfahrt gedämpft mit 🏠-Chip, 0 h (zählt nicht in die Tagessumme)
+export function privTripRow(e, util, settings) {
+  const { esc, clock } = util;
+  const sg = (Array.isArray(e.segments) && e.segments[0]) || {};
+  const from = sg.place || (sg.loc && sg.loc.addr) || "";
+  const to = sg.endPlace || (sg.endLoc && sg.endLoc.addr) || e.place || "";
+  const k = segmentKm({ ...sg, end: Number.isFinite(sg.end) ? sg.end : e.end }, settings || {});
+  const p = [`<span class="tag pm-chip">🏠 Privat</span>`, "Privatfahrt"];
+  if (from || to) p.push(esc(`${from || "?"} → ${to || "?"}`));
+  if (k) p.push(esc(`${k.est ? "≈ " : ""}${fmtKm(k.km)} km`));
+  return `
+        <button type="button" class="entry ek-priv" data-id="${esc(e.id)}" title="Privatfahrt – zählt nicht als Arbeitszeit">
+          <span class="t">${esc(clock(e.start))} – ${esc(clock(e.end))}</span>
+          <span class="d">privat</span>
+          <span class="p">${p.join(" · ")}</span>
+        </button>`;
+}
+
 function placeText(e) {
   if (!e) return "";
   if (e.place) return e.place;

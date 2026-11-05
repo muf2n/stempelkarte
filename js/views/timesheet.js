@@ -5,6 +5,7 @@
 import { icon } from "../icons.js";
 import {
   esc, hm, clock, dayKey, netMin, creditMin, kindLabel, holidayName, schoolLabel, schoolCreditMin, dailyTargetMin, WD,
+  isPrivateTrip,
 } from "../util.js";
 import { readApprentice, isoWeek } from "./report.js";
 import { kindDays, fmtDays, MONTHS_AT } from "./leave.js";
@@ -32,7 +33,7 @@ function addUniq(list, v) {
 /** Zeilen und Summen für den Monat ab `from` (1. des Monats). */
 export function buildMonth(snap, from) {
   const settings = (snap && snap.settings) || {};
-  const entries = ((snap && snap.entries) || []).filter((e) => e && Number.isFinite(e.start));
+  const entries = ((snap && snap.entries) || []).filter((e) => e && Number.isFinite(e.start) && !isPrivateTrip(e)); // Update 9 – Privatfahrten nicht im Stundenzettel
   const to = new Date(from.getFullYear(), from.getMonth() + 1, 1);
   const byDay = new Map();
   for (const e of entries) {

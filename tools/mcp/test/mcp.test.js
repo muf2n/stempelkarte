@@ -61,7 +61,7 @@ test("tools/list: alle Werkzeuge mit deutschen Beschreibungen und Schemas", asyn
   const names = result.tools.map((x) => x.name).sort();
   assert.deepEqual(names, [
     "abschnitt_wechseln", "ausgabe_eintragen", "ausstempeln", "eintrag_nachtragen", "eintraege_lesen",
-    "einsatz_anlegen", "einstempeln", "geld_lesen", "hausaufgabe_anlegen", "material_anlegen", "material_lesen", "orte_lesen", "pause",
+    "einsatz_anlegen", "einstempeln", "geld_lesen", "hausaufgabe_anlegen", "material_anlegen", "material_lesen", "modus_setzen", "orte_lesen", "pause",
     "planer_lesen", "pruefung_anlegen", "schule_lesen", "status_heute", "termin_anlegen", "todo_anlegen",
     "todo_erledigt", "todos_lesen", "wochen_zusammenfassung",
   ].sort());

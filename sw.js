@@ -127,6 +127,12 @@ const SHELL = [
   "css/alltag-galerie.css",
   "js/gallery-active.js", // Update 9 (Agent U) – aktive Kategorie
   "css/gallery-active.css",
+  // Update 9 – Privat / Arbeit
+  "js/privat-core.js",
+  "js/privat.js",
+  "js/privat-drive.js",
+  "js/views/privat-mode.js",
+  "css/privat.css",
   "js/app.js"
 ];
 

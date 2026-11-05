@@ -12,6 +12,7 @@ import { icon } from "../icons.js";
 import { esc, WD } from "../util.js";
 import { download } from "../export.js";
 import { runningMeta, openViewer, camIcon } from "../views/gallery.js";
+import { isPrivatNow } from "../privat.js"; // Update 9 – Privat-Modus
 
 const TABS = [
   ["offen", "Offen", "list"],
@@ -102,7 +103,7 @@ export function openQuickAdd(opts = {}) {
   const { items } = cols();
   const edit = opts.item || null;
   const snap = store.get();
-  const run = runningMeta(snap, appCtx());
+  const run = isPrivatNow(snap) ? null : runningMeta(snap, appCtx()); // Update 9 – Privat-Modus: kein Ort vorbelegt
   const st = {
     name: edit ? edit.name : (opts.name || ""),
     unit: edit ? edit.unit : (opts.unit || "Stk"),
@@ -734,7 +735,7 @@ export function mountTodayButton(host) {
     b.setAttribute("aria-label", n ? `Material erfassen – ${n} heute` : "Material erfassen");
   };
   b.addEventListener("click", () => {
-    const meta = runningMeta(store.get(), appCtx());
+    const meta = isPrivatNow() ? null : runningMeta(store.get(), appCtx()); // Update 9 – Privat
     openQuickAdd(meta ? { placeId: meta.placeId, place: meta.place, dayKey: meta.dayKey, status: "verbaut" } : { status: "verbaut" });
   });
   let off = items.watch(() => { if (!b.isConnected && off) { off(); off = null; return; } draw(); });
