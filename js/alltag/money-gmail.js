@@ -349,7 +349,7 @@ export function createGmail(opts) {
         `<li><a href="https://console.cloud.google.com/apis/credentials?project=stempelkarte-40682" target="_blank" rel="noopener">APIs &amp; Dienste → Anmeldedaten</a> → OAuth-2.0-Client <b>„Web client (auto created by Google Service)“</b> öffnen (oder einen neuen <b>Webanwendung</b>-Client anlegen).</li>` +
         `<li>Bei <b>Autorisierte Weiterleitungs-URIs</b> „+ URI hinzufügen“: <code>https://stempelkarte-mcp.lippa-florian.workers.dev/gmail/callback</code> → Speichern.</li>` +
         `<li><b>Client-ID</b> und <b>Clientschlüssel</b> kopieren und auf GitHub (Repository → Settings → Secrets and variables → Actions) als <code>GOOGLE_OAUTH_CLIENT_ID</code> und <code>GOOGLE_OAUTH_CLIENT_SECRET</code> eintragen.</li>` +
-        `<li>Secret <code>GMAIL_ENC_KEY</code> anlegen: beliebiger Zufallstext mit <b>40+ Zeichen</b> (später nicht mehr ändern). Danach unter Actions „MCP-Connector veröffentlichen“ → Run workflow.</li>` +
+        `<li>Danach unter Actions „MCP-Connector veröffentlichen“ → Run workflow. (Die Verschlüsselung richtet der Server automatisch ein.)</li>` +
       `</ol>` +
       `<p class="note">Gmail API und der Bereich <code>gmail.readonly</code> müssen wie beim Sitzungs-Modus freigegeben sein. Steht die App bei Google auf „Testen“, läuft die Freigabe nach 7 Tagen ab – unter <b>Zielgruppe → App veröffentlichen</b> bleibt sie dauerhaft.</p>` +
     `</details>`;

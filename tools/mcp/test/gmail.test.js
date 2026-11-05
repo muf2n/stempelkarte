@@ -230,10 +230,14 @@ test("start: Google-URL mit allen Parametern, state nur als Hash, 15 Minuten", a
   assert.ok(!JSON.stringify(pend).includes(p.state));
   // ohne Anmeldung / ohne Einrichtung
   assert.equal((await t.req("/gmail/start", { token: null })).status, 401);
+  // ohne eigenes GMAIL_ENC_KEY: Schlüssel wird aus dem Dienstkonto abgeleitet → funktioniert trotzdem
   const t2 = await setup({ env: { GMAIL_ENC_KEY: "kurz" } });
   const r2 = await t2.req("/gmail/start");
-  assert.equal(r2.status, 503);
-  assert.match(r2.data.error, /GMAIL_ENC_KEY/);
+  assert.equal(r2.status, 200);
+  // ohne OAuth-Client → nicht eingerichtet
+  const t3 = await setup({ env: { GOOGLE_OAUTH_CLIENT_SECRET: "" } });
+  const r3 = await t3.req("/gmail/start");
+  assert.equal(r3.status, 503);
 });
 
 test("callback: falscher/abgelaufener state, fehlendes Häkchen, falsches Konto → nichts gespeichert", async () => {
