@@ -1,19 +1,19 @@
 // Playwright-Test für das Fahrtenbuch (lokaler Modus).
 //   cd <worktree> && python3 -m http.server 8858 &   then   node tests/fahrtenbuch-e2e.cjs [screenshot-dir]
 // Fremde Domains werden abgefangen; router.project-osrm.org wird mit page.route gestubbt (Distanz = Luftlinie × 1,2).
-// Testdaten: echte Adressen aus dem Screenshot (Graz / Seiersberg-Pirka), November 2026.
+// Testdaten: echte Adressen aus dem Screenshot (Musterstadt / Testheim-Au), November 2026.
 const { chromium } = require("playwright");
 const fs = require("fs");
 const path = require("path");
 const BASE = "http://localhost:8858/";
 const OUT = process.argv[2] || require("os").tmpdir();
 
-const BUERO = { lat: 47.0745, lng: 15.4010, addr: "Puchstraße 41, 8020 Graz" };
-const WIENER = { lat: 47.1093, lng: 15.4118, addr: "Wiener Straße 286, 8051 Graz" };
-const KLEIN = { lat: 47.1046, lng: 15.4226, addr: "Anton-Kleinoscheg-Straße, 8051 Graz" };
-const FELD = { lat: 47.0240, lng: 15.4198, addr: "Feldkirchner Straße 11, 8054 Seiersberg-Pirka" };
-const WEINH = { lat: 47.0790, lng: 15.4560, addr: "Weinholdstraße 13, 8010 Graz" };
-const NEU = { lat: 47.0590, lng: 15.4700, addr: "Liebenauer Hauptstraße 2, 8041 Graz" };
+const BUERO = { lat: 47.0745, lng: 15.4010, addr: "Musterstraße 41, 8020 Musterstadt" };
+const ERFUNDENE = { lat: 47.1093, lng: 15.4118, addr: "Erfundene Straße 286, 8051 Musterstadt" };
+const KLEIN = { lat: 47.1046, lng: 15.4226, addr: "Max-Mustermann-Straße, 8051 Musterstadt" };
+const FELD = { lat: 47.0240, lng: 15.4198, addr: "Beispielfelder Straße 11, 8054 Testheim-Au" };
+const WEINH = { lat: 47.0790, lng: 15.4560, addr: "Probestraße 13, 8010 Musterstadt" };
+const NEU = { lat: 47.0590, lng: 15.4700, addr: "Probenauer Hauptstraße 2, 8041 Musterstadt" };
 
 function seed(extra = []) {
   const T = (d, h, m) => new Date(2026, 10, d, h, m).getTime();
@@ -23,8 +23,8 @@ function seed(extra = []) {
   const e1 = { id: "e-mo", kind: "work", start: T(2, 6, 50), end: T(2, 15, 30), pauseMin: 30, placeId: "p-buero", place: "Büro", note: "", people: [], inLoc: BUERO, outLoc: BUERO,
     segments: close([
       W(T(2, 6, 50), BUERO, "Büro", "p-buero"),
-      D(T(2, 6, 59), BUERO, WIENER, "Büro", "", "p-buero"),
-      W(T(2, 7, 18), WIENER),
+      D(T(2, 6, 59), BUERO, ERFUNDENE, "Büro", "", "p-buero"),
+      W(T(2, 7, 18), ERFUNDENE),
       D(T(2, 12, 10), KLEIN, BUERO, "", "Büro"),
       W(T(2, 12, 28), BUERO, "Büro", "p-buero"),
       D(T(2, 12, 46), BUERO, FELD, "Büro", "", "p-buero"),
@@ -129,12 +129,12 @@ function seed(extra = []) {
   ok(rows.every((r) => r.h <= 72), `Zeilen kompakt (max. Höhe ${Math.max(...rows.map((r) => r.h)).toFixed(0)} px)`);
   ok(rows.every((r) => r.sw <= r.cw + 1 && r.ell), "kein Umbruch/Überlauf, Ellipse statt Zeilenumbruch");
   ok(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth && document.getElementById("fb-root").scrollWidth <= innerWidth), "keine waagrechte Seiten-Scrollleiste");
-  ok(rows[0].l1.includes("Büro") && rows[0].l1.includes("Wiener Straße 286") && !rows[0].l1.includes("8051"), `Kurzadresse „${rows[0].l1.trim()}“`);
-  ok(rows[0].l2.startsWith("8051 Graz") && rows[0].l2.includes("Baustelle"), `Ort klein darunter + Zweck „${rows[0].l2}“`);
-  ok(rows[2].l1.includes("Feldkirchner Straße 11") && rows[2].l2.includes("8054 Seiersberg-Pirka"), "Seiersberg-Pirka als Ort");
+  ok(rows[0].l1.includes("Büro") && rows[0].l1.includes("Erfundene Straße 286") && !rows[0].l1.includes("8051"), `Kurzadresse „${rows[0].l1.trim()}“`);
+  ok(rows[0].l2.startsWith("8051 Musterstadt") && rows[0].l2.includes("Baustelle"), `Ort klein darunter + Zweck „${rows[0].l2}“`);
+  ok(rows[2].l1.includes("Beispielfelder Straße 11") && rows[2].l2.includes("8054 Testheim-Au"), "Testheim-Au als Ort");
   ok(!rows[1].l2.includes("Büro"), "Zweck wiederholt nicht das Ziel (Büro)");
-  ok(rows[3].ret && rows[5].ret && !rows[0].ret && !rows[2].ret, "Rückfahrten markiert (Feldkirchner → Büro, Weinhold → Büro)");
-  ok(rows[0].title.includes("Wiener Straße 286, 8051 Graz"), "volle Adresse im title");
+  ok(rows[3].ret && rows[5].ret && !rows[0].ret && !rows[2].ret, "Rückfahrten markiert (Beispielfelder → Büro, Probe → Büro)");
+  ok(rows[0].title.includes("Erfundene Straße 286, 8051 Musterstadt"), "volle Adresse im title");
   await shot("fb-390-light-list.png");
 
   /* ---------- OSRM: sequentiell, ≤ 1/s, Cache ---------- */
@@ -192,7 +192,7 @@ function seed(extra = []) {
   await page.click(".fb-row >> nth=0");
   await page.waitForSelector(".sheet .fb-det");
   const det = await page.textContent(".sheet .fb-det");
-  ok(det.includes("Wiener Straße 286, 8051 Graz") && det.includes("Puchstraße 41, 8020 Graz"), "Detail: volle Adressen");
+  ok(det.includes("Erfundene Straße 286, 8051 Musterstadt") && det.includes("Musterstraße 41, 8020 Musterstadt"), "Detail: volle Adressen");
   ok(/06:59 – 07:18 · 0:19 h/.test(det), "Detail: Zeiten + Dauer");
   ok(det.includes("Straße") && /Kilometerstand 45\.210 → 45\.2\d\d/.test(det), "Detail: km-Quelle + Kilometerstand");
   const href = await page.getAttribute(".sheet .fb-maps", "href");
@@ -212,7 +212,7 @@ function seed(extra = []) {
   const r0 = await page.$eval(".fb-row >> nth=0", (r) => ({ cls: r.className, km: r.querySelector(".fb-km b").textContent, man: !!r.querySelector(".fb-src-man"), l2: r.querySelector(".fb-l2").textContent }));
   ok(r0.cls.includes("is-priv") && r0.km === "12,5" && r0.man && r0.l2.includes("Material holen") && r0.l2.includes("privat"), "Zeile zeigt privat, ✎ 12,5 km, neuen Zweck");
   ok(/privat\s*12,5 km/.test(await page.textContent(".fb-split-l")), "Monatskopf: privat 12,5 km");
-  // Zweck-Chip „Privat“ setzt Art privat; zweite Fahrt (Kleinoscheg → Büro) bekommt Default „Büro“
+  // Zweck-Chip „Privat“ setzt Art privat; zweite Fahrt (Mustermann → Büro) bekommt Default „Büro“
   await page.click(".fb-row >> nth=1");
   ok(await page.inputValue('.sheet [data-r="purpose"]') === "Büro", "Standard-Zweck = gespeicherter Zielort (Büro)");
   await closeSheet();
@@ -225,7 +225,7 @@ function seed(extra = []) {
   await page.fill('.sheet [data-r="t2"]', "16:25");
   await page.selectOption('.sheet [data-r="from"]', "p-buero");
   await page.selectOption('.sheet [data-r="to"]', "__free");
-  await page.fill('.sheet [data-r="to-free"]', "Hauptplatz 1, 8010 Graz");
+  await page.fill('.sheet [data-r="to-free"]', "Hauptplatz 1, 8010 Musterstadt");
   await page.fill('.sheet [data-r="km"]', "4,2");
   await page.click('.sheet [data-pchip="Kunde"]');
   await shot("fb-390-manual.png");
@@ -241,9 +241,9 @@ function seed(extra = []) {
   await page.fill('.sheet [data-r="t1"]', "10:00");
   await page.fill('.sheet [data-r="t2"]', "10:20");
   await page.selectOption('.sheet [data-r="from"]', "__free");
-  await page.fill('.sheet [data-r="from-free"]', "Weinholdstraße 13, 8010 Graz");
+  await page.fill('.sheet [data-r="from-free"]', "Probestraße 13, 8010 Musterstadt");
   await page.selectOption('.sheet [data-r="to"]', "__free");
-  await page.fill('.sheet [data-r="to-free"]', "Lagerhaus, Conrad-von-Hötzendorf-Straße 100, 8010 Graz");
+  await page.fill('.sheet [data-r="to-free"]', "Lagerhaus, Conrad-von-Muster-Straße 100, 8010 Musterstadt");
   await page.click('.sheet [data-pchip="Material holen"]');
   await page.click('.sheet [data-r="save"]');
   await page.waitForTimeout(500);
@@ -256,9 +256,9 @@ function seed(extra = []) {
   ok(await page.$$eval(".fb-row .fb-km.none", (e) => e.length) === 1, "Fahrt ohne Koordinaten/km: „?“");
 
   /* ---------- Suche ---------- */
-  await page.fill('#fb-root [data-fb="q"]', "feldkirchner");
+  await page.fill('#fb-root [data-fb="q"]', "beispielfelder");
   await page.waitForTimeout(150);
-  ok(await page.$$eval(".fb-row", (e) => e.length) === 2, "Suche „feldkirchner“ → 2 Fahrten");
+  ok(await page.$$eval(".fb-row", (e) => e.length) === 2, "Suche „beispielfelder“ → 2 Fahrten");
   await page.fill('#fb-root [data-fb="q"]', "material");
   await page.waitForTimeout(150);
   ok(await page.$$eval(".fb-row", (e) => e.length) === 2, "Suche Zweck „material“ → 2 Fahrten");
@@ -284,7 +284,7 @@ function seed(extra = []) {
   ok(lines[0] === "Datum;Abfahrt;Ankunft;Ausgangsort;Zielort;Zweck;gefahrene km;Kilometerstand Beginn;Kilometerstand Ende;Fahrzeug;Kennzeichen;beruflich/privat;km-Quelle", "CSV-Kopf klassisch");
   ok(dl.suggestedFilename() === "Fahrtenbuch-2026-11.csv", "Dateiname Fahrtenbuch-2026-11.csv");
   const first = lines[1].split(";");
-  ok(first[0] === "02.11.2026" && first[3] === "Büro (Puchstraße 41, 8020 Graz)" && first[4] === "Wiener Straße 286, 8051 Graz" && first[5] === "Material holen" && first[6] === "12,5" && first[10] === "GU-55XY" && first[11] === "privat",
+  ok(first[0] === "02.11.2026" && first[3] === "Büro (Musterstraße 41, 8020 Musterstadt)" && first[4] === "Erfundene Straße 286, 8051 Musterstadt" && first[5] === "Material holen" && first[6] === "12,5" && first[10] === "GU-55XY" && first[11] === "privat",
     "CSV-Zeile 1 (Privatfahrt mit Golf)");
   const second = lines[2].split(";");
   ok(second[7] === "45210" && second[9] === "VW Caddy" && second[10] === "G-123AB" && second[11] === "beruflich", "CSV: Kilometerstand + Standard-Fahrzeug (Caddy beginnt bei 45210)");

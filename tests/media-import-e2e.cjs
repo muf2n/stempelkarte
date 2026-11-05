@@ -10,13 +10,13 @@ const key = (d) => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate(
 const exifDate = (d) => `${d.getFullYear()}:${pad(d.getMonth() + 1)}:${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}`;
 const at = (dayOffset, h, m = 0) => { const d = new Date(); d.setDate(d.getDate() + dayOffset); d.setHours(h, m, 0, 0); return d; };
 
-const GRAMBACH = { lat: 47.01098, lng: 15.50511 };
+const MUSTERDORF = { lat: 47.01098, lng: 15.50511 };
 const FIRMA = { lat: 47.0402, lng: 15.4089 };
 
 function nominatimFor(lat, lng) {
   const near = (p, m) => Math.hypot((lat - p.lat) * 111320, (lng - p.lng) * 75900) < m;
-  if (near(GRAMBACH, 300)) return { address: { house_number: "1", road: "Thomas-Arbesser-Straße", village: "Grambach", postcode: "8074" } };
-  if (near(FIRMA, 300)) return { address: { house_number: "5", road: "Wiener Straße", city: "Graz", postcode: "8020" } };
+  if (near(MUSTERDORF, 300)) return { address: { house_number: "1", road: "Erika-Muster-Straße", village: "Musterdorf", postcode: "8074" } };
+  if (near(FIRMA, 300)) return { address: { house_number: "5", road: "Erfundene Straße", city: "Musterstadt", postcode: "8020" } };
   return { address: { village: "Irgendwo" } };
 }
 
@@ -65,7 +65,7 @@ function nominatimFor(lat, lng) {
     { id: "f_privat", name: "Privat", emoji: "🏠", color: "#16a34a", order: 2, created: 3 },
     { id: "fWohn", name: "Wohnungen", emoji: "🏠", color: "#7c3aed", order: 3, created: 4 },
   ];
-  const PLACES = [{ id: "pF", name: "Firma Elektro Maier", addr: "Wiener Straße 5, 8020 Graz", lat: FIRMA.lat, lng: FIRMA.lng, radius: 150, photoFolderId: "fWohn" }];
+  const PLACES = [{ id: "pF", name: "Firma Elektro Maier", addr: "Erfundene Straße 5, 8020 Musterstadt", lat: FIRMA.lat, lng: FIRMA.lng, radius: 150, photoFolderId: "fWohn" }];
 
   /* ======================= 1) Web: Import mit EXIF ======================= */
   let { page, ctx } = await newPage();
@@ -87,11 +87,11 @@ function nominatimFor(lat, lng) {
       { start: Y(15, 0), end: Y(15, 30), activity: "Autofahren", placeId: null, place: "", loc: null, private: true },
     ] };
   const F = {
-    f1: await withExif("#0369a1", "09:15 Grambach", at(-1, 9, 15), GRAMBACH),
+    f1: await withExif("#0369a1", "09:15 Musterdorf", at(-1, 9, 15), MUSTERDORF),
     f2: await withExif("#047857", "10:30 ohne GPS", at(-1, 10, 30)),
     f3: await withExif("#be123c", "15:10 privat", at(-1, 15, 10), { lat: 47.2, lng: 15.6 }),
     f4: await withExif("#7c3aed", "19:45 Firma", at(-1, 19, 45), FIRMA),
-    f5: await withExif("#b45309", "vorgestern", at(-2, 9, 0), GRAMBACH),
+    f5: await withExif("#b45309", "vorgestern", at(-2, 9, 0), MUSTERDORF),
   };
   const files = (names) => names.map((n) => ({ name: `IMG_${n}.jpg`, mimeType: "image/jpeg", buffer: F[n] }));
   await seed(page, { ls: {
@@ -141,12 +141,12 @@ function nominatimFor(lat, lng) {
   const p1 = list.find((x) => new Date(x.ts).getHours() === 9);
   const p2 = list.find((x) => new Date(x.ts).getHours() === 10);
   ok(p1.dayKey === key(at(-1, 0)) && new Date(p1.ts).getMinutes() === 15, "ts = EXIF-Aufnahmezeit (gestern 09:15)");
-  ok(Math.abs(p1.lat - GRAMBACH.lat) < 1e-5, "lat/lng aus EXIF");
+  ok(Math.abs(p1.lat - MUSTERDORF.lat) < 1e-5, "lat/lng aus EXIF");
   ok(p2.placeId === "pF" && Math.abs(p2.lat - FIRMA.lat) < 1e-6, "ohne GPS: Ort + Position der Arbeitszeit (Firma)");
   let al = await H.albums();
-  const aG = al.find((a) => /Grambach/.test(a.name));
+  const aG = al.find((a) => /Musterdorf/.test(a.name));
   const aF = al.find((a) => a.kind === "place" && a.placeId === "pF");
-  ok(aG && p1.albumIds.includes(aG.id), "Foto 09:15 → Adress-Album „Thomas-Arbesser-Straße 1, Grambach“");
+  ok(aG && p1.albumIds.includes(aG.id), "Foto 09:15 → Adress-Album „Erika-Muster-Straße 1, Musterdorf“");
   ok(aF && p2.albumIds.includes(aF.id), "Foto 10:30 → Ort-Album „Firma Elektro Maier“");
   ok(aG.folderId === "fWohn", "Neues Adress-Album → Kategorie zur Aufnahmezeit (Ort-Vorgabe „Wohnungen“, nicht aktuell „Baustellen“)");
   ok(aF.folderId === "fWohn", "Ort-Album → Foto-Kategorie des Orts");
@@ -197,7 +197,7 @@ function nominatimFor(lat, lng) {
   const now = Date.now();
   const runStart = now - 2 * 3600e3;
   const NI = [
-    { id: 101, dateTaken: now - 3600e3, displayName: "IMG_101.jpg", size: F.f1.length, width: 800, height: 600, lat: GRAMBACH.lat, lng: GRAMBACH.lng, img: F.f1 },
+    { id: 101, dateTaken: now - 3600e3, displayName: "IMG_101.jpg", size: F.f1.length, width: 800, height: 600, lat: MUSTERDORF.lat, lng: MUSTERDORF.lng, img: F.f1 },
     { id: 102, dateTaken: now - 1800e3, displayName: "IMG_102.jpg", size: F.f2.length, width: 800, height: 600, img: F.f2 },
     { id: 103, dateTaken: runStart - 600e3, displayName: "IMG_103.jpg", size: F.f3.length, width: 800, height: 600, lat: 47.2, lng: 15.6, img: F.f3 },
   ];
@@ -259,9 +259,9 @@ function nominatimFor(lat, lng) {
   const mk = calls.filter((c) => c[0] === "markImported").pop();
   ok(mk && mk[1].ids.sort().join() === "101,102" && mk[1].skipped.join() === "103", "markImported({ids:[101,102], skipped:[103]})");
   const n1 = list.find((x) => Math.abs(x.ts - NI[0].dateTaken) < 1000), n2 = list.find((x) => Math.abs(x.ts - NI[1].dateTaken) < 1000);
-  ok(n1 && Math.abs(n1.lat - GRAMBACH.lat) < 1e-6 && n2 && n2.placeId === "pF", "ts = DATE_TAKEN; GPS aus der App bzw. Ort der laufenden Schicht");
+  ok(n1 && Math.abs(n1.lat - MUSTERDORF.lat) < 1e-6 && n2 && n2.placeId === "pF", "ts = DATE_TAKEN; GPS aus der App bzw. Ort der laufenden Schicht");
   al = await H.albums();
-  const naG = al.find((a) => /Grambach/.test(a.name));
+  const naG = al.find((a) => /Musterdorf/.test(a.name));
   ok(naG && n1.albumIds.includes(naG.id) && naG.folderId === "fWohn", "App-Foto → Adress-Album in Kategorie der laufenden Schicht (Ort-Vorgabe)");
   ok((await H.imports()).filter((d) => d.src === "native" && /^n:10[12]:/.test(d.fp)).length === 2, "Fingerabdrücke n:<_ID>:<DATE_TAKEN> gespeichert");
   // neues Foto + Benachrichtigung antippen
