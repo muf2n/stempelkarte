@@ -11,6 +11,34 @@ export const s = (v) => (v == null ? "" : String(v).trim());
 export const pad2 = (n) => String(n).padStart(2, "0");
 export function need(v, msg) { if (!s(v)) throw new UserError(msg); return s(v); }
 
+/** Erlaubte Dokument-IDs aus Modell-Eingaben (App: newId → base36, Firestore-Auto-IDs, bk_…, YYYY-MM-DD). */
+export const ID_RE = /^[A-Za-z0-9_-]{1,128}$/;
+/** Von Claude gelieferte ID prüfen, bevor sie in einem Firestore-Pfad landet (L13). Leer → "". */
+export function idArg(v, what = "ID") {
+  const t = s(v);
+  if (!t) return "";
+  if (!ID_RE.test(t)) throw new UserError(`Ungültige ${what} „${short(t, 40)}“ – bitte die ID genau so angeben, wie sie ein Lese-Werkzeug geliefert hat.`);
+  return t;
+}
+
+/* ---------- Inhalte von Dritten (H1) ---------- */
+
+export const UNTRUSTED_TAG = "untrusted_content";
+/** Text von Dritten (E-Mail, Bank-Verwendungszweck/Gegenkonto) klar abgrenzen. Ein eingeschmuggeltes
+ *  Schluss-Tag wird entschärft, damit der Text nicht aus dem Block „ausbrechen“ kann. */
+export function untrusted(source, text) {
+  const t = String(text ?? "").replace(/<\s*\/?\s*untrusted_content[^>]*>?/gi, "[…]");
+  return `<${UNTRUSTED_TAG} source="${source}">${t}</${UNTRUSTED_TAG}>`;
+}
+/** Enthält eine Werkzeug-Ausgabe Inhalte von Dritten? */
+export const hasUntrusted = (out) => typeof out === "string" && out.includes(`<${UNTRUSTED_TAG} source=`);
+/** Buchungs-Notiz: bei Bank-Buchungen (Text kommt vom Gegenkonto/Verwendungszweck) abgegrenzt. */
+export function txNote(x, n = 60) {
+  if (!s(x && x.note)) return "";
+  const t = s(x.note).slice(0, n);
+  return x.src === "bank" || x.bankRef || x.bankId ? untrusted("bank", t) : `„${t}“`;
+}
+
 export function dateArg(v, today, label = "Datum") {
   if (v == null || s(v) === "") return null;
   const k = parseDate(v, today);
@@ -60,6 +88,7 @@ export function resolvePlace(q, places) {
 /** Eindeutiges Element per ID oder unscharfem Namen finden (sonst verständlicher Fehler). */
 export function pick(list, { id, name }, nameOf, what, min = 55) {
   if (s(id)) {
+    idArg(id, `${what}-ID`);
     const x = list.find((e) => e && e.id === s(id));
     if (!x) throw new UserError(`${what} mit der ID ${s(id)} gibt es nicht.`);
     return x;

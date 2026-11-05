@@ -13,6 +13,7 @@ import { handleChat } from "./chat.js";
 import { handleBank, runBankCron } from "./bank.js";
 import { handleIcs } from "./ics.js";
 import { handleGmail, runGmailCron, GMAIL_CRON } from "./gmail.js";
+import { rateOk, rateTake, retryAfter } from "./ratelimit.js";
 
 const CORS = {
   "access-control-allow-origin": "*",
@@ -79,9 +80,24 @@ export function makeDataFactory(env, fetchImpl = (...a) => fetch(...a), nowFn = 
   };
 }
 
+/** 429 mit Retry-After (M6). CORS wie bei der jeweiligen Route ist hier egal – der Browser zeigt ohnehin einen Fehler. */
+function tooMany(scope) {
+  return new Response(JSON.stringify({ error: "Zu viele Anfragen – bitte kurz warten." }), {
+    status: 429, headers: { "content-type": "application/json; charset=utf-8", "cache-control": "no-store", "retry-after": String(retryAfter(scope)), ...CORS },
+  });
+}
+
 export async function handle(request, env, { fetchImpl, now, ctx = null, log = (n) => console.log("tool:", n) } = {}) {
   const url = new URL(request.url);
   const path = url.pathname.replace(/\/+$/, "") || "/";
+  const t0 = (now || (() => Date.now()))();
+
+  // M6: Endpunkte, die ohne Anmeldung Firestore/Google anfragen, pro IP bremsen (Preflights zählen nicht)
+  if (request.method !== "OPTIONS") {
+    if (path === "/gmail/callback" && !rateTake("gmail-callback", request, t0)) return tooMany("gmail-callback");
+    if (path === "/bank/finish" && !rateTake("bank-finish", request, t0)) return tooMany("bank-finish");
+    if (path === "/ics" && !rateTake("ics", request, t0)) return tooMany("ics");
+  }
 
   if (path === "/chat") return handleChat(request, env, { fetchImpl, now: (now || (() => Date.now()))() });
   if (path === "/ics") return handleIcs(request, env, { fetchImpl, now: (now || (() => Date.now()))() });
@@ -100,7 +116,9 @@ export async function handle(request, env, { fetchImpl, now, ctx = null, log = (
   if (request.method !== "POST") {
     return text(405, "Nur POST ist erlaubt (kein SSE-Stream).\n", { allow: "POST, OPTIONS" });
   }
+  if (!rateOk("mcp-auth", request, t0)) return tooMany("mcp-auth");
   if (!(await authorized(request, url, env))) {
+    rateTake("mcp-auth", request, t0); // nur Fehlversuche zählen
     return json(401, { jsonrpc: "2.0", id: null, error: { code: -32001, message: "Nicht autorisiert." } }, { "www-authenticate": 'Bearer realm="stempelkarte"' });
   }
   const ct = request.headers.get("content-type") || "";

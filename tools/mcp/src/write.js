@@ -5,7 +5,7 @@ import {
   dayKey, keyToTs, addDays, fmtKey, fmtKeyWd, clock, hm, eur, isKey, fmtTime, weekKey, isoWeek, diffDays, WD,
 } from "./time.js";
 import { UserError, clean, newId, alltagId, normTodo, netMin, creditMin, kindLabel, cleanPeople } from "./logic.js";
-import { SRC, WR, s, need, dateArg, timeArg, boolArg, numArg, resolvePlace, pick, short, pad2, placeName } from "./util.js";
+import { SRC, WR, s, need, dateArg, timeArg, boolArg, numArg, resolvePlace, pick, short, pad2, placeName, idArg } from "./util.js";
 import { best, score, norm } from "./match.js";
 import { expandTodo, parseRRule, describeRule, applyEdit, finalizeEvent, normCalendars, toMin, hhmm } from "./cal.js";
 import { repeatRule, weekStart, bdayArg, moneyCats, catName, matStatus, resolveSubject } from "./tools.js";
@@ -219,7 +219,7 @@ const TOOL_EINTRAG_BEARBEITEN = {
   annotations: WR,
   async run(args, d) {
     const today = dayKey(d.now);
-    let id = s(args.id), data;
+    let id = idArg(args.id, "Eintrags-ID"), data;
     if (id) {
       const doc = await d.fs.get(d.p(`entries/${id}`));
       if (!doc) throw new UserError(`Keinen Eintrag mit der ID ${id} gefunden.`);
@@ -328,7 +328,7 @@ const TOOL_FAHRT = {
     if (s(args.fahrt)) {
       const m = /^([^#\s]+)#(\d+)$/.exec(s(args.fahrt));
       if (!m) throw new UserError("fahrt bitte genau wie in fahrtenbuch_lesen angeben (z. B. \"e1#0\").");
-      entryId = m[1]; raw = Number(m[2]);
+      entryId = idArg(m[1], "Fahrt-Kennung"); raw = Number(m[2]);
     } else {
       const day = dateArg(need(args.datum, "Bitte fahrt oder datum + uhrzeit angeben."), today);
       const t0 = timeArg(need(args.uhrzeit, "Bitte auch die Abfahrtszeit (uhrzeit) angeben."), "uhrzeit");
@@ -888,7 +888,7 @@ const TOOL_GALERIE_W = {
   async run(args, d) {
     const a = s(args.aktion);
     if (a === "foto_notiz") {
-      const id = need(args.foto_id, "Bitte foto_id angeben (aus galerie_lesen).");
+      const id = idArg(need(args.foto_id, "Bitte foto_id angeben (aus galerie_lesen)."), "Foto-ID");
       const idx = await photoIndex(d);
       const it = idx.find((x) => x.id === id);
       if (!it) throw new UserError(`Kein Foto mit der ID ${id} gefunden.`);

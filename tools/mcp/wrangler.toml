@@ -16,6 +16,7 @@ preview_urls = false
 #   GOOGLE_OAUTH_CLIENT_ID    – Web-OAuth-Client (Projekt stempelkarte-40682) für „Gmail dauerhaft verbinden“
 #   GOOGLE_OAUTH_CLIENT_SECRET – Clientschlüssel dazu
 #   GMAIL_ENC_KEY             – Zufallstext (≥ 32, besser 40+ Zeichen): verschlüsselt das Gmail-Refresh-Token (AES-256-GCM, HKDF)
+#   ALLOW_LOCALHOST_CORS      – (Var) "1" erlaubt CORS von http://localhost/127.0.0.1 (nur Entwicklung, in Produktion NICHT setzen)
 #   GMAIL_REDIRECT_URL        – (Var) Rückruf-Adresse, Standard https://stempelkarte-mcp.lippa-florian.workers.dev/gmail/callback
 
 [vars]

@@ -13,7 +13,8 @@
 //   users/{uid}/a_money_tx/bk_…    Buchungen (Form wie js/alltag/money.js + src:"bank", bankRef, counterparty)
 // Nie die volle IBAN, nie Schlüssel/Tokens protokollieren.
 import { loadAccount, getAccessToken, resolveUid, DEFAULT_PROJECT, DEFAULT_EMAIL, b64url } from "./google.js";
-import { Firestore } from "./firestore.js";
+import { Firestore, FirestoreError } from "./firestore.js";
+import { validState, validCode } from "./ratelimit.js";
 import { verifyIdToken, corsHeaders, allowedOrigin } from "./chat.js";
 import { suggestCategory, DEFAULT_CATS, round2 } from "./money.js";
 import { normTodo, clean } from "./logic.js";
@@ -332,12 +333,21 @@ class Bank {
 
   async finish({ code, state }) {
     if (!str(code) || !str(state)) throw new HttpError(400, "code und state fehlen.");
+    if (!validState(state) || !validCode(code)) throw new HttpError(400, BAD_STATE_MSG);
     const pd = await this.fs.get(this.p("meta/bank_pending"));
     const pend = pd && pd.data;
     if (!pend || pend.used) throw new HttpError(400, "Kein offener Verbindungsversuch – bitte in der App neu starten.");
     if (!(Number(pend.exp) > this.now)) throw new HttpError(400, "Der Verbindungsversuch ist abgelaufen (15 Minuten) – bitte neu starten.");
     if (!(await safeEqualHex(await sha256Hex(state), pend.stateHash))) throw new HttpError(400, "Ungültiger Rückruf (state passt nicht) – bitte neu starten.");
-    await this.fs.commit([this.fs.patchWrite(this.p("meta/bank_pending"), { used: true })]);
+    // L3: state atomar verbrauchen (Vorbedingung updateTime – ein paralleler Rückruf mit demselben state scheitert)
+    try {
+      await this.fs.commit([this.fs.patchWrite(this.p("meta/bank_pending"), { used: true }, pd.updateTime ? { updateTime: pd.updateTime } : { exists: true })]);
+    } catch (e) {
+      if (e instanceof FirestoreError && (e.status === 400 || e.status === 404 || e.status === 409 || e.code === "FAILED_PRECONDITION")) {
+        throw new HttpError(400, "Kein offener Verbindungsversuch – bitte in der App neu starten.");
+      }
+      throw e;
+    }
     const s = await this.eb.session(str(code));
     const accounts = sessionAccounts(s.accounts);
     const old = await this.meta();
@@ -642,20 +652,22 @@ export async function accountBalances(meta, accounts, fresh, raw, { from, today,
 
 /* ---------- HTTP ---------- */
 
-function bankCors(origin) {
-  const h = corsHeaders(origin);
+function bankCors(origin, env) {
+  const h = corsHeaders(origin, env);
   if (h["access-control-allow-origin"]) h["access-control-allow-methods"] = "GET, POST, OPTIONS";
   return h;
 }
+
+export const BAD_STATE_MSG = "Ungültiger Rückruf (state passt nicht) – bitte in der App neu starten.";
 
 export async function handleBank(request, env, { fetchImpl = (...a) => fetch(...a), now = Date.now() } = {}) {
   const url = new URL(request.url);
   const path = url.pathname.replace(/\/+$/, "");
   const origin = request.headers.get("origin");
-  const cors = bankCors(origin);
+  const cors = bankCors(origin, env);
   const json = (status, body) => new Response(JSON.stringify(body), { status, headers: { "content-type": "application/json; charset=utf-8", "cache-control": "no-store", ...cors } });
-  if (request.method === "OPTIONS") return new Response(null, { status: allowedOrigin(origin) ? 204 : 403, headers: cors });
-  if (origin && !allowedOrigin(origin)) return json(403, { error: "Herkunft nicht erlaubt." });
+  if (request.method === "OPTIONS") return new Response(null, { status: allowedOrigin(origin, env) ? 204 : 403, headers: cors });
+  if (origin && !allowedOrigin(origin, env)) return json(403, { error: "Herkunft nicht erlaubt." });
   const route = path.slice("/bank/".length);
   const methods = { start: "POST", finish: "POST", sync: "POST", status: "GET", unlink: "POST" };
   if (!methods[route]) return json(404, { error: "Nicht gefunden." });
@@ -679,6 +691,8 @@ export async function handleBank(request, env, { fetchImpl = (...a) => fetch(...
         return json(401, { error: "Anmeldung ungültig oder abgelaufen – bitte neu laden." });
       }
     } else if (route === "finish") {
+      // M6: kaputten state/code ablehnen, bevor Firestore oder Google angefragt werden
+      if (!validState(body.state) || !validCode(body.code)) return json(400, { error: BAD_STATE_MSG });
       // Rückruf ohne Anmeldung (z. B. im Handy-Browser außerhalb der App): Der zufällige state aus
       // /bank/start ist hier der Nachweis. Die App hat genau einen Nutzer → UID wie beim MCP-Server.
       // UNSICHER: bewusste Lockerung für den Custom-Tab-Fall der Android-App.
@@ -691,7 +705,11 @@ export async function handleBank(request, env, { fetchImpl = (...a) => fetch(...
     if (route !== "status" && route !== "unlink") await ebJwt(env, now); // Einrichtung früh prüfen
     let out;
     if (route === "start") out = await bank.start(body);
-    else if (route === "finish") out = await bank.finish(body);
+    else if (route === "finish") {
+      out = await bank.finish(body);
+      // L2: ohne ID-Token keine Salden/Buchungen/Kontodaten zurückgeben – die App holt den Status nach der Anmeldung selbst.
+      if (!m) out = { ok: true };
+    }
     else if (route === "sync") { const r = await bank.sync({}); out = { ...r, status: await bank.status() }; }
     else if (route === "status") out = await bank.status();
     else out = await bank.unlink();

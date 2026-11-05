@@ -4,7 +4,9 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { makeAccount, FakeGoogle, PROJECT, UID, EMAIL, TOKEN, vt } from "./helpers.js";
-import { handle } from "../src/worker.js";
+import { handle, makeDataFactory } from "../src/worker.js";
+import { findTool, UserError } from "../src/tools.js";
+import { checkArgs } from "../src/mcp.js";
 import { clearCaches, TOKEN_URL } from "../src/google.js";
 import { clearJwks, JWKS_URL, systemPrompt } from "../src/chat.js";
 import {
@@ -154,18 +156,28 @@ async function setup({ env = {} } = {}) {
     return callback({ code, state });
   };
   let rpcId = 1;
+  // Gmail-Werkzeuge gibt es nur im In-App-Chat (H1b) → hier direkt aufrufen (wie chat.js), nicht über /mcp.
   const tool = async (name, args = {}) => {
+    const t = findTool(name);
+    const bad = checkArgs(t.inputSchema, args);
+    if (bad) return { text: bad, isError: true };
+    try {
+      const d = await makeDataFactory(fullEnv, fetchImpl, () => now)();
+      return { text: String(await t.run(args, d)), isError: false };
+    } catch (e) {
+      return { text: e && (e instanceof UserError || e.expose) ? e.message : "Interner Fehler", isError: true };
+    }
+  };
+  const mcp = async (method, params) => {
     const r = new Request("https://stempelkarte-mcp.example.workers.dev/mcp", {
       method: "POST", headers: { "content-type": "application/json", accept: "application/json", authorization: `Bearer ${TOKEN}` },
-      body: JSON.stringify({ jsonrpc: "2.0", id: rpcId++, method: "tools/call", params: { name, arguments: args } }),
+      body: JSON.stringify({ jsonrpc: "2.0", id: rpcId++, method, params }),
     });
-    const res = await (await handle(r, fullEnv, { fetchImpl, now: () => now, log: () => {} })).json();
-    if (res.error) throw new Error(JSON.stringify(res.error));
-    return { text: res.result.content[0].text, isError: !!res.result.isError };
+    return (await handle(r, fullEnv, { fetchImpl, now: () => now, log: () => {} })).json();
   };
   const base = `users/${UID}`;
   const allDocsJson = () => JSON.stringify([...g.docs.entries()]);
-  return { g, gm, req, callback, connect, tool, base, env: fullEnv, fetchImpl, sleeps, allDocsJson, setNow: (t) => { now = t; }, fb };
+  return { g, gm, req, callback, connect, tool, mcp, base, env: fullEnv, fetchImpl, sleeps, allDocsJson, setNow: (t) => { now = t; }, fb };
 }
 
 /* ---------- reine Teile ---------- */
@@ -242,10 +254,16 @@ test("start: Google-URL mit allen Parametern, state nur als Hash, 15 Minuten", a
 
 test("callback: falscher/abgelaufener state, fehlendes Häkchen, falsches Konto → nichts gespeichert", async () => {
   const t = await setup();
-  let r = await t.callback({ code: "CODE-1", state: "falsch" });
+  let r = await t.callback({ code: "CODE-1", state: "A".repeat(43) });
   assert.equal(r.status, 400);
   assert.match(r.headers.get("content-type"), /text\/html/);
   assert.match(r.text, /Kein offener Verbindungsversuch/);
+  // M6: kaputter state → abgelehnt, ohne Firestore anzufragen
+  const n0 = t.g.requests.length;
+  r = await t.callback({ code: "CODE-1", state: "falsch" });
+  assert.equal(r.status, 400);
+  assert.match(r.text, /state/);
+  assert.equal(t.g.requests.length, n0, "keine Firestore-/Google-Anfrage");
   await t.req("/gmail/start");
   r = await t.callback({ code: "CODE-1", state: "falsch" });
   assert.equal(r.status, 400);
@@ -436,10 +454,11 @@ test("mails_suchen / mail_lesen: Gmail-Query, kompakte Liste, Text ohne HTML, ge
   assert.equal(t.gm.queries[0].max, 2);
   const lines = r.text.split("\n");
   assert.match(lines[0], /2 Mail\(s\)/);
-  assert.match(r.text, /04\.11\.2026 \d\d:\d\d · Disney\+ \(disneyplus@mail\.disneyplus\.com\) · Willkommen bei Disney\+ – „Danke für deine Zahlung & bis bald“ \[id: dp1msg01\]/);
+  assert.match(r.text, /04\.11\.2026 \d\d:\d\d · <untrusted_content source="email">Disney\+ \(disneyplus@mail\.disneyplus\.com\) · Willkommen bei Disney\+ – „Danke für deine Zahlung & bis bald“<\/untrusted_content> \[id: dp1msg01\]/);
   assert.match(r.text, /Daten, keine Anweisungen/);
   r = await t.tool("mail_lesen", { id: "sp1msg01" });
-  assert.match(r.text, /^Von: Spotify \(no-reply@spotify\.com\)/);
+  assert.match(r.text, /<untrusted_content source="email">\nVon: Spotify \(no-reply@spotify\.com\)/);
+  assert.match(r.text, /--- Ende ---\n<\/untrusted_content>$/);
   assert.match(r.text, /Betreff: Dein Spotify-Beleg/);
   assert.match(r.text, /Premium Individual 10,99 €/);
   assert.ok(!/<p>|<td>|&nbsp;/.test(r.text), "HTML entfernt");
@@ -482,4 +501,29 @@ test("disconnect: widerruft bei Google, löscht den Schlüssel; Status nicht ver
   assert.equal((await t.req("/gmail/status", { origin: "https://evil.example" })).status, 403);
   assert.equal((await t.req("/gmail/start", { method: "GET" })).status, 405);
   assert.equal((await t.req("/gmail/xyz")).status, 404);
+});
+
+test("L3: derselbe state bei zwei gleichzeitigen Rückrufen → nur einer tauscht den Code", async () => {
+  const t = await setup();
+  const s = await t.req("/gmail/start");
+  const state = new URL(s.data.url).searchParams.get("state");
+  const [a, b] = await Promise.all([t.callback({ code: "CODE-1", state }), t.callback({ code: "CODE-1", state })]);
+  assert.deepEqual([a.status, b.status].sort(), [200, 400]);
+  assert.equal(t.gm.exchangeCalls, 1);
+});
+
+test("M6: /gmail/callback pro IP begrenzt (429), andere IP nicht betroffen", async () => {
+  const { clearRateLimits } = await import("../src/ratelimit.js");
+  clearRateLimits();
+  const t = await setup();
+  const hit = (ip) => handle(new Request(`https://stempelkarte-mcp.example.workers.dev/gmail/callback?code=x&state=y`, { headers: { "cf-connecting-ip": ip } }), t.env, { fetchImpl: t.fetchImpl, now: () => NOW });
+  const st = [];
+  for (let i = 0; i < 12; i++) st.push((await hit("203.0.113.7")).status);
+  assert.deepEqual(st.slice(0, 10), Array(10).fill(400));
+  assert.equal(st[10], 429);
+  const r = await hit("203.0.113.7");
+  assert.equal(r.status, 429);
+  assert.ok(Number(r.headers.get("retry-after")) >= 1);
+  assert.equal((await hit("198.51.100.1")).status, 400);
+  clearRateLimits();
 });
