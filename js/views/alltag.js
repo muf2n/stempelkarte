@@ -12,7 +12,7 @@ let routeToken = 0;
 function subRoute() {
   const h = (location.hash || "").replace(/^#/, "");
   if (h !== "alltag" && !h.startsWith("alltag/")) return null; // anderer Reiter
-  return h.split("/")[1] || "";
+  return h.split("?")[0].split("/")[1] || ""; // Update 9 (Agent W3): #alltag/galerie?import=native
 }
 
 function unmountModule() {

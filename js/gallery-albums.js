@@ -194,12 +194,13 @@ export function currentPosition({ timeout = 8000 } = {}) {
 
 /* ---------- Alben anlegen/ändern ---------- */
 
-export async function createAlbum(data, { place = null } = {}) {
+export async function createAlbum(data, { place = null, activeFolderId } = {}) {
   const id = data.id || "al" + Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
   data = { ...data };
   if (data.folderId === undefined && (data.kind === "address" || data.kind === "place")) {
     try { await ensureFolders(); } catch (e) { console.warn("Kategorien:", e); }
-    const fid = G.folderForNewAlbum(data, { folders: folders(), autoFolder: settings().autoFolder, activeFolderId: activeFolder().id, place });
+    // Update 9 (Agent W3): beim Import gilt die Kategorie zur Aufnahmezeit (activeFolderId übergeben)
+    const fid = G.folderForNewAlbum(data, { folders: folders(), autoFolder: settings().autoFolder, activeFolderId: activeFolderId !== undefined ? activeFolderId : activeFolder().id, place });
     if (fid) data.folderId = fid;
   }
   if (!data.folderId || data.folderId === G.OHNE_KAT) delete data.folderId;
@@ -215,7 +216,7 @@ export async function patchAlbum(id, partial) {
 }
 
 /** Ort-Album zu einem gespeicherten Ort (anlegen, falls es fehlt). */
-export async function placeAlbum(place) {
+export async function placeAlbum(place, opt = {}) {
   const pid = place && (place.id || place.placeId);
   if (!pid) return null;
   const have = albums().find((a) => a.kind === "place" && a.placeId === pid);
@@ -224,7 +225,7 @@ export async function placeAlbum(place) {
     kind: "place", placeId: pid, name: place.name || place.place || "Ort",
     lat: G.hasPos(place) ? place.lat : null, lng: G.hasPos(place) ? place.lng : null,
     radius: G.cleanRadius(place.radius, G.PLACE_RADIUS), addr: place.addr || "",
-  }, { place });
+  }, { place, activeFolderId: opt.activeFolderId });
 }
 
 /* ---------- Automatisch einsortieren ---------- */
@@ -234,7 +235,7 @@ let fileQueue = Promise.resolve();
 /**
  * Foto (schon gespeichert) nachträglich mit Position + Album versehen. Läuft in einer Warteschlange,
  * damit zwei schnelle Fotos an derselben Adresse nicht zwei Alben anlegen.
- * opts = { pos?: {lat,lng,acc} | Promise, auto?: false (keine Alben), placeId? }
+ * opts = { pos?: {lat,lng,acc} | Promise, auto?: false (keine Alben), placeId?, activeFolderId? (Kategorie für neue Alben) }
  * → { album|null, pos|null, created (Album neu angelegt) }
  */
 export function autoFile(photo, opts = {}) {
@@ -260,7 +261,7 @@ async function doFile(photo, opts) {
   if (pos) {
     const m = G.matchLocation(pos, { places: pls, albums: albums(), defaultRadius: set.radius });
     if (auto && m.type === "place") {
-      album = m.album || await placeAlbum(m.place);
+      album = m.album || await placeAlbum(m.place, opts);
       if (!m.album) created = true;
       addr = m.place.addr || "";
       // Foto ohne Ort (nicht eingestempelt dort) → mit dem gespeicherten Ort verknüpfen (erscheint im Ort-Blatt)
@@ -274,7 +275,7 @@ async function doFile(photo, opts) {
         // nach der Wartezeit noch einmal prüfen (andere Geräte/Fotos)
         const again = G.matchLocation(pos, { places: pls, albums: albums(), defaultRadius: set.radius });
         if (again.type === "address") album = again.album;
-        else { album = await createAlbum({ kind: "address", name: G.albumNameFrom(data) || G.coordName(pos), lat: pos.lat, lng: pos.lng, radius: set.radius, addr }); created = true; }
+        else { album = await createAlbum({ kind: "address", name: G.albumNameFrom(data) || G.coordName(pos), lat: pos.lat, lng: pos.lng, radius: set.radius, addr }, { activeFolderId: opts.activeFolderId }); created = true; }
       }
     }
   } else if (auto && (opts.placeId || photo.placeId)) {
@@ -282,7 +283,7 @@ async function doFile(photo, opts) {
     const pid = opts.placeId || photo.placeId;
     const pl = pls.find((p) => p.id === pid) || { id: pid, name: photo.place || "Ort" };
     const had = albums().some((a) => a.kind === "place" && a.placeId === pid);
-    album = await placeAlbum(pl);
+    album = await placeAlbum(pl, opts);
     if (!had && album) created = true;
   }
   if (addr) patch.addr = addr;
