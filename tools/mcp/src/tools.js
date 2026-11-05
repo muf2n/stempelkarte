@@ -19,50 +19,18 @@ import * as PM from "./privat.js"; // Update 9 – Privat / Arbeit
 import { vienna } from "./time.js";
 import { DEFAULT_CATS, suggestCategory, parseAmount, budgetLevel, upcoming, monthlyCost, round2, INTERVALS } from "./money.js";
 import * as AB from "./subs.js"; // Update 9 – Abos: „Wie lange noch“, Fristen, Katalog (gemeinsam mit der Web-App)
+import * as MC from "./moneycore.js";
+import { READ_TOOLS, schoolSection, moneyExtra } from "./read.js"; // Update 9 – Claude sieht (fast) alles
+import { WRITE_TOOLS } from "./write.js"; // Update 9 – Claude darf (fast) alles ändern
+import { SETTINGS_TOOLS } from "./settings.js"; // Update 9 – Einstellungen nur mit Bestätigung
 
-const SRC = "claude";
 const ABS_KINDS = ["urlaub", "krank", "zeitausgleich", "schule", "feiertag"];
 const GRADE_NAMES = { 1: "Sehr gut", 2: "Gut", 3: "Befriedigend", 4: "Genügend", 5: "Nicht genügend" };
 const EXAM_KINDS = ["Schularbeit", "Test", "Prüfung", "Mündlich", "Referat", "Lehrabschlussprüfung"];
 
-/* ---------- kleine Hilfen ---------- */
+import { SRC, RO, WR, s, pad2, need, dateArg, timeArg, boolArg, placeName, matchPlace, resolvePlace, countdown } from "./util.js";
 
-const s = (v) => (v == null ? "" : String(v).trim());
-const pad2 = (n) => String(n).padStart(2, "0");
-function need(v, msg) { if (!s(v)) throw new UserError(msg); return s(v); }
-
-function dateArg(v, today, label = "Datum") {
-  if (v == null || s(v) === "") return null;
-  const k = parseDate(v, today);
-  if (!k) throw new UserError(`${label} „${s(v)}“ verstehe ich nicht. Bitte als TT.MM.JJJJ (z. B. ${fmtKey(today)}) oder „heute“/„gestern“ angeben.`);
-  return k;
-}
-function timeArg(v, label) {
-  const t = parseTime(v);
-  if (!t) throw new UserError(`${label} „${s(v)}“ verstehe ich nicht. Bitte als HH:MM (24 h, z. B. 07:30) angeben.`);
-  return t;
-}
-
-function placeName(x) { return s(x && (x.place || (x.inLoc && x.inLoc.addr) || (x.loc && x.loc.addr))); }
 function lastSeg(r) { const sg = segmentsOf(r); return sg[sg.length - 1] || null; }
-
-function matchPlace(q, places) {
-  const m = best(q, places.filter((p) => p && p.name), (p) => p.name);
-  return m;
-}
-
-/** Ort-Eingabe → {placeId, place, info}. Kein Treffer → freier Text (wie App: placeId null). */
-function resolvePlace(q, places) {
-  const txt = s(q);
-  if (!txt) return { placeId: null, place: "", info: "" };
-  const m = matchPlace(txt, places);
-  if (m) {
-    let info = norm(m.item.name) === norm(txt) ? "" : ` (gespeicherter Ort „${m.item.name}“ zu „${txt}“ gefunden)`;
-    if (m.ambiguous && m.second) info += ` – Achtung, „${m.second.name}“ passt ähnlich gut`;
-    return { placeId: m.item.id, place: String(m.item.name), info };
-  }
-  return { placeId: null, place: txt, info: ` (kein gespeicherter Ort passt zu „${txt}“ – als freier Text übernommen)` };
-}
 
 function resolveActivity(q, settings) {
   const list = activitiesOf(settings);
@@ -173,8 +141,6 @@ function modeLine(settings, running, now) {
 
 /* ---------- Werkzeuge ---------- */
 
-const RO = { readOnlyHint: true, destructiveHint: false, idempotentHint: true, openWorldHint: false };
-const WR = { readOnlyHint: false, destructiveHint: false, idempotentHint: false, openWorldHint: false };
 
 export const TOOLS = [];
 function tool(def) { TOOLS.push(def); }
@@ -253,6 +219,28 @@ tool({
   },
 });
 
+/** Wochen-Angabe (leer, "letzte", "KW 45", "2026-W45", "-2", Datum) → Montag "YYYY-MM-DD". */
+export function weekStart(arg, today) {
+  const w = s(arg).toLowerCase();
+  let ws = mondayOf(today);
+  let m;
+  if (!w || /^(diese|aktuell|jetzt)/.test(w)) { /* diese Woche */ }
+  else if (/^(letzte|vorige|vergangene)/.test(w)) ws = addDays(ws, -7);
+  else if (/^(nächste|naechste|kommende)/.test(w)) ws = addDays(ws, 7);
+  else if ((m = /^([+-]\d{1,2})$/.exec(w))) ws = addDays(ws, 7 * Number(m[1]));
+  else if ((m = /^(\d{4})-?w(\d{1,2})$/.exec(w))) ws = isoWeekMonday(+m[1], +m[2]);
+  else if ((m = /^kw\s*(\d{1,2})(?:\s*[/.]?\s*(\d{4}))?$/.exec(w)) || (m = /^(\d{1,2})$/.exec(w))) {
+    const wk = +m[1];
+    if (wk < 1 || wk > 53) throw new UserError("Kalenderwoche muss zwischen 1 und 53 liegen.");
+    const yr = m[2] ? +m[2] : isoWeek(today).year;
+    ws = isoWeekMonday(yr, wk);
+  } else {
+    const k = dateArg(arg, today, "Woche");
+    ws = mondayOf(k);
+  }
+  return ws;
+}
+
 tool({
   name: "wochen_zusammenfassung",
   title: "Wochenbericht (Berichtsheft)",
@@ -267,23 +255,7 @@ tool({
   annotations: RO,
   async run(args, d) {
     const today = dayKey(d.now);
-    const w = s(args.woche).toLowerCase();
-    let ws = mondayOf(today);
-    let m;
-    if (!w || /^(diese|aktuell|jetzt)/.test(w)) { /* diese Woche */ }
-    else if (/^(letzte|vorige|vergangene)/.test(w)) ws = addDays(ws, -7);
-    else if (/^(nächste|naechste|kommende)/.test(w)) ws = addDays(ws, 7);
-    else if ((m = /^([+-]\d{1,2})$/.exec(w))) ws = addDays(ws, 7 * Number(m[1]));
-    else if ((m = /^(\d{4})-?w(\d{1,2})$/.exec(w))) ws = isoWeekMonday(+m[1], +m[2]);
-    else if ((m = /^kw\s*(\d{1,2})(?:\s*[/.]?\s*(\d{4}))?$/.exec(w)) || (m = /^(\d{1,2})$/.exec(w))) {
-      const wk = +m[1];
-      if (wk < 1 || wk > 53) throw new UserError("Kalenderwoche muss zwischen 1 und 53 liegen.");
-      const yr = m[2] ? +m[2] : isoWeek(today).year;
-      ws = isoWeekMonday(yr, wk);
-    } else {
-      const k = dateArg(args.woche, today, "Woche");
-      ws = mondayOf(k);
-    }
+    const ws = weekStart(args.woche, today);
     const we = addDays(ws, 6);
     const [settings, entries] = await Promise.all([d.settings(), d.entriesRange(keyToTs(ws), keyToTs(addDays(we, 1)))]);
     const rows = buildWeek(settings, entries, ws);
@@ -687,7 +659,7 @@ function einsatzLine(e) {
   return `- ${fmtKeyWd(e.date)}${to}: ${e.place || e.title}${e.people && e.people.length ? ` · mit ${e.people.join(", ")}` : ""}${s(e.note) ? ` · ${s(e.note)}` : ""} (ID ${e.id})`;
 }
 
-function sortTodos(a, b) {
+export function sortTodos(a, b) {
   const da = a.done ? 1 : 0, db = b.done ? 1 : 0;
   if (da !== db) return da - db;
   const ka = a.date ? `${a.date} ${a.time || "99:99"}` : "~";
@@ -749,10 +721,27 @@ const REPEAT_WORDS = [
 ];
 const RD = ["SU", "MO", "TU", "WE", "TH", "FR", "SA"];
 
+/** Wiederholung (Wort oder RRULE, optional wiederholen_bis/anzahl) zum Starttag → RRULE-Text oder null („keine“). */
+export function repeatRule(args, date, today) {
+  const w = s(args.wiederholung).toLowerCase();
+  const wd = RD[wdOf(date)];
+  let rr;
+  if (/^(rrule:)?freq=/i.test(w)) rr = parseRRule(w.toUpperCase()) ? formatRRule(w.toUpperCase()) : null;
+  else {
+    const hit = REPEAT_WORDS.find(([re]) => re.test(w));
+    if (!hit) throw new UserError("wiederholung: täglich, werktags, wöchentlich, alle 2 wochen, monatlich, jährlich, keine oder eine RRULE (FREQ=…).");
+    rr = hit[1] === "W" ? `FREQ=WEEKLY;BYDAY=${wd}` : hit[1] === "W2" ? `FREQ=WEEKLY;INTERVAL=2;BYDAY=${wd}` : hit[1] === "M" ? `FREQ=MONTHLY;BYMONTHDAY=${Number(date.slice(8))}` : hit[1];
+  }
+  if (!rr) return null;
+  const r = parseRRule(rr);
+  if (s(args.wiederholen_bis)) { r.until = dateArg(args.wiederholen_bis, today, "wiederholen_bis"); r.count = null; }
+  else if (args.anzahl != null) { const n = Math.round(Number(args.anzahl)); if (!(n >= 1 && n <= 999)) throw new UserError("anzahl muss 1–999 sein."); r.count = n; r.until = null; }
+  return formatRRule(r);
+}
+
 /** Update 9 – Kalender: Zusatzfelder für Termine (Ende, ganztägig, Ort, Wiederholung, mehrere Erinnerungen, Kalender). */
-async function eventArgs(d, args, base, today) {
+export async function eventArgs(d, args, base, today) {
   const t = { ...base };
-  const wd = RD[wdOf(t.date)];
   if (args.ganztags === true) { t.allDay = true; t.time = null; }
   if (s(args.ende_datum)) {
     const ed = dateArg(args.ende_datum, today, "ende_datum");
@@ -767,20 +756,8 @@ async function eventArgs(d, args, base, today) {
   }
   if (s(args.ort)) t.location = s(args.ort).slice(0, 200);
   if (s(args.wiederholung)) {
-    const w = s(args.wiederholung).toLowerCase();
-    let rr;
-    if (/^(rrule:)?freq=/i.test(w)) rr = parseRRule(w.toUpperCase()) ? formatRRule(w.toUpperCase()) : null;
-    else {
-      const hit = REPEAT_WORDS.find(([re]) => re.test(w));
-      if (!hit) throw new UserError("wiederholung: täglich, werktags, wöchentlich, alle 2 wochen, monatlich, jährlich oder eine RRULE (FREQ=…).");
-      rr = hit[1] === "W" ? `FREQ=WEEKLY;BYDAY=${wd}` : hit[1] === "W2" ? `FREQ=WEEKLY;INTERVAL=2;BYDAY=${wd}` : hit[1] === "M" ? `FREQ=MONTHLY;BYMONTHDAY=${Number(t.date.slice(8))}` : hit[1];
-    }
-    if (rr) {
-      const r = parseRRule(rr);
-      if (s(args.wiederholen_bis)) { r.until = dateArg(args.wiederholen_bis, today, "wiederholen_bis"); r.count = null; }
-      else if (args.anzahl != null) { const n = Math.round(Number(args.anzahl)); if (!(n >= 1 && n <= 999)) throw new UserError("anzahl muss 1–999 sein."); r.count = n; r.until = null; }
-      t.rrule = formatRRule(r);
-    }
+    const rr = repeatRule(args, t.date, today);
+    if (rr) t.rrule = rr;
   }
   if (Array.isArray(args.erinnerungen)) {
     const list = args.erinnerungen.map((x) => Math.round(Number(x)));
@@ -823,6 +800,7 @@ async function createTodo(d, kind, args) {
     title, kind, date, time: date ? time : null, remind, remindMin,
     note: s(args.notiz), done: false, doneAt: null, createdAt: d.now, src: SRC,
   };
+  if (args.countdown === true) { if (!date) throw new UserError("Ein Countdown braucht ein Datum."); base.countdown = true; }
   if (kind === "termin") base = await eventArgs(d, args, base, today);
   const full = normTodo(base, id, d.now);
   const { id: _i, ...data } = full;
@@ -830,27 +808,51 @@ async function createTodo(d, kind, args) {
   return full;
 }
 
+/** Geburtstag „TT.MM.“ oder „TT.MM.JJJJ“ → {bday:"MM-DD", byear|null}. */
+export function bdayArg(v) {
+  const m = /^(\d{1,2})\.\s?(\d{1,2})\.?\s?(\d{4})?$/.exec(s(v)) || /^(\d{4})-(\d{1,2})-(\d{1,2})$/.exec(s(v));
+  if (!m) throw new UserError(`Geburtstag „${s(v)}“ verstehe ich nicht – bitte TT.MM. oder TT.MM.JJJJ (z. B. 24.03.2001).`);
+  const iso = m[0].includes("-");
+  const d = Number(iso ? m[3] : m[1]), mo = Number(m[2]), y = iso ? Number(m[1]) : m[3] ? Number(m[3]) : null;
+  if (!(mo >= 1 && mo <= 12 && d >= 1 && d <= new Date(Date.UTC(2024, mo, 0)).getUTCDate())) throw new UserError("Dieses Datum gibt es nicht.");
+  if (y != null && !(y > 1850 && y < 2200)) throw new UserError("Das Geburtsjahr ist ungültig.");
+  return { bday: `${pad2(mo)}-${pad2(d)}`, byear: y };
+}
+
 tool({
   name: "todo_anlegen",
-  title: "Aufgabe anlegen",
-  description: "Legt eine Aufgabe im Planer an (wie „Neu im Planer → Aufgabe“). Mit Fälligkeitsdatum und Uhrzeit wird standardmäßig eine Push-Erinnerung (30 min vorher) eingestellt.",
+  title: "Aufgabe / Geburtstag anlegen",
+  description: "Legt eine Aufgabe im Planer an (wie „Neu im Planer → Aufgabe“) – mit art \"geburtstag\" stattdessen einen Geburtstag (jährlich, datum = TT.MM. oder TT.MM.JJJJ). Mit Fälligkeitsdatum und Uhrzeit wird standardmäßig eine Push-Erinnerung (30 min vorher) eingestellt; countdown: true zeigt oben im Planer „noch X Tage“.",
   inputSchema: {
     type: "object",
     properties: {
-      titel: { type: "string", description: "Was ist zu tun?" },
+      titel: { type: "string", description: "Was ist zu tun? Bei Geburtstag: Name der Person" },
+      art: { type: "string", enum: ["aufgabe", "geburtstag"], description: "Standard aufgabe" },
       faellig: { type: "string", description: "Fälligkeitsdatum (optional), z. B. \"morgen\", \"10.11.2026\"" },
+      datum: { type: "string", description: "Nur Geburtstag: TT.MM. oder TT.MM.JJJJ" },
       uhrzeit: { type: "string", description: "Uhrzeit HH:MM (optional)" },
       notiz: { type: "string" },
-      erinnern: { type: "boolean", description: "Push-Erinnerung (nur mit Datum und Uhrzeit)" },
+      erinnern: { type: "boolean", description: "Push-Erinnerung (Aufgabe: nur mit Datum und Uhrzeit; Geburtstag: am Tag um 09:00)" },
       erinnern_min: { type: "number", description: "Minuten vorher (Standard 30)" },
+      countdown: { type: "boolean", description: "Countdown „noch X Tage“ oben im Planer (braucht Datum)" },
     },
     required: ["titel"],
     additionalProperties: false,
   },
   annotations: WR,
   async run(args, d) {
+    if (s(args.art) === "geburtstag") {
+      const title = need(args.titel, "Bitte den Namen angeben.").slice(0, 80);
+      const b = bdayArg(need(args.datum || args.faellig, "Bitte das Geburtsdatum (TT.MM. oder TT.MM.JJJJ) angeben."));
+      const id = newId("t", d.now);
+      const rt = s(args.uhrzeit) ? fmtTime(timeArg(args.uhrzeit, "Uhrzeit")) : "09:00";
+      const full = normTodo({ kind: "geburtstag", title, ...b, date: null, time: rt, remind: args.erinnern !== false, remindDays: 0, remindMin: 0, note: s(args.notiz), done: false, doneAt: null, createdAt: d.now, src: SRC }, id, d.now);
+      const { id: _i, ...data } = full;
+      await d.commit([d.fs.setWrite(d.p(`todos/${id}`), clean(data))]);
+      return `Geburtstag gespeichert: ${title} am ${b.bday.slice(3)}.${b.bday.slice(0, 2)}.${b.byear ? b.byear : ""}${full.remind ? `, Erinnerung am Tag um ${rt}` : ""} 🎂\n(ID ${id})`;
+    }
     const t = await createTodo(d, "todo", args);
-    return `Aufgabe angelegt: „${t.title}“${t.date ? ` – fällig ${fmtKeyWd(t.date)}${t.time ? " " + t.time : ""}` : " (ohne Datum)"}${t.remind ? `, Erinnerung ${t.remindMin} min vorher` : ""}.\n(ID ${t.id})`;
+    return `Aufgabe angelegt: „${t.title}“${t.date ? ` – fällig ${fmtKeyWd(t.date)}${t.time ? " " + t.time : ""}` : " (ohne Datum)"}${t.remind ? `, Erinnerung ${t.remindMin} min vorher` : ""}${t.countdown ? ", mit Countdown" : ""}.\n(ID ${t.id})`;
   },
 });
 
@@ -876,6 +878,7 @@ tool({
       erinnern: { type: "boolean" },
       erinnern_min: { type: "number", description: "Minuten vorher (Standard 30)" },
       erinnerungen: { type: "array", items: { type: "number" }, description: "Mehrere Erinnerungen in Minuten vorher, z. B. [10, 60, 1440]" },
+      countdown: { type: "boolean", description: "Countdown „noch X Tage“ oben im Planer anzeigen" },
     },
     required: ["titel", "datum"],
     additionalProperties: false,
@@ -888,7 +891,7 @@ tool({
       t.endDate ? `bis ${fmtKeyWd(t.endDate)}${t.endTime ? " " + t.endTime : ""}` : t.endTime ? `bis ${t.endTime}` : "",
       t.allDay ? "ganztägig" : "", t.location ? `Ort: ${t.location}` : "", t.rrule ? describeRule(t.rrule, t.date) : "",
     ].filter(Boolean).join(" · ");
-    return `Termin angelegt: „${t.title}“ am ${fmtKeyWd(t.date)}${t.time ? ` um ${t.time}` : ""}${rem}${extra ? ` · ${extra}` : ""}.\n(ID ${t.id})`;
+    return `Termin angelegt: „${t.title}“ am ${fmtKeyWd(t.date)}${t.time ? ` um ${t.time}` : ""}${rem}${extra ? ` · ${extra}` : ""}${t.countdown ? " · mit Countdown" : ""}.\n(ID ${t.id})`;
   },
 });
 
@@ -971,10 +974,18 @@ tool({
   },
 });
 
+/** Erinnerungen eines Termins kurz („ · 🔔 30 min, 1 Tag vorher“). */
+function remText(t) {
+  const list = Array.isArray(t && t.reminders) && t.reminders.length ? t.reminders : t && t.remind ? [t.remindMin] : [];
+  if (!list.length) return "";
+  const f = (m) => (m % 1440 === 0 && m ? `${m / 1440} ${m === 1440 ? "Tag" : "Tage"}` : m % 60 === 0 && m ? `${m / 60} h` : `${m} min`);
+  return ` · 🔔 ${list.map(f).join(", ")} vorher`;
+}
+
 tool({
   name: "planer_lesen",
   title: "Planer lesen",
-  description: "Zeigt den Planer Tag für Tag: Termine, Aufgaben mit Datum, Einsätze (Einsatzplan), Berufsschultage und Feiertage im Zeitraum; dazu offene Aufgaben ohne Datum. Ohne Angabe: heute + 6 Tage.",
+  description: "Kalender/Planer Tag für Tag: Termine (Serien aufgeklappt, mit Ausnahmen, Ort, Erinnerungen und ID), Aufgaben mit Datum, Geburtstage, Einsätze (Einsatzplan), Berufsschultage und Feiertage im Zeitraum; dazu offene Aufgaben ohne Datum und Überfälliges. Ohne Angabe: heute + 6 Tage (höchstens 92 Tage).",
   inputSchema: {
     type: "object",
     properties: {
@@ -1005,7 +1016,7 @@ tool({
     for (const t of todos) {
       const m = t.kind === "geburtstag" && /^(\d{1,2})-(\d{1,2})$/.exec(s(t.bday));
       if (!m) continue;
-      for (let y = Number(from.slice(0, 4)); y <= Number(to.slice(0, 4)); y++) bdays.push({ title: t.title, date: `${y}-${pad2(m[1])}-${pad2(m[2])}` });
+      for (let y = Number(from.slice(0, 4)); y <= Number(to.slice(0, 4)); y++) bdays.push({ title: t.title, date: `${y}-${pad2(m[1])}-${pad2(m[2])}`, age: Number(t.byear) > 1850 ? y - Number(t.byear) : null });
     }
     let any = false;
     for (let k = from; k <= to; k = addDays(k, 1)) {
@@ -1016,13 +1027,13 @@ tool({
       if (sch) bits.push(`  ${sch === "Berufsschule" ? "Berufsschule" : "Berufsschule – " + sch}`);
       const ez = einsatzFor(k, todos);
       if (ez) bits.push(`  Einsatz: ${ez.place || ez.title}${ez.people && ez.people.length ? ` mit ${ez.people.join(", ")}` : ""}${s(ez.note) ? ` (${s(ez.note)})` : ""}`);
-      for (const b of bdays) if (b.date === k) bits.push(`  🎂 Geburtstag: ${b.title}`);
+      for (const b of bdays) if (b.date === k) bits.push(`  🎂 Geburtstag: ${b.title}${b.age ? ` (${b.age})` : ""}`);
       const items = todos.filter((t) => t.kind !== "einsatz" && t.kind !== "termin" && t.kind !== "geburtstag" && t.date === k).sort(sortTodos);
       const evs = (byDay.get(k) || []).map((i) => ({ i, sk: i.allDay || i.date < k ? "" : i.time }));
       const lines = [
         ...evs.map(({ i, sk }) => [sk || "", `  ${i.done ? "[x]" : "[ ]"} ${i.allDay ? "ganztägig " : i.date < k ? "(Fortsetzung) " : i.time + " "}Termin: ${i.title}` +
-          `${i.endDate > i.date ? ` (${fmtKey(i.date)} – ${fmtKey(i.endDate)})` : !i.allDay ? `–${i.endTime}` : ""}${i.recurring ? " (Serie)" : ""}${s(i.location) ? ` · ${s(i.location)}` : ""}${s(i.note) ? ` – ${s(i.note)}` : ""}`]),
-        ...items.map((t) => [t.time || "99", `  ${t.done ? "[x]" : "[ ]"} ${t.time ? t.time + " " : ""}${t.title}${s(t.note) ? ` – ${s(t.note)}` : ""}`]),
+          `${i.endDate > i.date ? ` (${fmtKey(i.date)} – ${fmtKey(i.endDate)})` : !i.allDay ? `–${i.endTime}` : ""}${i.recurring ? " (Serie)" : ""}${s(i.location) ? ` · ${s(i.location)}` : ""}${s(i.note) ? ` – ${s(i.note)}` : ""}${remText(i.t)} (ID ${i.id}${i.recurring ? `, Wiederholung ${fmtKey(i.key)}` : ""})`]),
+        ...items.map((t) => [t.time || "99", `  ${t.done ? "[x]" : "[ ]"} ${t.time ? t.time + " " : ""}${t.title}${s(t.note) ? ` – ${s(t.note)}` : ""}${t.countdown ? " ⏳" : ""} (ID ${t.id})`]),
       ].sort((a, b) => (a[0] < b[0] ? -1 : a[0] > b[0] ? 1 : 0));
       for (const [, l] of lines) bits.push(l);
       if (bits.length) { any = true; out.push("", `${fmtKeyWd(k)}${k === today ? " (heute)" : ""}`, ...bits); }
@@ -1038,21 +1049,24 @@ tool({
 
 /* ===== Geld ===== */
 
-async function moneyCats(d) {
+export async function moneyCats(d) {
   const cats = (await d.alltag("money_cats")).filter((c) => c && c.id && !c.deleted);
   const map = new Map(DEFAULT_CATS.map((c) => [c.id, c]));
   for (const c of cats) map.set(c.id, { ...map.get(c.id), ...c });
   return map;
 }
-const catName = (map, id) => { const c = map.get(id); return c ? `${c.emoji ? c.emoji + " " : ""}${c.name}` : id || "Sonstiges"; };
+export const catName = (map, id) => { const c = map.get(id); return c ? `${c.emoji ? c.emoji + " " : ""}${c.name}` : id || "Sonstiges"; };
 
 tool({
   name: "geld_lesen",
   title: "Geld-Übersicht",
-  description: "Geld-Bereich der App (Alltag → Geld): Einnahmen, Ausgaben und Saldo eines Monats, Ausgaben je Kategorie, Budget-Stand (Warnung ab 80 %), kommende Abo-Zahlungen und Sparziele. Ohne Angabe: aktueller Monat.",
+  description: "Geld-Bereich der App (Alltag → Geld): Einnahmen, Ausgaben und Saldo eines Monats, Ausgaben je Kategorie, Budget-Stand (Warnung ab 80 %), kommende Abo-Zahlungen, Sparziele (mit „pro Monat nötig“), Teilen-Gruppen mit Salden („Max schuldet dir …“) und – falls verbunden – Kontostand der Bank. Mit buchungen: true auch die einzelnen Buchungen. Ohne Angabe: aktueller Monat.",
   inputSchema: {
     type: "object",
-    properties: { monat: { type: "string", description: "z. B. \"2026-11\", \"11.2026\", \"Oktober\", \"letzter\"" } },
+    properties: {
+      monat: { type: "string", description: "z. B. \"2026-11\", \"11.2026\", \"Oktober\", \"letzter\"" },
+      buchungen: { type: "boolean", description: "Auch die einzelnen Buchungen des Monats auflisten (höchstens 60)" },
+    },
     additionalProperties: false,
   },
   annotations: RO,
@@ -1063,7 +1077,8 @@ tool({
     const [txs, budget, subs, goals, cats] = await Promise.all([
       d.alltag("money_tx"), d.alltag("money_budget"), d.alltag("money_subs"), d.alltag("money_goals"), moneyCats(d),
     ]);
-    if (!txs.length && !budget.length && !subs.length && !goals.length) {
+    const extra = await moneyExtra(d);
+    if (!txs.length && !budget.length && !subs.length && !goals.length && !extra.length) {
       return "Im Bereich Geld ist noch nichts eingetragen. Du kannst mit „ausgabe_eintragen“ gleich die erste Buchung anlegen.";
     }
     const list = txs.filter((t) => String(t.date || "").slice(0, 7) === mk);
@@ -1100,8 +1115,15 @@ tool({
       out.push("", "Sparziele:");
       for (const g of goals) {
         const tg = Number(g.target) || 0, sv = Number(g.saved) || 0;
-        out.push(`- ${g.emoji ? g.emoji + " " : ""}${g.name || "Ziel"}: ${eur(sv)} von ${eur(tg)}${tg > 0 ? ` (${Math.min(100, Math.round(sv / tg * 100))} %)` : ""}${isKey(g.date) ? ` bis ${fmtKey(g.date)}` : ""}`);
+        const pm = MC.goalPerMonth(g, today);
+        out.push(`- ${g.emoji ? g.emoji + " " : ""}${g.name || "Ziel"}: ${eur(sv)} von ${eur(tg)}${tg > 0 ? ` (${Math.min(100, Math.round(sv / tg * 100))} %)` : ""}${isKey(g.date) ? ` bis ${fmtKey(g.date)}` : ""}${pm.done ? " – erreicht 🎉" : pm.perMonth ? ` – noch ${eur(pm.perMonth)} pro Monat nötig` : ""}`);
       }
+    }
+    out.push(...extra);
+    if (args.buchungen === true && list.length) {
+      out.push("", "Buchungen:");
+      for (const x of [...list].sort((a, b) => (a.date < b.date ? 1 : -1)).slice(0, 60)) out.push(`- ${fmtKey(x.date)} ${x.type === "in" ? "+" : "−"}${eur(Number(x.amount) || 0)} · ${catName(cats, x.category)}${s(x.note) ? ` · „${s(x.note).slice(0, 60)}“` : ""}${x.src === "bank" ? " · Bank" : ""} (ID ${x.id})`);
+      if (list.length > 60) out.push(`… und ${list.length - 60} weitere`);
     }
     return out.join("\n");
   },
@@ -1170,14 +1192,6 @@ const AB_DATES = new Set(["next", "startDate", "minTermEnd", "contractEnd", "tri
 const AB_BOOLS = new Set(["autoRenew", "remind", "paused"]);
 const AB_URLS = new Set(["cancelUrl", "manageUrl"]);
 const AB_TEXT = { name: 40, what: 120, noticeText: 80, cancelHow: 2000, account: 120 };
-
-function boolArg(v, label) {
-  if (typeof v === "boolean") return v;
-  const t = s(v).toLowerCase();
-  if (["ja", "true", "an", "1", "yes", "ein"].includes(t)) return true;
-  if (["nein", "false", "aus", "0", "no"].includes(t)) return false;
-  throw new UserError(`${label}: bitte ja oder nein angeben.`);
-}
 
 async function findSub(d, name) {
   const subs = (await d.alltag("money_subs")).filter((x) => x && x.id && !x.deleted);
@@ -1351,14 +1365,6 @@ tool({
 
 /* ===== Schule ===== */
 
-function countdown(today, k) {
-  const n = diffDays(today, k);
-  if (n === 0) return "heute";
-  if (n === 1) return "morgen";
-  if (n === 2) return "übermorgen";
-  if (n > 0) return `noch ${n} Tage`;
-  return n === -1 ? "seit gestern" : `seit ${-n} Tagen`;
-}
 function avgOf(list) {
   let sum = 0, w = 0;
   for (const g of list) {
@@ -1375,7 +1381,7 @@ async function schoolSubjects(d) {
   for (const l of lists) for (const x of l) { const v = s(x.subject); if (v) seen.set(v.toLowerCase(), v); }
   return [...seen.values()];
 }
-async function resolveSubject(d, q) {
+export async function resolveSubject(d, q) {
   const v = s(q);
   if (!v) return "";
   const subs = await schoolSubjects(d);
@@ -1386,10 +1392,15 @@ async function resolveSubject(d, q) {
 tool({
   name: "schule_lesen",
   title: "Schule & Lernen",
-  description: "Schul-Bereich der App (Alltag → Schule & Lernen): kommende Prüfungen/Schularbeiten mit Countdown und Lernfortschritt, offene Hausaufgaben (überfällig/heute/demnächst), Notenschnitt je Fach und gesamt (österreichische Noten 1–5, gewichtet) sowie die nächsten Berufsschultage.",
-  inputSchema: { type: "object", properties: {}, additionalProperties: false },
+  description: "Schul-Bereich der App (Alltag → Schule & Lernen). bereich uebersicht (Standard): kommende Prüfungen mit Countdown und Lernfortschritt, offene Hausaufgaben, Notenschnitt je Fach (Noten 1–5, gewichtet), offene Projekte, nächste Berufsschultage. Weitere Bereiche: stundenplan (Stunden je Wochentag mit Raum/Lehrer/A-B-Woche und ID), noten (alle Noten mit Datum/Art/Gewicht und ID), projekte (Schritte ☐/☑ mit Schritt-ID), dokumente (nur Titel/Fach/Größe), lernplan (geplante Lerneinheiten und Lernzeit der letzten 14 Tage).",
+  inputSchema: {
+    type: "object",
+    properties: { bereich: { type: "string", enum: ["uebersicht", "stundenplan", "noten", "projekte", "dokumente", "lernplan"], description: "Standard uebersicht" } },
+    additionalProperties: false,
+  },
   annotations: RO,
-  async run(_a, d) {
+  async run(args, d) {
+    if (s(args.bereich) && s(args.bereich) !== "uebersicht") return schoolSection(d, s(args.bereich), args);
     const today = dayKey(d.now);
     const [exams, tasks, grades, settings] = await Promise.all([
       d.alltag("school_exams"), d.alltag("school_tasks"), d.alltag("school_grades"), d.settings(),
@@ -1428,6 +1439,8 @@ tool({
       out.push("", `Notenschnitt gesamt: ${overall == null ? "–" : `${dec(overall)} (${GRADE_NAMES[Math.round(overall)]})`} aus ${grades.length} ${grades.length === 1 ? "Note" : "Noten"}`);
       for (const r of rows) out.push(`- ${r.sub}: Ø ${r.avg == null ? "–" : dec(r.avg)} (${r.n} ${r.n === 1 ? "Note" : "Noten"})`);
     } else out.push("", "Noch keine Noten eingetragen.");
+    const pj = (await d.alltag("school_projects").catch(() => [])).filter((p) => (p.steps || []).some((x) => x && !x.done) || !(p.steps || []).length);
+    if (pj.length) out.push("", `Offene Projekte: ${pj.map((p) => `„${s(p.title)}“ (${(p.steps || []).filter((x) => x && x.done).length}/${(p.steps || []).length})`).join(", ")} – Details: bereich projekte`);
     return out.join("\n");
   },
 });
@@ -1506,7 +1519,7 @@ const MAT_STATUS = {
   verbaut: "verbaut", eingebaut: "verbaut", montiert: "verbaut",
 };
 const MAT_STATUS_HELP = "„brauche“, „besorgt“, „baustelle“ (vor Ort/geliefert) oder „verbaut“";
-function matStatus(v, fallback) {
+export function matStatus(v, fallback) {
   const k = norm(v).replace(/ /g, "");
   if (!k) return fallback;
   if (MAT_STATUS[k]) return MAT_STATUS[k];
@@ -1631,6 +1644,9 @@ tool({
     return out.join("\n");
   },
 });
+
+/* ===== Update 9: weitere Lese-/Schreib-Werkzeuge, Einstellungen (zweistufig) ===== */
+for (const t of [...READ_TOOLS, ...WRITE_TOOLS, ...SETTINGS_TOOLS]) tool(t);
 
 /* ===== Sicheres Löschen (Vorschlag → Bestätigung → Papierkorb) ===== */
 for (const t of DELETE_TOOLS) tool(t);

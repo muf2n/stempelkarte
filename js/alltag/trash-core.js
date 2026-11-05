@@ -5,6 +5,7 @@
 //   op:        "delete" (ganzes Dokument gelöscht) | "exdate" (eine Termin-Wiederholung ausgelassen, Feld date)
 //              | "items" (einzelne Packlisten-Einträge entfernt, Feld itemIds)
 //   date?, itemIds?, type (z. B. "termin"), label (Anzeige), deletedAt (ms), by: "claude", batchId
+//   photoIds? (nur Album: Fotos, die beim Löschen aus dem Album genommen wurden – die Fotos selbst bleiben)
 // }
 // Wiederherstellen (restoreDoc) ändert möglichst wenig am aktuellen Stand: Ausnahme wieder entfernen,
 // fehlende Packlisten-Einträge wieder einfügen, gelöschte Dokumente neu anlegen.
@@ -14,7 +15,7 @@ export const TRASH_MS = TRASH_DAYS * 86400000;
 
 /** Sammlungen, die Claude löschen darf (relativ zu users/{uid}/). Tresor, Fotos, Einstellungen NIE. */
 export const DELETABLE = ["entries", "todos", "places", "a_material_items", "a_money_tx", "a_money_subs",
-  "a_school_tasks", "a_school_exams", "a_school_grades", "a_travel_packing"];
+  "a_school_tasks", "a_school_exams", "a_school_grades", "a_travel_packing", "a_photo_albums"];
 
 /** "entries/e1" → {coll:"entries", id:"e1"} oder null (nur genau zwei Teile, erlaubte Sammlung). */
 export function splitPath(path) {
@@ -88,6 +89,6 @@ export function groupBatches(docs) {
 const TYPE_LABELS = {
   termin: "Termin", aufgabe: "Aufgabe", geburtstag: "Geburtstag", einsatz: "Einsatz", eintrag: "Eintrag",
   material: "Material", ausgabe: "Buchung", hausaufgabe: "Hausaufgabe", pruefung: "Prüfung", note: "Note",
-  packliste: "Packliste", abo: "Abo", ort: "Ort",
+  packliste: "Packliste", abo: "Abo", ort: "Ort", album: "Album",
 };
 export function typeLabel(t) { return TYPE_LABELS[t] || "Eintrag"; }

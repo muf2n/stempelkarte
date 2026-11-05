@@ -10,22 +10,78 @@ Er läuft kostenlos als **Cloudflare Worker** und liest/schreibt dieselben Fires
 
 ## Was Claude damit kann
 
+Claude sieht (fast) alles in der App und darf vieles ändern – Löschen und Einstellungen aber nur in zwei Schritten.
+Insgesamt 46 Werkzeuge (verwandte Lese-Bereiche sind über `bereich`/`aktion` zusammengefasst).
+
+**Lesen**
+
 | Werkzeug | Was es macht |
 |---|---|
 | `status_heute` | eingestempelt? seit wann, Ort, Abschnitt, Pause, heutige Stunden, Woche Ist/Soll, Überstundenkonto, Modus Arbeit/Privat |
-| `modus_setzen` | Privat / Arbeit umschalten (`modus`: "privat" \| "arbeit", optional `bis`: "1h", "abend", "morgen", HH:MM) – eingestempelt wird nicht umgeschaltet |
 | `eintraege_lesen` | Arbeitszeiten im Zeitraum (Zeiten, Ort, Abschnitte, Personen, Notizen, Urlaub/Krank …) |
-| `wochen_zusammenfassung` | Daten fürs Berichtsheft (wie die Berichtsheft-Ansicht der App) |
-| `einstempeln`, `ausstempeln`, `pause`, `abschnitt_wechseln` | Stempeluhr – gleiche Logik wie die App (`js/timer.js`) |
-| `eintrag_nachtragen` | vergessene Arbeitszeit, Urlaub, Krank, Zeitausgleich, Schule (auch Zeiträume) |
+| `wochen_zusammenfassung` | Berichtsheft einer Woche (wie die Berichtsheft-Ansicht, inkl. „Ergänzungen zur Woche“) |
 | `orte_lesen` | gespeicherte Orte |
-| `todos_lesen`, `todo_anlegen`, `termin_anlegen`, `einsatz_anlegen`, `todo_erledigt`, `planer_lesen` | Planer |
-| `geld_lesen`, `ausgabe_eintragen` | Alltag → Geld |
-| `schule_lesen`, `hausaufgabe_anlegen`, `pruefung_anlegen` | Alltag → Schule & Lernen |
-| `material_anlegen`, `material_lesen` | Alltag → Material |
-| `loeschen_vorschlagen` | **Schritt 1 beim Löschen** – sucht passende Elemente und zeigt eine Liste mit Bestätigungscode (löscht noch nichts) |
-| `loeschen_bestaetigen` | **Schritt 2** – löscht mit dem Code, nachdem du „Ja“ gesagt hast; alles kommt vorher in den Papierkorb |
-| `rueckgaengig` | stellt die letzte (oder eine bestimmte) Claude-Löschung aus dem Papierkorb wieder her |
+| `todos_lesen`, `planer_lesen` | Planer/Kalender: Termine (Serien aufgeklappt, Ausnahmen, Ort, Erinnerungen, ID), Aufgaben, Geburtstage, Einsätze, Schultage, Feiertage |
+| `geld_lesen` | Monat (Einnahmen/Ausgaben/Kategorien, optional alle `buchungen`), Budget, Abos, Sparziele („pro Monat nötig“), Teilen-Gruppen mit Salden, Kontostand der Bank |
+| `abos_lesen` | Abos mit Laufzeit, Fristen, Kündigungslinks |
+| `schule_lesen` | `bereich`: uebersicht, stundenplan, noten, projekte, dokumente (nur Titel), lernplan |
+| `material_lesen` | Einkaufsliste, auf der Baustelle, verbaut |
+| `galerie_lesen` | Kategorien, Alben (Anzahl, Adresse, ID), aktive Kategorie, neueste Fotos mit Datum/Adresse/Notiz – **nur Text**: der Foto-Index wird mit Feldmaske **ohne** `thumb` gelesen, `photos/…` nie |
+| `unterwegs_lesen` | `bereich`: uebersicht, reisen (Countdown, Budget, Packliste %), packliste (☐/☑), parken, tanken (l/100 km, €/km), adressen |
+| `fahrtenbuch_lesen` | Fahrten eines Monats (von → nach, km + Quelle, Zweck, privat, Fahrzeug, Kennung `fahrt`), Summen, Kilometergeld – Logik aus `js/travel.js` + `js/trip-core.js` |
+| `taggeld_lesen` | Taggeld je Tag (Stunden weg, Stufe, Betrag), Monatssumme, Kilometergeld |
+| `urlaub_lesen` | Urlaubskonto (Anspruch, verbraucht, geplant, übrig), Krankenstand, Zeitausgleich |
+| `einstellungen_lesen` | Arbeitstage/Wochenstunden, Schultage + Blöcke, Lehre, Urlaub, Erinnerungen, Privat-Zeitplan, Taggeld/Fahrzeuge, Galerie, Kalender; iCal-Abos nur mit verborgener Adresse |
+| `suche {text}` | globale Suche über Einträge, Planer, Orte, Material, Geld, Abos, Schule, Unterwegs, Galerie, Berichtsheft (nie im Tresor) |
+
+**Schreiben**
+
+| Werkzeug | Was es macht |
+|---|---|
+| `einstempeln`, `ausstempeln`, `pause`, `abschnitt_wechseln`, `modus_setzen` | Stempeluhr – gleiche Logik wie die App (`js/timer.js`) |
+| `eintrag_nachtragen` | vergessene Arbeitszeit, Urlaub, Krank, Zeitausgleich, Schule (auch Zeiträume) |
+| `eintrag_bearbeiten` | abgeschlossenen Eintrag ändern: Beginn/Ende/Pause/Ort/Notiz/Personen bzw. Gutschrift – nie die laufende Schicht |
+| `todo_anlegen` (auch `art: "geburtstag"`), `termin_anlegen`, `einsatz_anlegen`, `todo_erledigt` | Planer; `countdown: true` zeigt „noch X Tage“ |
+| `planer_bearbeiten` | Termin/Aufgabe/Geburtstag ändern oder verschieben – Serien: `umfang` alle / nur_diese / ab_diesem (wie der Kalender, `applyEdit` + `finalizeEvent` aus `js/cal-core.js`), Wiederholung, Erinnerungen, Kalender, Countdown |
+| `fahrt_bearbeiten` | Zweck, beruflich/privat, Fahrzeug, km einer Fahrt |
+| `ausgabe_eintragen`, `abo_bearbeiten` | Buchungen, Abo-Details |
+| `geld_eintragen` | `aktion`: budget, sparziel, einzahlung, teilen (Ausgabe in einer Gruppe) |
+| `hausaufgabe_anlegen`, `pruefung_anlegen`, `schule_eintragen` | Schule; `schule_eintragen` `aktion`: note, stunde (Stundenplan), projekt_schritt |
+| `material_anlegen`, `material_status` | Material eintragen bzw. Status ändern (brauche → besorgt → baustelle → verbaut) |
+| `unterwegs_eintragen` | `aktion`: reise_anlegen, packliste_hinzufuegen, packliste_abhaken, parkplatz_merken (nach Adresse), tanken (optional in Geld buchen), adresse_speichern |
+| `berichtsheft_notiz` | Ergänzung zu einer Berichtsheft-Woche (`settings.apprentice.notes`) |
+| `galerie_bearbeiten` | `aktion`: album_umbenennen, album_kategorie, foto_notiz (schreibt nur `note` in Foto + Index) |
+| `einstellung_aendern` → `einstellung_bestaetigen` | **zweistufig** – siehe unten |
+| `loeschen_vorschlagen` → `loeschen_bestaetigen`, `rueckgaengig` | **zweistufig** Löschen + Papierkorb |
+
+Jede Änderung antwortet mit einer kurzen deutschen Bestätigung; im In-App-Assistenten landet der Werkzeugname in `actions`
+(Löschen als `loeschen`, Einstellungen als `einstellung`).
+
+### Einstellungen ändern (zweistufig, nur Freigabeliste)
+
+`einstellung_aendern {bereich, werte}` rechnet vorher → nachher aus und legt den Vorschlag mit einem
+Bestätigungscode (10 Minuten) in `users/{uid}/meta/ai_pending_settings` ab – gespeichert wird noch nichts.
+Erst nach deinem **Ja** in der nächsten Nachricht speichert `einstellung_bestaetigen {bestaetigungs_code}` (in `/chat` lehnt
+der Server die Bestätigung im selben Zug ab – genau wie beim Löschen). Wurde die Einstellung inzwischen in der App
+geändert, wird nichts gespeichert. Erlaubt sind nur:
+
+| `bereich` | Felder |
+|---|---|
+| `arbeitszeit` | `arbeitstage`, `wochenstunden` |
+| `schule` | `schultage`, `block_hinzufuegen {von, bis, name}`, `block_entfernen` |
+| `lehre` | `lehrbeginn`, `lehrdauer`, `lehrberuf`, `lehrbetrieb`, `name` |
+| `urlaub` | `anspruch`, `urlaubsjahr_ab_monat`, `rest_vorjahr` |
+| `erinnerungen` | `an`, `einstempeln_an`, `einstempeln_um`, `ausstempeln_an`, `ausstempeln_nach_h`, `pause_an` |
+| `privat` | `zeitplan_an`, `arbeit_von`, `arbeit_bis`, `privatfahrten_aufzeichnen` |
+| `galerie` | `aktive_kategorie` (neue Fotos gehen nach …), `automatisch` |
+| `taggeld` | `an`, `ab_stunden_teilweise`, `ab_stunden_voll`, `betrag_teilweise`, `betrag_voll`, `kilometergeld`, `eigenes_auto`, `umwegfaktor` |
+
+### Nie erlaubt
+
+Passwort-Tresor (verschlüsselt, nicht lesbar), API-Schlüssel/Tokens/App-Sperre, Adressen der Kalender-Abos (werden nur
+als `host/… (Adresse verborgen)` gezeigt), Bankverbindung einrichten/trennen (Kontostand lesen geht, ohne Sitzungs-IDs),
+Nachrichten oder E-Mails senden, Löschen ohne die zwei Schritte, Google-Konto/Anmeldung ändern. Fragt man danach,
+erklärt Claude freundlich warum und wo es in der App geht.
 
 Alles, was Claude anlegt, bekommt das Feld `src: "claude"`.
 
@@ -53,6 +109,7 @@ Alles, was Claude anlegt, bekommt das Feld `src: "claude"`.
 | `packliste` (einzelne Gegenstände, `liste` = Name der Liste) | `a_travel_packing` | Gegenstand | – |
 | `abo` | `a_money_subs` | Name | – |
 | `ort` | `places` | Name, Adresse | – (Einträge behalten den Ortsnamen als Text) |
+| `album` | `a_photo_albums` | Name, Adresse | – **„Album löschen, Fotos behalten“**: die Album-ID wird aus `albumIds` der Fotos (Foto + Index) entfernt; `rueckgaengig` legt sie wieder hinein |
 
 - **Zeiträume:** `von`/`bis` verstehen TT.MM.JJJJ, JJJJ-MM-TT, „24.12.“, „heute“, „Dezember“, „im Dezember“,
   „nächste Woche“, „letzte Woche“. Alles andere rechnet Claude selbst in ein Datum um.
@@ -60,7 +117,7 @@ Alles, was Claude anlegt, bekommt das Feld `src: "claude"`.
   „Nur am Datum“ setzt – wie der Kalender der App – eine Ausnahme (`exdates`) am Termin.
 - **Schule außerhalb der Blöcke:** `was: "eintrag", nur_ausserhalb_schulblock: true` findet „Schule“-Einträge, die
   weder an einem wöchentlichen Schultag noch in einem Schulblock liegen.
-- **Nie löschbar:** Passwort-Tresor, Fotos, Einstellungen und die laufende Schicht (zuerst ausstempeln).
+- **Nie löschbar:** Passwort-Tresor, Fotos, Einstellungen und die laufende Schicht (zuerst ausstempeln). Alben schon – die Fotos bleiben.
   Ganz ohne Suchtext/Zeitraum/ID löscht Claude nichts.
 
 **Papierkorb / Rückgängig:** Vor dem Löschen wird jedes Dokument nach `users/{uid}/a_trash/{id}` kopiert
@@ -148,6 +205,7 @@ Für einen Chat direkt in der Web-App. Anmeldung mit dem Firebase-ID-Token der A
   abwechselnd `user`/`assistant`, nur Text, letzte Nachricht vom Nutzer, max. 40 Nachrichten / 40.000 Zeichen.
 - **Antwort 200:** `{"reply":"…","actions":["einstempeln"],"usage":{"month":"2026-11","inTok":…,"outTok":…,"usd":…,"capUsd":3}}`
   – `actions` = verwendete Schreib-Werkzeuge (App sollte danach ggf. neu laden; Firestore-Listener tun das ohnehin).
+  Die Werkzeug-Liste wird mit `cache_control` zwischengespeichert (Prompt-Caching); die Kosten rechnen Cache-Schreiben ×1,25 und Cache-Lesen ×0,1.
 - **Fehler:** JSON `{"error":"…"}` mit deutschem Text – 400 (ungültige Nachrichten), 401 (Token fehlt/ungültig/
   falsches Konto), 403 (fremde Herkunft), 413 (Verlauf zu lang), 429 (Monatsbudget aufgebraucht, zusätzlich
   `reply` mit freundlichem Text), 502 (KI-Dienst nicht erreichbar), 503 (nicht eingerichtet).
@@ -248,11 +306,17 @@ Die Tests vergleichen die Ergebnisse mit dem echten Code der Web-App (`js/timer.
 
 **Wichtig:** Ändert sich in der App die Logik (Zeitberechnung, Datenformen, Alltag-Kategorien), bitte
 `src/logic.js` bzw. `src/money.js` nachziehen – die Tests schlagen dann meist von selbst an.
+Gemeinsam (keine Kopie, von wrangler mitgebündelt, im Deploy-Workflow als Pfad eingetragen): `js/cal-core.js`,
+`js/travel.js` + `js/trip-core.js` (Fahrtenbuch/Taggeld), `js/alltag/unterwegs-core.js`, `js/gallery-core.js`,
+`js/alltag/money-core.js` (Teilen/Sparziele), `js/alltag/material-core.js`, `js/alltag/subs-*.js`, `js/privat-core.js`,
+`js/alltag/trash-core.js`.
 
 ## Sicherheit & Datenschutz
 
 - Kein Geheimnis im Code – alles kommt aus Cloudflare-Secrets. Das Repo ist öffentlich, das ist so in Ordnung.
 - Das Token wird in konstanter Zeit verglichen; ohne gesetztes `STEMPEL_TOKEN` (mind. 16 Zeichen) wird alles abgelehnt.
 - Protokolliert wird nur der Werkzeugname, keine Inhalte. Cloudflare-Observability ist ausgeschaltet.
+- Claude bekommt nie Bilddaten: Fotos/Dokumente werden nur über Feldmasken (ohne `thumb`/`data`) gelesen, der Tresor gar nicht.
+  Geheimnisse (iCal-Adressen, Bank-Sitzung, PIN, API-Schlüssel) tauchen in keiner Werkzeug-Antwort auf (Tests prüfen das).
 - Das Dienstkonto hat Vollzugriff auf Firestore – den Schlüssel nie weitergeben.
 - Variante mit `?key=` in der URL: Die URL ist dann selbst das Passwort – nicht teilen, nicht in Screenshots zeigen.

@@ -154,6 +154,7 @@ export function mount(el, ctx) {
       if (actions.length && ctx && ctx.toast) {
         ctx.toast(actions.includes("loeschen")
           ? `${voice.assistantName()} hat gelöscht – rückgängig im Papierkorb`
+          : actions.includes("einstellung") ? `${voice.assistantName()} hat eine Einstellung geändert ✓`
           : `${voice.assistantName()} hat etwas eingetragen ✓`);
       }
     } catch (err) {

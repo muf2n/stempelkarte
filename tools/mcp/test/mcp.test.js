@@ -65,6 +65,10 @@ test("tools/list: alle Werkzeuge mit deutschen Beschreibungen und Schemas", asyn
     "planer_lesen", "pruefung_anlegen", "schule_lesen", "status_heute", "termin_anlegen", "todo_anlegen",
     "todo_erledigt", "todos_lesen", "wochen_zusammenfassung",
     "loeschen_vorschlagen", "loeschen_bestaetigen", "rueckgaengig",
+    // Update 9 – (fast) alles sehen und ändern
+    "galerie_lesen", "unterwegs_lesen", "fahrtenbuch_lesen", "taggeld_lesen", "urlaub_lesen", "einstellungen_lesen", "suche",
+    "planer_bearbeiten", "eintrag_bearbeiten", "fahrt_bearbeiten", "unterwegs_eintragen", "material_status", "geld_eintragen",
+    "schule_eintragen", "berichtsheft_notiz", "galerie_bearbeiten", "einstellung_aendern", "einstellung_bestaetigen",
   ].sort());
   for (const x of result.tools) {
     assert.equal(x.inputSchema.type, "object");

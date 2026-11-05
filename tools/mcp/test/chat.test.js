@@ -5,6 +5,7 @@ import { makeAccount, FakeGoogle, PROJECT, UID, EMAIL, vt } from "./helpers.js";
 import { handle } from "../src/worker.js";
 import { clearCaches } from "../src/google.js";
 import { clearJwks, JWKS_URL, ANTHROPIC_URL, costUsd, cleanMessages, chatMode, systemPrompt, sanitizeName } from "../src/chat.js";
+import { TOOLS } from "../src/tools.js";
 
 const NOW = vt(2026, 11, 4, 10, 0);
 const ORIGIN = "https://muf2n.github.io";
@@ -96,7 +97,9 @@ test("Werkzeug-Schleife: einstempeln über den Chat, Antwort + actions + Verbrau
   assert.equal(c.headers["anthropic-version"], "2023-06-01");
   assert.equal(c.body.model, "claude-haiku-4-5");
   assert.equal(c.body.max_tokens, 1024);
-  assert.equal(c.body.tools.length, 28);
+  assert.equal(c.body.tools.length, TOOLS.length);
+  assert.ok(TOOLS.length <= 46, "Werkzeug-Anzahl im Rahmen halten");
+  assert.deepEqual(c.body.tools[c.body.tools.length - 1].cache_control, { type: "ephemeral" });
   assert.ok(c.body.tools.every((x) => x.name && x.description && x.input_schema.type === "object"));
   assert.match(c.body.system, /Elektriker-Lehrling/);
   assert.match(c.body.system, /Mi, 04\.11\.2026, 10:00 Uhr/);
@@ -341,4 +344,52 @@ test("Löschen: Bestätigung im selben Zug wie der Vorschlag wird abgelehnt; nä
   assert.deepEqual(out.actions, ["loeschen"]);
   assert.equal(t.g.get(`${t.base}/todos/t2`), null);
   assert.equal(t.g.list(`${t.base}/a_trash`).length, 1);
+});
+
+test("Einstellungen: Bestätigung im selben Zug wie der Vorschlag wird abgelehnt; nächste Runde speichert, actions enthält „einstellung“", async () => {
+  let code = null;
+  const t = await setupChat({
+    script: [
+      { id: "m", type: "message", role: "assistant", stop_reason: "tool_use", usage: { input_tokens: 10, output_tokens: 10 },
+        content: [{ type: "tool_use", id: "v1", name: "einstellung_aendern", input: { bereich: "urlaub", werte: { anspruch: 26 } } },
+          { type: "tool_use", id: "c1", name: "einstellung_bestaetigen", input: { bestaetigungs_code: "AAAAAA" } }] },
+      (body) => {
+        const [v, c] = body.messages[body.messages.length - 1].content;
+        assert.equal(v.is_error, undefined, v.content);
+        assert.match(v.content, /Urlaubsanspruch: 25 Tage → 26 Tage/);
+        code = /bestaetigungs_code: ([A-Z0-9]{6})/.exec(v.content)[1];
+        assert.equal(c.is_error, true);
+        assert.match(c.content, /Abgelehnt: Du hast die Einstellung gerade erst vorgeschlagen/);
+        return use("einstellung_bestaetigen", { bestaetigungs_code: code }, "c2");
+      },
+      (body) => {
+        const [c] = body.messages[body.messages.length - 1].content;
+        assert.equal(c.is_error, true);
+        return end("Urlaubsanspruch 25 → 26 Tage. Soll ich das so speichern?");
+      },
+      () => use("einstellung_bestaetigen", { bestaetigungs_code: code }, "c3"),
+      (body) => {
+        const [c] = body.messages[body.messages.length - 1].content;
+        assert.equal(c.is_error, undefined, c.content);
+        assert.match(c.content, /Gespeichert/);
+        return end("Gespeichert.");
+      },
+    ],
+  });
+  t.g.set(`${t.base}/meta/settings`, { leave: { daysPerYear: 25 } });
+  let res = await t.post(msg("Mein Urlaubsanspruch ist 26 Tage"));
+  let out = await res.json();
+  assert.deepEqual(out.actions, []);
+  assert.equal(t.g.get(`${t.base}/meta/settings`).leave.daysPerYear, 25);
+  assert.match(t.calls[0].body.system, /EINSTELLUNGEN ändern geht ebenso nur in zwei Schritten/);
+  assert.match(t.calls[0].body.system, /Passwort-Tresor/);
+  assert.match(t.calls[0].body.system, /Nachrichten oder E-Mails senden/);
+  res = await t.post({ messages: [
+    { role: "user", content: "Mein Urlaubsanspruch ist 26 Tage" },
+    { role: "assistant", content: out.reply },
+    { role: "user", content: "Ja" },
+  ] });
+  out = await res.json();
+  assert.deepEqual(out.actions, ["einstellung"]);
+  assert.equal(t.g.get(`${t.base}/meta/settings`).leave.daysPerYear, 26);
 });

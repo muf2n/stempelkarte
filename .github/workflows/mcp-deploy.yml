@@ -22,6 +22,10 @@ on:
       - "js/alltag/subs-core.js"
       - "js/alltag/subs-catalog.js"
       - "js/alltag/money-core.js"
+      - "js/travel.js"
+      - "js/trip-core.js"
+      - "js/alltag/unterwegs-core.js"
+      - "js/gallery-core.js"
       - ".github/workflows/mcp-deploy.yml"
   workflow_dispatch:
 

@@ -6,12 +6,15 @@ export const SUPPORTED_VERSIONS = ["2025-06-18", "2025-03-26", "2024-11-05"];
 export const LATEST = SUPPORTED_VERSIONS[0];
 
 const INSTRUCTIONS =
-  "Stempelkarte: Arbeitszeit-, Planer-, Geld- und Schul-App eines Elektriker-Lehrlings in Österreich. " +
-  "Zeiten sind Wiener Ortszeit (24 h), Datumsangaben TT.MM.JJJJ. Antworte dem Nutzer auf Deutsch. " +
+  "Stempelkarte: Arbeitszeit- und Alltags-App eines Elektriker-Lehrlings in Österreich (Arbeitszeit, Planer/Kalender, Berichtsheft, " +
+  "Fahrtenbuch, Taggeld, Urlaub, Geld, Schule, Material, Unterwegs, Galerie, Einstellungen). " +
+  "Zeiten sind Wiener Ortszeit (24 h), Datumsangaben TT.MM.JJJJ. Antworte dem Nutzer auf Deutsch. Daten immer über die Werkzeuge holen, nie raten (Suche: suche). " +
   "Vor dem Ein-/Ausstempeln bei Unklarheit status_heute aufrufen. " +
   "Löschen nur in zwei Schritten: loeschen_vorschlagen zeigt eine Liste mit Bestätigungscode – dem Nutzer die Liste zeigen, " +
   "fragen „Soll ich diese X löschen?“ und erst nach seinem ausdrücklichen Ja loeschen_bestaetigen aufrufen. " +
-  "Gelöschtes liegt 30 Tage im Papierkorb (rueckgaengig). Tresor, Fotos und Einstellungen sind nicht löschbar.";
+  "Gelöschtes liegt 30 Tage im Papierkorb (rueckgaengig). Tresor, Fotos und Einstellungen sind nicht löschbar (Alben schon, Fotos bleiben). " +
+  "Einstellungen ebenfalls zweistufig: einstellung_aendern (vorher → nachher, Code) → Nutzer fragt/bestätigt → einstellung_bestaetigen. " +
+  "Nie: Passwort-Tresor, API-Schlüssel/Kalender-Abo-Adressen verraten, Bankverbindung einrichten/trennen, Nachrichten/E-Mails senden, Google-Konto ändern.";
 
 export const ERR = { PARSE: -32700, INVALID_REQUEST: -32600, METHOD: -32601, PARAMS: -32602, INTERNAL: -32603 };
 

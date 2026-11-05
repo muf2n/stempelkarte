@@ -8,6 +8,7 @@ import { esc } from "../util.js";
 import { putImage, getImage, cachedImage, delImage, shrinkImage, safeWrite } from "./unterwegs-shared.js";
 
 const KEEP = 10;
+const hasLL = (r) => !!r && typeof r.lat === "number" && typeof r.lng === "number" && Number.isFinite(r.lat) && Number.isFinite(r.lng);
 const REMIND_MIN = 10;
 const NOTIFIED_KEY = "sk-uw-park-notified";
 
@@ -108,7 +109,7 @@ export function createPark({ col, ui, queue, isVisible }) {
   function rotateArrow() {
     const a = document.querySelector(".uw-park-arrow");
     const rec = active();
-    if (!a || !rec || !here) return;
+    if (!a || !rec || !here || !hasLL(rec)) return;
     const b = C.bearing(here, rec);
     const rot = heading == null ? b : b - heading;
     a.style.transform = `rotate(${rot.toFixed(1)}deg)`;
@@ -129,6 +130,8 @@ export function createPark({ col, ui, queue, isVisible }) {
 
   function liveHTML(rec) {
     if (!rec) return "";
+    // Update 9 – von Claude nach Adresse gemerkt (ohne Koordinaten): keine Live-Richtung, nur die Adresse
+    if (!hasLL(rec)) return `<div class="uw-park-dist"><b>${esc(rec.addr || "Parkplatz")}</b><small>Nach Adresse gemerkt – Navigation über die Adresse.</small></div>`;
     if (!here) return `<div class="uw-park-dist"><b>…</b><small>${esc(geoErr || "Suche deinen Standort …")}</small></div>`;
     const d = C.distanceM(here, rec);
     const b = C.bearing(here, rec);
@@ -175,7 +178,8 @@ export function createPark({ col, ui, queue, isVisible }) {
       rec.level ? `<span><small>Ebene</small><b>${esc(rec.level)}</b></span>` : "",
       rec.spot ? `<span><small>Stellplatz</small><b>${esc(rec.spot)}</b></span>` : "",
       `<span><small>Geparkt</small><b>${esc(C.clock(rec.ts))}</b></span>`,
-      `<span><small>Genauigkeit</small><b>±${Math.round(rec.acc || 0)} m</b></span>`,
+      hasLL(rec) ? `<span><small>Genauigkeit</small><b>±${Math.round(rec.acc || 0)} m</b></span>` : "",
+      rec.addr ? `<span><small>Adresse</small><b>${esc(rec.addr)}</b></span>` : "",
     ].join("");
     return `<section class="card uw-park-card">` +
       `<div class="uw-park-head"><span class="uw-park-badge">${icon("car", 22)}</span>` +
@@ -187,7 +191,7 @@ export function createPark({ col, ui, queue, isVisible }) {
       (img ? `<button type="button" class="uw-park-photo" data-pa="photo" data-id="${esc(rec.id)}"><img src="${img}" alt="Foto vom Parkplatz"></button>` : "") +
       timerHTML(rec) +
       `<div class="uw-park-act">` +
-        `<a class="btn primary" href="${esc(C.mapsWalk(rec.lat, rec.lng))}" target="_blank" rel="noopener" data-pa="nav">${icon("pin", 20)} Navigation starten</a>` +
+        `<a class="btn primary" href="${esc(hasLL(rec) ? C.mapsWalk(rec.lat, rec.lng) : C.mapsRoute(rec.addr))}" target="_blank" rel="noopener" data-pa="nav">${icon("pin", 20)} Navigation starten</a>` +
         (needsOrientPermission() && heading == null ? `<button type="button" class="btn ghost sm" data-pa="compass">Kompass aktivieren</button>` : "") +
         `<button type="button" class="btn ghost sm" data-pa="leave" data-id="${esc(rec.id)}">Weggefahren</button>` +
       `</div>` +
@@ -218,9 +222,9 @@ export function createPark({ col, ui, queue, isVisible }) {
       (rec ? `<button type="button" class="btn ghost sm uw-park-again" data-pa="here"${busy ? " disabled" : ""}>${icon("pin", 18)} Neu parken (hier)</button>` : "") +
       `<section class="uw-sec"><h3 class="uw-h">Verlauf</h3>` +
         (hist.length ? `<ul class="uw-park-hist">${hist.map((p) => `<li>` +
-            `<a href="${esc(C.mapsSearch(p.lat.toFixed(6) + "," + p.lng.toFixed(6)))}" target="_blank" rel="noopener">` +
+            `<a href="${esc(C.mapsSearch(hasLL(p) ? p.lat.toFixed(6) + "," + p.lng.toFixed(6) : p.addr || ""))}" target="_blank" rel="noopener">` +
               `<span class="uw-park-hic">${icon("pin", 18)}</span>` +
-              `<span class="uw-park-ht"><b>${esc(C.fmtDateTime(p.ts))}</b><small>${esc([p.note, p.level && "Ebene " + p.level, p.spot && "Platz " + p.spot].filter(Boolean).join(" · ") || `±${Math.round(p.acc || 0)} m`)}</small></span>` +
+              `<span class="uw-park-ht"><b>${esc(C.fmtDateTime(p.ts))}</b><small>${esc([p.addr, p.note, p.level && "Ebene " + p.level, p.spot && "Platz " + p.spot].filter(Boolean).join(" · ") || `±${Math.round(p.acc || 0)} m`)}</small></span>` +
             `</a>` +
             `<button type="button" class="uw-ib del" data-pa="del" data-id="${esc(p.id)}" aria-label="Aus Verlauf löschen">${icon("trash", 16)}</button>` +
           `</li>`).join("")}</ul>`

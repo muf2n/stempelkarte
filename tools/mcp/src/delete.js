@@ -36,14 +36,15 @@ const WAS = {
   packliste: "packliste", packlisten: "packliste", packlisteitems: "packliste", packlisteneintrag: "packliste",
   abo: "abo", abos: "abo", fixkosten: "abo",
   ort: "ort", orte: "ort",
+  album: "album", alben: "album", fotoalbum: "album", fotoalben: "album", galeriealbum: "album",
 };
 const FORBIDDEN = [
   [/passw|tresor|vault|kennw|pin|wlan|zugangsdat/, "Den Passwort-Tresor kann ich nicht löschen – das geht nur direkt in der App."],
-  [/foto|bild|galerie|photo/, "Fotos kann ich nicht löschen – das geht nur in der Galerie der App."],
+  [/foto|bild|galerie|photo/, "Fotos kann ich nicht löschen – das geht nur in der Galerie der App. Ein Album kann ich entfernen (was=album), die Fotos darin bleiben erhalten."],
   [/einstell|setting|konto|profil|schulbl/, "Einstellungen kann ich nicht löschen oder zurücksetzen – das geht nur in der App."],
   [/laufend|stempeluhr|aktuelleschicht/, "Die laufende Schicht kann ich nicht löschen. Bitte zuerst ausstempeln – danach kann der Eintrag gelöscht werden."],
 ];
-const WAS_HELP = "termin, aufgabe, geburtstag, einsatz, eintrag, material, ausgabe, hausaufgabe, pruefung, note, packliste, abo oder ort";
+const WAS_HELP = "termin, aufgabe, geburtstag, einsatz, eintrag, material, ausgabe, hausaufgabe, pruefung, note, packliste, abo, ort oder album (Fotos bleiben)";
 
 export function resolveWas(v) {
   const k = s(v).toLowerCase().replace(/ä/g, "ae").replace(/ö/g, "oe").replace(/ü/g, "ue").replace(/ß/g, "ss").replace(/[^a-z]/g, "");
@@ -239,9 +240,32 @@ async function findPacking(d, args, r) {
   return { list: out, notes: [] };
 }
 
+/** Foto-Zugehörigkeit nur über schlanke Felder lesen (nie Bilddaten). */
+async function photoRefs(d) {
+  const [photos, index] = await Promise.all([
+    d.fs.list(d.p("photos"), { mask: ["albumIds"] }),
+    d.fs.list(d.p("a_photo_index"), { mask: ["albumIds"] }),
+  ]);
+  const ids = (x) => (Array.isArray(x && x.albumIds) ? x.albumIds.map(String) : []);
+  return { photos: new Map(photos.map((p) => [p.id, ids(p.data)])), index: new Map(index.map((p) => [p.id, ids(p.data)])) };
+}
+
+async function findAlbums(d, args, r) {
+  if (r) throw new UserError("Alben haben kein Datum – bitte mit suche (Name) oder id angeben.");
+  const albums = await d.alltag("photo_albums");
+  const hits = albums.filter((a) => a && a.id && (!s(args.id) || a.id === s(args.id)) && textHit(args.suche, [a.name, a.addr]));
+  if (!hits.length) return { list: [], notes: [] };
+  const refs = await photoRefs(d);
+  const out = hits.map((a) => {
+    const n = [...refs.index.entries()].filter(([, l]) => l.includes(a.id)).length;
+    return { op: "album", path: `a_photo_albums/${a.id}`, type: "album", sort: s(a.name), label: `Album „${s(a.name) || "Album"}“ · ${n} ${n === 1 ? "Foto" : "Fotos"} (die Fotos bleiben erhalten)` };
+  });
+  return { list: out, notes: ["Hinweis: Nur das Album verschwindet – alle Fotos bleiben in der Galerie (unter „Alle Fotos“ bzw. anderen Alben)."] };
+}
+
 /* ---------- Werkzeuge ---------- */
 
-function makeCode() {
+export function makeCode() {
   const a = new Uint8Array(6);
   crypto.getRandomValues(a);
   return Array.from(a, (b) => CODE_CHARS[b % CODE_CHARS.length]).join("");
@@ -269,7 +293,7 @@ const count = (n, one, many) => `${n} ${n === 1 ? one : many}`;
 const opsCount = (ops) => ops.reduce((a, o) => a + (o.op === "items" ? o.itemIds.length : 1), 0);
 
 const PROPS = {
-  was: { type: "string", description: "Was: termin, aufgabe, geburtstag, einsatz, eintrag (Arbeitszeit/Urlaub/Krank/Zeitausgleich/Schule), material, ausgabe (Buchung), hausaufgabe, pruefung, note, packliste (Gegenstände einer Packliste), abo, ort. NICHT möglich: Passwort-Tresor, Fotos, Einstellungen, laufende Schicht." },
+  was: { type: "string", description: "Was: termin, aufgabe, geburtstag, einsatz, eintrag (Arbeitszeit/Urlaub/Krank/Zeitausgleich/Schule), material, ausgabe (Buchung), hausaufgabe, pruefung, note, packliste (Gegenstände einer Packliste), abo, ort, album (nur das Album – Fotos bleiben). NICHT möglich: Passwort-Tresor, Fotos, Einstellungen, laufende Schicht." },
   suche: { type: "string", description: "Suchtext, unscharf gegen Titel/Notiz/Ort (z. B. \"Zahnarzt\", \"Billa\", \"Huber\")" },
   von: { type: "string", description: "Erster Tag bzw. Zeitraum: TT.MM.JJJJ, JJJJ-MM-TT, \"24.12.\", \"heute\", \"Dezember\", \"nächste Woche\". Andere Angaben bitte selbst in ein Datum umrechnen." },
   bis: { type: "string", description: "Letzter Tag (inklusive), gleiche Formate. Fehlt er, gilt der von-Tag bzw. -Zeitraum." },
@@ -284,7 +308,7 @@ export const DELETE_TOOLS = [
   {
     name: "loeschen_vorschlagen",
     title: "Löschen vorschlagen",
-    description: "SCHRITT 1 von 2 beim Löschen – löscht selbst NOCH NICHTS. Sucht die passenden Elemente (Termine, Aufgaben, Geburtstage, Einsätze, Arbeitszeit-Einträge, Material, Buchungen, Hausaufgaben, Prüfungen, Noten, Packlisten-Gegenstände, Abos, Orte) und gibt eine Liste (Datum, Art, Titel) plus einen bestaetigungs_code (10 Minuten gültig, höchstens 200 Elemente) zurück. Danach IMMER dem Nutzer die Liste zeigen und fragen „Soll ich diese X löschen?“ – erst nach einem ausdrücklichen Ja in seiner NÄCHSTEN Nachricht loeschen_bestaetigen aufrufen. Nie beide Werkzeuge ohne Antwort des Nutzers dazwischen aufrufen. Bei Serienterminen zuerst fragen: ganze Serie oder nur am Datum X (Feld serie). Passwort-Tresor, Fotos, Einstellungen und die laufende Schicht sind nicht löschbar.",
+    description: "SCHRITT 1 von 2 beim Löschen – löscht selbst NOCH NICHTS. Sucht die passenden Elemente (Termine, Aufgaben, Geburtstage, Einsätze, Arbeitszeit-Einträge, Material, Buchungen, Hausaufgaben, Prüfungen, Noten, Packlisten-Gegenstände, Abos, Orte, Foto-Alben – „Album löschen, Fotos behalten“) und gibt eine Liste (Datum, Art, Titel) plus einen bestaetigungs_code (10 Minuten gültig, höchstens 200 Elemente) zurück. Danach IMMER dem Nutzer die Liste zeigen und fragen „Soll ich diese X löschen?“ – erst nach einem ausdrücklichen Ja in seiner NÄCHSTEN Nachricht loeschen_bestaetigen aufrufen. Nie beide Werkzeuge ohne Antwort des Nutzers dazwischen aufrufen. Bei Serienterminen zuerst fragen: ganze Serie oder nur am Datum X (Feld serie). Passwort-Tresor, Fotos, Einstellungen und die laufende Schicht sind nicht löschbar.",
     inputSchema: { type: "object", properties: PROPS, required: ["was"], additionalProperties: false },
     annotations: { readOnlyHint: true, destructiveHint: false, idempotentHint: false, openWorldHint: false },
     async run(args, d) {
@@ -300,6 +324,7 @@ export const DELETE_TOOLS = [
       else if (TODO_KIND[type]) res = await findTodos(d, args, r, type);
       else if (ALLTAG[type]) res = await findAlltag(d, args, r, type);
       else if (type === "ort") res = await findPlaces(d, args, r);
+      else if (type === "album") res = await findAlbums(d, args, r);
       else res = await findPacking(d, args, r);
       const list = res.list.sort((a, b) => (a.sort < b.sort ? -1 : a.sort > b.sort ? 1 : 0));
       const ask = res.askSerie || [];
@@ -360,6 +385,8 @@ export const DELETE_TOOLS = [
       let done = 0, gone = 0, i = 0;
       // mehrere Ausnahmen am selben Serientermin nacheinander anwenden
       const work = new Map();
+      const refs = ops.some((o) => o.op === "album") ? await photoRefs(d) : null;
+      const pre = []; // Album: Fotos aus dem Album nehmen (vor dem eigentlichen Löschen, ggf. in Teilen)
       for (const o of ops) {
         const before = work.has(o.path) ? work.get(o.path) : cur.get(o.path);
         if (!before) { gone++; continue; }
@@ -379,6 +406,18 @@ export const DELETE_TOOLS = [
           writes.push(d.fs.setWrite(d.p(o.path), n)); work.set(o.path, n);
           trash.itemIds = [...ids];
           done += k;
+        } else if (o.op === "album") {
+          // „Album löschen, Fotos behalten“: Album-ID aus Foto UND Index entfernen (nur Feld albumIds), dann Album löschen
+          const pids = [];
+          for (const [pid, l] of refs.photos) {
+            if (!l.includes(id)) continue;
+            pids.push(pid);
+            pre.push(d.fs.patchWrite(d.p(`photos/${pid}`), { albumIds: l.filter((x) => x !== id) }, { exists: true }));
+          }
+          for (const [pid, l] of refs.index) if (l.includes(id)) pre.push(d.fs.patchWrite(d.p(`a_photo_index/${pid}`), { albumIds: l.filter((x) => x !== id) }, { exists: true }));
+          trash.photoIds = pids;
+          writes.push(d.fs.deleteWrite(d.p(o.path))); work.set(o.path, null);
+          done++;
         } else {
           writes.push(d.fs.deleteWrite(d.p(o.path))); work.set(o.path, null);
           done++;
@@ -386,6 +425,7 @@ export const DELETE_TOOLS = [
         writes.push(d.fs.setWrite(d.p(`a_trash/${batchId}-${i++}`), trash));
       }
       writes.push(d.fs.deleteWrite(d.p(PENDING)));
+      for (let k = 0; k < pre.length; k += 400) await d.commit(pre.slice(k, k + 400));
       await d.commit(writes);
       d.invalidate("todos", "places", "entries:true", "entries:false", ...DELETABLE.filter((c) => c.startsWith("a_")));
       if (!done) return "Nichts gelöscht – die vorgeschlagenen Elemente gibt es nicht mehr.";
@@ -417,17 +457,29 @@ export const DELETE_TOOLS = [
       const its = [...b.items].sort((x, y) => String(x.id).localeCompare(String(y.id), "en", { numeric: true }));
       const cur = await getMany(d, its.filter((t) => splitPath(t.path)).map((t) => t.path));
       const state = new Map(cur);
-      const writes = [], labels = [];
+      const writes = [], labels = [], post = [];
       let skipped = 0;
+      const refs = its.some((t) => Array.isArray(t.photoIds) && t.photoIds.length) ? await photoRefs(d) : null;
       for (const t of its) {
         if (splitPath(t.path)) {
           const r = restoreDoc(t, state.get(t.path) ?? null);
           if (r.data) { writes.push(d.fs.setWrite(d.p(t.path), r.data)); state.set(t.path, r.data); labels.push(t.label || t.path); }
           else skipped++;
+          // Album: Fotos wieder ins Album legen (nur die, die es noch gibt)
+          if (refs && Array.isArray(t.photoIds) && r.data) {
+            const aid = splitPath(t.path).id;
+            for (const pid of t.photoIds) {
+              const pl = refs.photos.get(pid);
+              if (pl && !pl.includes(aid)) post.push(d.fs.patchWrite(d.p(`photos/${pid}`), { albumIds: [...pl, aid] }, { exists: true }));
+              const il = refs.index.get(pid);
+              if (il && !il.includes(aid)) post.push(d.fs.patchWrite(d.p(`a_photo_index/${pid}`), { albumIds: [...il, aid] }, { exists: true }));
+            }
+          }
         }
         writes.push(d.fs.deleteWrite(d.p(`a_trash/${t.id}`)));
       }
       await d.commit(writes);
+      for (let k = 0; k < post.length; k += 400) await d.commit(post.slice(k, k + 400));
       d.invalidate("todos", "places", "entries:true", "entries:false", ...DELETABLE.filter((c) => c.startsWith("a_")));
       const out = [`Wiederhergestellt: ${count(labels.length, "Element", "Elemente")} (gelöscht am ${fmtKey(dayKey(b.deletedAt))}, ${clock(b.deletedAt)} Uhr).`];
       out.push(...labels.slice(0, 30).map((l) => `- ${l}`));

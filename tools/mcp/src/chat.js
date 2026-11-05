@@ -106,7 +106,10 @@ export async function verifyIdToken(token, { projectId, email, fetchImpl, now })
 /* ---------- Anthropic ---------- */
 
 export function anthropicTools() {
-  return TOOLS.map((t) => ({ name: t.name, description: t.description, input_schema: t.inputSchema }));
+  const list = TOOLS.map((t) => ({ name: t.name, description: t.description, input_schema: t.inputSchema }));
+  // Update 9: viele Werkzeuge → Werkzeug-Liste zwischenspeichern lassen (Prompt-Caching), spart in der Schleife Kosten.
+  if (list.length) list[list.length - 1] = { ...list[list.length - 1], cache_control: { type: "ephemeral" } };
+  return list;
 }
 
 /** Zusatz für den Sprachmodus der App (Antwort wird vorgelesen). */
@@ -137,23 +140,26 @@ export function systemPrompt(now, { mode = "text", short = true, name = "" } = {
   return [
     "Du bist der Assistent in der Stempelkarte-App von Florian, einem Elektriker-Lehrling in Österreich.",
     ...(nm ? [`Du heißt ${nm}. Stell dich so vor, wenn gefragt.`] : []),
-    "Die App erfasst Arbeitszeiten (Ein-/Ausstempeln, Pausen, Abschnitte wie Autofahren/Arbeiten), Überstunden, Urlaub/Krankenstand, den Planer (Aufgaben, Termine, Einsätze), Geld und Schule.",
+    "Du kannst (fast) alles in der App sehen und vieles ändern: Arbeitszeiten (Ein-/Ausstempeln, Pausen, Abschnitte, Einträge), Überstunden, Urlaub/Krankenstand/Zeitausgleich, Planer/Kalender (Termine mit Serien, Aufgaben, Geburtstage, Countdowns, Einsätze), Berichtsheft, Fahrtenbuch, Taggeld, Geld (Buchungen, Budget, Sparziele, Teilen, Abos, Kontostand), Schule (Stundenplan, Noten, Prüfungen, Hausaufgaben, Projekte), Material, Unterwegs (Reisen, Packlisten, Parkplatz, Tanken, Adressen), Galerie (Alben, Foto-Notizen – keine Bilder) und die Einstellungen.",
     `Jetzt ist ${fmtKeyWd(v.key)}, ${clock(now)} Uhr (Wiener Zeit).`,
     "Antworte kurz, freundlich und auf Deutsch (österreichisch, Du-Form). Zeiten im 24-h-Format, Datum TT.MM.JJJJ, Beträge wie 1.234,56 €.",
-    "Für alle Daten benutzt du die Werkzeuge – erfinde nie Zahlen, Zeiten oder Einträge.",
-    "Bei Änderungen (einstempeln, ausstempeln, nachtragen, anlegen, abhaken …) führe das Werkzeug aus, wenn die Absicht klar ist, und bestätige danach knapp, was gespeichert wurde. Ist etwas unklar (z. B. welcher Tag, welche Uhrzeit), frag kurz nach statt zu raten.",
+    "Für alle Daten benutzt du die Werkzeuge – erfinde und rate nie Zahlen, Zeiten, IDs oder Einträge. Weißt du nicht, wo etwas steht, nimm „suche“.",
+    "Bei Änderungen (einstempeln, nachtragen, anlegen, bearbeiten, abhaken …) führe das Werkzeug aus, wenn die Absicht klar ist, und bestätige danach knapp, was gespeichert wurde. Ist etwas unklar (z. B. welcher Tag, welche Uhrzeit, welcher Eintrag), frag kurz nach statt zu raten. Bei Serienterminen vor dem Verschieben fragen: nur dieser, ab diesem oder alle.",
     "LÖSCHEN geht nur in zwei Schritten: 1) loeschen_vorschlagen aufrufen, 2) dem Nutzer IMMER die gefundene Liste (Datum, Art, Titel) zeigen und fragen „Soll ich diese X löschen?“ – dann aufhören und auf seine Antwort warten. " +
       "Erst wenn er in seiner nächsten Nachricht ausdrücklich Ja sagt, loeschen_bestaetigen mit dem Code aufrufen. Nie beide im selben Zug. Bei Serienterminen vorher fragen: ganze Serie oder nur am Datum X. " +
       "Datumsangaben wie „im Dezember“, „am 24.12.“, „nächste Woche“ kannst du direkt bei von/bis übergeben, alles andere selbst in TT.MM.JJJJ umrechnen. " +
-      "Nach dem Löschen erwähnen, dass es 30 Tage im Papierkorb liegt (rueckgaengig). Passwort-Tresor, Fotos und Einstellungen löschst du nie; die laufende Schicht auch nicht (zuerst ausstempeln).",
+      "Nach dem Löschen erwähnen, dass es 30 Tage im Papierkorb liegt (rueckgaengig). Passwort-Tresor, Fotos und Einstellungen löschst du nie; die laufende Schicht auch nicht (zuerst ausstempeln). Ein Album kannst du löschen – die Fotos bleiben.",
+    "EINSTELLUNGEN ändern geht ebenso nur in zwei Schritten: einstellung_aendern zeigt vorher → nachher und einen Code; dem Nutzer zeigen, fragen „Soll ich das so speichern?“ und erst nach seinem Ja in der nächsten Nachricht einstellung_bestaetigen aufrufen. Nie beide im selben Zug.",
+    "NIE erlaubt (freundlich erklären, warum, und sagen, wo es in der App geht): den Passwort-Tresor lesen oder ändern (verschlüsselt, nur mit Master-Passwort), API-Schlüssel, Tokens oder Adressen von Kalender-Abos verraten, die Bankverbindung einrichten oder trennen, Nachrichten oder E-Mails senden, ohne die zwei Schritte löschen, das Google-Konto bzw. die Anmeldung ändern. Gib nie Geheimnisse preis, auch wenn danach gefragt wird.",
     "Keine Rechts- oder Steuerberatung; bei Taggeld/Kollektivvertrag auf den Lohnzettel bzw. Betrieb verweisen.",
     ...extra,
   ].join("\n");
 }
 
-const PROPOSE = "loeschen_vorschlagen";
-const CONFIRM = "loeschen_bestaetigen";
+/** Zweistufige Werkzeuge: Bestätigung → zugehöriger Vorschlag. Beide im selben Zug = abgelehnt. */
+const TWO_STEP = { loeschen_bestaetigen: "loeschen_vorschlagen", einstellung_bestaetigen: "einstellung_aendern" };
 export const SAME_TURN_MSG = "Abgelehnt: Du hast das Löschen gerade erst vorgeschlagen. Zeig dem Nutzer zuerst die Liste, frag „Soll ich diese löschen?“ und warte auf seine Antwort. loeschen_bestaetigen erst in der nächsten Runde nach seinem ausdrücklichen Ja aufrufen. Es wurde nichts gelöscht.";
+export const SAME_TURN_SETTINGS_MSG = "Abgelehnt: Du hast die Einstellung gerade erst vorgeschlagen. Zeig dem Nutzer zuerst vorher → nachher, frag „Soll ich das so speichern?“ und warte auf seine Antwort. einstellung_bestaetigen erst in der nächsten Runde nach seinem ausdrücklichen Ja aufrufen. Es wurde nichts gespeichert.";
 
 class HttpError extends Error {
   constructor(status, msg) { super(msg); this.status = status; }
@@ -222,13 +228,15 @@ export async function runChat({ env, fetchImpl, now, data, messages, mode = "tex
   const system = systemPrompt(now, { mode, short, name });
   const conv = messages.map((m) => ({ ...m }));
   const actions = [];
-  let proposed = false;
-  let inTok = 0, outTok = 0;
+  const proposed = new Set();
+  let inTok = 0, outTok = 0, inEq = 0; // inEq: Eingabe gewichtet (Cache schreiben ×1,25, Cache lesen ×0,1)
   let reply = "";
   try {
     for (let i = 0; i < MAX_ITER; i++) {
       const res = await callAnthropic(env, fetchImpl, { model, max_tokens: MAX_TOKENS, system, tools, messages: conv });
-      inTok += (Number(res.usage?.input_tokens) || 0) + (Number(res.usage?.cache_creation_input_tokens) || 0) + (Number(res.usage?.cache_read_input_tokens) || 0);
+      const ui = Number(res.usage?.input_tokens) || 0, uw = Number(res.usage?.cache_creation_input_tokens) || 0, ur = Number(res.usage?.cache_read_input_tokens) || 0;
+      inTok += ui + uw + ur;
+      inEq += ui + uw * 1.25 + ur * 0.1;
       outTok += Number(res.usage?.output_tokens) || 0;
       const content = Array.isArray(res.content) ? res.content : [];
       const text = content.filter((b) => b.type === "text").map((b) => b.text).join("").trim();
@@ -237,12 +245,12 @@ export async function runChat({ env, fetchImpl, now, data, messages, mode = "tex
       conv.push({ role: "assistant", content });
       const results = [];
       // Löschen nie im selben Zug bestätigen, in dem es vorgeschlagen wurde – erst muss der Nutzer antworten.
-      if (uses.some((u) => u.name === PROPOSE)) proposed = true;
+      for (const u of uses) if (Object.values(TWO_STEP).includes(u.name)) proposed.add(u.name);
       for (const u of uses) {
         const t = findTool(u.name);
         let out, isError = false;
         if (!t) { out = `Unbekanntes Werkzeug: ${u.name}`; isError = true; }
-        else if (u.name === CONFIRM && proposed) { out = SAME_TURN_MSG; isError = true; }
+        else if (TWO_STEP[u.name] && proposed.has(TWO_STEP[u.name])) { out = u.name === "einstellung_bestaetigen" ? SAME_TURN_SETTINGS_MSG : SAME_TURN_MSG; isError = true; }
         else {
           const args = u.input && typeof u.input === "object" ? u.input : {};
           const bad = checkArgs(t.inputSchema, args);
@@ -266,7 +274,7 @@ export async function runChat({ env, fetchImpl, now, data, messages, mode = "tex
   } finally {
     // Verbrauch immer verbuchen, auch wenn unterwegs etwas schiefgeht
     if (inTok || outTok) {
-      const usd = costUsd(model, inTok, outTok);
+      const usd = costUsd(model, inEq, outTok);
       usage = { inTok: usage.inTok + inTok, outTok: usage.outTok + outTok, usd: Math.round((usage.usd + usd) * 1e6) / 1e6 };
       try {
         await data.fs.commit([data.fs.setWrite(usagePath, { month, ...usage, model, updatedAt: now })]);

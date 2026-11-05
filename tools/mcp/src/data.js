@@ -82,6 +82,30 @@ export class Data {
     });
   }
 
+  /** Beliebige Sammlung (relativ zu users/{uid}/) – optional nur bestimmte Felder (mask), z. B. ohne Vorschaubilder. */
+  listMasked(sub, mask) {
+    return this.once(`list:${sub}:${(mask || []).join(",")}`, async () => {
+      const docs = await this.fs.list(this.p(sub), { mask, pageSize: 300 });
+      return docs.map((d) => ({ ...d.data, id: d.id }));
+    });
+  }
+
+  /** Einzelnes Dokument (relativ) → Daten oder null. */
+  doc(sub) {
+    return this.once("doc:" + sub, async () => {
+      const d = await this.fs.get(this.p(sub));
+      return d ? d.data : null;
+    });
+  }
+
+  /** Tageswerte users/{uid}/days/{dayKey} → { "YYYY-MM-DD": {...} } (z. B. Taggeld-Stufe). */
+  days() {
+    return this.once("days", async () => {
+      const docs = await this.fs.list(this.p("days"));
+      return Object.fromEntries(docs.map((d) => [d.id, d.data]));
+    });
+  }
+
   async commit(writes) {
     await this.fs.commit(writes);
   }

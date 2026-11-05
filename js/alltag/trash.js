@@ -65,6 +65,20 @@ async function write(path, data) {
   return collection(coll.slice(2)).put(doc);
 }
 
+/** Album wiederhergestellt → seine Fotos wieder hineinlegen (Foto + Index, wie in der Galerie). */
+async function refileAlbum(albumId, photoIds) {
+  try {
+    const photos = await import("../photos.js");
+    const list = await photos.listIndex();
+    for (const id of photoIds) {
+      const it = list.find((x) => x && x.id === id);
+      if (!it) continue;
+      const ids = Array.isArray(it.albumIds) ? it.albumIds : [];
+      if (!ids.includes(albumId)) await photos.updatePhoto(id, { albumIds: [...ids, albumId] });
+    }
+  } catch (err) { console.error("Album wiederherstellen (Fotos):", err); }
+}
+
 /** Einen Stapel wiederherstellen → Anzahl wiederhergestellter Elemente. */
 export async function restoreBatch(batch) {
   const items = [...batch.items].sort((a, b) => String(a.id).localeCompare(String(b.id), "en", { numeric: true }));
@@ -75,6 +89,7 @@ export async function restoreBatch(batch) {
       const cur = state.has(t.path) ? state.get(t.path) : await current(t.path);
       const r = restoreDoc(t, cur);
       if (r.data) { await write(t.path, r.data); state.set(t.path, r.data); n++; }
+      if (r.data && Array.isArray(t.photoIds) && t.photoIds.length) await refileAlbum(splitPath(t.path).id, t.photoIds);
     }
     await trashCol().remove(t.id);
   }
