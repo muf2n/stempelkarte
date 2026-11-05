@@ -17,7 +17,7 @@ export const GMAIL_SCOPE = "https://www.googleapis.com/auth/gmail.readonly";
 const API = "https://gmail.googleapis.com/gmail/v1/users/me/";
 const TOKEN_MS = 55 * 60 * 1000;
 const MAX_MAILS = 150;
-const BATCH = 10;
+const BATCH = 4;          // Gmail-Limit „Units per minute per user“ schonen
 
 export const QUERY = 'newer_than:400d (subject:(abo OR abonnement OR subscription OR mitgliedschaft OR "your receipt" OR rechnung OR beleg OR bestellbestätigung OR "trial" OR testzeitraum OR gekündigt OR kündigung OR cancelled OR verlängert OR renewal) OR from:(googleplay-noreply@google.com OR no_reply@email.apple.com OR netflix OR spotify OR amazon OR disneyplus OR youtube OR paypal))';
 
@@ -178,13 +178,18 @@ export async function connectGmail(email = "") {
 
 async function api(path, token) {
   let r;
-  for (let attempt = 0; attempt < 3; attempt++) {
+  for (let attempt = 0; attempt < 6; attempt++) {
     try {
       r = await fetch(API + path, { headers: { Authorization: "Bearer " + token, Accept: "application/json" } });
     } catch (err) {
       throw gErr(navigator.onLine === false ? "offline" : "net", navigator.onLine === false ? ERR_TEXT.offline : ERR_TEXT.net, err);
     }
-    if (r.status === 429 || r.status >= 500) { await new Promise((ok) => setTimeout(ok, 600 * (attempt + 1))); continue; }
+    let limited = r.status === 429 || r.status >= 500;
+    if (!limited && r.status === 403) {
+      // Google meldet Tempolimits auch als 403 („Quota exceeded“, „rateLimitExceeded“) → warten statt abbrechen
+      try { const t = await r.clone().text(); limited = /quota|rateLimit|userRateLimitExceeded|RESOURCE_EXHAUSTED/i.test(t); } catch { /* egal */ }
+    }
+    if (limited && attempt < 5) { await new Promise((ok) => setTimeout(ok, Math.min(20000, 1500 * 2 ** attempt) + Math.random() * 500)); continue; }
     break;
   }
   if (r.ok) return r.json();
@@ -192,6 +197,9 @@ async function api(path, token) {
   try { body = await r.json(); } catch { /* egal */ }
   const reason = JSON.stringify(body || "");
   if (r.status === 401) { forgetToken(); throw gErr("auth", ERR_TEXT.auth); }
+  if (/quota|rateLimit|RESOURCE_EXHAUSTED/i.test(reason)) {
+    throw gErr("net", "Google bremst gerade (zu viele Anfragen in kurzer Zeit). Bitte in 1–2 Minuten nochmal „Mails prüfen“ tippen.");
+  }
   if (r.status === 403 || /insufficient|PERMISSION_DENIED|ACCESS_TOKEN_SCOPE/i.test(reason)) {
     forgetToken();
     // genauer sagen, was fehlt
@@ -208,7 +216,7 @@ async function api(path, token) {
 }
 
 /**
- * Passende Mails laden (max. 150, je 10 parallel). onProgress(done, total).
+ * Passende Mails laden (max. 150, je 4 parallel, mit Pausen). onProgress(done, total).
  * → [{id, date, from, subject, text}] – nur im Speicher.
  */
 export async function fetchMails({ onProgress, token } = {}) {
@@ -236,6 +244,7 @@ export async function fetchMails({ onProgress, token } = {}) {
     })));
     for (const m of got) if (m) mails.push(m);
     done += chunk.length;
+    if (i + BATCH < ids.length) await new Promise((ok) => setTimeout(ok, 250)); // sanft bleiben
     if (onProgress) onProgress(done, ids.length);
   }
   return mails;
