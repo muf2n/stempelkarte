@@ -1,9 +1,9 @@
-// Playwright-Test für Alltag › Galerie (lokaler Modus).
-//   cd <worktree> && python3 -m http.server 8860 &   then   node tests/galerie-e2e.cjs [screenshot-dir]
+// Playwright-Test für Alltag › Galerie (lokaler Modus) inkl. Hauptkategorien (Agent T).
+//   cd <worktree> && python3 -m http.server 8861 &   then   node tests/galerie-e2e.cjs [screenshot-dir]
 // Fremde Domains werden abgefangen, Nominatim wird per page.route nachgebildet, die Position per Kontext-Geolocation.
 const { chromium } = require("playwright");
 const path = require("path");
-const BASE = process.env.BASE || "http://localhost:8860/";
+const BASE = process.env.BASE || "http://localhost:8861/";
 const OUT = process.argv[2] || require("os").tmpdir();
 
 const pad = (n) => String(n).padStart(2, "0");
@@ -14,6 +14,7 @@ const GRAMBACH = { latitude: 47.01098, longitude: 15.50511 };
 const LIEBENAU = { latitude: 47.01098 + 2000 / 111320, longitude: 15.50511 };     // 2 km nördlich
 const FIRMA = { latitude: 47.0402, longitude: 15.4089 };                            // gespeicherter Ort
 const SEIERSBERG = { lat: 47.0062, lng: 15.4028 };                                  // EXIF-GPS
+const LBS = { latitude: 47.0905, longitude: 15.4040 };                              // gespeicherter Ort Berufsschule
 
 function nominatimFor(lat, lng) {
   const near = (p, m) => Math.hypot((lat - p.latitude) * 111320, (lng - p.longitude) * 75900) < m;
@@ -58,6 +59,10 @@ function nominatimFor(lat, lng) {
   const txt = (s) => page.textContent(s);
   const albums = () => page.evaluate(() => JSON.parse(localStorage.getItem("sk-a-photo_albums") || "[]"));
   const albumByName = async (re) => (await albums()).find((a) => re.test(a.name));
+  const folders = () => page.evaluate(() => JSON.parse(localStorage.getItem("sk-a-photo_folders") || "[]"));
+  const gset = () => page.evaluate(() => import("/js/store.js").then((m) => m.get().settings.gallery || {}));
+  const albumOf = async (id) => (await albums()).find((a) => a.id === id);
+  const goHash = async (h, sel) => { await page.evaluate((h) => { location.hash = h; }, h); if (sel) await page.waitForSelector(sel); await page.waitForTimeout(150); };
   const idx = () => page.evaluate(() => import("/js/photos.js").then((m) => m.listIndex({ refresh: true })));
   const until = async (fn, msg, ms = 8000) => { const t0 = Date.now(); for (;;) { const v = await fn(); if (v) return v; if (Date.now() - t0 > ms) throw new Error("FEHLER (Zeit): " + msg); await page.waitForTimeout(120); } };
   const closeSheet = async () => { await page.click(".sheet .close"); await page.waitForTimeout(150); };
@@ -75,16 +80,23 @@ function nominatimFor(lat, lng) {
   const plainBuf = await jpeg("#a16207", "Import");
 
   // Startdaten: laufende Schicht (ohne Ort), gespeicherter Ort „Firma“, ein altes Foto (ohne Index) mit placeId
-  await page.evaluate(async ([firma]) => {
+  await page.evaluate(async ([firma, lbs]) => {
     const d = new Date(); d.setHours(7, 0, 0, 0);
     const s = Math.min(d.getTime(), Date.now() - 60000);
     localStorage.clear();
     localStorage.setItem("stempelkarte.local.v1", JSON.stringify({
       entries: [], todos: [], days: {},
-      places: [{ id: "pF", name: "Firma Elektro Maier", addr: "Wiener Straße 5, 8020 Graz", lat: firma.latitude, lng: firma.longitude, radius: 150 }],
+      places: [{ id: "pF", name: "Firma Elektro Maier", addr: "Wiener Straße 5, 8020 Graz", lat: firma.latitude, lng: firma.longitude, radius: 150 },
+        { id: "pS", name: "Landesberufsschule Graz 4", addr: "Hans-Brandstetter-Gasse 6, 8010 Graz", lat: lbs.latitude, lng: lbs.longitude, radius: 150 }],
       running: { start: s, segments: [{ start: s, activity: "Arbeiten", placeId: null, place: "", loc: null }], placeId: null, place: "", note: "", people: [], pauseStart: null, pauseMs: 0, inLoc: null },
       rev: Date.now(), settings: { weeklyTarget: 38.5 },
     }));
+    // Alben aus der Zeit vor den Hauptkategorien (Adresse, Berufsschul-Ort, eigenes)
+    localStorage.setItem("sk-a-photo_albums", JSON.stringify([
+      { id: "alOld", kind: "address", name: "Annenstraße 3, Graz", lat: 47.0712, lng: 15.4300, radius: 80, addr: "Annenstraße 3, 8020 Graz", created: 1 },
+      { id: "alLbs", kind: "place", placeId: "pS", name: "Landesberufsschule Graz 4", lat: lbs.latitude, lng: lbs.longitude, radius: 150, created: 2 },
+      { id: "alCust", kind: "custom", name: "Ideen", emoji: "💡", radius: 80, created: 3 },
+    ]));
     await new Promise((res) => { const r = indexedDB.deleteDatabase("stempelkarte-photos"); r.onsuccess = r.onerror = r.onblocked = () => res(); });
     // alte Datenbank (Version 1, ohne Index-Store) mit einem alten Foto
     const cv = document.createElement("canvas"); cv.width = 64; cv.height = 48; const g = cv.getContext("2d"); g.fillStyle = "#64748b"; g.fillRect(0, 0, 64, 48);
@@ -100,7 +112,7 @@ function nominatimFor(lat, lng) {
       };
       r.onerror = () => rej(r.error);
     });
-  }, [FIRMA]);
+  }, [FIRMA, LBS]);
   await page.reload();
   await page.click("#btn-local");
   await page.waitForTimeout(600);
@@ -117,6 +129,15 @@ function nominatimFor(lat, lng) {
   await takeHeute(IMG.p1, "p1.jpg", "Verteiler vorher");
   const a1 = await until(() => albumByName(/Grambach/), "Album für Grambach angelegt");
   ok(a1.name === "Thomas-Arbesser-Straße 1, Grambach" && a1.kind === "address" && a1.radius === 80, "Foto 1 in Grambach → Album „Thomas-Arbesser-Straße 1, Grambach“ (Adresse, 80 m)");
+  /* Hauptkategorien: erster Start */
+  let fl = await folders();
+  ok(fl.map((f) => f.id).sort().join() === "f_bau,f_privat,f_schule", "Erster Start: Standard-Kategorien 🏗️ Baustellen, 🏫 Berufsschule, 🏠 Privat angelegt");
+  ok(fl.find((f) => f.id === "f_bau").emoji === "🏗️" && fl.find((f) => f.id === "f_bau").name === "Baustellen", "Baustellen mit 🏗️");
+  ok((await gset()).foldersInit === true, "Flag foldersInit gesetzt");
+  ok(a1.folderId === "f_bau", "Neues Adress-Album landet automatisch in „Baustellen“");
+  ok((await albumOf("alOld")).folderId === "f_bau", "Bestehendes Adress-Album → Baustellen (Migration)");
+  ok((await albumOf("alLbs")).folderId === "f_schule", "Ort-Album der Berufsschule (LBS) → Berufsschule");
+  ok(!(await albumOf("alCust")).folderId, "Eigenes Album bleibt ohne Kategorie");
   let list = await until(async () => { const l = await idx(); return l.length && l.find((x) => x.note === "Verteiler vorher" && x.albumIds.includes(a1.id)) ? l : null; }, "Foto 1 im Album");
   const ph1 = list.find((x) => x.note === "Verteiler vorher");
   ok(Math.abs(ph1.lat - GRAMBACH.latitude) < 1e-6 && ph1.addr === "Thomas-Arbesser-Straße 1, 8074 Grambach", "Position + Adresse am Foto gespeichert");
@@ -125,7 +146,7 @@ function nominatimFor(lat, lng) {
   await ctx.setGeolocation({ latitude: GRAMBACH.latitude + 0.0002, longitude: GRAMBACH.longitude }); // ≈ 22 m daneben
   await takeHeute(IMG.p2, "p2.jpg", "");
   await until(async () => (await idx()).filter((x) => x.albumIds.includes(a1.id)).length === 2, "Foto 2 im selben Album");
-  ok((await albums()).length === 1, "Foto 2 an derselben Adresse → kein neues Album");
+  ok((await albums()).length === 4, "Foto 2 an derselben Adresse → kein neues Album (3 alte + 1)");
   await ctx.setGeolocation(LIEBENAU);
   await takeHeute(IMG.p3, "p3.jpg", "Zählerkasten");
   const a3 = await until(() => albumByName(/Liebenauer/), "neues Album nach 2 km");
@@ -136,6 +157,8 @@ function nominatimFor(lat, lng) {
   await takeHeute(IMG.p4, "p4.jpg", "Lager");
   const aF = await until(async () => (await albums()).find((a) => a.kind === "place" && a.placeId === "pF"), "Ort-Album");
   ok(aF.name === "Firma Elektro Maier", "Foto an gespeichertem Ort → Ort-Album „Firma Elektro Maier“ (Vorrang vor Adresse)");
+  ok(aF.folderId === "f_bau" && (await albumOf(a3.id)).folderId === "f_bau", "Neues Ort-/Adress-Album → Baustellen");
+  ok((await folders()).length === 3, "Standard-Kategorien nur einmal angelegt");
   ok(nomi.length === 2, `Nominatim nur für neue Adressen gefragt (${nomi.length}×)`);
   ok(nomi.every((n, i) => !i || n.t - nomi[i - 1].t >= 1000), "Nominatim höchstens 1×/s");
   await shot("gl-heute-390.png", false);
@@ -145,24 +168,36 @@ function nominatimFor(lat, lng) {
   await page.waitForSelector('[data-md="photos"] [data-ps="gal"]');
   ok(await page.isVisible('[data-md="photos"] [data-ps="gal"]'), "„Galerie“-Knopf am Foto-Streifen in Mein Tag");
   await page.click('[data-md="photos"] [data-ps="gal"]');
-  await page.waitForSelector(".gl-agrid");
-  ok(page.url().endsWith("#alltag/galerie"), "Knopf öffnet Alltag › Galerie");
+  await page.waitForSelector(".gl-fgrid");
+  ok(page.url().endsWith("#alltag/galerie"), "Knopf öffnet Alltag › Galerie (Hauptkategorien)");
 
   /* ---------- Alben + Migration ---------- */
   await until(async () => (await idx()).some((x) => x.id === "old1" && x.albumIds.includes(aF.id)), "altes Foto nachgetragen + Ort-Album");
   ok(true, "Altes Foto (ohne Index, mit placeId) → Index nachgetragen und ins Ort-Album");
   await page.waitForTimeout(300);
+  const fcards = await page.$$eval(".gl-fcard[data-folder]", (b) => b.map((x) => x.textContent.replace(/\s+/g, " ").trim()));
+  ok(fcards.length === 4 && /Baustellen/.test(fcards[0]) && /Berufsschule/.test(fcards[1]) && /Privat/.test(fcards[2]) && /Ohne Kategorie/.test(fcards[3]), "Kategorie-Karten in Reihenfolge + „Ohne Kategorie“: " + fcards.join(" | "));
+  ok(/4 Alben · 5 Fotos/.test(fcards[0]) && /zuletzt/.test(fcards[0]), "Baustellen: 4 Alben · 5 Fotos, letztes Datum");
+  ok((await page.$$('.gl-fcard[data-folder="f_bau"] .gl-fmos img')).length === 4 && await page.$('.gl-fcard[data-folder="f_bau"] .gl-fmos.n4'), "2×2-Cover-Mosaik (Album-Titelbilder + neueste Fotos)");
+  ok(await page.$('.gl-fcard[data-folder="f_schule"] .gl-fmos.n0'), "Leere Kategorie: großes Emoji statt Mosaik");
+  ok(/1 Album · 0 Fotos/.test(fcards[1]), "Berufsschule: 1 Album");
+  await shot("gl-kat-390.png");
+  await page.click('.gl-fcard[data-folder="f_bau"]');
+  await page.waitForSelector(".gl-fhead");
+  ok(page.url().endsWith("#alltag/galerie/k/f_bau") && (await txt('[data-g="fname"]')) === "Baustellen", "Tippen öffnet die Kategorie (eigener Hash)");
   const cards = await page.$$eval(".gl-acard[data-album]", (b) => b.map((x) => x.textContent.replace(/\s+/g, " ").trim()));
-  ok(cards.length === 3, "3 Album-Karten: " + cards.join(" | "));
+  ok(cards.length === 4, "4 Album-Karten in Baustellen: " + cards.join(" | "));
   ok(cards.some((c) => c.includes("Thomas-Arbesser-Straße 1, Grambach") && c.includes("2 Fotos")), "Karte Grambach: 2 Fotos");
   ok(cards.some((c) => c.includes("Firma Elektro Maier") && c.includes("2 Fotos")), "Karte Firma: 2 Fotos (neu + migriert)");
   ok((await page.$$(".gl-acard .gl-acov img")).length === 3, "Titelbilder als Vorschaubilder");
   await shot("gl-alben-390.png");
+  await shot("gl-kat-bau-390.png");
 
   /* ---------- Album: umbenennen, Symbol, zusammenführen ---------- */
   await page.click(`.gl-acard[data-album="${a3.id}"]`);
   await page.waitForSelector(".gl-ahead");
   ok(page.url().includes(`#alltag/galerie/a/${a3.id}`), "Album-Ansicht über eigenen Hash");
+  ok((await txt('[data-g="back"]')).trim() === "Baustellen" && (await txt('[data-g="afolder"]')).includes("Baustellen"), "Album zeigt „← Baustellen“ und seine Kategorie");
   ok((await txt(".gl-ahead")).includes("Umkreis 80 m"), "Album zeigt Art + Umkreis");
   ok((await page.getAttribute('[data-g="maps"]', "href")).startsWith("https://www.google.com/maps/search/?api=1&query=47.0"), "„In Google Maps öffnen“-Link");
   await page.click('[data-g="amenu"]');
@@ -270,16 +305,23 @@ function nominatimFor(lat, lng) {
   ok((await idx()).length === 4, "1 Foto gelöscht (4 übrig)");
   ok(await page.isVisible(".gl-empty"), "Album leer");
   await page.click('[data-g="back"]');
-  await page.waitForSelector(".gl-agrid");
-  ok(page.url().endsWith("#alltag/galerie"), "Zurück → Alben (Verlauf)");
+  await page.waitForSelector(".gl-fhead");
+  ok(page.url().endsWith("#alltag/galerie/k/f_bau"), "Zurück → Kategorie (Verlauf)");
+  await page.click('[data-g="back"]');
+  await page.waitForSelector(".gl-fgrid");
+  ok(page.url().endsWith("#alltag/galerie"), "Zurück → Kategorien (Verlauf)");
 
   /* ---------- Import mit EXIF ---------- */
   await page.setInputFiles('.gl-head input[data-in="imp"]', [{ name: "IMG_20261014.jpg", mimeType: "image/jpeg", buffer: exifBuf }]);
   const aS = await until(() => albumByName(/Seiersberg/), "Album aus EXIF-GPS");
   ok(aS.name === "Am Seiersberg 10, Seiersberg-Pirka", "Import mit EXIF-GPS → Album „Am Seiersberg 10, Seiersberg-Pirka“");
+  ok(aS.folderId === "f_bau", "Neues Adress-Album aus Import → Baustellen");
   const imp = await until(async () => (await idx()).find((x) => x.albumIds.includes(aS.id)), "importiertes Foto");
   ok(imp.dayKey === "2026-10-14" && new Date(imp.ts).getHours() === 9, "EXIF-Aufnahmezeit übernommen (14.10.2026, 09:41)");
-  // Import ohne EXIF in „Verteiler“
+  // Import ohne EXIF in „Verteiler“ (eigenes Album → Ohne Kategorie)
+  ok(!verteiler.folderId, "Eigenes Album „Verteiler“ ohne Kategorie");
+  await page.click(`.gl-fcard[data-folder="${G.OHNE_KAT}"]`);
+  await page.waitForSelector(".gl-fhead");
   await page.click(`.gl-acard[data-album="${verteiler.id}"]`);
   await page.waitForSelector(".gl-ahead");
   await page.setInputFiles('.gl-aacts input[data-in="imp"]', [{ name: "a.jpg", mimeType: "image/jpeg", buffer: plainBuf }, { name: "b.jpg", mimeType: "image/jpeg", buffer: plainBuf }]);
@@ -289,7 +331,9 @@ function nominatimFor(lat, lng) {
   ok(impToday === 4, "Ohne EXIF: aktuelle Zeit");
   await page.click('[data-g="back"]');
   await page.waitForSelector(".gl-agrid");
-  ok((await txt(".gl-agrid")).includes("Ohne Ort"), "Virtuelles Album „Ohne Ort“ für Fotos ohne Standort");
+  ok((await txt(".gl-agrid")).includes("Ohne Ort"), "Virtuelles Album „Ohne Ort“ (in „Ohne Kategorie“) für Fotos ohne Standort");
+  await page.click('[data-g="back"]');
+  await page.waitForSelector(".gl-fgrid");
 
   /* ---------- Alle Fotos: Filter & Suche ---------- */
   await page.click('.gl-tab[data-tab="alle"]');
@@ -313,6 +357,21 @@ function nominatimFor(lat, lng) {
   await shot("gl-alle-390.png");
   await page.click('[data-g="clear"]');
   ok((await count()) === "7 Fotos", "Filter zurücksetzen");
+  // Kategorie-Filter
+  const expectF = async (fid) => { const als = await albums(); const ids = new Set((await folders()).map((f) => f.id)); return G.filterItems(await idx(), { folderId: fid }, new Map(als.map((a) => [a.id, G.normAlbum(a)])), ids).length; };
+  ok((await page.$$eval(".gl-fchip", (b) => b.map((x) => x.textContent.trim()))).join("|") === "Alle Kategorien|🏗️Baustellen|🏫Berufsschule|🏠Privat|🗂️Ohne Kategorie", "Kategorien als Filter-Chips");
+  await page.click('.gl-fchip[data-ff="f_bau"]');
+  const nBau = await expectF("f_bau");
+  ok(nBau === 3 && (await count()) === `${nBau} Fotos gefunden`, `Kategorie-Filter „Baustellen“ → ${nBau}`);
+  ok(!(await page.$(`.gl-chip[data-fa="${verteiler.id}"]`)) && await page.$(`.gl-chip[data-fa="${aF.id}"]`), "Album-Chips nur aus der gewählten Kategorie");
+  await page.click(`.gl-chip[data-fa="${aF.id}"]`);
+  ok((await count()) === "2 Fotos gefunden", "Kategorie + Album kombiniert → 2");
+  await page.click(`.gl-fchip[data-ff="${G.OHNE_KAT}"]`);
+  ok((await count()) === `${await expectF(G.OHNE_KAT)} Fotos gefunden`, "Filter „Ohne Kategorie“");
+  await page.click('.gl-fchip[data-ff="f_bau"]');
+  await shot("gl-alle-kat-390.png");
+  await page.click('[data-g="clear"]');
+  ok((await count()) === "7 Fotos", "Filter zurücksetzen (auch Kategorie)");
   await page.fill('[data-g="to"]', "2026-10-31");
   await page.dispatchEvent('[data-g="to"]', "change");
   ok((await count()) === "2 Fotos gefunden", "Zeitraum bis 31.10. → 2");
@@ -320,48 +379,179 @@ function nominatimFor(lat, lng) {
 
   /* ---------- Album löschen: Fotos behalten / mitlöschen ---------- */
   await page.click('.gl-tab[data-tab="alben"]');
-  await page.click(`.gl-acard[data-album="${verteiler.id}"]`);
+  await goHash(`#alltag/galerie/a/${verteiler.id}`, ".gl-ahead");
   await page.click('[data-g="amenu"]');
   await page.click('.sheet [data-m="del"]');
   await page.waitForSelector('.sheet [data-c="ok"]');
   await page.click('.sheet [data-c="ok"]');
   ok((await txt('.sheet [data-c="ok"]')) === "Wirklich löschen?", "Album löschen: zweiter Tipp nötig");
   await page.click('.sheet [data-c="ok"]');
-  await page.waitForSelector(".gl-agrid");
+  await page.waitForSelector(".gl-fgrid, .gl-agrid");
   ok(!(await albums()).some((a) => a.id === verteiler.id) && (await idx()).length === 7, "„Verteiler“ gelöscht, Fotos bleiben (7)");
-  await page.click(`.gl-acard[data-album="${aS.id}"]`);
+  await goHash(`#alltag/galerie/a/${aS.id}`, ".gl-ahead");
   await page.click('[data-g="amenu"]');
   await page.click('.sheet [data-m="del"]');
   await page.check('.sheet input[value="all"]');
   ok((await txt('.sheet [data-c="ok"]')).includes("1 Foto löschen"), "Option „Fotos auch löschen“ zeigt Anzahl");
   await page.click('.sheet [data-c="ok"]'); await page.click('.sheet [data-c="ok"]');
-  await page.waitForSelector(".gl-agrid");
+  await page.waitForSelector(".gl-fgrid, .gl-agrid");
   await page.waitForTimeout(300);
   ok(!(await albums()).some((a) => a.id === aS.id) && (await idx()).length === 6, "Album + Foto gelöscht (6 übrig)");
 
   /* ---------- Neues Album, Einstellungen, GPS verweigert ---------- */
-  await page.click('.gl-anew');
+  await goHash("#alltag/galerie", ".gl-fgrid");
+  await page.click('.gl-tools [data-g="newalbum"]');
   await page.fill('.sheet [data-n="name"]', "Vorher / Nachher");
   await page.click('.sheet [data-emoji="⭐"]');
+  ok((await page.inputValue('.sheet [data-n="folder"]')) === "", "Neues Album: Kategorie-Auswahl (Standard „Ohne Kategorie“)");
+  await page.selectOption('.sheet [data-n="folder"]', "f_privat");
   await page.click('.sheet [data-n="ok"]');
   await page.waitForSelector(".gl-ahead");
   ok((await txt('[data-g="aname"]')) === "Vorher / Nachher" && (await txt(".gl-ahead-ic")).includes("⭐"), "„+ Neues Album“ mit Emoji");
-  await page.click('[data-g="back"]');
+  const vn = await albumByName(/^Vorher \/ Nachher$/);
+  ok(vn.folderId === "f_privat" && (await txt('[data-g="afolder"]')).includes("Privat"), "Neues Album gleich in Kategorie „Privat“");
+  // Neues Album aus der Kategorie-Ansicht: Kategorie vorausgewählt
+  await goHash("#alltag/galerie/k/f_schule", ".gl-fhead");
+  await page.click('.gl-aacts [data-g="newalbum"]');
+  ok((await page.inputValue('.sheet [data-n="folder"]')) === "f_schule", "Neues Album in Kategorie-Ansicht: Kategorie vorausgewählt");
+  await closeSheet();
+  await goHash("#alltag/galerie", ".gl-fgrid");
   await page.click('[data-g="settings"]');
   ok(await page.isChecked('.sheet [data-s="auto"]'), "Einstellung „automatisch nach Adresse“ standardmäßig an");
+  ok((await page.inputValue('.sheet [data-s="autofolder"]')) === "f_bau", "„Neue Adress-Alben automatisch in Kategorie …“ = Baustellen (Standard)");
   await page.click('.sheet [data-rad="300"]');
   await page.click('.sheet [data-s="save"]');
   await page.waitForTimeout(200);
-  ok((await page.evaluate(() => import("/js/store.js").then((m) => m.get().settings.gallery))).radius === 300, "Umkreis 300 m in settings.gallery gespeichert");
+  ok((await gset()).radius === 300 && (await gset()).foldersInit === true && (await gset()).autoFolder === "f_bau", "Umkreis 300 m in settings.gallery gespeichert (Flag + Auto-Kategorie bleiben)");
   // GPS verweigert → Ohne Ort
   await page.evaluate(() => { navigator.geolocation.getCurrentPosition = (ok, err) => setTimeout(() => err({ code: 1, message: "denied" }), 10); });
   await page.evaluate(() => import("/js/gallery-albums.js").then((m) => m.forgetPosition()));
+  await page.waitForTimeout(500); // Neuzeichnen nach dem Speichern abwarten (sonst trifft das change-Ereignis ein altes Feld)
   await page.setInputFiles('.gl-head input[data-in="cam"]', { name: "x.jpg", mimeType: "image/jpeg", buffer: IMG.p5 });
   await page.waitForSelector('.sheet [data-ph="save"]:not([disabled])');
   await page.click('.sheet [data-ph="save"]');
   await page.waitForTimeout(900);
   const ohne = (await idx()).filter((x) => !x.albumIds.length && x.lat === null);
   ok(ohne.length >= 3, "GPS verweigert → Foto ohne Album (Ohne Ort)");
+
+  /* ---------- Hauptkategorien: anlegen, umbenennen, ordnen, Alben verschieben, löschen ---------- */
+  const nPhotos = (await idx()).length;
+  await goHash("#alltag/galerie", ".gl-fgrid");
+  await page.click(".gl-fnew");
+  await page.fill('.sheet [data-k="name"]', "Werkzeug & Material");
+  await page.click('.sheet [data-emoji="🔧"]');
+  await page.click('.sheet [data-color="#0d9488"]');
+  ok((await txt('.sheet [data-k="pname"]')) === "Werkzeug & Material" && (await txt('.sheet [data-k="pemo"]')) === "🔧", "Blatt „+ Hauptkategorie“: Vorschau mit Name + Emoji");
+  await shot("gl-kat-neu-390.png", false);
+  await page.click('.sheet [data-k="ok"]');
+  await page.waitForSelector(".sheet", { state: "detached" });
+  const wz = (await folders()).find((f) => f.name === "Werkzeug & Material");
+  ok(wz && wz.emoji === "🔧" && wz.color === "#0d9488" && wz.order === 3, "Hauptkategorie „🔧 Werkzeug & Material“ angelegt (Farbe, ans Ende)");
+  await page.waitForSelector(`.gl-fcard[data-folder="${wz.id}"]`);
+  ok(true, "Neue Kategorie-Karte erscheint");
+  await page.click(`.gl-fcard[data-folder="${wz.id}"]`);
+  await page.waitForSelector(".gl-fhead");
+  ok((await txt(".gl-page .gl-empty")).includes("Noch keine Alben"), "Leere Kategorie: freundlicher Hinweis");
+  await page.click(".gl-albar [data-fedit]");
+  await page.fill('.sheet [data-k="name"]', "Werkzeug + Material");
+  await page.click('.sheet [data-k="ok"]');
+  await page.waitForSelector(".sheet", { state: "detached" });
+  await page.waitForTimeout(150);
+  ok((await txt('[data-g="fname"]')) === "Werkzeug + Material" && (await folders()).find((f) => f.id === wz.id).name === "Werkzeug + Material", "Kategorie umbenannt");
+  await page.click(".gl-albar [data-fedit]");
+  ok((await txt('.sheet [data-k="pos"]')) === "Platz 4 von 4" && await page.isDisabled('.sheet [data-k="down"]'), "Bearbeiten: Platz 4 von 4, „Nach unten“ gesperrt");
+  await page.click('.sheet [data-k="up"]');
+  await page.waitForTimeout(150);
+  ok((await txt('.sheet [data-k="pos"]')) === "Platz 3 von 4", "„Nach oben“ im Blatt → Platz 3");
+  await closeSheet();
+  await page.click('[data-g="back"]');
+  await page.waitForSelector(".gl-fgrid");
+  const order = () => page.$$eval("[data-fsec], .gl-fcard[data-folder]", (b) => b.map((x) => x.dataset.fsec || x.dataset.folder));
+  ok((await order()).join() === `f_bau,f_schule,${wz.id},f_privat,${G.OHNE_KAT}`, "Reihenfolge der Karten geändert");
+  await page.click('[data-amode="liste"]');
+  await page.waitForSelector(".gl-flist");
+  ok((await page.$$(".gl-fsec")).length === 5 && (await page.$$(".gl-arow[data-album]")).length >= 6, "„Alles aufklappen“: Kategorien mit ihren Alben als Liste");
+  ok(await page.isDisabled('[data-fsec="f_bau"] [data-fmove="-1"]') && await page.isDisabled('[data-fsec="f_privat"] [data-fmove="1"]'), "Erste kann nicht hoch, letzte nicht runter");
+  await page.click(`[data-fsec="${wz.id}"] [data-fmove="-1"]`);
+  await page.waitForTimeout(200);
+  ok((await order()).join() === `f_bau,${wz.id},f_schule,f_privat,${G.OHNE_KAT}`, "↑ in der Liste: Werkzeug vor Berufsschule");
+  ok((await folders()).find((f) => f.id === wz.id).order === 1, "Reihenfolge gespeichert");
+  await shot("gl-liste-390.png");
+  // einzeln: Album-Menü → Kategorie ändern
+  await goHash(`#alltag/galerie/a/${vn.id}`, ".gl-ahead");
+  await page.click('[data-g="amenu"]');
+  await page.click('.sheet [data-m="folder"]');
+  await page.waitForSelector(`.sheet [data-pickf="${wz.id}"]`);
+  ok((await page.getAttribute('.sheet [data-pickf="f_privat"]', "aria-pressed")) === "true", "Kategorie-Auswahl zeigt die aktuelle (Privat)");
+  await page.click(`.sheet [data-pickf="${wz.id}"]`);
+  await page.waitForTimeout(200);
+  ok((await albumOf(vn.id)).folderId === wz.id && (await txt('[data-g="afolder"]')).includes("Werkzeug"), "Album einzeln nach „Werkzeug + Material“ verschoben");
+  // über den Kategorie-Knopf im Album
+  await page.click('[data-g="afolder"]');
+  await page.click('.sheet [data-pickf="f_bau"]');
+  await page.waitForTimeout(200);
+  ok((await albumOf(vn.id)).folderId === "f_bau", "Kategorie-Knopf im Album → Baustellen");
+  await page.click('[data-g="afolder"]');
+  await page.click(`.sheet [data-pickf="${wz.id}"]`);
+  await page.waitForTimeout(200);
+  // mehrere: langes Drücken in der Liste
+  await goHash("#alltag/galerie", ".gl-flist");
+  await longPress('.gl-arow[data-album="alOld"]');
+  ok(await page.isVisible('[data-g="selbar"]') && (await txt('[data-g="selcount"]')) === "1 Album ausgewählt", "Langes Drücken auf ein Album startet die Alben-Auswahl");
+  await page.click(`.gl-arow[data-album="${a3.id}"]`);
+  ok((await txt('[data-g="selcount"]')) === "2 Alben ausgewählt" && page.url().endsWith("#alltag/galerie"), "Tippen wählt weitere Alben (öffnet nicht)");
+  await shot("gl-asel-390.png", false);
+  await page.click('[data-s="afolder"]');
+  await page.click('.sheet [data-pickf="f_privat"]');
+  await page.waitForTimeout(250);
+  ok((await albumOf("alOld")).folderId === "f_privat" && (await albumOf(a3.id)).folderId === "f_privat", "2 Alben auf einmal „In Kategorie verschieben“ → Privat");
+  ok(!(await page.isVisible('[data-g="selbar"]')), "Alben-Auswahl danach beendet");
+  // Auswahl in der Kategorie-Ansicht (Karten): Langes Drücken + „Alle“
+  await goHash("#alltag/galerie/k/f_privat", ".gl-fhead");
+  await longPress(`.gl-acard[data-album="${a3.id}"]`);
+  await page.click('[data-s="aall"]');
+  ok((await txt('[data-g="selcount"]')) === "2 Alben ausgewählt", "Kategorie-Ansicht: langes Drücken + „Alle“ (2)");
+  await page.click('[data-s="done"]');
+  // Löschen 1: Privat → Ohne Kategorie
+  await page.click(".gl-albar [data-fedit]");
+  await page.click('.sheet [data-k="del"]');
+  await page.waitForSelector('.sheet [data-c="ok"]');
+  ok((await txt(".sheet")).includes("Fotos und Alben werden dabei nie gelöscht") && await page.isChecked('.sheet input[value="none"]'), "Kategorie löschen: Hinweis + Standard „Ohne Kategorie“");
+  await page.click('.sheet [data-c="ok"]');
+  ok((await txt('.sheet [data-c="ok"]')) === "Wirklich löschen?", "Kategorie löschen: zweiter Tipp nötig");
+  await page.click('.sheet [data-c="ok"]');
+  await page.waitForSelector(".gl-flist, .gl-fgrid");
+  await page.waitForTimeout(200);
+  ok(!(await folders()).some((f) => f.id === "f_privat"), "Kategorie „Privat“ gelöscht");
+  ok(!(await albumOf("alOld")).folderId && !(await albumOf(a3.id)).folderId && (await idx()).length === nPhotos, "Ihre Alben → Ohne Kategorie, kein Foto gelöscht");
+  // Löschen 2: Werkzeug → Baustellen
+  await goHash(`#alltag/galerie/k/${wz.id}`, ".gl-fhead");
+  await page.click(".gl-albar [data-fedit]");
+  await page.click('.sheet [data-k="del"]');
+  await page.waitForSelector('.sheet [data-d="target"]');
+  await page.check('.sheet input[value="move"]');
+  await page.selectOption('.sheet [data-d="target"]', "f_bau");
+  await shot("gl-kat-del-390.png", false);
+  await page.click('.sheet [data-c="ok"]'); await page.click('.sheet [data-c="ok"]');
+  await page.waitForSelector(".gl-flist, .gl-fgrid");
+  await page.waitForTimeout(200);
+  ok(!(await folders()).some((f) => f.id === wz.id) && (await albumOf(vn.id)).folderId === "f_bau" && (await idx()).length === nPhotos, "Kategorie gelöscht, Alben in „Baustellen“ verschoben, Fotos bleiben");
+  // Standard-Kategorie Berufsschule löschen → kommt nicht wieder
+  await goHash("#alltag/galerie/k/f_schule", ".gl-fhead");
+  await page.click(".gl-albar [data-fedit]");
+  await page.click('.sheet [data-k="del"]');
+  await page.click('.sheet [data-c="ok"]'); await page.click('.sheet [data-c="ok"]');
+  await page.waitForSelector(".gl-flist, .gl-fgrid");
+  ok(!(await albumOf("alLbs")).folderId, "Berufsschule gelöscht → Album ohne Kategorie");
+  await page.reload();
+  await page.waitForTimeout(600);
+  if (await page.isVisible("#btn-local")) await page.click("#btn-local");
+  await page.waitForTimeout(400);
+  await goHash("#alltag/galerie", ".gl-flist");
+  await page.waitForTimeout(600);
+  ok((await folders()).map((f) => f.id).join() === "f_bau" && (await page.$$(".gl-fsec")).length === 2, "Nach Neuladen: gelöschte Standard-Kategorien kommen nicht wieder");
+  await page.click('[data-amode="karten"]');
+  await page.waitForSelector(".gl-fgrid");
 
   /* ---------- Karte (fremde Domains gesperrt → Liste) ---------- */
   await page.click('.gl-tab[data-tab="karte"]');
@@ -388,7 +578,7 @@ function nominatimFor(lat, lng) {
   await page.waitForSelector(".sheet .ph-th");
   ok((await page.$$(".sheet .ph-th")).length >= 4, "„📷 heute“ öffnet weiter das Tages-Blatt");
   await page.click(".sheet [data-ph-gal]");
-  await page.waitForSelector(".gl-agrid");
+  await page.waitForSelector(".gl-fgrid");
   ok(!(await page.$(".sheet")), "Tages-Blatt → „Alle Fotos in der Galerie“");
 
   /* ---------- Screenshots ---------- */
@@ -396,7 +586,7 @@ function nominatimFor(lat, lng) {
   await page.waitForSelector('.al-tile[data-id="galerie"]');
   ok((await txt('.al-tile[data-id="galerie"]')).includes("Fotos nach Baustelle & Adresse"), "Kachel „Galerie“ im Alltag");
   await page.click('.al-tile[data-id="galerie"]');
-  await page.waitForSelector(".gl-agrid");
+  await page.waitForSelector(".gl-fgrid");
   await shot("gl-alben2-390.png");
   const state = await page.evaluate(() => ({ ls: { ...localStorage } }));
 
@@ -416,6 +606,14 @@ function nominatimFor(lat, lng) {
     await p2.evaluate(async (imgs) => {
       const photos = await import("/js/photos.js");
       const A = await import("/js/gallery-albums.js");
+      // für die Screenshots wieder ein paar Kategorien
+      const fS = await A.createFolder({ name: "Berufsschule", emoji: "🏫", color: "#2563eb" });
+      const fW = await A.createFolder({ name: "Werkzeug & Material", emoji: "🔧", color: "#0d9488" });
+      await A.createFolder({ name: "Privat", emoji: "🏠", color: "#16a34a" });
+      const by = (re) => A.albums().filter((a) => re.test(a.name)).map((a) => a.id);
+      await A.setAlbumsFolder(by(/Landesberufsschule/), fS.id);
+      await A.setAlbumsFolder(by(/Vorher/), fW.id);
+      await A.setAlbumsFolder(by(/Ideen/), fW.id);
       const als = A.albums();
       const toFile = (b64, n) => { const bin = atob(b64); const u = new Uint8Array(bin.length); for (let i = 0; i < bin.length; i++) u[i] = bin.charCodeAt(i); return new File([u], n, { type: "image/jpeg" }); };
       let i = 0;
@@ -425,17 +623,30 @@ function nominatimFor(lat, lng) {
       }
     }, Object.values(IMG).map((b) => b.toString("base64")));
     await p2.evaluate(() => { location.hash = "#alltag/galerie"; });
-    await p2.waitForSelector(".gl-agrid");
+    await p2.waitForSelector(".gl-fgrid");
     await p2.waitForTimeout(400);
     await shot(`gl-alben-${name}.png`, true, p2);
+    await p2.click('[data-amode="liste"]');
+    await p2.waitForSelector(".gl-flist");
+    await shot(`gl-liste-${name}.png`, true, p2);
+    await p2.click('[data-amode="karten"]');
+    await p2.click('.gl-fcard[data-folder="f_bau"]');
+    await p2.waitForSelector(".gl-fhead");
+    await shot(`gl-kat-${name}.png`, true, p2);
+    await p2.click('[data-g="back"]');
+    await p2.waitForSelector(".gl-fgrid");
     await p2.click('.gl-tab[data-tab="alle"]');
     await p2.waitForSelector(".gl-th");
+    await p2.click('.gl-fchip[data-ff="f_bau"]');
     await shot(`gl-alle-${name}.png`, true, p2);
+    await p2.click('[data-g="clear"]');
     await p2.click(".gl-th >> nth=1");
     await p2.waitForSelector(".ph-view");
     await shot(`gl-viewer-${name}.png`, false, p2);
     await p2.keyboard.press("Escape");
     await p2.click('.gl-tab[data-tab="alben"]');
+    await p2.click('.gl-fcard[data-folder="f_bau"]');
+    await p2.waitForSelector(".gl-fhead");
     await p2.click(".gl-acard[data-album] >> nth=0");
     await p2.waitForSelector(".gl-ahead");
     await p2.click('[data-g="select"]');

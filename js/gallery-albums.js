@@ -3,7 +3,11 @@
 //   addr?, placeId?, cover?, emoji?, created }.
 //   autoFile(): nach dem Speichern eines Fotos Position anhängen und passendes Album suchen/anlegen
 //   (gespeicherter Ort → Ort-Album, sonst Adress-Album im Radius, sonst neues Album aus Nominatim).
-//   Einstellungen: settings.gallery = { auto (Standard true), radius (Standard 80 m) }.
+//   Einstellungen: settings.gallery = { auto (Standard true), radius (Standard 80 m),
+//     autoFolder (Kategorie für neue Adress-/Ort-Alben; fehlt = „Baustellen“, "" = keine), foldersInit (Flag erster Start) }.
+// Update 9 (Agent T) – Hauptkategorien: Sammlung a_photo_folders { id, name, emoji, color, order, created },
+//   Alben bekommen optional folderId. ensureFolders() legt beim ersten Start (nur ohne Kategorien) die Standard-
+//   Kategorien an und sortiert bestehende Adress-/Ort-Alben ein – danach nie wieder (Flag foldersInit).
 import { collection } from "./alltag/db.js";
 import * as photos from "./photos.js";
 import * as geo from "./geo.js";
@@ -31,12 +35,83 @@ export async function albumsReady(ms = 4000) {
 
 /* ---------- Einstellungen ---------- */
 
+function rawSettings() { return (store.get().settings && store.get().settings.gallery) || {}; }
 export function settings() {
-  const g = (store.get().settings && store.get().settings.gallery) || {};
-  return { auto: g.auto !== false, radius: G.cleanRadius(g.radius, G.DEFAULT_RADIUS) };
+  const g = rawSettings();
+  const out = { auto: g.auto !== false, radius: G.cleanRadius(g.radius, G.DEFAULT_RADIUS), foldersInit: !!g.foldersInit };
+  if (typeof g.autoFolder === "string") out.autoFolder = g.autoFolder; // fehlt = Standard „Baustellen“
+  return out;
 }
 export async function saveSettings(partial) {
-  await store.saveSettings({ gallery: { ...settings(), ...partial } });
+  await store.saveSettings({ gallery: { ...rawSettings(), ...settings(), ...partial } });
+}
+
+/* ---------- Hauptkategorien ---------- */
+
+let fcol = null;
+export function foldersCol() { return fcol || (fcol = collection("photo_folders")); }
+export function folders() { return G.sortFolders(foldersCol().all().map(G.normFolder).filter(Boolean)); }
+export function folderById(id) { const f = id ? foldersCol().get(id) : null; return f ? G.normFolder(f) : null; }
+export function folderIds() { return new Set(folders().map((f) => f.id)); }
+/** Kategorie, in die neue Adress-/Ort-Alben automatisch kommen (null = keine). */
+export function autoFolderId() { return G.resolveAutoFolder(folders(), settings().autoFolder); }
+
+export async function foldersReady(ms = 4000) {
+  const c = foldersCol();
+  c.all();
+  const t0 = Date.now();
+  while (!c.loaded && Date.now() - t0 < ms) await sleep(100);
+  return c.loaded;
+}
+
+let ensuring = null;
+/** Erster Start: Standard-Kategorien + Einsortieren bestehender Alben (einmalig, Flag in settings.gallery). */
+export function ensureFolders() {
+  if (settings().foldersInit) return Promise.resolve(false);
+  if (!ensuring) ensuring = doEnsureFolders().finally(() => { ensuring = null; });
+  return ensuring;
+}
+async function doEnsureFolders() {
+  const okF = await foldersReady();
+  const okA = await albumsReady();
+  if (!okF || !okA || settings().foldersInit) return false; // Cloud noch nicht da → später nochmal
+  const plan = G.folderMigration({ initialized: false, folders: folders(), albums: albums(), places: store.get().places || [] });
+  if (!plan) return false;
+  const now = Date.now();
+  for (const f of plan.create) await soft(foldersCol().put({ ...f, created: now + f.order }));
+  for (const { id, folderId } of plan.assign) await patchAlbum(id, { folderId });
+  try { await saveSettings({ foldersInit: true }); } catch (e) { console.error("Galerie-Einstellung:", e); }
+  return true;
+}
+
+export async function createFolder({ name, emoji, color }) {
+  const id = "fo" + Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
+  const f = G.normFolder({ id, name, emoji, color, order: G.nextFolderOrder(folders()), created: Date.now() });
+  await soft(foldersCol().put(f));
+  return folderById(id) || f;
+}
+export async function patchFolder(id, partial) {
+  if (!id || id === G.OHNE_KAT) return;
+  await soft(foldersCol().patch(id, partial));
+}
+export async function moveFolder(id, dir) {
+  for (const { id: fid, order } of G.moveFolderPlan(folders(), id, dir)) await patchFolder(fid, { order });
+}
+/** Alben in eine Kategorie legen (folderId null/OHNE_KAT = Ohne Kategorie). */
+export async function setAlbumsFolder(ids, folderId) {
+  const f = folderId && folderId !== G.OHNE_KAT ? folderId : null;
+  for (const id of ids || []) await patchAlbum(id, { folderId: f });
+}
+/** Kategorie löschen – Fotos und Alben bleiben, die Alben wandern nach target (null = Ohne Kategorie). */
+export async function deleteFolder(id, { target = null } = {}) {
+  if (!id || id === G.OHNE_KAT) return 0;
+  const t = target && target !== G.OHNE_KAT && target !== id && folderById(target) ? target : null;
+  const plan = G.deleteFolderPlan(albums(), id, t);
+  for (const p of plan) await patchAlbum(p.id, { folderId: p.folderId });
+  // war es die Auto-Kategorie für neue Adress-Alben → dorthin, wohin die Alben gewandert sind (sonst keine)
+  if (autoFolderId() === id) { try { await saveSettings({ autoFolder: t || "" }); } catch (e) { console.error(e); } }
+  await soft(foldersCol().remove(id));
+  return plan.length;
 }
 
 /* ---------- Position (frisch < 60 s wiederverwenden, sonst ≈ 8 s warten) ---------- */
@@ -62,8 +137,15 @@ export function currentPosition({ timeout = 8000 } = {}) {
 
 /* ---------- Alben anlegen/ändern ---------- */
 
-export async function createAlbum(data) {
+export async function createAlbum(data, { place = null } = {}) {
   const id = data.id || "al" + Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
+  data = { ...data };
+  if (data.folderId === undefined && (data.kind === "address" || data.kind === "place")) {
+    try { await ensureFolders(); } catch (e) { console.warn("Kategorien:", e); }
+    const fid = G.folderForNewAlbum(data, { folders: folders(), autoFolder: settings().autoFolder, place });
+    if (fid) data.folderId = fid;
+  }
+  if (!data.folderId || data.folderId === G.OHNE_KAT) delete data.folderId;
   const a = G.normAlbum({ radius: settings().radius, ...data, id, created: Date.now() });
   const clean = {};
   for (const [k, v] of Object.entries(a)) if (v !== undefined) clean[k] = v;
@@ -85,7 +167,7 @@ export async function placeAlbum(place) {
     kind: "place", placeId: pid, name: place.name || place.place || "Ort",
     lat: G.hasPos(place) ? place.lat : null, lng: G.hasPos(place) ? place.lng : null,
     radius: G.cleanRadius(place.radius, G.PLACE_RADIUS), addr: place.addr || "",
-  });
+  }, { place });
 }
 
 /* ---------- Automatisch einsortieren ---------- */

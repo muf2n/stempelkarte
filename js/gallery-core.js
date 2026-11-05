@@ -39,6 +39,7 @@ export function normAlbum(a) {
   out.radius = cleanRadius(a.radius);
   out.addr = String(a.addr || "");
   out.placeId = a.placeId ? String(a.placeId) : null;
+  out.folderId = a.folderId ? String(a.folderId) : null;
   out.cover = a.cover ? String(a.cover) : null;
   out.emoji = typeof a.emoji === "string" ? a.emoji.slice(0, 8) : "";
   out.created = Number(a.created) || 0;
@@ -273,11 +274,15 @@ export function fold(s) {
 }
 
 /**
- * Filtern: f = { albumId?, from?: "YYYY-MM-DD", to?: "YYYY-MM-DD", q? }.
+ * Filtern: f = { folderId?, albumId?, from?: "YYYY-MM-DD", to?: "YYYY-MM-DD", q? }.
  * Suche über Notiz, Adresse, Ort und Album-Namen; alle Wörter müssen vorkommen.
  */
-export function filterItems(items, f = {}, albumsById = new Map()) {
+export function filterItems(items, f = {}, albumsById = new Map(), folderIds = null) {
   let list = (items || []).slice();
+  if (f.folderId) {
+    const als = albumsById.values ? [...albumsById.values()] : Object.values(albumsById);
+    list = itemsOfFolder(list, f.folderId, als, folderIds || new Set());
+  }
   if (f.albumId) list = itemsOfAlbum(list, f.albumId, albumsById);
   if (f.from) list = list.filter((it) => it.dayKey >= f.from);
   if (f.to) list = list.filter((it) => it.dayKey <= f.to);
@@ -461,4 +466,167 @@ export function albumMapsUrl(a, place) {
   if (src) return `https://www.google.com/maps/search/?api=1&query=${src.lat},${src.lng}`;
   const q = (a && (a.addr || a.name)) || "";
   return q ? `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(q)}` : null;
+}
+
+/* ---------- Hauptkategorien (Update 9, Agent T) ----------
+ *   Sammlung a_photo_folders: { id, name, emoji, color, order, created }. Alben haben optional folderId.
+ *   Album ohne (gültige) Kategorie → virtuelle Kategorie „Ohne Kategorie“ (OHNE_KAT).
+ */
+
+export const OHNE_KAT = "__ohne_kat";
+export const BAU_ID = "f_bau";
+export const SCHULE_ID = "f_schule";
+export const PRIVAT_ID = "f_privat";
+export const FOLDER_COLORS = ["#d97706", "#2563eb", "#16a34a", "#dc2626", "#7c3aed", "#0d9488", "#db2777", "#475569"];
+export const FOLDER_EMOJIS = ["🏗️", "🏫", "🏠", "🔧", "🧰", "⚡", "🔌", "💡", "📦", "🚧", "🏢", "🏭", "🚗", "📚", "📝", "⭐", "❤️", "🎉", "🌳", "📷"];
+/** Feste IDs, damit zwei Geräte beim ersten Start nicht doppelt anlegen. */
+export const DEFAULT_FOLDERS = [
+  { id: BAU_ID, name: "Baustellen", emoji: "🏗️", color: "#d97706", order: 0 },
+  { id: SCHULE_ID, name: "Berufsschule", emoji: "🏫", color: "#2563eb", order: 1 },
+  { id: PRIVAT_ID, name: "Privat", emoji: "🏠", color: "#16a34a", order: 2 },
+];
+
+const HEX = /^#[0-9a-f]{6}$/i;
+
+/** Kategorie normalisieren (unbekannte Felder bleiben). */
+export function normFolder(f) {
+  if (!f || typeof f !== "object" || !f.id) return null;
+  return {
+    ...f,
+    id: String(f.id),
+    name: String(f.name || "").trim() || "Kategorie",
+    emoji: typeof f.emoji === "string" && f.emoji ? f.emoji.slice(0, 8) : "📁",
+    color: HEX.test(String(f.color || "")) ? String(f.color) : FOLDER_COLORS[7],
+    order: Number.isFinite(Number(f.order)) ? Number(f.order) : 0,
+    created: Number(f.created) || 0,
+  };
+}
+
+/** Nach order, dann Anlagezeit, dann Name. */
+export function sortFolders(list) {
+  return (list || []).filter(Boolean).slice().sort((a, b) =>
+    (a.order - b.order) || ((a.created || 0) - (b.created || 0)) || String(a.name).localeCompare(String(b.name), "de"));
+}
+
+/** Ist das ein Berufsschul-Name? („Landesberufsschule Graz“, „LBS Fürstenfeld“, „Schule“) */
+export function isSchoolName(s) {
+  const t = String(s || "");
+  return /schule/i.test(t) || /(^|[^a-z0-9äöüß])lbs($|[^a-z0-9äöüß])/i.test(t);
+}
+
+const byId = (folders, id) => (folders || []).find((f) => f && f.id === id) || null;
+/** Kategorie „Berufsschule“: feste ID, sonst eine mit „schule“ im Namen. */
+export function schoolFolder(folders) { return byId(folders, SCHULE_ID) || (folders || []).find((f) => f && /schule/i.test(f.name)) || null; }
+/** Kategorie „Baustellen“: feste ID, sonst eine mit „baustelle“ im Namen. */
+export function bauFolder(folders) { return byId(folders, BAU_ID) || (folders || []).find((f) => f && /baustelle/i.test(f.name)) || null; }
+
+/**
+ * Einstellung „Neue Adress-Alben automatisch in Kategorie …“ auflösen.
+ *   setting undefined/null → Standard „Baustellen“ (falls vorhanden); "" → keine; ID → diese, falls es sie gibt.
+ * → folderId | null
+ */
+export function resolveAutoFolder(folders, setting) {
+  if (setting === "" ) return null;
+  if (setting === undefined || setting === null) { const b = bauFolder(folders); return b ? b.id : null; }
+  return byId(folders, String(setting)) ? String(setting) : null;
+}
+
+/**
+ * Kategorie für ein neu angelegtes Album.
+ *   Eigene Alben → keine. Adress-/Ort-Alben: Berufsschule (Name/Ort enthält „schule“/„LBS“) → Berufsschul-Kategorie,
+ *   sonst die eingestellte Auto-Kategorie.
+ * opts = { folders, autoFolder (Einstellungswert), place? }
+ */
+export function folderForNewAlbum(album, { folders = [], autoFolder, place = null } = {}) {
+  if (!album || (album.kind !== "address" && album.kind !== "place")) return null;
+  if (album.kind === "place" && (isSchoolName(album.name) || (place && isSchoolName(place.name)))) {
+    const s = schoolFolder(folders);
+    if (s) return s.id;
+  }
+  return resolveAutoFolder(folders, autoFolder);
+}
+
+/**
+ * Erster Start der Hauptkategorien (nur einmal – danach Flag gesetzt, gelöschte Standard-Kategorien kommen nie wieder).
+ *   initialized → null (nichts tun)
+ *   keine Kategorien → Standard-Kategorien anlegen
+ *   bestehende Adress-/Ort-Alben ohne Kategorie → Baustellen (Berufsschul-Orte → Berufsschule)
+ * → { create: [folder…], assign: [{ id, folderId }] } | null
+ */
+export function folderMigration({ initialized = false, folders = [], albums = [], places = [] } = {}) {
+  if (initialized) return null;
+  const create = (folders || []).length ? [] : DEFAULT_FOLDERS.map((f) => ({ ...f }));
+  const all = [...(folders || []), ...create];
+  const ids = new Set(all.map((f) => f.id));
+  const bau = bauFolder(all), schule = schoolFolder(all);
+  const assign = [];
+  for (const a of albums || []) {
+    if (!a || (a.kind !== "address" && a.kind !== "place")) continue;
+    if (a.folderId && ids.has(a.folderId)) continue;
+    const pl = a.kind === "place" ? (places || []).find((p) => p && p.id === a.placeId) : null;
+    const school = a.kind === "place" && (isSchoolName(a.name) || (pl && isSchoolName(pl.name)));
+    const target = school && schule ? schule : bau;
+    if (target) assign.push({ id: a.id, folderId: target.id });
+  }
+  return { create, assign };
+}
+
+/** Gültige Kategorie eines Albums oder OHNE_KAT. folderIds = Set der vorhandenen Kategorie-IDs. */
+export function albumFolderId(album, folderIds) {
+  const f = album && album.folderId;
+  return f && folderIds && folderIds.has(f) ? f : OHNE_KAT;
+}
+
+/** Alben einer Kategorie (OHNE_KAT = ohne gültige Kategorie). */
+export function albumsInFolder(albums, folderId, folderIds) {
+  return (albums || []).filter((a) => a && albumFolderId(a, folderIds) === folderId);
+}
+
+/** Fotos einer Kategorie: in mindestens einem ihrer Alben. OHNE_KAT: in keinem Album mit Kategorie. */
+export function itemsOfFolder(items, folderId, albums, folderIds) {
+  if (folderId === OHNE_KAT) {
+    const withF = new Set((albums || []).filter((a) => albumFolderId(a, folderIds) !== OHNE_KAT).map((a) => a.id));
+    return (items || []).filter((it) => !cleanIds(it.albumIds).some((id) => withF.has(id)));
+  }
+  const ids = new Set(albumsInFolder(albums, folderId, folderIds).map((a) => a.id));
+  return (items || []).filter((it) => cleanIds(it.albumIds).some((id) => ids.has(id)));
+}
+
+/**
+ * Kategorie-Statistik: { albums, count (Fotos, jedes nur einmal), last (ts), covers: [item ≤ 4] }.
+ *   Mosaik: Titelbilder der zuletzt benutzten Alben, mit den neuesten anderen Fotos aufgefüllt.
+ */
+export function folderStats(items, folderId, albums, folderIds, albumsById) {
+  const als = albumsInFolder(albums, folderId, folderIds);
+  const list = itemsOfFolder(items, folderId, albums, folderIds);
+  const per = als.map((a) => albumStats(items, a, albumsById)).filter((s) => s.count).sort((x, y) => y.last - x.last);
+  const covers = [];
+  for (const s of per) { if (covers.length >= 4) break; if (s.coverItem && !covers.includes(s.coverItem)) covers.push(s.coverItem); }
+  if (covers.length < 4) {
+    for (const it of list.slice().sort((a, b) => b.ts - a.ts)) { if (covers.length >= 4) break; if (!covers.includes(it)) covers.push(it); }
+  }
+  let last = 0;
+  for (const it of list) if (it.ts > last) last = it.ts;
+  return { albums: als.length, count: list.length, last, covers };
+}
+
+/** Reihenfolge ändern: dir = -1 (hoch) / +1 (runter) → [{ id, order }] (nur geänderte). */
+export function moveFolderPlan(folders, id, dir) {
+  const list = sortFolders(folders);
+  const i = list.findIndex((f) => f.id === id);
+  const j = i + (dir < 0 ? -1 : 1);
+  if (i < 0 || j < 0 || j >= list.length) return [];
+  [list[i], list[j]] = [list[j], list[i]];
+  return list.map((f, k) => ({ id: f.id, order: k, was: f.order })).filter((x) => x.was !== x.order).map(({ id: fid, order }) => ({ id: fid, order }));
+}
+
+/** Neue order ans Ende. */
+export function nextFolderOrder(folders) {
+  return (folders || []).reduce((m, f) => Math.max(m, Number(f && f.order) || 0), -1) + 1;
+}
+
+/** Kategorie löschen: Alben wandern nach target (null = Ohne Kategorie). → [{ id, folderId }] */
+export function deleteFolderPlan(albums, folderId, target = null) {
+  const t = target && target !== folderId && target !== OHNE_KAT ? target : null;
+  return (albums || []).filter((a) => a && a.folderId === folderId).map((a) => ({ id: a.id, folderId: t }));
 }

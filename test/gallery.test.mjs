@@ -179,3 +179,112 @@ test("normAlbum + Maps-Link", () => {
   assert.equal(G.albumMapsUrl(a), "https://www.google.com/maps/search/?api=1&query=47.07,15.43");
   assert.match(G.albumMapsUrl({ name: "Hauptplatz 1, Graz" }), /query=Hauptplatz%201%2C%20Graz$/);
 });
+
+/* ---------- Hauptkategorien (Agent T) ---------- */
+
+const FOLDERS = G.DEFAULT_FOLDERS.map((f) => G.normFolder(f));
+
+test("Kategorien: normFolder + Sortierung", () => {
+  assert.equal(G.normFolder(null), null);
+  const f = G.normFolder({ id: "x", name: "  ", color: "rot" });
+  assert.equal(f.name, "Kategorie");
+  assert.equal(f.emoji, "📁");
+  assert.match(f.color, /^#[0-9a-f]{6}$/i);
+  const s = G.sortFolders([{ id: "b", name: "B", order: 2 }, { id: "a", name: "A", order: 0 }, { id: "c", name: "C", order: 2, created: -1 }]);
+  assert.deepEqual(s.map((x) => x.id), ["a", "c", "b"]);
+});
+
+test("Kategorien: Berufsschul-Erkennung", () => {
+  for (const n of ["Landesberufsschule Graz 4", "LBS Fürstenfeld", "Berufsschule", "lbs graz"]) assert.ok(G.isSchoolName(n), n);
+  for (const n of ["Baustelle Liebenau", "Albstraße 3", "Elbsee", "Firma Elektro Maier"]) assert.ok(!G.isSchoolName(n), n);
+});
+
+test("Kategorien: Auto-Kategorie für neue Alben", () => {
+  assert.equal(G.resolveAutoFolder(FOLDERS, undefined), G.BAU_ID, "Standard = Baustellen");
+  assert.equal(G.resolveAutoFolder(FOLDERS, ""), null, "„keine“");
+  assert.equal(G.resolveAutoFolder(FOLDERS, G.PRIVAT_ID), G.PRIVAT_ID);
+  assert.equal(G.resolveAutoFolder(FOLDERS, "weg"), null, "gelöschte Kategorie → keine");
+  assert.equal(G.resolveAutoFolder([], undefined), null, "ohne Baustellen → keine");
+  assert.equal(G.resolveAutoFolder([{ id: "u1", name: "Meine Baustellen" }], undefined), "u1", "Baustellen per Name");
+
+  const addr = { kind: "address", name: "Hauptplatz 1, Graz" };
+  assert.equal(G.folderForNewAlbum(addr, { folders: FOLDERS }), G.BAU_ID);
+  assert.equal(G.folderForNewAlbum(addr, { folders: FOLDERS, autoFolder: G.PRIVAT_ID }), G.PRIVAT_ID);
+  assert.equal(G.folderForNewAlbum({ kind: "custom", name: "Verteiler" }, { folders: FOLDERS }), null, "eigene Alben nie automatisch");
+  assert.equal(G.folderForNewAlbum({ kind: "place", name: "LBS Graz" }, { folders: FOLDERS }), G.SCHULE_ID, "Berufsschul-Ort → Berufsschule");
+  assert.equal(G.folderForNewAlbum({ kind: "place", name: "Schulort" }, { folders: FOLDERS, place: { name: "Landesberufsschule" } }), G.SCHULE_ID);
+  assert.equal(G.folderForNewAlbum({ kind: "place", name: "LBS Graz" }, { folders: [FOLDERS[0]] }), G.BAU_ID, "ohne Berufsschul-Kategorie → Auto");
+  assert.equal(G.folderForNewAlbum({ kind: "place", name: "Firma" }, { folders: FOLDERS, autoFolder: "" }), null);
+});
+
+test("Kategorien: erster Start (Migration) nur einmal", () => {
+  const albums = [
+    { id: "a1", kind: "address", name: "Hauptplatz 1, Graz" },
+    { id: "a2", kind: "place", placeId: "pS", name: "Schule" },
+    { id: "a3", kind: "place", placeId: "pF", name: "Firma" },
+    { id: "a4", kind: "custom", name: "Verteiler" },
+    { id: "a5", kind: "address", name: "Schon sortiert", folderId: G.PRIVAT_ID },
+  ];
+  const places = [{ id: "pS", name: "Landesberufsschule Graz" }, { id: "pF", name: "Firma Elektro Maier" }];
+  const plan = G.folderMigration({ folders: [], albums, places });
+  assert.deepEqual(plan.create.map((f) => f.id), [G.BAU_ID, G.SCHULE_ID, G.PRIVAT_ID], "Standard-Kategorien");
+  assert.deepEqual(plan.create.map((f) => f.emoji + " " + f.name), ["🏗️ Baustellen", "🏫 Berufsschule", "🏠 Privat"]);
+  assert.deepEqual(plan.assign, [{ id: "a1", folderId: G.BAU_ID }, { id: "a2", folderId: G.SCHULE_ID }, { id: "a3", folderId: G.BAU_ID }],
+    "Adress-/Ort-Alben → Baustellen, Berufsschul-Ort → Berufsschule, eigene + schon sortierte bleiben");
+  // Flag gesetzt → nie wieder (gelöschte Standard-Kategorien kommen nicht zurück)
+  assert.equal(G.folderMigration({ initialized: true, folders: [], albums, places }), null);
+  // eigene Kategorien schon da → keine Standard-Kategorien anlegen, ohne „Baustellen“ nichts zuordnen
+  const own = G.folderMigration({ folders: [{ id: "w", name: "Werkzeug & Material" }], albums, places });
+  assert.equal(own.create.length, 0);
+  assert.equal(own.assign.length, 0);
+  // eigene „Baustellen“-Kategorie wird genutzt
+  const own2 = G.folderMigration({ folders: [{ id: "b", name: "Baustellen 2026" }], albums: albums.slice(0, 1) });
+  assert.deepEqual(own2.assign, [{ id: "a1", folderId: "b" }]);
+  // ungültige folderId (Kategorie gelöscht) zählt als ohne
+  assert.deepEqual(G.folderMigration({ folders: FOLDERS, albums: [{ id: "z", kind: "address", folderId: "weg" }] }).assign, [{ id: "z", folderId: G.BAU_ID }]);
+});
+
+test("Kategorien: Zuordnung, Statistik, Filter", () => {
+  const ids = new Set(FOLDERS.map((f) => f.id));
+  const albums = [
+    { id: "a1", kind: "address", folderId: G.BAU_ID, name: "A1" },
+    { id: "a2", kind: "address", folderId: G.BAU_ID, name: "A2" },
+    { id: "a3", kind: "custom", folderId: G.PRIVAT_ID, name: "A3" },
+    { id: "a4", kind: "custom", name: "A4" },
+    { id: "a5", kind: "custom", folderId: "geloescht", name: "A5" },
+  ].map(G.normAlbum);
+  const m = new Map(albums.map((a) => [a.id, a]));
+  const items = [
+    { id: "p1", ts: 1, albumIds: ["a1"] }, { id: "p2", ts: 5, albumIds: ["a1", "a2"] }, { id: "p3", ts: 3, albumIds: ["a2"] },
+    { id: "p4", ts: 4, albumIds: ["a3"] }, { id: "p5", ts: 2, albumIds: ["a4"] }, { id: "p6", ts: 6, albumIds: [] },
+    { id: "p7", ts: 7, albumIds: ["a5"] },
+  ];
+  assert.equal(G.albumFolderId(albums[0], ids), G.BAU_ID);
+  assert.equal(G.albumFolderId(albums[4], ids), G.OHNE_KAT, "gelöschte Kategorie → Ohne Kategorie");
+  assert.deepEqual(G.albumsInFolder(albums, G.OHNE_KAT, ids).map((a) => a.id), ["a4", "a5"]);
+  const st = G.folderStats(items, G.BAU_ID, albums, ids, m);
+  assert.equal(st.albums, 2);
+  assert.equal(st.count, 3, "p2 in zwei Alben zählt einmal");
+  assert.equal(st.last, 5);
+  assert.deepEqual(st.covers.map((x) => x.id), ["p2", "p3", "p1"], "Mosaik: Album-Titelbilder, dann neueste");
+  assert.equal(G.folderStats(items, G.SCHULE_ID, albums, ids, m).count, 0);
+  assert.deepEqual(G.filterItems(items, { folderId: G.BAU_ID }, m, ids).map((x) => x.id).sort(), ["p1", "p2", "p3"]);
+  assert.deepEqual(G.filterItems(items, { folderId: G.OHNE_KAT }, m, ids).map((x) => x.id).sort(), ["p5", "p6", "p7"]);
+  assert.deepEqual(G.filterItems(items, { folderId: G.BAU_ID, albumId: "a2" }, m, ids).map((x) => x.id).sort(), ["p2", "p3"]);
+});
+
+test("Kategorien: Reihenfolge + Löschen", () => {
+  const fs = [{ id: "x", order: 0 }, { id: "y", order: 1 }, { id: "z", order: 2 }];
+  assert.deepEqual(G.moveFolderPlan(fs, "z", -1), [{ id: "z", order: 1 }, { id: "y", order: 2 }]);
+  assert.deepEqual(G.moveFolderPlan(fs, "x", -1), [], "ganz oben bleibt");
+  assert.deepEqual(G.moveFolderPlan(fs, "z", 1), [], "ganz unten bleibt");
+  // gleiche order (z. B. alte Daten) → sauber durchnummeriert
+  const same = [{ id: "x", order: 0, created: 1 }, { id: "y", order: 0, created: 2 }];
+  assert.deepEqual(G.moveFolderPlan(same, "y", -1), [{ id: "x", order: 1 }], "y behält 0, x wird 1");
+  assert.equal(G.nextFolderOrder(fs), 3);
+  assert.equal(G.nextFolderOrder([]), 0);
+  const albums = [{ id: "a1", folderId: "x" }, { id: "a2", folderId: "y" }, { id: "a3", folderId: "x" }];
+  assert.deepEqual(G.deleteFolderPlan(albums, "x"), [{ id: "a1", folderId: null }, { id: "a3", folderId: null }], "→ Ohne Kategorie");
+  assert.deepEqual(G.deleteFolderPlan(albums, "x", "y"), [{ id: "a1", folderId: "y" }, { id: "a3", folderId: "y" }], "→ andere Kategorie");
+  assert.deepEqual(G.deleteFolderPlan(albums, "x", "x"), [{ id: "a1", folderId: null }, { id: "a3", folderId: null }], "Ziel = sich selbst → Ohne");
+});
