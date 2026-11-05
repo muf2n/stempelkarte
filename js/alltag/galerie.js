@@ -549,7 +549,8 @@ function renderAlbum() {
   pg.innerHTML =
     `<div class="gl-albar">` +
       `<button type="button" class="gl-back" data-g="back" aria-label="Zurück zu ${esc(fromF ? `„${fromF.name}“` : "den Alben")}">${icon("chevron-left", 20)}<span>${esc(fromF ? fromF.name : "Alben")}</span></button>` +
-      (virtual ? "" : `<button type="button" class="btn sm ghost gl-more-btn" data-g="amenu" aria-label="Album bearbeiten">${icon("pencil", 18)}<span>Bearbeiten</span></button>`) +
+      (virtual ? "" : `<span class="gl-albar-r"><button type="button" class="btn sm ghost gl-more-btn" data-g="amenu" aria-label="Album bearbeiten">${icon("pencil", 18)}<span>Bearbeiten</span></button>` +
+        `<button type="button" class="btn sm ghost gl-del-btn" data-g="adel" aria-label="Album löschen">${icon("trash", 18)}</button></span>`) +
     `</div>` +
     `<div class="gl-ahead">` +
       `<span class="gl-ahead-ic">${albumGlyph(a, 26)}</span>` +
@@ -713,6 +714,7 @@ function wireGrid(root) {
       case "aselall": { const ids = selectableAlbumIds(); const all = ids.every((id) => S.asel.has(id)); S.asel = new Set(all ? [] : ids); render(true); break; }
       case "fphotos": { const fid = S.folderId; S.f = { folderId: fid, albumId: "", from: "", to: "", q: "" }; S.tab = "alle"; lsSet(TAB_KEY, "alle"); S.pushed = false; location.hash = "alltag/galerie"; break; }
       case "afolder": { const a = curAlbum(); if (a) changeAlbumFolder([a.id]); break; }
+      case "adel": { const a = curAlbum(); if (a && a.kind !== "virtual") deleteAlbumSheet(a); break; }
       case "pull": { const f = A.folderById(S.folderId); if (f) pullSheet(f); break; }
       case "select": S.selecting = true; S.sel.clear(); render(true); break;
       case "selall": { const ids = visibleList().map((x) => x.id); const all = ids.every((id) => S.sel.has(id)); S.sel = new Set(all ? [] : ids); render(true); break; }
@@ -772,6 +774,7 @@ function drawSelBar() {
       `<div class="gl-sel-acts">` +
         `<button type="button" data-s="aall">${icon("check2", 20)}<span>Alle</span></button>` +
         `<button type="button" class="is-main" data-s="afolder"${n ? "" : " disabled"}>${icon("layers", 20)}<span>In Kategorie verschieben</span></button>` +
+        `<button type="button" class="is-danger" data-s="adel"${n ? "" : " disabled"}>${icon("trash", 20)}<span>Löschen</span></button>` +
       `</div>`;
     return;
   }
@@ -805,6 +808,7 @@ async function onSelBar(ev) {
     if (b.dataset.s === "done") { clearASel(); render(true); }
     else if (b.dataset.s === "aall") { const all = selectableAlbumIds(); const every = all.every((id) => S.asel.has(id)); S.asel = new Set(every ? [] : all); render(true); }
     else if (b.dataset.s === "afolder") { const aids = [...S.asel]; if (await changeAlbumFolder(aids)) { clearASel(); render(true); } }
+    else if (b.dataset.s === "adel") { const list = [...S.asel].map((id) => albumsAll().find((x) => x.id === id)).filter(Boolean); if (list.length) deleteAlbumSheet(list, () => { clearASel(); render(true); }); }
     return;
   }
   switch (b.dataset.s) {
@@ -1156,23 +1160,26 @@ function mergeSheet(a) {
   });
 }
 
-function deleteAlbumSheet(a) {
+function deleteAlbumSheet(arg, after) {
   const ctx = S.ctx;
-  const n = G.itemsOfAlbum(S.items, a.id, amap()).length;
+  const albums = Array.isArray(arg) ? arg : [arg];
+  const a = albums[0];
+  const multi = albums.length > 1;
+  const n = new Set(albums.flatMap((x) => G.itemsOfAlbum(S.items, x.id, amap()).map((i) => i.id))).size;
   sheet({
-    title: "Album löschen?",
+    title: multi ? `${albums.length} Alben löschen?` : "Album löschen?",
     bodyHTML:
-      `<div class="gl-sheet"><p><b>„${esc(a.name)}“</b> · ${esc(nFotos(n))}</p>` +
+      `<div class="gl-sheet"><p>${multi ? albums.slice(0, 5).map((x) => `<b>„${esc(x.name)}“</b>`).join(", ") + (albums.length > 5 ? " …" : "") : `<b>„${esc(a.name)}“</b>`} · ${esc(nFotos(n))}</p>` +
       `<div class="gl-radio" role="radiogroup" aria-label="Was passiert mit den Fotos?">` +
         `<label><input type="radio" name="gl-del" value="keep" checked><span><b>Fotos behalten</b><small>Sie bleiben in „Alle Fotos“ (und anderen Alben).</small></span></label>` +
         `<label class="is-danger"><input type="radio" name="gl-del" value="all"${n ? "" : " disabled"}><span><b>Fotos auch löschen</b><small>${esc(nFotos(n))} endgültig löschen – auch aus „Heute“ und dem Ort.</small></span></label>` +
       `</div>` +
-      `<div class="row"><button type="button" class="btn ghost" data-c="no">Abbrechen</button><button type="button" class="btn danger" data-c="ok">Album löschen</button></div></div>`,
+      `<div class="row"><button type="button" class="btn ghost" data-c="no">Abbrechen</button><button type="button" class="btn danger" data-c="ok">${multi ? `${albums.length} Alben löschen` : "Album löschen"}</button></div></div>`,
     onMount(el, close) {
       el.querySelector('[data-c="no"]').addEventListener("click", close);
       const ok = el.querySelector('[data-c="ok"]');
       const mode = () => (el.querySelector('input[name="gl-del"]:checked') || {}).value;
-      el.addEventListener("change", () => { ok.textContent = mode() === "all" ? `Album + ${nFotos(n)} löschen` : "Album löschen"; });
+      el.addEventListener("change", () => { ok.textContent = mode() === "all" ? `${multi ? albums.length + " Alben" : "Album"} + ${nFotos(n)} löschen` : (multi ? `${albums.length} Alben löschen` : "Album löschen"); });
       // immer bestätigen: zweiter Tipp
       let armed = false, t = 0;
       ok.addEventListener("click", async () => {
@@ -1180,10 +1187,12 @@ function deleteAlbumSheet(a) {
         clearTimeout(t);
         const withPhotos = mode() === "all";
         ui.setBusy(ok, true, "Löscht …");
-        await A.deleteAlbum(a.id, { withPhotos });
+        for (const x of albums) { try { await A.deleteAlbum(x.id, { withPhotos }); } catch (err) { console.error(err); } }
         close();
-        ctx.ui.toast(withPhotos ? `Album und ${nFotos(n)} gelöscht.` : "Album gelöscht – die Fotos sind noch in „Alle Fotos“.", 3200);
-        if (S && S.albumId === a.id) closeAlbum();
+        const what = multi ? `${albums.length} Alben` : "Album";
+        ctx.ui.toast(withPhotos ? `${what} und ${nFotos(n)} gelöscht.` : `${what} gelöscht – die Fotos sind noch in „Alle Fotos“.`, 3200);
+        if (S && albums.some((x) => x.id === S.albumId)) closeAlbum();
+        if (typeof after === "function") after();
       });
     },
   });
