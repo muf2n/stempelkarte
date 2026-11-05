@@ -68,6 +68,7 @@ export function mount(el, ctx) {
       if (act === "prev") { shiftMonth(-1); return; }
       if (act === "next") { shiftMonth(1); return; }
       if (act === "all-days") { selKey = null; render(); return; }
+      if (act === "sch-hint-x") { lsSet(SCH_HINT_KEY, "1"); actEl.closest(".ek-schhint")?.remove(); return; }
       if (act === "today") {
         const n = new Date();
         curY = n.getFullYear(); curM = n.getMonth(); selKey = null;
@@ -82,6 +83,13 @@ export function mount(el, ctx) {
       if (entry) C.openEntryForm(entry);
     }
   });
+
+  // aufgeklappte Schulwochen merken (toggle blubbert nicht → capture)
+  el.addEventListener("toggle", (ev) => {
+    const d = ev.target;
+    if (!d || !d.matches || !d.matches("details.ek-schweek")) return;
+    if (d.open) openWeeks.add(d.dataset.wk); else openWeeks.delete(d.dataset.wk);
+  }, true);
 
   update(C.store.get());
 }
@@ -377,21 +385,7 @@ function render() {
     }
   }
   const keyTs = (k) => { const d = parseDate(k); return new Date(d.y, d.mo, d.d).getTime(); };
-  const schoolRow = (k, name) => {
-    const cm = util.schoolCreditMin ? util.schoolCreditMin(keyTs(k), snap.settings) : 0;
-    return `
-        <div class="entry ek-holrow ek-schoolrow" role="note">
-          <span class="t"><span class="ek-holico" aria-hidden="true">${icon("building", 18)}</span>${esc(name)}</span>
-          <span class="d">${cm > 0 ? `${esc(hm(cm))} h` : "Schule"}</span>
-          <span class="p">${esc(name === "Berufsschule" ? "Berufsschule · zählt als Arbeitszeit" : `${name} · Berufsschule · zählt als Arbeitszeit`)}</span>
-        </div>`;
-  };
-  const schoolDayHTML = (k, name) => `
-      <div class="day ek-schoolday">
-        <div class="day-h"><span>${esc(fmtDate(keyTs(k)))} <span class="ek-sch">${esc(name)}</span></span></div>
-        ${schoolRow(k, name)}
-      </div>`;
-  const specialDayHTML = (k) => (monthHols.has(k) ? holDayHTML(k, monthHols.get(k)) : schoolDayHTML(k, monthSchool.get(k)));
+  const SD = schoolDayKit(util, snap.settings, keyTs, creditMin);
   const holRow = (name) => `
         <div class="entry ek-holrow" role="note">
           <span class="t"><span class="ek-holico" aria-hidden="true">${icon("calendar", 18)}</span>${esc(name)}</span>
@@ -418,8 +412,11 @@ function render() {
       listEl.innerHTML = holDayHTML(selKey, monthHols.get(selKey)) +
         `<p class="note ek-holnote">${esc(monthHols.get(selKey))} – arbeitsfrei, zählt nicht als Fehlstunden. Du musst nichts eintragen.</p>${resetBtn}`;
     } else if (selKey && monthSchool.has(selKey)) {
-      listEl.innerHTML = schoolDayHTML(selKey, monthSchool.get(selKey)) +
-        `<p class="note ek-holnote">${esc(monthSchool.get(selKey))} – zählt als Arbeitszeit, das Tagessoll ist damit erfüllt. Du musst nichts eintragen.</p>${resetBtn}`;
+      sumEl.textContent = "";
+      listEl.innerHTML = SD.dayHTML(selKey, monthSchool.get(selKey), [], "", true) +
+        `<p class="note ek-holnote">${SD.creditOf(selKey) > 0 ? "Berufsschule zählt als Arbeitszeit, das Tagessoll ist damit erfüllt. Du musst nichts eintragen."
+          : "Berufsschule an einem Tag ohne Soll – es wird nichts gutgeschrieben. Du musst nichts eintragen."}</p>${resetBtn}`;
+      return;
     } else if (selKey) {
       const d = parseDate(selKey);
       const ts = d ? new Date(d.y, d.mo, d.d).getTime() : Date.now();
@@ -428,7 +425,8 @@ function render() {
         ${hol ? `<p class="note">Feiertag: ${esc(hol)}</p>` : ""}
         <p class="note">Tippe auf „+ Nachtragen“, um für diesen Tag etwas einzutragen.</p></div>${resetBtn}`;
     } else {
-      const holsHTML = [...new Set([...monthHols.keys(), ...monthSchool.keys()])].sort().reverse().map(specialDayHTML).join("");
+      const holsHTML = SD.assemble([...new Set([...monthHols.keys(), ...monthSchool.keys()])].sort().reverse()
+        .map((k) => (monthHols.has(k) ? { k, html: holDayHTML(k, monthHols.get(k)) } : SD.day(k, monthSchool.get(k), [], ""))), false);
       const sp = [];
       if (monthHols.size) sp.push(`${monthHols.size} ${monthHols.size === 1 ? "Feiertag" : "Feiertage"}`);
       if (monthSchool.size) sp.push(`${monthSchool.size} ${monthSchool.size === 1 ? "Schultag" : "Schultage"}`);
@@ -457,15 +455,21 @@ function render() {
   const keys = [...groups.keys()].sort().reverse();
 
   let total = 0;
+  let planned = 0;
   let workDays = 0;
   const absCount = new Map();
-  const html = keys.map((k) => {
+  const dayObjs = keys.map((k) => {
     const items = groups.get(k).sort((a, b) => a.start - b.start);
-    if (!items.length) return specialDayHTML(k);
-    const daySum = items.reduce((s, e) => s + creditMin(e), 0);
-    total += daySum;
+    const sch = monthSchool.get(k) || null;
+    if (!items.length && !sch) return { k, html: holDayHTML(k, monthHols.get(k)) };
+    const merged = sch ? SD.mergeable(items) : null; // manueller „Schule“-Eintrag → in die Schulkarte
+    const rowItems = merged ? items.filter((e) => e !== merged) : items;
+    const daySum = items.reduce((s, e) => s + creditMin(e), 0) + (sch ? SD.creditOf(k) : 0);
+    const planSch = sch && k > dayKey(Date.now()) ? SD.creditOf(k) : 0; // geplante Schulzeit nicht in „Gesamt“
+    total += daySum - planSch;
+    planned += planSch;
     if (items.some((e) => isWork(e) && netMin(e) > 0)) workDays++;
-    const rows = items.map((e) => {
+    const rows = rowItems.map((e) => {
       if (!isWork(e)) {
         absCount.set(e.kind, (absCount.get(e.kind) || 0) + 1);
         const p = [`<span class="tag ek-tag ek-${esc(e.kind)}">${esc(kindLabel(e.kind))}</span>`];
@@ -500,24 +504,24 @@ function render() {
         ${segmentsHTML(e, util, geo)}
         ${links.length ? `<div class="links">${links.join(" · ")}</div>` : ""}`;
     }).join("");
+    if (sch) return SD.day(k, sch, items, rows, dayExtraHTML(k, items, tgMap, snap.settings, esc), !!selKey);
     const hol = holidaysOn ? holidayName(items[0].start) : null;
-    const sch = monthSchool.get(k) || null;
-    return `
-      <div class="day${hol ? " ek-holday" : ""}${sch ? " ek-schoolday" : ""}">
-        <div class="day-h"><span>${esc(fmtDate(items[0].start))}${hol ? ` <span class="ek-hol">${esc(hol)}</span>` : ""}${sch ? ` <span class="ek-sch">${esc(sch)}</span>` : ""}</span><span class="sum">${esc(hm(daySum))} h</span></div>
+    return { k, html: `
+      <div class="day${hol ? " ek-holday" : ""}">
+        <div class="day-h"><span>${esc(fmtDate(items[0].start))}${hol ? ` <span class="ek-hol">${esc(hol)}</span>` : ""}</span><span class="sum">${esc(hm(daySum))} h</span></div>
         ${dayExtraHTML(k, items, tgMap, snap.settings, esc)}
         ${hol ? holRow(hol) : ""}
-        ${sch ? schoolRow(k, sch) : ""}
         ${rows}
-      </div>`;
-  }).join("");
+      </div>` };
+  });
+  const html = SD.assemble(dayObjs, !!selKey);
 
   if (selKey) {
     sumEl.textContent = "";
     listEl.innerHTML = html + resetBtn;
     return;
   }
-  const parts = [`Gesamt ${hm(total)} h`, `${workDays} ${workDays === 1 ? "Arbeitstag" : "Arbeitstage"}`];
+  const parts = [`Gesamt ${hm(total)} h${planned > 0 ? ` (+${hm(planned)} h Schule geplant)` : ""}`, `${workDays} ${workDays === 1 ? "Arbeitstag" : "Arbeitstage"}`];
   for (const kind of ["urlaub", "krank", "feiertag", "zeitausgleich", "schule"]) {
     const n = absCount.get(kind);
     if (n) parts.push(`${n}× ${kindLabel(kind)}`);
@@ -526,6 +530,143 @@ function render() {
   if (monthSchool.size) parts.push(`${monthSchool.size} ${monthSchool.size === 1 ? "Schultag" : "Schultage"} (automatisch)`);
   sumEl.textContent = parts.join(" · ");
   listEl.innerHTML = html;
+}
+
+// ---------- Berufsschule in der Liste (Update 9, Agent R) ----------
+// Eine Karte je Schultag (🎓 + Gutschrift). Ein manueller „Schule“-Eintrag am selben Tag wird in die Karte
+// übernommen (Notiz als kleine Zeile, antippbar zum Bearbeiten). Tageskopf = Schul-Gutschrift + Einträge,
+// genauso wie im Überstundenkonto (Schultag: Soll 0, eigene Einträge zählen zusätzlich).
+// Zukünftige Schultage: gestrichelt „geplant“; reine Schulwochen in der Zukunft als eine aufklappbare Zeile.
+
+const SCH_HINT_KEY = "stempelkarte.hint.schoolNoSoll";
+const WD_LONG = ["Sonntag", "Montag", "Dienstag", "Mittwoch", "Donnerstag", "Freitag", "Samstag"];
+const openWeeks = new Set(); // aufgeklappte Schulwochen (Wochen-Schlüssel), überlebt Neuzeichnen
+
+function lsSet(key, v) {
+  try { localStorage.setItem(key, v); } catch { /* egal */ }
+}
+
+// „Berufschule“, „Blockschule“, „Schule“ … = allgemeine Bezeichnung (kein eigener Chip)
+function genericSchoolLabel(name) {
+  const n = String(name || "").toLowerCase().replace(/[^a-zäöüß]/g, "");
+  if (!n) return true;
+  if (/^(berufs?schule|blockschule|schule|bs|lbs|berufsschulblock|schulblock)$/.test(n)) return true;
+  // Tippfehler-tolerant: Abstand ≤ 2 zu „berufsschule“/„blockschule“
+  return ["berufsschule", "blockschule"].some((w) => editDist(n, w) <= 2);
+}
+function editDist(a, b) {
+  const m = a.length, n = b.length;
+  if (Math.abs(m - n) > 2) return 3;
+  let prev = Array.from({ length: n + 1 }, (_, j) => j);
+  for (let i = 1; i <= m; i++) {
+    const cur = [i];
+    for (let j = 1; j <= n; j++) cur[j] = Math.min(prev[j] + 1, cur[j - 1] + 1, prev[j - 1] + (a[i - 1] === b[j - 1] ? 0 : 1));
+    prev = cur;
+  }
+  return prev[n];
+}
+
+function schoolDayKit(util, settings, keyTs, creditMin) {
+  const { esc, hm, fmtDate, dayKey, startOfWeek, pad, WD } = util;
+  const todayKey = dayKey(Date.now());
+  let hintDone = lsGet(SCH_HINT_KEY) === "1";
+  const creditOf = (k) => (util.schoolCreditMin ? util.schoolCreditMin(keyTs(k), settings) : 0);
+  const short = (k) => { const d = new Date(keyTs(k)); return `${WD[d.getDay()]} ${pad(d.getDate())}.${pad(d.getMonth() + 1)}.`; };
+  // Titel: eigene Bezeichnung so, wie eingetragen, wenn sie nur „Berufsschule“ meint; sonst „Berufsschule“ + Chip
+  const titleOf = (name) => (genericSchoolLabel(name) ? String(name || "").trim() || "Berufsschule" : "Berufsschule");
+  const chipOf = (name) => (genericSchoolLabel(name) ? "" : `<span class="ek-schchip">${esc(name)}</span>`);
+  const cap = (name) => `<span class="ek-schico" aria-hidden="true">🎓</span><span class="ek-schname">${esc(titleOf(name))}</span>${chipOf(name)}`;
+
+  const PLAN = `<span class="ek-plan">geplant</span>`;
+  const mergeable = (items) => items.find((e) => e && e.kind === "schule") || null;
+
+  const card = (k, name, manual) => {
+    const cm = creditOf(k);
+    const extra = manual ? creditMin(manual) : 0;
+    const future = k > todayKey;
+    const sub = [];
+    if (cm <= 0) sub.push(`<span>kein Arbeitstag – keine Gutschrift</span>`);
+    if (manual && manual.note) sub.push(`<span class="ek-schnote">${icon("pencil", 14)}${esc(manual.note)}</span>`);
+    if (extra > 0) sub.push(`<span class="ek-schextra">+${esc(hm(extra))} h eigener Eintrag</span>`);
+    const tot = cm + extra;
+    const cls = `entry ek-schcard${future ? " plan" : ""}${tot <= 0 ? " zero" : ""}`;
+    const inner = `
+          <span class="t">${cap(name)}${future ? PLAN : ""}</span>
+          <span class="d">${tot > 0 ? `${esc(hm(tot))} h` : "–"}</span>
+          ${sub.length ? `<span class="p">${sub.join("")}</span>` : ""}`;
+    return manual
+      ? `<button type="button" class="${cls}" data-id="${esc(manual.id)}" data-day="${esc(k)}" aria-label="${esc(`${titleOf(name)} ${fmtDate(keyTs(k))} – eigenen Schuleintrag bearbeiten`)}">${inner}</button>`
+      : `<div class="${cls}" data-day="${esc(k)}" role="note">${inner}</div>`;
+  };
+
+  const hintHTML = (k) => {
+    const wd = WD_LONG[new Date(keyTs(k)).getDay()];
+    return `<div class="ek-schhint" role="note"><span>💡</span><p><b>${esc(wd)} ist bei dir kein Arbeitstag</b> – Schulzeit wird nicht gutgeschrieben (Einstellungen → Arbeitstage).</p>` +
+      `<button type="button" class="ek-schhint-x" data-act="sch-hint-x" aria-label="Hinweis ausblenden">✕</button></div>`;
+  };
+
+  /** Tag mit Schule → {k, html, school, onlySchool, future, total, zero, name}. */
+  const day = (k, name, items, rowsHTML, extraHTML = "", sel = false) => {
+    const manual = mergeable(items);
+    const cm = creditOf(k);
+    const total = cm + items.reduce((s, e) => s + creditMin(e), 0);
+    const future = k > todayKey;
+    const onlySchool = items.every((e) => e === manual);
+    const pill = total > 0
+      ? `<span class="sum${future ? " plan" : ""}">${esc(hm(total))} h</span>`
+      : `<span class="sum ek-schpill">Schule</span>`;
+    const html = `
+      <div class="day ek-schoolday${future ? " plan" : ""}" data-sday="${esc(k)}">
+        <div class="day-h"><span>${esc(fmtDate(keyTs(k)))}</span>${pill}</div>
+        ${extraHTML || ""}
+        ${card(k, name, manual)}
+        ${rowsHTML || ""}
+      </div>`;
+    return { k, html, school: true, onlySchool, future, total, zero: cm <= 0, name, sel };
+  };
+
+  /** Tage (absteigend) zusammensetzen: Hinweis einmal, reine Zukunfts-Schulwochen einklappen. */
+  const assemble = (days, sel) => {
+    const wk = (k) => dayKey(startOfWeek(keyTs(k)));
+    const out = [];
+    const hint = (grp) => {
+      if (hintDone) return "";
+      const z = grp.find((d) => d.school && d.zero);
+      if (!z) return "";
+      hintDone = true;
+      return hintHTML(z.k);
+    };
+    for (let i = 0; i < days.length;) {
+      const d = days[i];
+      if (!sel && d.school && d.onlySchool && d.future) {
+        let j = i + 1;
+        while (j < days.length && days[j].school && days[j].onlySchool && days[j].future && wk(days[j].k) === wk(d.k)) j++;
+        if (j - i >= 2) {
+          const grp = days.slice(i, j);
+          const w = wk(d.k);
+          const sum = grp.reduce((s, x) => s + Math.round(x.total), 0); // wie die einzelnen Tagesköpfe gerundet
+          const first = grp[grp.length - 1].k, last = grp[0].k;
+          const n = grp.length;
+          out.push(hint(grp) + `
+      <details class="ek-schweek"${openWeeks.has(w) ? " open" : ""} data-wk="${esc(w)}">
+        <summary class="entry ek-schcard plan">
+          <span class="t">${cap(d.name)}${PLAN}</span>
+          <span class="d">${sum > 0 ? `${esc(hm(sum))} h` : "–"}</span>
+          <span class="p"><span class="ek-schrange">${esc(short(first))}–${esc(short(last))}</span><span>· ${n} Tage</span><span class="ek-schmore" aria-hidden="true">${icon("chevron-right", 16)}</span></span>
+        </summary>
+        <div class="ek-schweek-days">${grp.map((x) => x.html).join("")}</div>
+      </details>`);
+          i = j;
+          continue;
+        }
+      }
+      out.push(hint([d]) + d.html);
+      i++;
+    }
+    return out.join("");
+  };
+
+  return { creditOf, mergeable, day, assemble, dayHTML: (k, name, items, rows, s) => day(k, name, items, rows, "", s).html };
 }
 
 // Karte „Kommende Feiertage“ unter dem Kalender (nächste 3 ab heute)

@@ -4573,3 +4573,93 @@ span.pl-agi { cursor: default; }
 /* Update 9 – Material (Berichtsheft-Zeile „Material: …“) */
 .rp-mat { margin-top: 3px; font-size: .86em; color: var(--muted); }
 .rp-mat b { font-weight: 700; color: var(--ink); }
+
+/* === Update 9 (Agent R): Berufsschule in „Einträge“ – eine Karte je Tag, geplante Wochen eingeklappt === */
+:root { --sch: #0F766E; --sch-bg: #E3F5F2; --sch-line: #9ED8CF; }
+@media (prefers-color-scheme: dark) {
+  :root { --sch: #5EEAD4; --sch-bg: #0F2A2A; --sch-line: #1F5A55; }
+}
+.ek-schoolday { gap: 6px; }
+.ek-schoolday + .ek-schoolday { margin-top: -6px; }
+.entry.ek-schcard {
+  min-height: 52px;
+  padding: 10px 14px;
+  background: color-mix(in srgb, var(--sch-bg) 70%, var(--card));
+  border-color: var(--sch-line);
+  box-shadow: inset 3px 0 0 var(--sch);
+}
+div.entry.ek-schcard { cursor: default; }
+div.entry.ek-schcard:hover { border-color: var(--sch-line); }
+.entry.ek-schcard .t {
+  display: inline-flex; align-items: center; flex-wrap: wrap; gap: 4px 8px; min-width: 0;
+  font-family: var(--f-body); font-weight: 700; font-size: 1rem;
+}
+.ek-schico { font-size: 1.05rem; line-height: 1; }
+.ek-schchip {
+  padding: 1px 8px; border-radius: 999px;
+  background: color-mix(in srgb, var(--sch) 14%, var(--card));
+  color: color-mix(in srgb, var(--sch) 80%, var(--ink));
+  font-size: .76rem; font-weight: 700;
+}
+.entry.ek-schcard .d { color: var(--sch); }
+.entry.ek-schcard .p { gap: 2px 10px; font-size: .82rem; }
+.ek-schweek > summary .p { gap: 2px 6px; }
+.ek-schnote { display: inline-flex; align-items: center; gap: 4px; color: var(--ink); }
+.ek-schnote svg { color: var(--muted); flex: none; }
+.ek-schextra { color: var(--sch); font-weight: 600; }
+.ek-plan {
+  padding: 0 7px; border-radius: 999px;
+  border: 1px dashed color-mix(in srgb, var(--sch) 55%, var(--line));
+  color: color-mix(in srgb, var(--sch) 70%, var(--muted));
+  font-size: .74rem; font-weight: 700; letter-spacing: .02em;
+}
+/* geplant (Zukunft): gedämpft, gestrichelt */
+.entry.ek-schcard.plan {
+  background: transparent;
+  border-style: dashed;
+  box-shadow: none;
+}
+.entry.ek-schcard.plan .d { color: color-mix(in srgb, var(--sch) 60%, var(--muted)); font-weight: 500; }
+.entry.ek-schcard.plan .ek-schname { color: color-mix(in srgb, var(--ink) 78%, var(--muted)); }
+.entry.ek-schcard.zero .d { color: var(--muted); }
+.day-h .sum.plan {
+  background: transparent;
+  border: 1px dashed color-mix(in srgb, var(--accent) 45%, var(--line));
+  color: color-mix(in srgb, var(--accent) 60%, var(--muted));
+}
+.day-h .sum.ek-schpill {
+  font-family: var(--f-body);
+  background: transparent;
+  border: 1px dashed var(--line);
+  color: var(--muted);
+  font-size: .8rem;
+}
+.ek-schoolday.plan > .day-h > span:first-child { color: color-mix(in srgb, var(--ink) 75%, var(--muted)); }
+/* Wochenzeile */
+.ek-schweek { display: flex; flex-direction: column; gap: 8px; }
+.ek-schweek > summary { list-style: none; cursor: pointer; }
+.ek-schweek > summary::-webkit-details-marker { display: none; }
+.ek-schweek > summary .p { align-items: center; }
+.ek-schrange { font-family: var(--f-mono); font-variant-numeric: tabular-nums; color: var(--ink); }
+.ek-schmore { display: inline-flex; margin-left: auto; color: var(--muted); transition: transform .2s ease; }
+.ek-schweek[open] > summary .ek-schmore { transform: rotate(90deg); }
+.ek-schweek-days {
+  display: flex; flex-direction: column; gap: 8px;
+  margin-left: 8px; padding-left: 10px;
+  border-left: 2px dashed var(--sch-line);
+}
+.ek-schweek-days .day-h { padding-top: 2px; }
+/* Hinweis „Freitag ist kein Arbeitstag“ */
+.ek-schhint {
+  display: flex; align-items: flex-start; gap: 10px;
+  padding: 10px 8px 10px 12px; border-radius: 12px;
+  background: color-mix(in srgb, var(--pause-soft) 75%, var(--card));
+  border: 1px solid color-mix(in srgb, var(--pause) 30%, transparent);
+  font-size: .86rem; line-height: 1.4;
+}
+.ek-schhint p { margin: 0; flex: 1 1 auto; min-width: 0; color: var(--ink); }
+.ek-schhint-x {
+  flex: none; min-width: 32px; min-height: 32px; margin: -4px 0;
+  border: 0; border-radius: 999px; background: transparent; color: var(--muted); font-size: 1rem; cursor: pointer;
+}
+.ek-schhint-x:focus-visible { outline: 2px solid var(--accent); }
