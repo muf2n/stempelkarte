@@ -69,6 +69,8 @@ test("tools/list: alle Werkzeuge mit deutschen Beschreibungen und Schemas", asyn
     "galerie_lesen", "unterwegs_lesen", "fahrtenbuch_lesen", "taggeld_lesen", "urlaub_lesen", "einstellungen_lesen", "suche",
     "planer_bearbeiten", "eintrag_bearbeiten", "fahrt_bearbeiten", "unterwegs_eintragen", "material_status", "geld_eintragen",
     "schule_eintragen", "berichtsheft_notiz", "galerie_bearbeiten", "einstellung_aendern", "einstellung_bestaetigen",
+    // Gmail dauerhaft (nur lesen)
+    "mails_suchen", "mail_lesen",
   ].sort());
   for (const x of result.tools) {
     assert.equal(x.inputSchema.type, "object");

@@ -11,7 +11,7 @@
 import { getFirebase } from "../firebase.js";
 import { firebaseConfig, isConfigured } from "../firebase-config.js";
 import { isNative, plugin } from "../native.js";
-import { mailFromGmail } from "./subs-detect.js";
+import { mailFromGmail, GMAIL_QUERY } from "./subs-detect.js";
 
 export const GMAIL_SCOPE = "https://www.googleapis.com/auth/gmail.readonly";
 const API = "https://gmail.googleapis.com/gmail/v1/users/me/";
@@ -19,7 +19,8 @@ const TOKEN_MS = 55 * 60 * 1000;
 const MAX_MAILS = 150;
 const BATCH = 4;          // Gmail-Limit „Units per minute per user“ schonen
 
-export const QUERY = 'newer_than:400d (subject:(abo OR abonnement OR subscription OR mitgliedschaft OR "your receipt" OR rechnung OR beleg OR bestellbestätigung OR "trial" OR testzeitraum OR gekündigt OR kündigung OR cancelled OR verlängert OR renewal) OR from:(googleplay-noreply@google.com OR no_reply@email.apple.com OR netflix OR spotify OR amazon OR disneyplus OR youtube OR paypal))';
+// Suchanfrage liegt in subs-detect.js (gemeinsam mit dem Server, tools/mcp/src/gmail.js)
+export const QUERY = GMAIL_QUERY;
 
 const TOK_KEY = "stempelkarte.gmail.tok";
 let tok = null; // { token, exp }

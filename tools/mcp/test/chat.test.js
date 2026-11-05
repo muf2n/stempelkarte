@@ -98,7 +98,7 @@ test("Werkzeug-Schleife: einstempeln über den Chat, Antwort + actions + Verbrau
   assert.equal(c.body.model, "claude-haiku-4-5");
   assert.equal(c.body.max_tokens, 1024);
   assert.equal(c.body.tools.length, TOOLS.length);
-  assert.ok(TOOLS.length <= 46, "Werkzeug-Anzahl im Rahmen halten");
+  assert.ok(TOOLS.length <= 48, "Werkzeug-Anzahl im Rahmen halten (46 + mails_suchen, mail_lesen)");
   assert.deepEqual(c.body.tools[c.body.tools.length - 1].cache_control, { type: "ephemeral" });
   assert.ok(c.body.tools.every((x) => x.name && x.description && x.input_schema.type === "object"));
   assert.match(c.body.system, /Elektriker-Lehrling/);

@@ -973,7 +973,7 @@ export function mount(el, ctx) {
   }
   el.addEventListener("click", onClick);
   el.addEventListener("input", onInput);
-  const onToggle = (ev) => { if (ev.target.classList && ev.target.classList.contains("gm-help")) gm.onToggleHelp(ev.target.open); };
+  const onToggle = (ev) => { if (ev.target.classList && ev.target.classList.contains("gm-help")) gm.onToggleHelp(ev.target.open, ev.target); };
   el.addEventListener("toggle", onToggle, true);
 
   const offs = Object.values(col).map((c) => c.watch(queue));

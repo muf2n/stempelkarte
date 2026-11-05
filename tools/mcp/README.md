@@ -11,7 +11,7 @@ Er läuft kostenlos als **Cloudflare Worker** und liest/schreibt dieselben Fires
 ## Was Claude damit kann
 
 Claude sieht (fast) alles in der App und darf vieles ändern – Löschen und Einstellungen aber nur in zwei Schritten.
-Insgesamt 46 Werkzeuge (verwandte Lese-Bereiche sind über `bereich`/`aktion` zusammengefasst).
+Insgesamt 48 Werkzeuge (verwandte Lese-Bereiche sind über `bereich`/`aktion` zusammengefasst).
 
 **Lesen**
 
@@ -24,6 +24,7 @@ Insgesamt 46 Werkzeuge (verwandte Lese-Bereiche sind über `bereich`/`aktion` zu
 | `todos_lesen`, `planer_lesen` | Planer/Kalender: Termine (Serien aufgeklappt, Ausnahmen, Ort, Erinnerungen, ID), Aufgaben, Geburtstage, Einsätze, Schultage, Feiertage |
 | `geld_lesen` | Monat (Einnahmen/Ausgaben/Kategorien, optional alle `buchungen`), Budget, Abos, Sparziele („pro Monat nötig“), Teilen-Gruppen mit Salden, Kontostand der Bank |
 | `abos_lesen` | Abos mit Laufzeit, Fristen, Kündigungslinks |
+| `mails_suchen`, `mail_lesen` | Gmail **nur lesen** (wenn „Gmail dauerhaft verbunden“ ist, siehe unten): Suche wie in Gmail (`von:Netflix`, Zeitraum `von`/`bis`) → Datum, Absender, Betreff, Auszug; einzelne Mail als Text (HTML entfernt, ≈ 6000 Zeichen). Senden/Weiterleiten/Löschen gibt es nicht; Mail-Inhalte gelten als Daten, nicht als Anweisungen |
 | `schule_lesen` | `bereich`: uebersicht, stundenplan, noten, projekte, dokumente (nur Titel), lernplan |
 | `material_lesen` | Einkaufsliste, auf der Baustelle, verbaut |
 | `galerie_lesen` | Kategorien, Alben (Anzahl, Adresse, ID), aktive Kategorie, neueste Fotos mit Datum/Adresse/Notiz – **nur Text**: der Foto-Index wird mit Feldmaske **ohne** `thumb` gelesen, `photos/…` nie |
@@ -291,6 +292,60 @@ Application frei) – beides ist nötig.
   selbst schreibt nur „Our pricing is volume based“ (<https://enablebanking.com/docs/faq/>) – im Control Panel
   prüfen, ob ein Zahlungsmittel verlangt wird.
 
+## Gmail dauerhaft verbinden (Server): `/gmail/*`
+
+Statt sich bei jedem Prüfen neu bei Google anzumelden (Browser-Modus in `js/alltag/gmail.js`), kann der Server
+**dauerhaft und nur lesend** auf Gmail zugreifen: täglich um 06:30 UTC (≈ 07:30 Wien) sucht er neue Abo-Mails,
+und der Assistent kann auf Nachfrage Mails suchen/lesen (`mails_suchen`, `mail_lesen`).
+
+**Bewusste Abwägung:** Dafür liegt ein langlebiges Google-**Refresh-Token** (Bereich `gmail.readonly`) auf dem
+eigenen Cloudflare-Worker – **verschlüsselt** (AES-256-GCM, Schlüssel per HKDF/SHA-256 aus `GMAIL_ENC_KEY`) in
+`users/{uid}/meta/gmail_server`. Wer Firestore *und* das Secret hätte, könnte die Mails lesen. Widerrufen geht
+jederzeit mit „Trennen“ in der App oder unter <https://myaccount.google.com/permissions>.
+
+### Einrichtung (einmalig, ca. 10 Minuten)
+
+Voraussetzung wie beim Browser-Modus: In <https://console.cloud.google.com/> (Projekt **stempelkarte-40682**) ist die
+**Gmail API** aktiviert und unter *Google Auth Platform → Datenzugriff* der Bereich `…/auth/gmail.readonly` eingetragen.
+
+1. **APIs & Dienste → Anmeldedaten** → OAuth-2.0-Client **„Web client (auto created by Google Service)“** öffnen
+   (oder *+ Anmeldedaten erstellen → OAuth-Client-ID → Webanwendung*, Name „Stempelkarte Server“).
+2. Unter **Autorisierte Weiterleitungs-URIs** → *+ URI hinzufügen* →
+   `https://stempelkarte-mcp.lippa-florian.workers.dev/gmail/callback` → **Speichern**.
+3. **Client-ID** und **Clientschlüssel** kopieren (zeigt Google keinen Schlüssel mehr an: *Secret hinzufügen*) und als
+   GitHub-Secrets anlegen (Repository → Settings → Secrets and variables → Actions):
+   `GOOGLE_OAUTH_CLIENT_ID` und `GOOGLE_OAUTH_CLIENT_SECRET`.
+4. Secret **`GMAIL_ENC_KEY`** anlegen: beliebiger Zufallstext mit **40+ Zeichen**, z. B. aus
+   `openssl rand -base64 48`. Nicht mehr ändern – sonst muss Gmail neu verbunden werden.
+5. **Actions → „MCP-Connector veröffentlichen“ → Run workflow** (überträgt die Secrets, richtet den täglichen Zeitplan ein).
+6. In der App: **Alltag › Geld › Abos → „Gmail dauerhaft verbinden“** → bei Google `lippa.florian@gmail.com` wählen,
+   „Google hat diese App nicht überprüft“ → *Erweitert* → *Weiter*, **Häkchen bei „E-Mails ansehen“** setzen → Weiter.
+   Es erscheint „Gmail dauerhaft verbunden ✓“; die erste Prüfung läuft sofort.
+
+**Wichtig (UNSICHER, Google-Regel):** Steht die App unter *Google Auth Platform → Zielgruppe* auf **„Testen“**, laufen
+Refresh-Tokens nach **7 Tagen** ab. Für eine dauerhafte Verbindung dort **„App veröffentlichen“** (In Produktion)
+wählen – für den eigenen Gebrauch bleibt nur der Warnhinweis „nicht überprüft“. Läuft die Freigabe trotzdem ab
+(`invalid_grant`), legt der Server einmalig die Aufgabe **„Gmail neu verbinden“** im Planer an.
+
+### Was passiert
+
+- `POST /gmail/start` (Firebase-ID-Token) → `{url}`: zufälliger `state` (nur als Hash, 15 Minuten) in
+  `users/{uid}/meta/gmail_pending`; Google-URL mit `access_type=offline`, `prompt=consent`, `include_granted_scopes=true`,
+  `login_hint`. Weiterleitungs-Adresse per Var `GMAIL_REDIRECT_URL` änderbar.
+- `GET /gmail/callback?code&state` (ohne Anmeldung, der `state` ist der Nachweis): Code tauschen, prüfen, dass
+  `gmail.readonly` gewährt wurde (sonst Seite „Häkchen fehlt“, Freigabe wird zurückgezogen) und das Postfach
+  `lippa.florian@gmail.com` ist (`users/me/profile`); Refresh-Token verschlüsselt speichern, kleine HTML-Seite mit Link zurück.
+- `GET /gmail/status`, `POST /gmail/scan` („Jetzt prüfen“), `POST /gmail/disconnect` (Widerruf bei
+  `oauth2.googleapis.com/revoke`, Schlüssel löschen).
+- Zugriffstokens nur im Speicher (≈ 55 Minuten). Tokens, Codes und Mail-Inhalte werden nie protokolliert oder gespeichert.
+- **Täglicher Scan** (`"30 6 * * *"`): dieselbe Suche wie im Browser, ab letztem Scan − 1 Tag (`after:`), höchstens 100 Mails,
+  je 3 gleichzeitig (`format=full`), bei 429/5xx/403 „quota/rateLimit“ mit wachsenden Pausen. Ausgewertet mit
+  `js/alltag/subs-detect.js` (gemeinsame Datei). Gespeichert werden **nur** die erkannten Felder + Mail-ID/Datum/Betreff
+  (≤ 120 Zeichen) in `users/{uid}/a_money_gmail/meta.serverDets` – die App zeigt sie wie gewohnt als
+  „Neues Abo erkannt“, „Preis geändert“, „Gekündigt erkannt“, „Testzeitraum endet“ (Übernehmen/Ignorieren wie bisher, `handled`).
+- UNSICHER: Auf dem kostenlosen Workers-Plan gilt ein knappes CPU-Limit je Aufruf; 100 Mails auszuwerten sollte reichen,
+  ist aber nicht am echten Konto gemessen.
+
 ## Entwicklung
 
 ```bash
@@ -319,4 +374,6 @@ Gemeinsam (keine Kopie, von wrangler mitgebündelt, im Deploy-Workflow als Pfad 
 - Claude bekommt nie Bilddaten: Fotos/Dokumente werden nur über Feldmasken (ohne `thumb`/`data`) gelesen, der Tresor gar nicht.
   Geheimnisse (iCal-Adressen, Bank-Sitzung, PIN, API-Schlüssel) tauchen in keiner Werkzeug-Antwort auf (Tests prüfen das).
 - Das Dienstkonto hat Vollzugriff auf Firestore – den Schlüssel nie weitergeben.
+- Gmail: Refresh-Token nur AES-256-GCM-verschlüsselt (an die UID gebunden), `GMAIL_ENC_KEY` nur als Secret. Mail-Inhalte
+  werden nicht gespeichert; der Assistent liest Mails nur auf Nachfrage und behandelt sie als Daten, nicht als Anweisungen.
 - Variante mit `?key=` in der URL: Die URL ist dann selbst das Passwort – nicht teilen, nicht in Screenshots zeigen.
