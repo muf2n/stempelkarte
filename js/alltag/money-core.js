@@ -82,6 +82,7 @@ export const DEFAULT_CATS = [
   { id: "schule", name: "Schule", emoji: "📚", color: "#5b7cfa", type: "out" },
   { id: "gesundheit", name: "Gesundheit", emoji: "💊", color: "#e11d48", type: "out" },
   { id: "geschenke", name: "Geschenke", emoji: "🎁", color: "#c026d3", type: "out" },
+  { id: "reisen", name: "Reisen", emoji: "✈️", color: "#0d9488", type: "out" },
   { id: "sparen", name: "Sparen", emoji: "🐷", color: "#14b8a6", type: "out" },
   { id: "sonstiges", name: "Sonstiges", emoji: "📦", color: "#64748b", type: "out" },
   { id: "einkommen", name: "Einkommen", emoji: "💶", color: "#059669", type: "in" },
