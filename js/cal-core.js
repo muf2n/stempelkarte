@@ -946,6 +946,8 @@ export function parseICS(text) {
       note: unescapeText((get("DESCRIPTION") || {}).value || "").trim(),
       rrule: null, exdates: [], overrides: {}, reminders: [],
     };
+    const urlProp = get("URL");
+    if (urlProp && /^https:\/\//i.test(urlProp.value.trim())) ev.url = urlProp.value.trim();
     const rr = get("RRULE");
     if (rr) {
       const p = parseRRule(rr.value);

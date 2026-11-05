@@ -8,8 +8,9 @@ import { buildIndex, CATS } from "../planer-core.js";
 import * as CV from "./cal-views.js";
 import { attachDnD } from "./cal-dnd.js";
 import { openEventForm, openGoogleEvent, askScope, persistResult } from "./cal-editor.js";
-import { openCalendarsSheet, openSearch, allCalendars, googleHelpHTML } from "./cal-tools.js";
+import { openCalendarsSheet, openSearch, allCalendars, googleHelpHTML, externalInstances, findExternal, externalCalName, toolState } from "./cal-tools.js";
 import * as GC from "../cal-google.js";
+import * as FD from "../cal-feeds.js";
 import * as CN from "../cal-notify.js";
 import { mondayOf as mondayK, addDays as addK, nextInstance, parseRRule, applyEdit, finalizeEvent, hhmm as hhmmK, describeRule } from "../cal-core.js";
 
@@ -548,6 +549,7 @@ export function mount(el, ctx) {
   });
   document.addEventListener("keydown", onKey);
   GC.onChange(() => { gVer++; if (root && CAL_MODES.includes(mode)) { lastKey = ""; render(); } });
+  FD.onChange(() => { gVer++; if (root && CAL_MODES.includes(mode)) { lastKey = ""; render(); } });
   try { CN.start(ctx); } catch (e) { console.warn(e); }
 
   snap = ctx.store.get ? ctx.store.get() : null;
@@ -581,7 +583,7 @@ function deps() {
   const vis = (id) => { const c = cals.find((x) => x.id === id); return !c || c.visible !== false; };
   return {
     util: (C && C.util) || {}, einsatzFor, now: Date.now(), cals,
-    external: (from, to) => { GC.setBuiltinHolidays((settingsOf() || {}).holidays); return GC.instancesFor(from, to, vis); },
+    external: (from, to) => externalInstances(from, to, vis, settingsOf()),
   };
 }
 
@@ -626,7 +628,7 @@ function renderCal() {
   const st = settingsOf();
   const lanes = isWide() ? 4 : 3;
   // Jetzt-Linie bewegt sich separat; neu zeichnen nur bei Datenänderung, Wechsel oder alle 15 Min (laufende Schicht)
-  const key = JSON.stringify(["cal", mode, snapVer, tk, focusDay, calMonth, calSel, bdAll, Math.floor(minute / 15), st.holidays, st.calendars, gVer, GC.state.loading > 0, agDays, adExpanded, lanes]);
+  const key = JSON.stringify(["cal", mode, snapVer, tk, focusDay, calMonth, calSel, bdAll, Math.floor(minute / 15), st.holidays, st.calendars, gVer, toolState().loading > 0, agDays, adExpanded, lanes]);
   if (key === lastKey) return;
   lastKey = key;
   const cal = root.querySelector("[data-r=cal]");
@@ -647,7 +649,7 @@ function renderCal() {
     else html = CV.agendaListHTML(snap, focusDay, agDays, d);
   } catch (e) { console.error(e); html = `<p class="note">Ansicht konnte nicht gezeichnet werden.</p>`; }
   const jumpVal = mode === "monat" ? calSel || `${calMonth.y}-${pad(calMonth.m + 1)}-01` : focusDay;
-  cal.innerHTML = CV.toolsHTML(jumpVal, GC.state) + html;
+  cal.innerHTML = CV.toolsHTML(jumpVal, toolState()) + html;
   cal.dataset.view = mode;
   below.innerHTML = mode === "monat" ? PC.birthdaysHTML(snap.todos || [], tk, bdAll) : "";
   below.hidden = mode !== "monat";
@@ -777,7 +779,7 @@ function onPlanerClick(b, ev) {
       const t = todos.find((x) => x.id === tid);
       if (t) openEventForm(t, C, null, parseRRule(t.rrule) ? key : null, { openTask });
     }
-    else if (kind === "gev") { const i = GC.find(id); if (i) openGoogleEvent(i, C, GC.calName(i.calendarId)); }
+    else if (kind === "gev") { const i = findExternal(id); if (i) openGoogleEvent(i, C, externalCalName(i.calendarId)); }
     else if (kind === "bday") { const t = todos.find((x) => x.id === id); if (t) PC.openBirthdayForm(t, C); }
     else if (kind === "einsatz") { const t = todos.find((x) => x.id === id); if (t) openEinsatzForm(mode === "tag" ? focusDay : t.date, t); }
     else if (kind === "einsatzday") openEinsatzForm(id, null);
@@ -827,7 +829,7 @@ function doSearch() {
         calMonth = { y: Number(i.date.slice(0, 4)), m: Number(i.date.slice(5, 7)) - 1 };
         if (!CAL_MODES.includes(mode)) setMode("tag"); else { lastKey = ""; calScrolled = ""; render(); }
       }
-      if (i.ext) { openGoogleEvent(i, C, GC.calName(i.calendarId)); return; }
+      if (i.ext) { openGoogleEvent(i, C, externalCalName(i.calendarId)); return; }
       const t = (C.store.get().todos || []).find((x) => x.id === i.id);
       if (!t) return;
       if (t.kind === "termin") openEventForm(t, C, null, parseRRule(t.rrule) ? i.key : null, { openTask });

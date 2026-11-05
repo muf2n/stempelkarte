@@ -49,6 +49,8 @@ const SHELL = [
   "js/views/planer-cal.js",
   "js/cal-core.js",
   "js/cal-google.js",
+  "js/cal-feeds.js",
+  "js/cal-feed-core.js",
   "js/cal-notify.js",
   "js/views/cal-views.js",
   "js/views/cal-dnd.js",

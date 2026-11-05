@@ -158,6 +158,16 @@ Für einen Chat direkt in der Web-App. Anmeldung mit dem Firebase-ID-Token der A
   geschätzt 1 $ / 5 $ pro Mio. Eingabe-/Ausgabe-Tokens). Beides lässt sich als Variable in `wrangler.toml`
   (`[vars]`) ändern.
 
+## Kalender-Links (iCal): `GET /ics?id=<feedId>`
+
+Für „Google Kalender dauerhaft verbinden“ in der App (Kalender → iCal-Link). Die App speichert die geheime
+iCal-Adresse in `users/{uid}/meta/ical_feeds` (`{feeds:[{id, name, color, url, visible}]}`); der Worker liest sie
+von dort (nie aus der Anfrage → kein offener Proxy), holt den Kalender mit 10 s Zeitlimit und max. 2 MB ab und
+antwortet mit `text/calendar` (Kopfzeile `x-ics-fetched-at`). Anmeldung mit Firebase-ID-Token wie bei `/chat`,
+gleiche CORS-Regeln. Zwischenspeicher 10 Minuten je Nutzer+Feed (`caches.default`, sonst Speicher); `&fresh=1`
+holt frühestens nach 1 Minute neu. Erlaubt sind nur https-Adressen von `calendar.google.com/calendar/ical/…`
+oder mit Pfad auf `.ics` (keine IP-Adressen, Weiterleitungen werden erneut geprüft). Keine Einrichtung nötig.
+
 ## Bankkonto (BAWAG) automatisch abgleichen: `/bank/*`
 
 Die App holt deine Kontobewegungen von BAWAG automatisch nach **Alltag › Geld** (Buchungen mit 🏦).

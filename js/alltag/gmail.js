@@ -1,5 +1,6 @@
 // Gmail (nur lesen) für die Abo-Erkennung – läuft ausschließlich im Browser/in der App.
-// Das OAuth-Zugriffstoken bleibt NUR im Speicher (≈ 55 Min.), wird nie gespeichert.
+// Das OAuth-Zugriffstoken (≈ 55 Min. gültig) liegt im Speicher und bis zum Ablauf in local-/sessionStorage
+// (damit ein Neuladen keine neue Freigabe braucht); bei 401/403 oder „Trennen“ wird es sofort verworfen.
 // In Firestore/lokal landet nur money_gmail/meta = {connected, lastScan, found, handled:[…]} (über db.js).
 //
 //   await connectGmail()              // MUSS direkt aus einem Tipp heraus aufgerufen werden (Popup-Blocker)
@@ -20,7 +21,29 @@ const BATCH = 10;
 
 export const QUERY = 'newer_than:400d (subject:(abo OR abonnement OR subscription OR mitgliedschaft OR "your receipt" OR rechnung OR beleg OR bestellbestätigung OR "trial" OR testzeitraum OR gekündigt OR kündigung OR cancelled OR verlängert OR renewal) OR from:(googleplay-noreply@google.com OR no_reply@email.apple.com OR netflix OR spotify OR amazon OR disneyplus OR youtube OR paypal))';
 
+const TOK_KEY = "stempelkarte.gmail.tok";
 let tok = null; // { token, exp }
+
+/** Token bis zum Ablauf merken (Neuladen innerhalb der Stunde ohne neue Freigabe). */
+function saveTok() {
+  const v = tok ? JSON.stringify(tok) : null;
+  for (const st of ["localStorage", "sessionStorage"]) {
+    try { const s = globalThis[st]; if (!s) continue; if (v) s.setItem(TOK_KEY, v); else s.removeItem(TOK_KEY); } catch { /* egal */ }
+  }
+}
+function loadTok() {
+  for (const st of ["sessionStorage", "localStorage"]) {
+    try {
+      const raw = globalThis[st] && globalThis[st].getItem(TOK_KEY);
+      if (!raw) continue;
+      const t = JSON.parse(raw);
+      if (t && typeof t.token === "string" && t.token && Number(t.exp) > Date.now() + 60000) return { token: t.token, exp: Number(t.exp) };
+    } catch { /* egal */ }
+  }
+  return null;
+}
+tok = loadTok();
+if (!tok) saveTok();
 
 const isLocalHost = () => {
   try { return ["localhost", "127.0.0.1"].includes(location.hostname); } catch { return false; }
@@ -37,7 +60,7 @@ export function hasToken() {
   return !!(tok && tok.exp > Date.now());
 }
 
-export function forgetToken() { tok = null; }
+export function forgetToken() { tok = null; saveTok(); }
 
 function gErr(code, message, cause) {
   const e = new Error(message);
@@ -113,6 +136,7 @@ export async function connectGmail(email = "") {
     const at = res && res.credential && res.credential.accessToken;
     if (!at) throw gErr("cancel", ERR_TEXT.cancel);
     tok = { token: at, exp: Date.now() + TOKEN_MS };
+    saveTok();
     return at;
   }
 
@@ -148,6 +172,7 @@ export async function connectGmail(email = "") {
   const at = cred && cred.accessToken;
   if (!at) throw gErr("scope", ERR_TEXT.scope);
   tok = { token: at, exp: Date.now() + TOKEN_MS };
+  saveTok();
   return at;
 }
 
@@ -166,9 +191,9 @@ async function api(path, token) {
   let body = null;
   try { body = await r.json(); } catch { /* egal */ }
   const reason = JSON.stringify(body || "");
-  if (r.status === 401) { tok = null; throw gErr("auth", ERR_TEXT.auth); }
+  if (r.status === 401) { forgetToken(); throw gErr("auth", ERR_TEXT.auth); }
   if (r.status === 403 || /insufficient|PERMISSION_DENIED|ACCESS_TOKEN_SCOPE/i.test(reason)) {
-    tok = null;
+    forgetToken();
     // genauer sagen, was fehlt
     if (/accessNotConfigured|SERVICE_DISABLED|has not been used|is disabled/i.test(reason)) {
       throw gErr("scope", "Die Gmail API ist im Google-Projekt „stempelkarte-40682“ noch nicht aktiviert (Schritt 1 der Anleitung). Nach dem Aktivieren ein paar Minuten warten.");

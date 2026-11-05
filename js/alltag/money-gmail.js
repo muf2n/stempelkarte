@@ -71,7 +71,7 @@ export function createGmail(opts) {
         ui.toast(n ? (n === 1 ? "1 Hinweis zu deinen Abos" : `${n} Hinweise zu deinen Abos`) : "Nichts Neues gefunden", 2600);
       } catch (err) {
         const code = (err && err.code) || "net";
-        if (code !== "cancel") console.warn("Gmail-Abgleich:", err);
+        if (code !== "cancel" && code !== "auth") console.warn("Gmail-Abgleich:", err);
         R.err = code;
         R.errMsg = (err && err.message) || G.ERR_TEXT.net;
         if (code === "scope") R.helpOpen = true;

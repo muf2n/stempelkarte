@@ -1,5 +1,7 @@
 // Update 9 – Google Kalender (nur lesen). Gleiches Muster wie js/alltag/gmail.js:
-// Zugriffstoken per reauthenticateWithPopup mit Zusatz-Scope, NUR im Speicher (≈ 55 Min.).
+// Zugriffstoken per reauthenticateWithPopup mit Zusatz-Scope (≈ 55 Min. gültig). Das Token liegt bis zum Ablauf
+// zusätzlich in local-/sessionStorage, damit ein Neuladen innerhalb der Stunde keine neue Freigabe braucht;
+// bei 401 wird es still verworfen (kleiner Knopf „Google neu verbinden“). Dauerhaft ohne Ablauf: iCal-Link (cal-feeds.js).
 // Termine werden nur im Speicher/sessionStorage zwischengespeichert, nie in Firestore.
 //
 //   await connect()                    // direkt aus einem Tipp heraus (Popup-Blocker)
@@ -18,6 +20,8 @@ const API = "https://www.googleapis.com/calendar/v3/";
 const TOKEN_MS = 55 * 60 * 1000;
 const SS_KEY = "stempelkarte.gcal.v1";
 const WAS_KEY = "stempelkarte.gcalConnected";
+const TOK_KEY = "stempelkarte.gcal.tok";
+const IDS_KEY = "stempelkarte.gcal.ids"; // zuletzt bekannte Kalender-IDs (für „schon über iCal-Link verbunden?“)
 const pad = (n) => String(n).padStart(2, "0");
 
 let tok = null;            // { token, exp }
@@ -27,6 +31,35 @@ const pending = new Set();
 const listeners = new Set();
 export const state = { connected: false, loading: 0, error: null, wasConnected: false };
 try { state.wasConnected = localStorage.getItem(WAS_KEY) === "1"; } catch { /* egal */ }
+
+/** Token bis zum Ablauf in local- und sessionStorage (alles in try/catch – privates Fenster, voll …). */
+let expTimer = null;
+function saveTok() {
+  clearTimeout(expTimer);
+  // Ablauf: still trennen → kleiner „Google neu verbinden“-Knopf statt Fehler
+  if (tok && !testToken()) expTimer = setTimeout(() => { if (tok && tok.exp <= Date.now() + 1000) { dropToken(); emit(); } }, Math.max(1000, Math.min(2147483000, tok.exp - Date.now())));
+  const v = tok ? JSON.stringify({ token: tok.token, exp: tok.exp }) : null;
+  for (const st of ["localStorage", "sessionStorage"]) {
+    try { const s = globalThis[st]; if (!s) continue; if (v) s.setItem(TOK_KEY, v); else s.removeItem(TOK_KEY); } catch { /* egal */ }
+  }
+}
+function loadTok() {
+  for (const st of ["sessionStorage", "localStorage"]) {
+    try {
+      const raw = globalThis[st] && globalThis[st].getItem(TOK_KEY);
+      if (!raw) continue;
+      const t = JSON.parse(raw);
+      if (t && typeof t.token === "string" && t.token && Number(t.exp) > Date.now() + 60000) return { token: t.token, exp: Number(t.exp) };
+    } catch { /* egal */ }
+  }
+  return null;
+}
+/** Token still verwerfen (abgelaufen/401). */
+function dropToken() { tok = null; saveTok(); state.connected = false; }
+/** Zuletzt bekannte Google-Kalender-IDs (auch ohne gültiges Token). */
+export function knownIds() {
+  try { const a = JSON.parse(localStorage.getItem(IDS_KEY) || "[]"); return Array.isArray(a) ? a.filter((x) => typeof x === "string") : []; } catch { return []; }
+}
 
 // Standardfarben von Google für colorId 1–11 (Termin-Farben)
 const EVENT_COLORS = { 1: "#7986CB", 2: "#33B679", 3: "#8E24AA", 4: "#E67C73", 5: "#F6BF26", 6: "#F4511E", 7: "#039BE5", 8: "#616161", 9: "#3F51B5", 10: "#0B8043", 11: "#D50000" };
@@ -85,7 +118,9 @@ export function prepare() {
 
 /** Zugriffstoken holen (Popup) und Kalender laden. Direkt aus dem Klick-Handler aufrufen! */
 export async function connect(email = "") {
-  if (!testToken() && !hasToken()) {
+  const tt = testToken();
+  if (tt && !(tok && tok.token === tt)) { tok = { token: tt, exp: Date.now() + TOKEN_MS }; saveTok(); }
+  if (!tt && !hasToken()) {
     if (typeof navigator !== "undefined" && navigator.onLine === false) throw gErr("offline", ERR_TEXT.offline);
     if (isNative()) {
       // UNSICHER: wie gmail.js – Zusatz-Scope über @capacitor-firebase/authentication (nicht am Gerät getestet).
@@ -97,6 +132,7 @@ export async function connect(email = "") {
       const at = res && res.credential && res.credential.accessToken;
       if (!at) throw gErr("cancel", ERR_TEXT.cancel);
       tok = { token: at, exp: Date.now() + TOKEN_MS };
+      saveTok();
     } else {
       if (!isConfigured()) throw gErr("local", ERR_TEXT.local);
       let f;
@@ -123,6 +159,8 @@ export async function connect(email = "") {
       const at = cred && cred.accessToken;
       if (!at) throw gErr("scope", ERR_TEXT.scope);
       tok = { token: at, exp: Date.now() + TOKEN_MS };
+      saveTok();
+      saveTok();
     }
   }
   state.error = null;
@@ -135,7 +173,7 @@ export async function connect(email = "") {
 }
 
 export function disconnect() {
-  tok = null; calList = null; months.clear();
+  tok = null; saveTok(); calList = null; months.clear();
   state.connected = false; state.wasConnected = false; state.error = null;
   try { localStorage.removeItem(WAS_KEY); sessionStorage.removeItem(SS_KEY); } catch { /* egal */ }
   emit();
@@ -155,7 +193,7 @@ async function api(path) {
   let body = null;
   try { body = await r.json(); } catch { /* egal */ }
   const reason = JSON.stringify(body || "");
-  if (r.status === 401) { tok = null; state.connected = false; throw gErr("auth", ERR_TEXT.auth); }
+  if (r.status === 401) { dropToken(); throw gErr("auth", ERR_TEXT.auth); }
   if (r.status === 403 || /insufficient|PERMISSION_DENIED|ACCESS_TOKEN_SCOPE|accessNotConfigured|SERVICE_DISABLED/i.test(reason)) {
     const e = gErr("scope", ERR_TEXT.scope);
     e.apiDisabled = /accessNotConfigured|SERVICE_DISABLED|has not been used|is disabled/i.test(reason);
@@ -173,6 +211,7 @@ async function loadCalendars() {
     pageToken = res.nextPageToken || "";
   } while (pageToken);
   calList = out;
+  try { localStorage.setItem(IDS_KEY, JSON.stringify(out.map((c) => c.id))); } catch { /* egal */ }
   restoreCache();
   return out;
 }
@@ -254,9 +293,8 @@ async function loadMonth(cal, mk) {
     months.set(id, list);
     saveCache();
   } catch (e) {
-    state.error = e;
-    if (e && e.code === "auth") state.connected = false;
-    console.warn("Google Kalender:", e && e.message);
+    if (e && e.code === "auth") { state.connected = false; state.error = null; } // still: nur der kleine „neu verbinden“-Knopf
+    else { state.error = e; console.warn("Google Kalender:", e && e.message); }
   } finally {
     pending.delete(id);
     state.loading--;
@@ -328,3 +366,24 @@ function restoreCache() {
     for (const [k, v] of d.months || []) if (!months.has(k)) months.set(k, v);
   } catch { /* egal */ }
 }
+
+/* ---------- Nach dem Neuladen: gespeichertes Token weiterverwenden ---------- */
+
+tok = loadTok();
+if (!tok) saveTok(); // abgelaufenes aufräumen
+let resumeP = null;
+/** Mit gespeichertem Token (ohne Popup) wieder verbinden. Fehler still → kleiner Knopf. */
+export function resume() {
+  if (resumeP || state.connected || !hasToken()) return resumeP;
+  resumeP = (async () => {
+    try {
+      await loadCalendars();
+      state.connected = true; state.wasConnected = true; state.error = null;
+      try { localStorage.setItem(WAS_KEY, "1"); } catch { /* egal */ }
+    } catch (e) {
+      if (e && e.code !== "auth") { state.error = e; console.warn("Google Kalender:", e && e.message); }
+    } finally { resumeP = null; emit(); }
+  })();
+  return resumeP;
+}
+if (tok && state.wasConnected) setTimeout(() => { if (typeof navigator === "undefined" || navigator.onLine !== false) resume(); }, 0);

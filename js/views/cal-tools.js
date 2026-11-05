@@ -8,6 +8,7 @@ import {
 import { calColor } from "../planer-core.js";
 import { shareICS } from "./cal-editor.js";
 import * as GC from "../cal-google.js";
+import * as FD from "../cal-feeds.js";
 
 const WD2 = ["So", "Mo", "Di", "Mi", "Do", "Fr", "Sa"];
 const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
@@ -15,16 +16,54 @@ const pad = (n) => String(n).padStart(2, "0");
 const todayKey = () => { const d = new Date(); return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`; };
 const newCalId = () => "c" + Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
 
-/** Alle Kalender inkl. Google (sichtbar laut Einstellung, sonst Google-Vorgabe). */
+/** Alle Kalender inkl. Google (sichtbar laut Einstellung, sonst Google-Vorgabe) und iCal-Links.
+ *  Kommt ein Google-Kalender schon über einen iCal-Link, wird die OAuth-Variante ausgeblendet. */
 export function allCalendars(settings) {
-  const list = normCalendars(settings && settings.calendars);
+  const covered = FD.coveredGoogleIds();
+  const list = normCalendars(settings && settings.calendars).filter((c) => !(c.kind === "google" && covered.has(c.id.slice(2))));
   for (const g of GC.calendars()) {
+    if (covered.has(g.gid)) continue;
     const saved = list.find((c) => c.id === g.id);
     if (saved) { saved.name = g.name; if (!(settings.calendars || []).some((x) => x.id === g.id && x.color)) saved.color = g.color; saved.gcolor = g.color; continue; }
     list.push({ id: g.id, name: g.name, color: g.color, gcolor: g.color, visible: g.defaultVisible !== false, kind: "google", readOnly: true });
   }
+  for (const f of FD.calendars()) list.push(f);
   return list;
 }
+
+/** Externe (nur lesen) Termine: iCal-Links + Google (OAuth) ohne Doppelte. */
+export function externalInstances(from, to, vis, settings) {
+  const st = settings || {};
+  GC.setBuiltinHolidays(st.holidays);
+  FD.setBuiltinHolidays(st.holidays);
+  const covered = FD.coveredGoogleIds();
+  const g = GC.instancesFor(from, to, (id) => !covered.has(id.slice(2)) && vis(id));
+  return [...FD.instancesFor(from, to, vis), ...g];
+}
+export const findExternal = (uid) => (String(uid).startsWith("f:") ? FD.find(uid) : GC.find(uid));
+export const externalCalName = (id) => (String(id).startsWith("f:") ? FD.calName(id) : GC.calName(id));
+
+/** Zustand für die Werkzeugleiste: kleiner „Google neu verbinden“-Knopf nur, wenn nötig. */
+export function toolState() {
+  const gs = GC.state;
+  const covered = FD.coveredGoogleIds();
+  const known = GC.knownIds();
+  const allCovered = covered.size > 0 && (!known.length || known.every((id) => covered.has(id)));
+  const feedErr = FD.list().some((f) => f.visible && FD.status(f.id).bad);
+  return { ...gs, connected: gs.connected && GC.hasToken(), wasConnected: gs.wasConnected && !allCovered, loading: gs.loading + (FD.isLoading() ? 1 : 0), feedErr };
+}
+
+const ICAL_STEPS = `<ol>` +
+  `<li><b>Am besten am PC:</b> <a href="https://calendar.google.com/calendar/r/settings" target="_blank" rel="noopener">calendar.google.com</a> im Browser öffnen und mit deinem Google-Konto anmelden. (In der Google-Kalender-App am Handy gibt es diese Einstellung nicht.)</li>` +
+  `<li>Rechts oben auf das Zahnrad <b>⚙</b> → <b>„Einstellungen“</b>.</li>` +
+  `<li>Links unter <b>„Einstellungen für meine Kalender“</b> den Kalender anklicken (z. B. deinen Namen).</li>` +
+  `<li>Nach unten scrollen bis <b>„Kalender integrieren“</b>.</li>` +
+  `<li>Bei <b>„Privatadresse im iCal-Format“</b> auf das Kopieren-Symbol klicken. Die Adresse sieht so aus: <code>https://calendar.google.com/calendar/ical/…/private-…/basic.ics</code></li>` +
+  `<li>Hier unten einfügen, Name und Farbe wählen und <b>„Dauerhaft verbinden“</b> tippen.</li>` +
+  `</ol>` +
+  `<p class="note">Tipp: Öffne die Stempelkarte auch am PC (gleiche Anmeldung) und füge die Adresse dort ein – dann gilt der Link automatisch auch am Handy. Für weitere Kalender (Familie, Arbeit …) Schritte 3–6 wiederholen. Neue Termine erscheinen nach ca. 15 Minuten.</p>` +
+  `<p class="note cal-secret"><b>Geheim halten!</b> Wer diese Adresse kennt, sieht alle deine Termine. Nicht weitergeben oder irgendwo posten. Falls doch passiert: bei Google an derselben Stelle „Zurücksetzen“ und den neuen Link hier eintragen.</p>` +
+  `<p class="note">Geht auch mit anderen Kalendern, z. B. Outlook (<i>Veröffentlichen → ICS-Link</i>), iCloud, Schule oder Verein – jede Adresse, die auf <code>.ics</code> endet.</p>`;
 
 /** Google-Anleitung (403 / API nicht aktiviert). */
 export function googleHelpHTML(open = false) {
@@ -42,6 +81,9 @@ export function openCalendarsSheet(c, { onImportDone } = {}) {
   let editColor = null;
   let gMsg = "";
   let gHelp = false;
+  let fMsg = "", fWarn = "";
+  let fColor = null;
+  const draft = { url: "", name: "" };
   return c.ui.openSheet({
     title: "Kalender",
     bodyHTML: `<div class="cal-sheet" data-r="body"></div>`,
@@ -49,7 +91,7 @@ export function openCalendarsSheet(c, { onImportDone } = {}) {
       const body = sheet.querySelector("[data-r=body]");
       const settings = () => c.store.get().settings || {};
       const save = async (list) => {
-        const own = list.filter((x) => x.kind !== "google" || (settings().calendars || []).some((s) => s.id === x.id) || x._touched);
+        const own = list.filter((x) => x.kind !== "feed" && (x.kind !== "google" || (settings().calendars || []).some((s) => s.id === x.id) || x._touched));
         try { await c.store.saveSettings({ calendars: calendarsForSave(own) }); } catch { /* Toast vom Store */ }
       };
       const row = (x) => {
@@ -60,6 +102,7 @@ export function openCalendarsSheet(c, { onImportDone } = {}) {
           `<span class="cal-nm"><b>${esc(x.name)}</b>${x.hint || x.readOnly ? `<small>${esc([x.hint, x.readOnly ? "nur lesen" : ""].filter(Boolean).join(" · "))}</small>` : ""}</span></label>` +
           `<button type="button" class="icon-btn cal-colbtn" data-colfor="${esc(x.id)}" aria-label="Farbe von ${esc(x.name)} ändern" aria-expanded="${editing}" style="--c:${esc(col)}"><i></i></button>` +
           (x.kind === "user" && !x.builtin ? `<button type="button" class="icon-btn" data-delcal="${esc(x.id)}" aria-label="${esc(x.name)} löschen">${icon("trash", 18)}</button>` : "") +
+          (x.kind === "feed" ? `<button type="button" class="icon-btn" data-delfeed="${esc(x.feedId)}" aria-label="Link ${esc(x.name)} entfernen">${icon("trash", 18)}</button>` : "") +
           (editing ? `<div class="cal-colors cal-colrow">${PALETTE.map(([k, n]) => `<button type="button" class="cal-sw" data-setcol="${k}" style="--c:var(--cal-${k})" aria-label="${n}" aria-pressed="${x.color === k}"></button>`).join("")}` +
             (x.gcolor ? `<button type="button" class="cal-sw" data-setcol="${esc(x.gcolor)}" style="--c:${esc(x.gcolor)}" aria-label="Google-Farbe"></button>` : "") + `</div>` : "") +
         `</li>`;
@@ -69,14 +112,41 @@ export function openCalendarsSheet(c, { onImportDone } = {}) {
         const mine = list.filter((x) => x.kind === "user");
         const layers = list.filter((x) => x.kind === "layer");
         const google = list.filter((x) => x.kind === "google");
-        const gs = GC.state;
         const s = c.store.get();
+        const feedCals = list.filter((x) => x.kind === "feed");
+        const fl = FD.list();
+        const coveredN = GC.calendars().filter((g) => FD.coveredGoogleIds().has(g.gid)).length;
+        const feedRow = (x) => {
+          const f = fl.find((y) => y.id === x.feedId) || {};
+          const stt = FD.status(x.feedId);
+          return row({ ...x, hint: f.mask, readOnly: false }).replace(/<\/li>$/, `<p class="cal-fstat${stt.bad ? " bad" : ""}" data-fstat="${esc(x.feedId)}">${esc(stt.text)}</p></li>`);
+        };
+        const selCol = fColor || (PALETTE.find(([k]) => !list.some((y) => y.color === k)) || PALETTE[6])[0];
+        const icalHTML =
+          `<h3 class="ag-h">Google Kalender dauerhaft verbinden <small class="note">iCal-Link · nur lesen</small></h3>` +
+          (feedCals.length ? `<ul class="cal-list cal-feeds">${feedCals.map(feedRow).join("")}</ul>` +
+            `<div class="row"><button type="button" class="btn sm ghost" data-r="frefresh">Jetzt aktualisieren</button></div>` : "") +
+          `<p class="note">Einmal einrichten – danach musst du Google <b>nie wieder neu verbinden</b>. Die Termine kommen über die geheime iCal-Adresse deines Kalenders.</p>` +
+          `<details class="gm-help cal-ical"${feedCals.length ? "" : " open"}><summary>Anleitung: iCal-Adresse holen (2 Minuten)</summary>${ICAL_STEPS}</details>` +
+          `<form class="cal-fform" data-r="feedform" novalidate>` +
+            `<label class="lbl" for="cal-furl">iCal-Adresse einfügen</label>` +
+            `<input id="cal-furl" type="url" inputmode="url" data-r="furl" autocomplete="off" autocapitalize="off" spellcheck="false" placeholder="https://calendar.google.com/calendar/ical/…/basic.ics" value="${esc(draft.url)}">` +
+            `<input type="text" data-r="fname" maxlength="40" placeholder="Name, z. B. Mein Google Kalender" aria-label="Name des Kalenders" value="${esc(draft.name)}">` +
+            `<div class="cal-colors" role="group" aria-label="Farbe">${PALETTE.map(([k, n]) => `<button type="button" class="cal-sw" data-fcol="${k}" style="--c:var(--cal-${k})" aria-label="${n}" aria-pressed="${k === selCol}"></button>`).join("")}</div>` +
+            `<button type="submit" class="btn primary" data-r="fadd">${icon("calendar", 18)} Dauerhaft verbinden</button>` +
+          `</form>` +
+          (fWarn ? `<p class="hint">${esc(fWarn)}</p>` : "") +
+          (fMsg ? `<p class="hint cal-gmsg" role="alert">${esc(fMsg)}</p>` : "") +
+          (s.mode === "local" ? `<p class="note">Hinweis: Die Kalender-Links holt dein Server ab – dafür braucht es die Anmeldung mit Google. Im lokalen Modus funktioniert das nicht.</p>` : "");
+        const gs = GC.state;
         const perm = typeof Notification !== "undefined" ? Notification.permission : "unsupported";
         body.innerHTML =
           `<h3 class="ag-h">Meine Kalender</h3><ul class="cal-list">${mine.map(row).join("")}</ul>` +
           `<form class="row cal-add" data-r="addform"><input type="text" data-r="newname" maxlength="40" placeholder="Neuer Kalender, z. B. Fußball" aria-label="Name des neuen Kalenders"><button type="submit" class="btn sm">${icon("plus", 16)} Anlegen</button></form>` +
           `<h3 class="ag-h">Weitere Ebenen</h3><ul class="cal-list">${layers.map(row).join("")}</ul>` +
-          `<h3 class="ag-h">Google Kalender <small class="note">nur lesen</small></h3>` +
+          icalHTML +
+          `<h3 class="ag-h">Google Kalender kurz verbinden <small class="note">läuft nach ca. 1 Std. ab</small></h3>` +
+          (coveredN ? `<p class="note">${coveredN === 1 ? "1 Kalender kommt" : `${coveredN} Kalender kommen`} schon über den iCal-Link und ${coveredN === 1 ? "wird" : "werden"} hier ausgeblendet.</p>` : "") +
           (gs.connected
             ? `<ul class="cal-list">${google.map(row).join("") || `<li class="note">Keine Kalender gefunden.</li>`}</ul>` +
               `<div class="row"><button type="button" class="btn sm ghost" data-r="grefresh">Neu laden</button><button type="button" class="btn sm ghost" data-r="gdisc">Trennen</button></div>`
@@ -92,7 +162,22 @@ export function openCalendarsSheet(c, { onImportDone } = {}) {
             : "");
       };
       draw();
-      const unsub = GC.onChange(() => { if (sheet.isConnected) draw(); else unsub(); });
+      const keepDraft = () => {
+        const u = body.querySelector("[data-r=furl]"), n = body.querySelector("[data-r=fname]");
+        if (u) draft.url = u.value;
+        if (n) draft.name = n.value;
+      };
+      const redraw = () => {
+        if (!sheet.isConnected) return false;
+        const a = document.activeElement;
+        const focusR = a && body.contains(a) && a.dataset ? a.dataset.r : null;
+        keepDraft();
+        draw();
+        if (focusR === "furl" || focusR === "fname") { const el = body.querySelector(`[data-r=${focusR}]`); if (el) { el.focus(); try { el.setSelectionRange(el.value.length, el.value.length); } catch { /* egal */ } } }
+        return true;
+      };
+      const unsub = GC.onChange(() => { if (!redraw()) unsub(); });
+      const unsubF = FD.onChange(() => { if (!redraw()) unsubF(); });
       try { GC.prepare(); } catch { /* egal */ }
 
       body.addEventListener("change", async (ev) => {
@@ -100,6 +185,10 @@ export function openCalendarsSheet(c, { onImportDone } = {}) {
         if (v) {
           const list = allCalendars(settings());
           const x = list.find((y) => y.id === v.dataset.vis);
+          if (x && x.kind === "feed") {
+            try { await FD.updateFeed(x.feedId, { visible: v.checked }); } catch (e) { c.ui.toast(e.message || "Speichern fehlgeschlagen"); }
+            return;
+          }
           if (x) { x.visible = v.checked; x._touched = true; const sp = save(list); draw(); await sp; }
           return;
         }
@@ -112,8 +201,33 @@ export function openCalendarsSheet(c, { onImportDone } = {}) {
           openImportPreview(c, text, f.name, onImportDone);
         }
       });
+      body.addEventListener("input", (ev) => {
+        if (ev.target.matches("[data-r=furl]")) {
+          const u = ev.target.value.trim();
+          const n = body.querySelector("[data-r=fname]");
+          if (n && !n.value.trim() && /^https?:|^webcal:/i.test(u)) { const chk = FD.checkFeedUrl(u); if (chk.ok) n.placeholder = FD.suggestName(chk.url); }
+        }
+      });
       body.addEventListener("submit", async (ev) => {
         ev.preventDefault();
+        if (ev.target.matches("[data-r=feedform]")) {
+          keepDraft();
+          const btn = body.querySelector("[data-r=fadd]");
+          const chk = FD.checkFeedUrl(draft.url);
+          fWarn = "";
+          if (!chk.ok) { fMsg = chk.error; draw(); const u = body.querySelector("[data-r=furl]"); if (u) u.focus(); return; }
+          fMsg = "";
+          c.ui.setBusy(btn, true, "Verbinde …");
+          try {
+            const sel = body.querySelector("[data-fcol][aria-pressed=true]");
+            const f = await FD.addFeed({ url: chk.url, name: draft.name.trim(), color: fColor || (sel && sel.dataset.fcol) });
+            draft.url = ""; draft.name = ""; fColor = null;
+            fWarn = chk.warn || "";
+            c.ui.toast(`„${f.name}“ dauerhaft verbunden`, 2000);
+          } catch (e) { fMsg = (e && e.message) || "Speichern fehlgeschlagen."; }
+          draw();
+          return;
+        }
         const inp = body.querySelector("[data-r=newname]");
         const name = inp.value.trim();
         if (!name) { inp.focus(); return; }
@@ -129,10 +243,22 @@ export function openCalendarsSheet(c, { onImportDone } = {}) {
       body.addEventListener("click", async (ev) => {
         const b = ev.target.closest("button, a");
         if (!b) return;
+        if (b.dataset.fcol) { fColor = b.dataset.fcol; body.querySelectorAll("[data-fcol]").forEach((x) => x.setAttribute("aria-pressed", String(x === b))); return; }
+        if (b.dataset.delfeed) {
+          if (b.dataset.armed !== "1") { b.dataset.armed = "1"; b.classList.add("armed"); b.setAttribute("aria-label", "Wirklich entfernen? Nochmal tippen"); c.ui.toast("Nochmal tippen zum Entfernen des Kalender-Links.", 2400); return; }
+          try { await FD.removeFeed(b.dataset.delfeed); c.ui.toast("Kalender-Link entfernt", 1600); } catch (e) { c.ui.toast(e.message || "Entfernen fehlgeschlagen"); }
+          return;
+        }
         if (b.dataset.colfor) { editColor = editColor === b.dataset.colfor ? null : b.dataset.colfor; draw(); return; }
         if (b.dataset.setcol) {
           const list = allCalendars(settings());
           const x = list.find((y) => y.id === editColor);
+          if (x && x.kind === "feed") {
+            editColor = null;
+            try { await FD.updateFeed(x.feedId, { color: b.dataset.setcol }); } catch (e) { c.ui.toast(e.message || "Speichern fehlgeschlagen"); }
+            draw();
+            return;
+          }
           if (x) { x.color = b.dataset.setcol; x._touched = true; editColor = null; const sp = save(list); draw(); await sp; }
           return;
         }
@@ -164,6 +290,7 @@ export function openCalendarsSheet(c, { onImportDone } = {}) {
           draw();
           return;
         }
+        if (r === "frefresh") { FD.refresh({ fresh: true }); return; }
         if (r === "grefresh") { GC.refresh(); c.ui.toast("Google-Termine werden neu geladen …", 1500); return; }
         if (r === "gdisc") { GC.disconnect(); draw(); return; }
         if (r === "export") {
@@ -242,7 +369,7 @@ export function openSearch(c, { onPick, visible = () => true } = {}) {
   return c.ui.openSheet({
     title: "Suchen",
     bodyHTML: `<label class="cal-search"><span class="cal-sr">Suchbegriff</span>${icon("search", 18)}<input type="search" data-r="q" enterkeyhint="search" placeholder="Titel, Ort oder Notiz" autocomplete="off"></label>` +
-      `<p class="note" data-r="info">Sucht in Terminen (auch Wiederholungen ±1 Jahr), Aufgaben und geladenen Google-Terminen.</p><ul class="cal-res" data-r="res"></ul>`,
+      `<p class="note" data-r="info">Sucht in Terminen (auch Wiederholungen ±1 Jahr), Aufgaben, geladenen Google-Terminen und Kalender-Links.</p><ul class="cal-res" data-r="res"></ul>`,
     onMount(sheet, close) {
       const q = sheet.querySelector("[data-r=q]");
       const res = sheet.querySelector("[data-r=res]");
@@ -256,7 +383,7 @@ export function openSearch(c, { onPick, visible = () => true } = {}) {
         const todos = c.store.get().todos || [];
         const list = searchEvents(todos, term, tk, { limit: 150 });
         const words = term.toLowerCase().split(/\s+/);
-        const g = GC.instancesFor(addDays(tk, -366), addDays(tk, 366), visible).filter((i) => words.every((w) => `${i.title} ${i.location} ${i.note}`.toLowerCase().includes(w)));
+        const g = externalInstances(addDays(tk, -366), addDays(tk, 366), visible, c.store.get().settings).filter((i) => words.every((w) => `${i.title} ${i.location} ${i.note}`.toLowerCase().includes(w)));
         last = [...list, ...g].sort((a, b) => {
           const fa = a.date && a.date >= tk ? 0 : 1, fb = b.date && b.date >= tk ? 0 : 1;
           return fa - fb || (fa ? String(b.date).localeCompare(String(a.date)) : String(a.date).localeCompare(String(b.date))) || (a.startMin || 0) - (b.startMin || 0);
@@ -265,7 +392,7 @@ export function openSearch(c, { onPick, visible = () => true } = {}) {
         res.innerHTML = last.length ? last.map((i, n) => {
           const when = i.date ? `${WD2[wdOf(i.date)]}, ${fmtKey(i.date)}` : "ohne Datum";
           return `<li><button type="button" data-n="${n}" class="cal-resb${i.date && i.date < tk ? " past" : ""}"><span class="cal-res-d">${esc(when)}<small>${i.allDay || !i.time ? (i.task ? "Aufgabe" : "ganztägig") : esc(i.time)}</small></span>` +
-            `<span class="cal-res-m"><b>${esc(i.title)}</b>${i.location ? `<small>${icon("pin", 12)} ${esc(i.location)}</small>` : ""}${i.ext ? `<small>Google</small>` : ""}${i.recurring ? `<small>${icon("repeat", 12)} Serie</small>` : ""}</span></button></li>`;
+            `<span class="cal-res-m"><b>${esc(i.title)}</b>${i.location ? `<small>${icon("pin", 12)} ${esc(i.location)}</small>` : ""}${i.ext ? `<small>${i.feed ? "iCal" : "Google"}</small>` : ""}${i.recurring ? `<small>${icon("repeat", 12)} Serie</small>` : ""}</span></button></li>`;
         }).join("") : `<li class="note">Nichts gefunden.</li>`;
       };
       q.addEventListener("input", () => { clearTimeout(timer); timer = setTimeout(run, 120); });

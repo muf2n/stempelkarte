@@ -38,6 +38,17 @@ export function aiAvailable(snap = store.get()) {
 
 function fail(code, msg) { const e = new Error(msg); e.code = code; return e; }
 
+/** Firebase-ID-Token für eigene Server-Endpunkte (z. B. /ics). Test-Haken wie askClaude. → String oder wirft (code local|auth). */
+export async function idToken(snap = store.get()) {
+  const hook = testHook();
+  if (hook) return String(hook.token || "test");
+  if (!aiAvailable(snap)) throw fail("local", "Nur mit Google-Anmeldung möglich – im lokalen Modus geht das nicht.");
+  const f = await getFirebase();
+  const u = f && f.auth.currentUser;
+  if (!u) throw fail("auth", "Bitte zuerst mit Google anmelden.");
+  return u.getIdToken();
+}
+
 const STATUS_MSG = {
   401: "Anmeldung abgelehnt – bitte ab- und wieder anmelden.",
   503: "Der Server ist noch nicht fertig eingerichtet (Claude-Schlüssel fehlt).",

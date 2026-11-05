@@ -44,12 +44,14 @@ export function navHTML(title, sub, isNow, label) {
 export function toolsHTML(dateVal, gState) {
   const g = gState && gState.connected
     ? (gState.loading ? `<span class="pl-gstat" aria-live="polite">Google lädt …</span>` : gState.error ? `<button type="button" class="btn sm ghost pl-gstat bad" data-pact="gerr">Google: Problem</button>` : "")
-    : gState && gState.wasConnected ? `<button type="button" class="btn sm ghost pl-gstat" data-pact="gconnect">Google neu verbinden</button>` : "";
+    : gState && gState.wasConnected ? `<button type="button" class="btn sm ghost pl-gstat pl-greconnect" data-pact="gconnect" title="Die Google-Freigabe ist abgelaufen – oder unter „Kalender“ dauerhaft per iCal-Link verbinden">${icon("repeat", 14)}<span>Google neu verbinden</span></button>`
+    : gState && gState.loading ? `<span class="pl-gstat" aria-live="polite">Kalender lädt …</span>` : "";
+  const f = gState && gState.feedErr ? `<button type="button" class="btn sm ghost pl-gstat bad" data-pact="cals">Kalender-Link: Problem</button>` : "";
   return `<div class="pl-tools">` +
     `<button type="button" class="btn sm ghost pl-tool" data-pact="search" title="Suchen (/)">${icon("search", 16)}<span>Suchen</span></button>` +
     `<label class="btn sm ghost pl-tool pl-jump" title="Datum wählen">${icon("calendar", 16)}<span>Datum</span><input type="date" data-pjump value="${esc(dateVal)}" aria-label="Zu Datum springen"></label>` +
     `<button type="button" class="btn sm ghost pl-tool" data-pact="cals" title="Kalender, Import/Export, Google">${icon("layers", 16)}<span>Kalender</span></button>` +
-    g + `</div>`;
+    g + f + `</div>`;
 }
 
 /* ---------- Bausteine ---------- */
