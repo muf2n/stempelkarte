@@ -19,6 +19,9 @@ on:
       - "js/alltag/material-core.js"
       - "js/alltag/trash-core.js"
       - "js/privat-core.js"
+      - "js/alltag/subs-core.js"
+      - "js/alltag/subs-catalog.js"
+      - "js/alltag/money-core.js"
       - ".github/workflows/mcp-deploy.yml"
   workflow_dispatch:
 

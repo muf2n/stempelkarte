@@ -135,6 +135,7 @@ export function upcoming(subs, today, days = 31) {
     let k = s.next, guard = 0;
     const anchor = s.day || dateOf(s.next).getUTCDate();
     while (k <= end && guard++ < 400) {
+      if (isKey(s.ended) && k > s.ended) break; // gekündigt: nach dem letzten Tag keine Zahlung mehr
       if (k >= today) res.push({ sub: s, date: k });
       k = nextDue(k, s.interval, s.interval === "week" ? null : anchor);
     }

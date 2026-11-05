@@ -102,6 +102,10 @@ const SHELL = [
   "js/alltag/gmail.js",
   "js/alltag/subs-detect.js",
   "js/alltag/money-gmail.js",
+  // Update 9 – Abos (Kündigen, Fristen, Katalog)
+  "js/alltag/money-subs.js",
+  "js/alltag/subs-core.js",
+  "js/alltag/subs-catalog.js",
   // Update 9 – Bankverbindung (BAWAG über Enable Banking)
   "js/alltag/money-bank.js",
   "bank-callback.html",

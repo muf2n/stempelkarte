@@ -274,6 +274,7 @@ export function dueBookings(sub, today = todayKey(), existingIds = new Set()) {
   let k = sub.next, guard = 0;
   const anchor = sub.day || dateOf(sub.next).getDate();
   while (k <= today && guard++ < 60) {
+    if (isKey(sub.ended) && k > sub.ended) break; // gekündigt: nach dem letzten Tag nicht mehr buchen
     const id = subTxId(sub.id, k);
     if (!existingIds.has(id)) {
       txs.push({ id, date: k, amount: round2(sub.amount), type: "out", category: sub.category || "abos", note: sub.name || "Abo", recurringId: sub.id, auto: true });
@@ -292,6 +293,7 @@ export function upcoming(subs, today = todayKey(), days = 31) {
     let k = s.next, guard = 0;
     const anchor = s.day || dateOf(s.next).getDate();
     while (k <= end && guard++ < 400) {
+      if (isKey(s.ended) && k > s.ended) break;
       if (k >= today) res.push({ sub: s, date: k });
       k = nextDue(k, s.interval, s.interval === "week" ? null : anchor);
     }
