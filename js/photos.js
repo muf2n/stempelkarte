@@ -3,9 +3,14 @@
 //   Cloud-Modus: Firestore users/{uid}/photos/{id} (NICHT im Haupt-Snapshot, nur gezielte Abfragen)
 //   Lokaler Modus: IndexedDB „stempelkarte-photos“
 // Form: { id, ts, dayKey, placeId|null, place, entryId|null, note, w, h, data, thumb }
+// Update 9 (Agent S, Galerie): optional { albumIds: [], lat, lng, acc, addr, albMig } und ein schlanker
+// Index je Foto (nur Vorschaubild + Metadaten, nie das große Bild):
+//   Cloud: users/{uid}/a_photo_index/{id}   Lokal: IndexedDB-Store „index“
+// Der Index wird bei add/update/delete mitgeschrieben und für alte Fotos bei Bedarf nachgetragen (ensureIndex).
 import * as store from "./store.js";
 import { getFirebase } from "./firebase.js";
 import { newId, dayKey as toDayKey } from "./util.js";
+import { indexDoc, indexDiffers, planBackfill, cleanIds } from "./gallery-core.js";
 
 const MAX_SIDE = 1280;
 const THUMB_SIDE = 240;
@@ -15,6 +20,8 @@ const NET_WAIT_MS = 5000;      // so lange auf den Server warten, dann Offline-C
 
 const IDB_NAME = "stempelkarte-photos";
 const IDB_STORE = "photos";
+const IDB_INDEX = "index";      // Update 9 – Galerie
+const CLOUD_INDEX = "a_photo_index";
 
 /* ---------- Änderungs-Benachrichtigung ---------- */
 
@@ -59,8 +66,16 @@ function norm(p) {
     h: Number(p.h) || 0,
     data: typeof p.data === "string" ? p.data : "",
     thumb: typeof p.thumb === "string" ? p.thumb : "",
+    // Update 9 – Galerie (optional, alte Fotos haben das nicht)
+    albumIds: cleanIds(p.albumIds),
+    lat: fnum(p.lat),
+    lng: fnum(p.lng),
+    acc: fnum(p.acc),
+    addr: String(p.addr || ""),
+    albMig: !!p.albMig,
   };
 }
+function fnum(v) { return typeof v === "number" && Number.isFinite(v) ? v : null; }
 const byTs = (a, b) => a.ts - b.ts;
 
 /* ---------- IndexedDB (lokaler Modus) ---------- */
@@ -70,7 +85,7 @@ function idb() {
   if (idbPromise) return idbPromise;
   idbPromise = new Promise((resolve, reject) => {
     if (typeof indexedDB === "undefined") { reject(new Error("Kein Speicher für Fotos verfügbar.")); return; }
-    const req = indexedDB.open(IDB_NAME, 1);
+    const req = indexedDB.open(IDB_NAME, 2);
     req.onupgradeneeded = () => {
       const db = req.result;
       if (!db.objectStoreNames.contains(IDB_STORE)) {
@@ -78,6 +93,7 @@ function idb() {
         os.createIndex("dayKey", "dayKey");
         os.createIndex("placeId", "placeId");
       }
+      if (!db.objectStoreNames.contains(IDB_INDEX)) db.createObjectStore(IDB_INDEX, { keyPath: "id" }); // Update 9 – Galerie
     };
     req.onsuccess = () => resolve(req.result);
     req.onerror = () => reject(req.error || new Error("Fotospeicher konnte nicht geöffnet werden."));
@@ -86,10 +102,10 @@ function idb() {
   return idbPromise;
 }
 
-function idbReq(mode, fn) {
+function idbReq(mode, fn, storeName = IDB_STORE) {
   return idb().then((db) => new Promise((resolve, reject) => {
-    const tx = db.transaction(IDB_STORE, mode);
-    const os = tx.objectStore(IDB_STORE);
+    const tx = db.transaction(storeName, mode);
+    const os = tx.objectStore(storeName);
     let out;
     const r = fn(os);
     if (r) r.onsuccess = () => { out = r.result; };
@@ -203,19 +219,24 @@ export async function addPhoto(file, meta = {}) {
     entryId: meta.entryId || null,
     note: String(meta.note || "").trim().slice(0, 500),
     w: img.w, h: img.h, data: img.data, thumb: img.thumb,
+    albumIds: meta.albumIds, lat: meta.lat, lng: meta.lng, acc: meta.acc, addr: meta.addr, albMig: !!meta.albMig,
   });
   let queued = false;
   if (store.get().mode === "cloud") {
     const { db, fs, uid } = await cloud();
     const { id, ...rest } = photo;
     const p = fs.setDoc(fs.doc(db, "users", uid, "photos", id), { id, ...rest });
+    const pi = fs.setDoc(fs.doc(db, "users", uid, CLOUD_INDEX, id), indexDoc(photo)); // Update 9 – Galerie-Index
+    pi.catch((e) => console.error("Foto-Index speichern fehlgeschlagen:", e));
     // Offline bestätigt Firestore erst, wenn das Netz wieder da ist – die Warteschlange sendet später.
     const r = await withTimeout(p, NET_WAIT_MS);
     if (r === TIMEOUT) { queued = true; p.catch((e) => console.error("Foto-Upload fehlgeschlagen:", e)); }
   } else {
     await idbReq("readwrite", (os) => os.put(photo));
+    await idbReq("readwrite", (os) => os.put(indexDoc(photo)), IDB_INDEX);
   }
   mem.set(photo.id, photo);
+  idxSet(indexDoc(photo));
   emit({ type: "add", photo });
   return { photo, queued };
 }
@@ -289,36 +310,189 @@ export async function deletePhoto(id) {
   if (store.get().mode === "cloud") {
     const { db, fs, uid } = await cloud();
     const p = fs.deleteDoc(fs.doc(db, "users", uid, "photos", pid));
+    fs.deleteDoc(fs.doc(db, "users", uid, CLOUD_INDEX, pid)).catch((e) => console.error("Foto-Index löschen fehlgeschlagen:", e));
     const r = await withTimeout(p, NET_WAIT_MS);
     if (r === TIMEOUT) p.catch((e) => console.error("Foto löschen fehlgeschlagen:", e));
   } else {
     await idbReq("readwrite", (os) => os.delete(pid));
+    await idbReq("readwrite", (os) => os.delete(pid), IDB_INDEX);
   }
-  const old = mem.get(pid) || null;
+  const old = mem.get(pid) || idx.get(pid) || null;
   mem.delete(pid);
+  idx.delete(pid);
   deleted.add(pid);
   emit({ type: "delete", id: pid, photo: old });
 }
 
 /** Notiz eines Fotos ändern. */
 export async function updateNote(id, note) {
+  const text = String(note || "").trim().slice(0, 500);
+  await updatePhoto(id, { note: text });
+}
+
+/* ---------- Update 9 – Galerie: Teil-Änderungen, Index, Einzel-Laden ---------- */
+
+const UPDATABLE = ["note", "albumIds", "lat", "lng", "acc", "addr", "albMig", "placeId", "place"];
+
+/**
+ * Felder eines Fotos ändern (note, albumIds, lat, lng, acc, addr, albMig, placeId, place).
+ * Schreibt Foto UND Index. Ereignis: { type: "note" } wenn nur die Notiz, sonst { type: "update" }.
+ */
+export async function updatePhoto(id, partial) {
   syncOwner();
   const pid = String(id || "");
-  const text = String(note || "").trim().slice(0, 500);
+  if (!pid) throw new Error("Foto nicht gefunden.");
+  const patch = {};
+  for (const k of UPDATABLE) if (partial && Object.prototype.hasOwnProperty.call(partial, k)) patch[k] = partial[k];
+  if ("note" in patch) patch.note = String(patch.note || "").trim().slice(0, 500);
+  if ("albumIds" in patch) patch.albumIds = cleanIds(patch.albumIds);
+  for (const k of ["lat", "lng", "acc"]) if (k in patch) patch[k] = fnum(patch[k]);
+  if ("addr" in patch) patch.addr = String(patch.addr || "");
+  if ("albMig" in patch) patch.albMig = !!patch.albMig;
+  if ("placeId" in patch) patch.placeId = patch.placeId ? String(patch.placeId) : null;
+  if ("place" in patch) patch.place = String(patch.place || "");
+  const base = mem.get(pid) || idx.get(pid) || null;
+  let nextIdx = null;
   if (store.get().mode === "cloud") {
     const { db, fs, uid } = await cloud();
-    const p = fs.setDoc(fs.doc(db, "users", uid, "photos", pid), { note: text }, { merge: true });
+    const p = fs.setDoc(fs.doc(db, "users", uid, "photos", pid), patch, { merge: true });
+    // Index: vollständig schreiben, wenn wir ihn kennen (sonst fehlte das Vorschaubild)
+    let full = idx.get(pid) || (mem.get(pid) ? indexDoc(mem.get(pid)) : null);
+    if (!full) { const ph = await getPhoto(pid).catch(() => null); full = ph ? indexDoc(ph) : null; }
+    if (full) {
+      nextIdx = indexDoc({ ...full, ...patch });
+      fs.setDoc(fs.doc(db, "users", uid, CLOUD_INDEX, pid), nextIdx).catch((e) => console.error("Foto-Index speichern fehlgeschlagen:", e));
+    }
     const r = await withTimeout(p, NET_WAIT_MS);
-    if (r === TIMEOUT) p.catch((e) => console.error("Foto-Notiz speichern fehlgeschlagen:", e));
+    if (r === TIMEOUT) p.catch((e) => console.error("Foto ändern fehlgeschlagen:", e));
   } else {
     const cur = await idbReq("readonly", (os) => os.get(pid));
     if (!cur) throw new Error("Foto nicht gefunden.");
-    await idbReq("readwrite", (os) => os.put({ ...cur, note: text }));
+    const next = norm({ ...cur, ...patch });
+    await idbReq("readwrite", (os) => os.put(next));
+    nextIdx = indexDoc(next);
+    await idbReq("readwrite", (os) => os.put(nextIdx), IDB_INDEX);
   }
   const m = mem.get(pid);
-  if (m) m.note = text;
-  emit({ type: "note", id: pid, note: text });
+  if (m) Object.assign(m, patch);
+  if (nextIdx) idxSet(nextIdx);
+  else if (idx.get(pid)) Object.assign(idx.get(pid), patch);
+  const onlyNote = Object.keys(patch).length === 1 && "note" in patch;
+  if (onlyNote) emit({ type: "note", id: pid, note: patch.note });
+  emit({ type: "update", id: pid, patch, photo: idx.get(pid) || m || (base && { ...base, ...patch }) || null });
 }
+
+/** Ein Foto vollständig (mit großem Bild) laden – aus dem Speicher, Firestore bzw. IndexedDB. */
+export async function getPhoto(id) {
+  syncOwner();
+  const pid = String(id || "");
+  if (!pid) return null;
+  const m = mem.get(pid);
+  if (m && m.data) return m;
+  let p = null;
+  if (store.get().mode === "cloud") {
+    const { db, fs, uid } = await cloud();
+    const ref = fs.doc(db, "users", uid, "photos", pid);
+    let d = null;
+    try { d = await withTimeout(fs.getDoc(ref), NET_WAIT_MS); } catch (e) { if (e && e.code === "permission-denied") throw e; d = TIMEOUT; }
+    if (d === TIMEOUT) { try { d = await fs.getDocFromCache(ref); } catch { d = null; } }
+    if (d && d.exists && d.exists()) p = norm({ ...d.data(), id: d.id });
+  } else {
+    const raw = await idbReq("readonly", (os) => os.get(pid));
+    p = raw ? norm(raw) : null;
+  }
+  if (p) mem.set(pid, p);
+  return p;
+}
+
+/* Index-Cache */
+const idx = new Map(); // id → Index-Dokument
+let idxOwner = "";
+let idxLoaded = false;
+function idxSync() { const o = owner(); if (o !== idxOwner) { idx.clear(); idxOwner = o; idxLoaded = false; } }
+function idxSet(d) { idxSync(); if (d && d.id && !deleted.has(d.id)) idx.set(d.id, d); }
+
+/**
+ * Alle Fotos als schlanke Index-Liste (neueste zuerst) – lädt NIE die großen Bilder.
+ * opts.refresh = true → neu vom Server/aus IndexedDB.
+ */
+export async function listIndex(opts = {}) {
+  syncOwner(); idxSync();
+  if (idxLoaded && !opts.refresh) return [...idx.values()].filter((x) => !deleted.has(x.id)).sort((a, b) => b.ts - a.ts);
+  const own = idxOwner;
+  let list = [];
+  if (store.get().mode === "cloud") {
+    const { db, fs, uid } = await cloud();
+    const col = fs.collection(db, "users", uid, CLOUD_INDEX);
+    let qs = null;
+    try { qs = await withTimeout(fs.getDocs(col), NET_WAIT_MS * 2); } catch (e) { if (e && e.code === "permission-denied") throw e; qs = TIMEOUT; }
+    if (qs === TIMEOUT) { try { qs = await fs.getDocsFromCache(col); } catch { qs = null; } }
+    if (qs) qs.forEach((d) => { const x = indexDoc({ ...d.data(), id: d.id }); if (x) list.push(x); });
+  } else {
+    list = ((await idbReq("readonly", (os) => os.getAll(), IDB_INDEX)) || []).map(indexDoc).filter(Boolean);
+  }
+  if (own !== owner()) return [];
+  idx.clear();
+  for (const x of list) if (!deleted.has(x.id)) idx.set(x.id, x);
+  for (const p of mem.values()) if (!idx.has(p.id) && !deleted.has(p.id)) idx.set(p.id, indexDoc(p)); // frisch aufgenommen, Index noch unterwegs
+  idxLoaded = true;
+  return [...idx.values()].sort((a, b) => b.ts - a.ts);
+}
+
+/**
+ * Fehlende Index-Einträge alter Fotos nachtragen (einmal pro Gerät/Konto, danach nur bei Abweichung).
+ * Cloud: vergleicht zuerst die Anzahl (Zähl-Abfrage, lädt keine Bilder); nur wenn sie abweicht,
+ * werden die Fotos einmal vollständig gelesen. → Anzahl nachgetragener Einträge.
+ */
+export async function ensureIndex() {
+  syncOwner(); idxSync();
+  const own = owner();
+  let added = 0;
+  if (store.get().mode === "cloud") {
+    const { db, fs, uid } = await cloud();
+    const pc = fs.collection(db, "users", uid, "photos");
+    const ic = fs.collection(db, "users", uid, CLOUD_INDEX);
+    let nP = null, nI = null;
+    try {
+      const [a, b] = await Promise.all([withTimeout(fs.getCountFromServer(pc), NET_WAIT_MS), withTimeout(fs.getCountFromServer(ic), NET_WAIT_MS)]);
+      if (a !== TIMEOUT && b !== TIMEOUT) { nP = a.data().count; nI = b.data().count; }
+    } catch { nP = null; }
+    if (nP === null || nP === nI) return 0; // offline oder schon vollständig
+    const [qp, qi] = await Promise.all([withTimeout(fs.getDocs(pc), 30000), withTimeout(fs.getDocs(ic), 15000)]);
+    if (qp === TIMEOUT || qi === TIMEOUT) return 0;
+    const photosById = new Map();
+    qp.forEach((d) => { const p = norm({ ...d.data(), id: d.id }); if (p) photosById.set(p.id, p); });
+    const iIds = []; qi.forEach((d) => iIds.push(d.id));
+    const plan = planBackfill([...photosById.keys()], iIds);
+    for (const id of plan.missing) {
+      const d = indexDoc(photosById.get(id));
+      fs.setDoc(fs.doc(db, "users", uid, CLOUD_INDEX, id), d).catch((e) => console.error("Index nachtragen:", e));
+      if (own === owner()) idxSet(d);
+      added++;
+    }
+    for (const id of plan.orphans) {
+      fs.deleteDoc(fs.doc(db, "users", uid, CLOUD_INDEX, id)).catch(() => {});
+      idx.delete(id);
+    }
+  } else {
+    const pIds = (await idbReq("readonly", (os) => os.getAllKeys())) || [];
+    const iIds = (await idbReq("readonly", (os) => os.getAllKeys(), IDB_INDEX)) || [];
+    const plan = planBackfill(pIds, iIds);
+    for (const id of plan.missing) {
+      const raw = await idbReq("readonly", (os) => os.get(id));
+      const d = raw ? indexDoc(norm(raw)) : null;
+      if (!d) continue;
+      await idbReq("readwrite", (os) => os.put(d), IDB_INDEX);
+      idxSet(d);
+      added++;
+    }
+    for (const id of plan.orphans) { await idbReq("readwrite", (os) => os.delete(id), IDB_INDEX); idx.delete(id); }
+  }
+  return added;
+}
+
+/** Interner Prüfer: weicht der Index vom Foto ab? (für Tests/Reparatur) */
+export function indexOutdated(photo) { return indexDiffers(indexDoc(photo), idx.get(photo && photo.id)); }
 
 /** dataURL → File (zum Teilen). */
 export function photoFile(photo) {

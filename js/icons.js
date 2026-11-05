@@ -72,6 +72,10 @@ const P = {
   // Update 9 – Material
   toolbox: '<rect x="3" y="8" width="18" height="12" rx="2.5"/><path d="M8.5 8V6a1.5 1.5 0 0 1 1.5-1.5h4A1.5 1.5 0 0 1 15.5 6v2M3 13h18M10 13v2h4v-2"/>',
   route: '<circle cx="6" cy="18" r="2.5"/><circle cx="18" cy="6" r="2.5"/><path d="M8.5 18H16a3.5 3.5 0 0 0 0-7H8a3.5 3.5 0 0 1 0-7h7.5"/>',
+  // Update 9 – Galerie
+  image: '<rect x="3.5" y="4.5" width="17" height="15" rx="2.5"/><circle cx="9" cy="10" r="1.8"/><path d="M4 17.5l4.8-4.8a1.5 1.5 0 0 1 2.1 0L15 16.8l1.8-1.8a1.5 1.5 0 0 1 2.1 0l1.6 1.6"/>',
+  map: '<path d="M3.5 6.5l5.5-2 6 2 5.5-2v13l-5.5 2-6-2-5.5 2z"/><path d="M9 4.5v13M15 6.5v13"/>',
+  check2: '<circle cx="12" cy="12" r="9"/><path d="M8 12.3l2.7 2.7L16 9.7"/>',
 };
 
 export const ICON_NAMES = Object.keys(P);

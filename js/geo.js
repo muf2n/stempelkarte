@@ -137,6 +137,12 @@ function formatAddress(data) {
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
 async function fetchAddress(lat, lng) {
+  const data = await fetchRaw(lat, lng);
+  return data ? formatAddress(data) : null;
+}
+
+// Update 9 (Galerie): Rohantwort (mit address-Feldern), gleiche Warteschlange/Drosselung (≤ 1 Anfrage/s)
+async function fetchRaw(lat, lng) {
   const wait = lastRequest + MIN_GAP_MS - Date.now();
   if (wait > 0) await sleep(wait);
   lastRequest = Date.now();
@@ -150,7 +156,7 @@ async function fetchAddress(lat, lng) {
     const res = await fetch(url, { signal: ctrl ? ctrl.signal : undefined, headers: { Accept: "application/json" } });
     if (!res.ok) return null;
     const data = await res.json();
-    return formatAddress(data);
+    return data && typeof data === "object" && !data.error ? data : null;
   } catch {
     return null;
   } finally {
@@ -171,6 +177,32 @@ export async function reverseGeocode(lat, lng) {
       const addr = await fetchAddress(lat, lng);
       if (addr) storeCache(key, addr);
       return addr;
+    });
+    queue = job.catch(() => null);
+    return await job;
+  } catch {
+    return null;
+  }
+}
+
+// Update 9 (Galerie): Nominatim-Rohdaten (address.road, house_number, village …), im Speicher zwischengespeichert.
+const rawCache = new Map(); // "lat,lng" (4 Nachkommastellen ≈ 11 m) → data
+export async function reverseGeocodeDetail(lat, lng) {
+  try {
+    lat = Number(lat); lng = Number(lng);
+    if (!Number.isFinite(lat) || !Number.isFinite(lng)) return null;
+    const key = lat.toFixed(4) + "," + lng.toFixed(4);
+    if (rawCache.has(key)) return rawCache.get(key);
+    const job = queue.then(async () => {
+      if (rawCache.has(key)) return rawCache.get(key);
+      const data = await fetchRaw(lat, lng);
+      if (data) {
+        rawCache.set(key, data);
+        if (rawCache.size > CACHE_MAX) rawCache.delete(rawCache.keys().next().value);
+        const addr = formatAddress(data);
+        if (addr) storeCache(key, addr);
+      }
+      return data;
     });
     queue = job.catch(() => null);
     return await job;

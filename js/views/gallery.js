@@ -2,6 +2,23 @@
 // Löschen, Teilen, Tages-Blatt „Fotos am …“ und kleiner Streifen in „Mein Tag“.
 import * as photos from "../photos.js";
 import { esc, dayKey as toDayKey, clock, fmtDate } from "../util.js";
+import * as albumsMod from "../gallery-albums.js"; // Update 9 – Galerie (automatische Alben)
+
+const GRID_SVG = '<svg class="ico" width="SZ" height="SZ" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><rect x="4" y="4" width="7" height="7" rx="2"/><rect x="13" y="4" width="7" height="7" rx="2"/><rect x="4" y="13" width="7" height="7" rx="2"/><rect x="13" y="13" width="7" height="7" rx="2"/></svg>';
+/** Update 9 – Galerie öffnen (Alltag › Galerie), optional direkt ein Album. */
+export function openGalleryPage(albumId) {
+  location.hash = albumId ? `alltag/galerie/a/${encodeURIComponent(albumId)}` : "alltag/galerie";
+}
+function galleryBtn(cls, label = "Galerie", size = 18) {
+  return `<button type="button" class="${cls}" data-ph-gal aria-label="Galerie öffnen" title="Galerie">${GRID_SVG.replace(/SZ/g, String(size))}<span>${esc(label)}</span></button>`;
+}
+
+/** Update 9 – nach dem Speichern: Position + Album anhängen (blockiert das Speichern nicht). */
+export function fileAfterSave(photo, ctx, posP, opts = {}) {
+  albumsMod.autoFile(photo, { pos: posP, auto: opts.auto, placeId: photo && photo.placeId }).then((r) => {
+    if (r && r.album && opts.toast !== false) ctx.ui.toast(`📍 Im Album „${r.album.name}“`, 2600);
+  }).catch((e) => console.error("Foto einsortieren:", e));
+}
 
 const CAM_SVG = '<svg class="ico ico-camera" width="SZ" height="SZ" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M4 8.5A2.5 2.5 0 0 1 6.5 6h1.7l1.3-2h5l1.3 2h1.7A2.5 2.5 0 0 1 20 8.5v9a2.5 2.5 0 0 1-2.5 2.5h-11A2.5 2.5 0 0 1 4 17.5z"/><circle cx="12" cy="13" r="3.6"/></svg>';
 export const camIcon = (size = 20) => CAM_SVG.replace(/SZ/g, String(size));
@@ -44,9 +61,12 @@ function wireFile(host, onFile) {
 /* ---------- Aufnahme: Vorschau + Notiz ---------- */
 
 /** Nach der Auswahl/Aufnahme: Vorschau, Notiz, Speichern. meta = { dayKey, placeId, place, entryId } */
-export function openCapture(file, ctx, meta = {}) {
+export function openCapture(file, ctx, meta = {}, opts = {}) {
   const work = photos.processImage(file);
   work.catch(() => {});
+  // Update 9 – Galerie: Position gleich bei der Aufnahme anfragen (frisch < 60 s wird wiederverwendet)
+  const posP = opts.file === false ? null : albumsMod.currentPosition();
+  if (posP) posP.catch(() => {});
   const where = [meta.place || "", meta.dayKey ? fmtDate(keyToDate(meta.dayKey)) : ""].filter(Boolean).join(" · ");
   ctx.ui.openSheet({
     title: "Foto speichern",
@@ -78,6 +98,8 @@ export function openCapture(file, ctx, meta = {}) {
           const r = await photos.addPhoto(null, { ...meta, processed: img, note: $("note").value });
           close();
           ctx.ui.toast(r.queued ? "Foto gespeichert – wird hochgeladen, sobald du Netz hast." : "Foto gespeichert.", r.queued ? 3600 : 2400);
+          if (posP) fileAfterSave(r.photo, ctx, posP, { auto: opts.auto });
+          if (opts.onSaved) { try { opts.onSaved(r.photo); } catch (e) { console.error(e); } }
         } catch (e) {
           console.error(e);
           ctx.ui.setBusy(save, false);
@@ -100,13 +122,15 @@ function closeViewer(fromPop = false) {
   viewer = null;
   document.removeEventListener("keydown", v.onKey, true);
   window.removeEventListener("popstate", v.onPop);
+  if (v.unsub) v.unsub();
   v.el.remove();
+  if (v.onClose) { try { v.onClose(); } catch { /* egal */ } }
   document.body.style.overflow = v.prevOverflow;
   if (!fromPop && v.pushed && history.state && history.state.phv) history.back();
   if (v.prevFocus && document.contains(v.prevFocus)) { try { v.prevFocus.focus({ preventScroll: true }); } catch { /* egal */ } }
 }
 
-async function sharePhoto(p, ctx) {
+export async function sharePhoto(p, ctx) {
   const file = photos.photoFile(p);
   const text = [p.note, p.place, fmtDate(p.ts) + " " + clock(p.ts)].filter(Boolean).join(" · ");
   try {
@@ -131,8 +155,28 @@ async function sharePhoto(p, ctx) {
   }
 }
 
-/** Foto im Vollbild zeigen; list = alle Fotos der Galerie (Wischen/Pfeile). */
-export function openViewer(list, index, ctx) {
+/** Foto als Datei herunterladen (Handy: landet in „Downloads“/Galerie). */
+export function downloadPhoto(p, ctx) {
+  const file = photos.photoFile(p);
+  try {
+    const a = document.createElement("a");
+    a.href = p.data || p.thumb;
+    a.download = (file && file.name) || "Foto.jpg";
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    if (ctx) ctx.ui.toast("Foto wird gespeichert …");
+  } catch {
+    if (ctx) ctx.ui.toast("Speichern geht hier nicht.");
+  }
+}
+
+/**
+ * Foto im Vollbild zeigen; list = alle Fotos der Galerie (Wischen/Pfeile).
+ * Update 9 – opts: { resolve(item) → Promise<volles Foto> (Liste enthält nur Vorschaubilder),
+ *   extra(photo, host) (z. B. Album-Chips), onClose() }
+ */
+export function openViewer(list, index, ctx, opts = {}) {
   closeViewer();
   const items = (list || []).slice();
   if (!items.length) return;
@@ -155,10 +199,12 @@ export function openViewer(list, index, ctx) {
     `</div>` +
     `<div class="ph-v-panel">` +
       `<div class="ph-v-meta" data-v="meta"></div>` +
+      `<div class="ph-v-extra" data-v="extra" hidden></div>` +
       `<label class="ph-v-note"><span class="ph-sr">Notiz</span><textarea data-v="note" rows="2" maxlength="500" placeholder="Notiz hinzufügen …"></textarea></label>` +
       `<div class="ph-v-acts">` +
         `<button type="button" class="btn sm ghost" data-v="save" hidden>Notiz speichern</button>` +
         `<button type="button" class="btn sm ghost" data-v="share">Teilen</button>` +
+        `<button type="button" class="btn sm ghost" data-v="dl" title="In Galerie des Handys speichern" aria-label="In Galerie des Handys speichern">Aufs Handy</button>` +
         `<button type="button" class="btn sm danger" data-v="del">Löschen</button>` +
       `</div>` +
     `</div>`;
@@ -176,14 +222,36 @@ export function openViewer(list, index, ctx) {
   viewer = v;
 
   const note = $("note"), saveBtn = $("save");
+  let showSeq = 0;
+  function drawExtra() {
+    const host = $("extra");
+    if (!opts.extra) return;
+    host.hidden = false;
+    try { opts.extra(items[i], host); } catch (e) { console.error(e); }
+  }
+  v.redrawExtra = () => { if (viewer === v) { drawMeta(); drawExtra(); } };
+  v.items = items;
+  function drawMeta() {
+    const p = items[i];
+    const where = [p.place, p.addr && p.addr !== p.place ? p.addr : ""].filter(Boolean).join(" · ");
+    $("meta").innerHTML = `<b>${esc(fmtDate(p.ts))}, ${esc(clock(p.ts))}</b>${where ? ` · ${esc(where)}` : ""}`;
+  }
   function show(n) {
     if (n < 0 || n >= items.length) return;
     i = n;
     const p = items[i];
+    const my = ++showSeq;
     $("img").src = p.data || p.thumb;
+    if (!p.data && opts.resolve) {
+      Promise.resolve(opts.resolve(p)).then((full) => {
+        if (my !== showSeq || viewer !== v || !full) return;
+        if (full.data) { p.data = full.data; $("img").src = full.data; }
+      }).catch((e) => console.error(e));
+    }
     $("img").alt = p.note ? `Foto: ${p.note}` : `Foto vom ${fmtDate(p.ts)}`;
     $("n").textContent = items.length > 1 ? `${i + 1} / ${items.length}` : "";
-    $("meta").innerHTML = `<b>${esc(fmtDate(p.ts))}, ${esc(clock(p.ts))}</b>${p.place ? ` · ${esc(p.place)}` : ""}`;
+    drawMeta();
+    drawExtra();
     note.value = p.note || "";
     saveBtn.hidden = true;
     $("prev").hidden = i === 0;
@@ -235,7 +303,9 @@ export function openViewer(list, index, ctx) {
   saveBtn.addEventListener("click", saveNote);
   note.addEventListener("blur", (ev) => { if (ev.relatedTarget !== saveBtn) saveNote(); });
 
-  $("share").addEventListener("click", () => sharePhoto(items[i], ctx));
+  const full = async (p) => (p.data || !opts.resolve) ? p : ({ ...p, ...((await opts.resolve(p)) || {}) });
+  $("share").addEventListener("click", async () => sharePhoto(await full(items[i]), ctx));
+  $("dl").addEventListener("click", async () => downloadPhoto(await full(items[i]), ctx));
   $("close").addEventListener("click", () => closeViewer());
   $("prev").addEventListener("click", () => show(i - 1));
   $("next").addEventListener("click", () => show(i + 1));
@@ -253,6 +323,15 @@ export function openViewer(list, index, ctx) {
     if (Math.abs(dx) > 50 && Math.abs(dx) > Math.abs(dy) * 1.4) show(dx < 0 ? i + 1 : i - 1);
   }, { passive: true });
 
+  // Update 9 – Änderungen (Alben, Notiz von anderswo) übernehmen
+  v.onClose = opts.onClose || null;
+  v.unsub = photos.onChange((info) => {
+    if (info.type !== "update" || viewer !== v) return;
+    const x = items.find((y) => y.id === info.id);
+    if (!x) return;
+    Object.assign(x, info.patch || {});
+    if (items[i] === x) { drawMeta(); drawExtra(); }
+  });
   document.body.appendChild(el);
   document.body.style.overflow = "hidden";
   document.addEventListener("keydown", v.onKey, true);
@@ -333,6 +412,11 @@ export function mountGallery(host, ctx, q, opts = {}) {
       if (x) { x.note = info.note; draw(); }
       return;
     }
+    if (info.type === "update") { // Update 9 – Galerie: Album/Position geändert → nur übernehmen
+      const x = list.find((y) => y.id === info.id);
+      if (x) Object.assign(x, info.patch || {});
+      return;
+    }
     load();
   });
   function destroy() { if (unsub) { unsub(); unsub = null; } seq++; }
@@ -352,8 +436,9 @@ export function openDayPhotos(dayKey, ctx) {
         `<button type="button" class="btn ghost sm" data-d="prev" aria-label="Vorheriger Tag">‹</button>` +
         `<b data-d="label"></b>` +
         `<button type="button" class="btn ghost sm" data-d="next" aria-label="Nächster Tag">›</button>` +
-      `</div><div data-d="gal"></div>`,
-    onMount(sheet) {
+      `</div><div data-d="gal"></div>` +
+      galleryBtn("btn ghost ph-day-gal", "Alle Fotos in der Galerie", 18), // Update 9 – Galerie
+    onMount(sheet, close) {
       let g = null;
       const today = toDayKey(Date.now());
       const render = () => {
@@ -365,6 +450,7 @@ export function openDayPhotos(dayKey, ctx) {
           empty: k === today ? "Heute noch keine Fotos – während du eingestempelt bist, kannst du in „Heute“ welche machen." : "An diesem Tag gibt es keine Fotos.",
         });
       };
+      sheet.querySelector("[data-ph-gal]").addEventListener("click", () => { close(); openGalleryPage(); });
       sheet.querySelector('[data-d="prev"]').addEventListener("click", () => { k = shiftKey(k, -1); render(); });
       sheet.querySelector('[data-d="next"]').addEventListener("click", () => { if (k < today) { k = shiftKey(k, 1); render(); } });
       render();
@@ -421,7 +507,7 @@ export function mountPhotoBar(host, ctx) {
   }
   photos.onChange((info) => {
     if (!host.isConnected || host.hidden) return;
-    if (info.type === "note") return;
+    if (info.type === "note" || info.type === "update") return;
     if (info.type === "add" && info.photo && info.photo.dayKey !== dayK) return;
     loadCount();
   });
@@ -453,19 +539,21 @@ export function mountDayStrip(host, ctx) {
     const b = ev.target.closest("[data-ps]");
     if (!b) return;
     if (b.dataset.ps === "all") openDayPhotos(k, ctx);
+    else if (b.dataset.ps === "gal") openGalleryPage(); // Update 9 – Galerie
     else openViewer(list, Number(b.dataset.ps) || 0, ctx);
   });
   function draw() {
     host.hidden = !list.length;
     if (!list.length) { host.innerHTML = ""; return; }
-    const max = 4;
+    const max = 3; // Update 9 – Platz für den „Galerie“-Knopf
     const shown = list.slice(-max);
     const off = list.length - shown.length;
     host.innerHTML =
       `<button type="button" class="ph-strip-l" data-ps="all" aria-label="Alle Fotos von heute ansehen">${camIcon(16)}<span>${list.length} ${list.length === 1 ? "Foto" : "Fotos"}</span></button>` +
       `<div class="ph-strip-row">` +
       shown.map((p, n) => `<button type="button" class="ph-th ph-th-s" data-ps="${off + n}" aria-label="Foto ${esc(clock(p.ts))}"><img src="${p.thumb || p.data}" alt="" decoding="async"></button>`).join("") +
-      `</div>`;
+      `</div>` +
+      galleryBtn("ph-strip-gal", "Galerie", 16).replace("data-ph-gal", 'data-ps="gal"');
   }
   async function load() {
     const my = ++seq;
@@ -477,7 +565,7 @@ export function mountDayStrip(host, ctx) {
   photos.onChange((info) => {
     if (!host.isConnected) return;
     if (info.type === "add" && info.photo && info.photo.dayKey !== k) return;
-    if (info.type === "note") return;
+    if (info.type === "note" || info.type === "update") return;
     load();
   });
   return {

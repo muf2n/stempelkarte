@@ -120,6 +120,11 @@ const SHELL = [
   "js/alltag/material.js",
   "js/alltag/material-core.js",
   "css/alltag-material.css",
+  // Update 9 – Galerie
+  "js/gallery-core.js",
+  "js/gallery-albums.js",
+  "js/alltag/galerie.js",
+  "css/alltag-galerie.css",
   "js/app.js"
 ];
 

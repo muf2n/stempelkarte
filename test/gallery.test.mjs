@@ -1,0 +1,181 @@
+// node --test test/gallery.test.mjs
+// Galerie: Alben-Zuordnung (Radius, Ort vor Adresse), Namen aus Nominatim-Antworten (AT), EXIF, Index-Abgleich.
+import test from "node:test";
+import assert from "node:assert/strict";
+import * as G from "../js/gallery-core.js";
+
+const GRAMBACH = { lat: 47.01098, lng: 15.50511 };    // Thomas-Arbesser-Straße, Grambach
+const move = (p, dLatM, dLngM = 0) => ({ lat: p.lat + dLatM / 111320, lng: p.lng + dLngM / (111320 * Math.cos(p.lat * Math.PI / 180)) });
+
+test("Haversine: 2 km nach Norden ≈ 2000 m", () => {
+  const d = G.distanceM(GRAMBACH, move(GRAMBACH, 2000));
+  assert.ok(Math.abs(d - 2000) < 5, String(d));
+});
+
+test("matchLocation: Adress-Album im Radius, außerhalb → neu, nächstes gewinnt", () => {
+  const a1 = { id: "a1", kind: "address", lat: GRAMBACH.lat, lng: GRAMBACH.lng, radius: 80 };
+  const a2 = { id: "a2", kind: "address", ...move(GRAMBACH, 120), radius: 80 };
+  const albums = [a1, a2];
+  assert.equal(G.matchLocation(move(GRAMBACH, 30), { albums }).album.id, "a1");
+  assert.equal(G.matchLocation(move(GRAMBACH, 79), { albums }).album.id, "a2", "näher an a2 (41 m) als an a1 (79 m)");
+  assert.equal(G.matchLocation(move(GRAMBACH, 2000), { albums }).type, "new");
+  assert.equal(G.matchLocation(move(GRAMBACH, -90), { albums }).type, "new", "90 m > 80 m Radius");
+  // Radius je Album
+  assert.equal(G.matchLocation(move(GRAMBACH, -90), { albums: [{ ...a1, radius: 150 }] }).type, "address");
+  // eigene Alben ohne Position zählen nicht
+  assert.equal(G.matchLocation(GRAMBACH, { albums: [{ id: "c", kind: "custom", lat: GRAMBACH.lat, lng: GRAMBACH.lng }] }).type, "new");
+  assert.equal(G.matchLocation(null, { albums }).type, "none");
+  assert.equal(G.matchLocation({ lat: NaN, lng: 1 }, { albums }).type, "none");
+});
+
+test("matchLocation: gespeicherter Ort hat Vorrang vor Adress-Album", () => {
+  const place = { id: "p1", name: "Baustelle Grambach", lat: GRAMBACH.lat, lng: GRAMBACH.lng, radius: 150 };
+  const addr = { id: "a1", kind: "address", ...move(GRAMBACH, 20), radius: 80 };
+  let m = G.matchLocation(move(GRAMBACH, 25), { places: [place], albums: [addr] });
+  assert.equal(m.type, "place");
+  assert.equal(m.place.id, "p1");
+  assert.equal(m.album, null, "Ort-Album noch nicht angelegt");
+  const pa = { id: "pa", kind: "place", placeId: "p1", name: "Baustelle Grambach" };
+  m = G.matchLocation(move(GRAMBACH, 25), { places: [place], albums: [addr, pa] });
+  assert.equal(m.album.id, "pa");
+  // außerhalb des Ort-Radius → Adress-Album
+  m = G.matchLocation(move(GRAMBACH, 170), { places: [place], albums: [{ ...addr, ...move(GRAMBACH, 180) }] });
+  assert.equal(m.type, "address");
+  // Ort ohne Koordinaten wird ignoriert; Standardradius 150 m
+  m = G.matchLocation(move(GRAMBACH, 140), { places: [{ id: "x", name: "Firma" }, { id: "p2", lat: GRAMBACH.lat, lng: GRAMBACH.lng }] });
+  assert.equal(m.type, "place");
+  assert.equal(m.place.id, "p2");
+});
+
+test("Album-Namen aus Nominatim (Österreich)", () => {
+  const grambach = {
+    display_name: "1, Thomas-Arbesser-Straße, Grambach, Bezirk Graz-Umgebung, Steiermark, 8074, Österreich",
+    address: { house_number: "1", road: "Thomas-Arbesser-Straße", village: "Grambach", municipality: "Grambach", county: "Bezirk Graz-Umgebung", state: "Steiermark", postcode: "8074", country: "Österreich", country_code: "at" },
+  };
+  assert.equal(G.albumNameFrom(grambach), "Thomas-Arbesser-Straße 1, Grambach");
+  assert.equal(G.fullAddrFrom(grambach), "Thomas-Arbesser-Straße 1, 8074 Grambach");
+
+  const graz = { address: { house_number: "1", road: "Hauptplatz", suburb: "Innere Stadt", city_district: "Innere Stadt", city: "Graz", state: "Steiermark", postcode: "8010", country: "Österreich" } };
+  assert.equal(G.albumNameFrom(graz), "Hauptplatz 1, Graz");
+
+  const seiersberg = { address: { house_number: "10", road: "Am Seiersberg", town: "Seiersberg-Pirka", municipality: "Seiersberg-Pirka", postcode: "8055" } };
+  assert.equal(G.albumNameFrom(seiersberg), "Am Seiersberg 10, Seiersberg-Pirka");
+
+  // ohne Hausnummer → Straße, Ort
+  const pirka = { address: { road: "Feldkirchner Straße", village: "Pirka", municipality: "Seiersberg-Pirka", postcode: "8054" } };
+  assert.equal(G.albumNameFrom(pirka), "Feldkirchner Straße, Pirka");
+  // ohne Straße → Ort (Stadtteil bei Städten)
+  assert.equal(G.albumNameFrom({ address: { village: "Grambach", postcode: "8074" } }), "Grambach");
+  assert.equal(G.albumNameFrom({ address: { suburb: "Lend", city: "Graz" } }), "Lend, Graz");
+  // nur display_name
+  assert.equal(G.albumNameFrom({ display_name: "Murradweg, Gössendorf, Bezirk Graz-Umgebung, Steiermark" }), "Murradweg, Gössendorf");
+  assert.equal(G.albumNameFrom(null), null);
+  assert.equal(G.albumNameFrom({ error: "Unable to geocode" }), null);
+  assert.match(G.coordName(GRAMBACH), /^Standort 47,0110 \/ 15,5051$/);
+});
+
+test("EXIF: DateTimeOriginal + GPS aus winzigem JPEG", () => {
+  const seg = G.buildExifSegment({ date: "2026:10:14 09:41:07", lat: 47.010983, lng: 15.505112 });
+  const jpeg = new Uint8Array([0xFF, 0xD8, 0xFF, 0xDB, 0x00, 0x04, 0x00, 0x00, 0xFF, 0xD9]);
+  const withExif = G.injectExif(jpeg, seg);
+  const r = G.readExif(withExif.buffer);
+  assert.equal(r.ts, new Date(2026, 9, 14, 9, 41, 7).getTime());
+  assert.ok(Math.abs(r.lat - 47.010983) < 1e-5, String(r.lat));
+  assert.ok(Math.abs(r.lng - 15.505112) < 1e-5, String(r.lng));
+  // Süd/West
+  const sw = G.readExif(G.injectExif(jpeg, G.buildExifSegment({ date: "2025:01:02 03:04:05", lat: -33.5, lng: -70.25 })));
+  assert.ok(Math.abs(sw.lat + 33.5) < 1e-6 && Math.abs(sw.lng + 70.25) < 1e-6);
+  // nur Datum
+  const d = G.readExif(G.injectExif(jpeg, G.buildExifSegment({ date: "2024:12:24 18:00:00" })));
+  assert.equal(d.ts, new Date(2024, 11, 24, 18).getTime());
+  assert.equal(d.lat, undefined);
+  // kein EXIF / Unsinn
+  assert.deepEqual(G.readExif(jpeg), {});
+  assert.deepEqual(G.readExif(new Uint8Array([1, 2, 3])), {});
+  const broken = G.injectExif(jpeg, G.buildExifSegment({ date: "2026:10:14 09:41:07", lat: 1, lng: 1 }).slice(0, 30));
+  assert.doesNotThrow(() => G.readExif(broken));
+});
+
+test("Index-Dokument: ohne großes Bild, Abweichung erkennen", () => {
+  const photo = { id: "ph1", ts: 1, dayKey: "2026-11-05", data: "data:image/jpeg;base64,AAAA", thumb: "data:t", note: "Verteiler", placeId: null, place: "", albumIds: ["a1", "a1", ""], lat: 47, lng: 15, addr: "X 1, 8074 Grambach", w: 10, h: 20 };
+  const d = G.indexDoc(photo);
+  assert.equal(d.data, undefined, "kein data im Index");
+  assert.equal(d.thumb, "data:t");
+  assert.deepEqual(d.albumIds, ["a1"]);
+  for (const k of Object.keys(d)) assert.ok(G.INDEX_FIELDS.includes(k), k);
+  assert.equal(G.indexDiffers(d, G.indexDoc({ ...photo })), false);
+  assert.equal(G.indexDiffers(d, G.indexDoc({ ...photo, note: "neu" })), true);
+  assert.equal(G.indexDiffers(d, G.indexDoc({ ...photo, albumIds: ["a1", "a2"] })), true);
+  assert.equal(G.indexDiffers(d, G.indexDoc({ ...photo, data: "anders" })), false, "data ist egal");
+  assert.equal(G.indexDiffers(d, null), true);
+});
+
+test("Backfill-Plan: fehlende und verwaiste Index-Einträge", () => {
+  const r = G.planBackfill(["a", "b", "c"], ["b", "x"]);
+  assert.deepEqual(r.missing.sort(), ["a", "c"]);
+  assert.deepEqual(r.orphans, ["x"]);
+  assert.deepEqual(G.planBackfill([], []), { missing: [], orphans: [] });
+});
+
+test("albumIds ändern, Zusammenführen, Migration, Ohne Ort", () => {
+  assert.deepEqual(G.changeIds(["a", "b"], "c", "a"), ["b", "c"]);
+  assert.deepEqual(G.changeIds(["a"], ["a", "b"]), ["a", "b"]);
+  assert.deepEqual(G.changeIds(undefined, "x"), ["x"]);
+  assert.deepEqual(G.cleanIds(["x", G.OHNE_ORT, "x", null]), ["x"]);
+
+  const items = [{ id: "1", albumIds: ["A"] }, { id: "2", albumIds: ["A", "B"] }, { id: "3", albumIds: ["C"] }];
+  assert.deepEqual(G.mergePlan(items, "A", "B"), [{ id: "1", albumIds: ["B"] }, { id: "2", albumIds: ["B"] }]);
+  assert.deepEqual(G.mergePlan(items, "A", "A"), []);
+
+  const albums = [{ id: "PA", kind: "place", placeId: "p1" }];
+  const mig = G.migrationPlan([
+    { id: "1", placeId: "p1", albumIds: [] },          // → zuordnen
+    { id: "2", placeId: "p1", albumIds: ["PA"] },      // schon drin
+    { id: "3", placeId: "p2", albumIds: [] },          // Ort-Album fehlt → zuordnen (wird angelegt)
+    { id: "4", placeId: "p1", albumIds: [], albMig: true }, // schon erledigt (bewusst entfernt)
+    { id: "5", placeId: null, albumIds: [] },
+  ], albums);
+  assert.deepEqual(mig, [{ id: "1", placeId: "p1" }, { id: "3", placeId: "p2" }]);
+
+  const am = new Map([["AD", { id: "AD", kind: "address" }], ["CU", { id: "CU", kind: "custom" }]]);
+  assert.equal(G.isOhneOrt({ id: "x", albumIds: [] }, am), true);
+  assert.equal(G.isOhneOrt({ id: "x", albumIds: ["CU"] }, am), true, "eigenes Album ist kein Ort");
+  assert.equal(G.isOhneOrt({ id: "x", albumIds: ["AD"] }, am), false);
+  assert.equal(G.isOhneOrt({ id: "x", albumIds: [], lat: 47, lng: 15 }, am), false);
+  assert.deepEqual(G.itemsOfAlbum([{ id: "x", albumIds: [] }, { id: "y", albumIds: ["AD"] }], G.OHNE_ORT, am).map((i) => i.id), ["x"]);
+});
+
+test("Gruppieren nach Monat/Tag, Filtern & Suche, Album-Statistik", () => {
+  const items = [
+    { id: "1", ts: new Date(2026, 10, 5, 9).getTime(), dayKey: "2026-11-05", note: "Verteiler vorher", addr: "Thomas-Arbesser-Straße 1, 8074 Grambach", albumIds: ["A"] },
+    { id: "2", ts: new Date(2026, 10, 5, 12).getTime(), dayKey: "2026-11-05", note: "", addr: "", albumIds: ["B"] },
+    { id: "3", ts: new Date(2026, 9, 30, 8).getTime(), dayKey: "2026-10-30", note: "Zählerkasten", addr: "Hauptplatz 1, 8010 Graz", albumIds: [] },
+  ];
+  const g = G.groupByMonthDay(items);
+  assert.deepEqual(g.map((m) => m.label), ["November 2026", "Oktober 2026"]);
+  assert.deepEqual(g[0].days[0].items.map((i) => i.id), ["2", "1"], "neueste zuerst");
+  const am = new Map([["A", { id: "A", name: "Thomas-Arbesser-Straße 1, Grambach", kind: "address" }], ["B", { id: "B", name: "Verteiler", kind: "custom" }]]);
+  const ids = (f) => G.filterItems(items, f, am).map((i) => i.id).sort();
+  assert.deepEqual(ids({ albumId: "A" }), ["1"]);
+  assert.deepEqual(ids({ from: "2026-11-01" }), ["1", "2"]);
+  assert.deepEqual(ids({ to: "2026-10-31" }), ["3"]);
+  assert.deepEqual(ids({ q: "grambach" }), ["1"]);
+  assert.deepEqual(ids({ q: "zaehler" }), ["3"], "Umlaut-unabhängig");
+  assert.deepEqual(ids({ q: "verteiler" }), ["1", "2"], "Notiz oder Album-Name");
+  assert.deepEqual(ids({ q: "arbesser str." }), ["1"], "„Str.“ = „Straße“");
+  assert.deepEqual(ids({ q: "graz verteiler" }), [], "alle Wörter müssen passen");
+  const st = G.albumStats(items, { id: "A" }, am);
+  assert.equal(st.count, 1);
+  assert.equal(st.coverItem.id, "1");
+  assert.equal(G.albumStats(items, { id: "B", cover: "nope" }, am).coverItem.id, "2");
+});
+
+test("normAlbum + Maps-Link", () => {
+  const a = G.normAlbum({ id: "x", kind: "address", name: " Hauptplatz 1, Graz ", lat: 47.07, lng: 15.43, radius: "abc" });
+  assert.equal(a.name, "Hauptplatz 1, Graz");
+  assert.equal(a.radius, 80);
+  assert.equal(G.normAlbum({ id: "y", kind: "foo" }).kind, "custom");
+  assert.equal(G.normAlbum(null), null);
+  assert.equal(G.albumMapsUrl(a), "https://www.google.com/maps/search/?api=1&query=47.07,15.43");
+  assert.match(G.albumMapsUrl({ name: "Hauptplatz 1, Graz" }), /query=Hauptplatz%201%2C%20Graz$/);
+});

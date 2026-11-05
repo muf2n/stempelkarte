@@ -4819,3 +4819,12 @@ div.entry.ek-schcard:hover { border-color: var(--sch-line); }
   .fbp-totals { grid-template-columns: 1fr 1fr; gap: 6mm; break-inside: avoid; }
   .fbp-paper .rp-sign { margin-top: 4mm; gap: 10mm; break-inside: avoid; }
 }
+
+/* Update 9 – Galerie (Knöpfe „Galerie“ im Tages-Blatt / Mein Tag, Platz für Album-Chips im Vollbild) */
+.ph-day-gal { width: 100%; margin-top: 12px; }
+.ph-strip-gal {
+  flex: none; display: inline-flex; align-items: center; gap: 5px; margin-left: auto; min-height: 40px; padding: 6px 10px;
+  border-radius: 999px; border: 1px solid var(--line); background: var(--card); color: var(--accent); font: inherit; font-size: .84rem; font-weight: 700; cursor: pointer;
+}
+.ph-strip-gal:focus-visible { outline: none; box-shadow: var(--ring); }
+.ph-v-extra[hidden] { display: none; }
