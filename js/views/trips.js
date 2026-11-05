@@ -6,6 +6,7 @@ import {
   readAllowance, tripsBetween, allowanceByDay, allowanceSummary, dayOverride,
   fmtKm, fmtEur, LEVEL_LABELS,
 } from "../travel.js";
+import { totals as tripTotals, fmtKmD } from "../trip-core.js"; // Update 9 – Fahrtenbuch
 
 let ctx = null;
 let root = null;
@@ -44,6 +45,7 @@ export function mount(el, c) {
       <div class="tg-tile"><span class="tg-l">Kilometer</span><strong data-tg="km">0</strong><span class="tg-sub" data-tg="trips"></span></div>
       <div class="tg-tile tg-t-money"><span class="tg-l">Taggeld</span><strong data-tg="tg">–</strong><span class="tg-sub" data-tg="tgsub"></span></div>
     </div>
+    <div class="kv" data-tg="splitrow" hidden><span>beruflich / privat</span><b data-tg="split"></b></div>
     <div class="kv"><span data-tg="yearl">Kilometer im Jahr</span><b data-tg="year"></b></div>
     <div class="kv" data-tg="kmgrow" hidden><span data-tg="kmgl">Kilometergeld</span><b data-tg="kmg"></b></div>
     <p class="note" data-tg="hint" hidden></p>
@@ -51,7 +53,7 @@ export function mount(el, c) {
       <button type="button" class="btn ghost sm" data-tg-open="log">${icon("list", 18)}<span>Fahrtenbuch</span></button>
       <button type="button" class="btn ghost sm" data-tg-open="days">${icon("calendar", 18)}<span>Taggeld-Tage</span></button>
     </div>
-    <p class="note tg-legal">Kilometer sind geschätzt (Luftlinie × Umwegfaktor), wenn du sie nicht selbst einträgst. Ob und wie viel Taggeld dir zusteht, regelt dein Kollektivvertrag – keine Rechtsberatung.</p>`;
+    <p class="note tg-legal">Kilometer: selbst eingetragen, sonst Straßen-km (Routing), sonst geschätzt (≈ Luftlinie × Umwegfaktor). Ob und wie viel Taggeld dir zusteht, regelt dein Kollektivvertrag – keine Rechtsberatung.</p>`;
 
   root.addEventListener("click", (ev) => {
     const mo = ev.target.closest("[data-tgmo]");
@@ -78,30 +80,35 @@ function render() {
   const f = from.getTime(), t = to.getTime();
   const s = snap.settings || {};
   const a = readAllowance(s);
-  const trips = tripsBetween(snap.entries, f, t, s);
+  const trips = tripsBetween(snap.entries, f, t, s, snap.places);
   const y = from.getFullYear();
-  const yearKm = tripsBetween(snap.entries, new Date(y, 0, 1).getTime(), new Date(y + 1, 0, 1).getTime(), s)
-    .reduce((x, tr) => x + (tr.km || 0), 0);
-  const km = trips.reduce((x, tr) => x + (tr.km || 0), 0);
-  const unknown = trips.filter((tr) => tr.km == null).length;
+  const yearTrips = tripsBetween(snap.entries, new Date(y, 0, 1).getTime(), new Date(y + 1, 0, 1).getTime(), s, snap.places);
+  const yearKm = yearTrips.reduce((x, tr) => x + (tr.km || 0), 0);
+  const yearApprox = yearTrips.some((tr) => tr.est);
+  // Update 9 – Fahrtenbuch: gleiche Summen wie im Fahrtenbuch (manuell > Straße > Luftlinie)
+  const tt = tripTotals(trips, s);
+  const km = tt.km;
+  const unknown = tt.unknownN;
   const am = allowanceMap(snap, f, t);
   const sum = allowanceSummary(am);
 
-  const key = JSON.stringify([f, km, yearKm, trips.length, unknown, a, sum]);
+  const key = JSON.stringify([f, km, yearKm, trips.length, unknown, a, sum, tt.bizKm, tt.kmgeld, tt.approx, tt.showKmgeld]);
   if (key === lastKey) return;
   lastKey = key;
 
   $('[data-tg="label"]').textContent = `${u.MONTHS[from.getMonth()]} ${y}`;
-  $('[data-tg="km"]').innerHTML = `${km > 0 ? "≈ " : ""}${u.esc(fmtKm(km))}<small> km</small>`;
+  $('[data-tg="km"]').innerHTML = `${tt.approx ? "≈ " : ""}${u.esc(fmtKm(km))}<small> km</small>`;
   $('[data-tg="trips"]').textContent = trips.length
     ? `${trips.length} ${trips.length === 1 ? "Fahrt" : "Fahrten"}${unknown ? ` · ${unknown} ohne km` : ""}`
     : "keine Fahrten";
+  $('[data-tg="splitrow"]').hidden = !trips.length;
+  $('[data-tg="split"]').textContent = `${fmtKmD(tt.bizKm)} / ${fmtKmD(tt.privKm)} km`;
   $('[data-tg="yearl"]').textContent = `Kilometer ${y} gesamt`;
-  $('[data-tg="year"]').textContent = `${yearKm > 0 ? "≈ " : ""}${fmtKm(yearKm)} km`;
+  $('[data-tg="year"]').textContent = `${yearApprox ? "≈ " : ""}${fmtKm(yearKm)} km`;
   const kmRow = $('[data-tg="kmgrow"]');
-  kmRow.hidden = !a.ownCar;
-  $('[data-tg="kmgl"]').textContent = `Kilometergeld (${fmtEur(a.kmRate)}/km, eigenes Auto)`;
-  $('[data-tg="kmg"]').textContent = fmtEur(km * a.kmRate);
+  kmRow.hidden = !tt.showKmgeld;
+  $('[data-tg="kmgl"]').textContent = `Kilometergeld (${fmtEur(a.kmRate)}/km, beruflich mit eigenem Auto)`;
+  $('[data-tg="kmg"]').textContent = fmtEur(tt.kmgeld);
 
   const tgEl = $('[data-tg="tg"]');
   const subEl = $('[data-tg="tgsub"]');
@@ -127,49 +134,11 @@ function render() {
 
 /* ---------------- Fahrtenbuch ---------------- */
 
+// Update 9 – Fahrtenbuch: eigene Vollbild-Ansicht (js/views/triplog.js) für den gewählten Monat.
 function openLog() {
-  const u = ctx.util;
-  const { from, to } = monthRange();
-  const s = snap.settings || {};
-  const trips = tripsBetween(snap.entries, from.getTime(), to.getTime(), s);
-  const total = trips.reduce((x, tr) => x + (tr.km || 0), 0);
-  const rows = trips.map((tr, i) => {
-    const d = new Date(tr.start);
-    const kmTxt = tr.km == null ? "? km" : `${tr.manual ? "" : "≈ "}${fmtKm(tr.km)} km`;
-    return `<li><button type="button" class="tg-trip" data-trip="${i}">
-      <span class="tg-trip-d">${u.esc(u.WD[d.getDay()])} ${u.pad(d.getDate())}.${u.pad(d.getMonth() + 1)}.<small>${u.esc(u.clock(tr.start))}–${u.esc(u.clock(tr.end))}</small></span>
-      <span class="tg-trip-r"><b>${u.esc(tr.from || "?")} → ${u.esc(tr.to || "?")}</b>${tr.purpose ? `<small>Zweck: ${u.esc(tr.purpose)}</small>` : ""}</span>
-      <span class="tg-trip-km${tr.km == null ? " none" : ""}">${u.esc(kmTxt)}${tr.manual ? "<small>manuell</small>" : ""}</span>
-    </button></li>`;
-  }).join("");
-  const body = `
-    <div class="tg-sheet">
-      <p class="note">${u.esc(u.MONTHS[from.getMonth()])} ${from.getFullYear()} · ${trips.length} ${trips.length === 1 ? "Fahrt" : "Fahrten"} · gesamt ${total > 0 ? "≈ " : ""}${u.esc(fmtKm(total))} km</p>
-      ${trips.length ? `<ul class="tg-log">${rows}</ul>` : `<p class="note">Keine Fahrten in diesem Monat. Fahrten entstehen aus Abschnitten „Autofahren“ beim Stempeln.</p>`}
-      <p class="note">Tippe auf eine Fahrt, um den Eintrag zu öffnen und die Kilometer selbst einzutragen (hat Vorrang vor der Schätzung).</p>
-      ${trips.length ? `<button type="button" class="btn ghost sm" data-tg-csv="1">Fahrtenbuch als CSV</button>` : ""}
-    </div>`;
-  const sheet = ctx.ui.openSheet({ title: "Fahrtenbuch", bodyHTML: body });
-  sheet.el.addEventListener("click", (ev) => {
-    const b = ev.target.closest("[data-trip]");
-    if (b) {
-      const tr = trips[Number(b.dataset.trip)];
-      if (tr) { sheet.close(); ctx.openEntryForm(tr.entry); }
-      return;
-    }
-    if (ev.target.closest("[data-tg-csv]")) {
-      const cell = (v) => { const x = v == null ? "" : String(v); return /[;"\r\n]/.test(x) ? '"' + x.replace(/"/g, '""') + '"' : x; };
-      const lines = [["Datum", "Beginn", "Ende", "Von", "Nach", "Zweck", "km", "manuell"]];
-      for (const tr of trips) {
-        const d = new Date(tr.start);
-        lines.push([`${u.pad(d.getDate())}.${u.pad(d.getMonth() + 1)}.${d.getFullYear()}`, u.clock(tr.start), u.clock(tr.end),
-          tr.from, tr.to, tr.purpose, tr.km == null ? "" : (Math.round(tr.km * 10) / 10).toFixed(1).replace(".", ","), tr.manual ? "ja" : ""]);
-      }
-      lines.push(["Summe", "", "", "", "", "", (Math.round(total * 10) / 10).toFixed(1).replace(".", ","), ""]);
-      const csv = "﻿" + lines.map((r) => r.map(cell).join(";")).join("\r\n") + "\r\n";
-      ctx.exporter.download(`Fahrtenbuch-${from.getFullYear()}-${u.pad(from.getMonth() + 1)}.csv`, csv);
-    }
-  });
+  const { from } = monthRange();
+  import("./triplog.js").then((m) => m.openTripLog(ctx, { year: from.getFullYear(), month: from.getMonth() }))
+    .catch((err) => { console.error(err); ctx.ui.toast("Fahrtenbuch konnte nicht geladen werden."); });
 }
 
 /* ---------------- Taggeld-Tage ---------------- */

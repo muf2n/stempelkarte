@@ -2,6 +2,10 @@
 // settings.allowance = { enabled, minHours, fullHours, ratePart, rateFull, homePlaceIds,
 //                        kmRate, ownCar, kmFactor }
 // Segment-Feld `km` (Zahl) = manuell eingetragene Kilometer (Vorrang vor der Berechnung).
+// Update 9 (Fahrtenbuch): `kmRoad` (+ `kmRoadAt`, `kmRoadFor` = Koordinaten-Schlüssel) = Straßen-km
+// vom Routing-Dienst (OSRM), einmal abgefragt und am Abschnitt gespeichert.
+// Vorrang überall (Übersicht, Taggeld, CSV, Unterwegs): manuell `km` > `kmRoad` > Luftlinie × Faktor.
+// Weitere Abschnitt-Felder fürs Fahrtenbuch: `purpose` (Zweck), `private` (true = Privatfahrt), `vehicleId`.
 // days/{dayKey}.allowance = "none" | "part" | "full" (manuell; null/fehlt = automatisch).
 
 export const DEFAULT_ALLOWANCE = Object.freeze({
@@ -75,18 +79,46 @@ export function manualKm(seg) {
   return Number.isFinite(n) && n >= 0 ? n : null;
 }
 
-/** Kilometer eines Fahrt-Abschnitts: {km, manual, est} oder null (unbekannt).
- *  est = berechnet (Luftlinie × Umwegfaktor). */
+/** Schlüssel für ein Koordinatenpaar (5 Nachkommastellen ≈ 1 m) – erkennt geänderte Start/Ziel-Punkte. */
+export function coordKey(a, b) {
+  if (!hasLL(a) || !hasLL(b)) return "";
+  const f = (p) => `${p.lat.toFixed(5)},${p.lng.toFixed(5)}`;
+  return `${f(a)};${f(b)}`;
+}
+
+/** Gespeicherte Straßen-km eines Abschnitts oder null (fehlt / passt nicht mehr zu den Koordinaten). */
+export function roadKm(seg) {
+  if (!seg || seg.kmRoad === null || seg.kmRoad === undefined || seg.kmRoad === "") return null;
+  const n = Number(seg.kmRoad);
+  if (!Number.isFinite(n) || n < 0) return null;
+  if (seg.kmRoadFor && hasLL(seg.loc) && hasLL(seg.endLoc) && seg.kmRoadFor !== coordKey(seg.loc, seg.endLoc)) return null;
+  return n;
+}
+
+/** Hat der Abschnitt Start- und Zielkoordinaten? */
+export function hasCoords(seg) { return !!seg && hasLL(seg.loc) && hasLL(seg.endLoc); }
+
+/** Kilometer eines Fahrt-Abschnitts: {km, manual, road, est, source} oder null (unbekannt).
+ *  Vorrang: manuell (source "manual") > Straße (source "road") > Luftlinie × Umwegfaktor (source "est"). */
 export function segmentKm(seg, settings) {
   if (!seg) return null;
   const m = manualKm(seg);
-  if (m != null) return { km: m, manual: true, est: false };
+  if (m != null) return { km: m, manual: true, road: false, est: false, source: "manual" };
+  const r = roadKm(seg);
+  if (r != null) return { km: r, manual: false, road: true, est: false, source: "road" };
   if (hasLL(seg.loc) && hasLL(seg.endLoc)) {
     const f = readAllowance(settings).kmFactor;
-    return { km: (haversineM(seg.loc, seg.endLoc) / 1000) * f, manual: false, est: true };
+    return { km: (haversineM(seg.loc, seg.endLoc) / 1000) * f, manual: false, road: false, est: true, source: "est" };
   }
   return null;
 }
+
+/** Kurzzeichen der km-Quelle: "✎" manuell, "🛣️" Straße, "≈" Luftlinie. */
+export const KM_SOURCE = Object.freeze({
+  manual: { sym: "✎", label: "manuell" },
+  road: { sym: "🛣️", label: "Straße" },
+  est: { sym: "≈", label: "Luftlinie" },
+});
 
 /** Abschnitte eines Eintrags mit Ende (wie in der Einträge-Liste). */
 export function segmentsWithEnd(e) {
@@ -121,25 +153,65 @@ function endName(x) {
   return x.endPlace || (x.endLoc && x.endLoc.addr) || "";
 }
 
+/** Gespeicherter Ort in der Nähe eines Punkts (innerhalb Radius + 100 m) oder null. */
+function placeNear(loc, places) {
+  if (!hasLL(loc) || !Array.isArray(places)) return null;
+  let best = null, bestD = Infinity;
+  for (const p of places) {
+    if (!p || !hasLL(p)) continue;
+    const d = haversineM(loc, p);
+    if (d <= Math.max(50, Number(p.radius) || 150) + 100 && d < bestD) { best = p; bestD = d; }
+  }
+  return best;
+}
+
+/** Standard-Zweck einer Fahrt: Name des gespeicherten Zielorts, sonst „Baustelle“. */
+export function defaultPurpose(t) {
+  return (t && t.toSaved && t.to) ? t.to : "Baustelle";
+}
+
 /** Fahrtenbuch: alle Fahrt-Abschnitte im Zeitraum [from, to) →
- *  [{entry, index, start, end, from, to, purpose, km, manual, est}] (km null = unbekannt). */
-export function tripsBetween(entries, from, to, settings) {
+ *  [{entry, index, rawIndex, key, start, end, from, to, fromAddr, toAddr, fromLoc, toLoc, fromSaved, toSaved,
+ *    purpose, purposeSet, private, vehicleId, km, manual, road, est, source}] (km null = unbekannt).
+ *  `places` (optional) ergänzt Ortsnamen, wenn nur Koordinaten/Adressen bekannt sind. */
+export function tripsBetween(entries, from, to, settings, places = null) {
   const out = [];
   for (const e of Array.isArray(entries) ? entries : []) {
     if (!isWork(e) || !Number.isFinite(e.start) || e.start < from || e.start >= to) continue;
+    const raw = Array.isArray(e.segments) ? e.segments : [];
+    const rawIdx = [];
+    raw.forEach((x, j) => { if (x && Number.isFinite(x.start)) rawIdx.push(j); });
     const segs = segmentsWithEnd(e);
     segs.forEach((s, i) => {
       if (!isDriving(s)) return;
       const k = segmentKm(s, settings);
-      // Zweck = Ziel-Ort: nächster Nicht-Fahrt-Abschnitt, sonst Ende der Fahrt, sonst Eintragsort
-      let purpose = "";
-      for (let j = i + 1; j < segs.length && !purpose; j++) if (!isDriving(segs[j])) purpose = placeName(segs[j]);
-      if (!purpose) purpose = endName(s) || e.place || "";
-      out.push({
-        entry: e, index: i, start: s.start, end: s.end,
-        from: placeName(s), to: endName(s), purpose,
-        km: k ? k.km : null, manual: !!(k && k.manual), est: !!(k && k.est),
-      });
+      // Zielort: Ende der Fahrt, sonst nächster Nicht-Fahrt-Abschnitt, sonst Eintragsort
+      let nextPlace = null;
+      for (let j = i + 1; j < segs.length && !nextPlace; j++) if (!isDriving(segs[j])) nextPlace = segs[j];
+      const fromAddr = (s.loc && s.loc.addr) || "";
+      const toAddr = (s.endLoc && s.endLoc.addr) || (nextPlace && nextPlace.loc && nextPlace.loc.addr) || "";
+      let fromN = placeName(s);
+      let toN = endName(s) || (nextPlace ? placeName(nextPlace) : "") || "";
+      let fromSaved = !!(s.placeId || (s.place && s.place !== fromAddr));
+      let toSaved = !!((s.endPlace && s.endPlace !== toAddr) || (!s.endPlace && nextPlace && (nextPlace.placeId || (nextPlace.place && nextPlace.place !== toAddr))));
+      if (!fromSaved) { const p = placeNear(s.loc, places); if (p && p.name) { fromN = p.name; fromSaved = true; } }
+      if (!toSaved) { const p = placeNear(s.endLoc, places); if (p && p.name) { toN = p.name; toSaved = true; } }
+      const t = {
+        entry: e, index: i, rawIndex: rawIdx[i] ?? i, key: `${e.id || ""}#${rawIdx[i] ?? i}`,
+        start: s.start, end: s.end,
+        from: fromN, to: toN, fromAddr, toAddr,
+        fromLoc: hasLL(s.loc) ? s.loc : null, toLoc: hasLL(s.endLoc) ? s.endLoc : null,
+        fromSaved, toSaved,
+        private: s.private === true,
+        vehicleId: typeof s.vehicleId === "string" && s.vehicleId ? s.vehicleId : null,
+        km: k ? k.km : null, manual: !!(k && k.manual), road: !!(k && k.road), est: !!(k && k.est),
+        source: k ? k.source : null,
+        seg: s,
+      };
+      const p = typeof s.purpose === "string" ? s.purpose.trim() : "";
+      t.purposeSet = !!p;
+      t.purpose = p || defaultPurpose(t);
+      out.push(t);
     });
   }
   return out.sort((a, b) => a.start - b.start);

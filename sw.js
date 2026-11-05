@@ -65,6 +65,10 @@ const SHELL = [
   "js/travel.js",
   "js/views/trips.js",
   "js/views/allowance-settings.js",
+  // Update 9 – Fahrtenbuch
+  "js/trip-core.js",
+  "js/road-km.js",
+  "js/views/triplog.js",
   "js/photos.js",
   "js/views/gallery.js",
   // Update 9b – Schule & Lernen

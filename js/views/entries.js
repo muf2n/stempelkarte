@@ -742,7 +742,7 @@ function segmentsHTML(e, util, geo) {
     } else if (pl) {
       parts.push(esc(pl));
     }
-    if (sk) parts.push(`<b class="tg-km">${sk.manual ? "" : "≈ "}${esc(fmtKm(sk.km))} km</b>${sk.manual ? " <small>manuell</small>" : ""}`);
+    if (sk) parts.push(`<b class="tg-km">${sk.est ? "≈ " : ""}${esc(fmtKm(sk.km))} km</b>${sk.manual ? " <small>manuell</small>" : sk.road ? " <small>Straße</small>" : ""}`); // Update 9: Straßen-km
     parts.push(esc(`${hm(Math.max(0, (x.end - x.start) / 60000))} h`));
     return `<li ${actAttrs(act, esc)}>${parts.join(" · ")}</li>`;
   }).join("")}</ul>`;
@@ -965,7 +965,7 @@ export function openEntryForm(entry, ctx, prefill = null) {
     if (!x || !isDriving(x)) return "";
     const est = segmentKm({ ...x, km: null }, store.get().settings);
     const v = x.km === null || x.km === undefined || x.km === "" ? "" : String(x.km).replace(".", ",");
-    return `<label class="rm-inline tg-kmedit"><span>km</span><input type="text" inputmode="decimal" data-segkm="${i}" value="${util.esc(v)}" placeholder="${est ? "≈ " + util.esc(fmtKm(est.km)) : "z. B. 23"}"><span>${est ? "leer = Schätzung" : "selbst eintragen"}</span></label>`;
+    return `<label class="rm-inline tg-kmedit"><span>km</span><input type="text" inputmode="decimal" data-segkm="${i}" value="${util.esc(v)}" placeholder="${est ? (est.est ? "≈ " : "") + util.esc(fmtKm(est.km)) : "z. B. 23"}"><span>${est ? (est.road ? "leer = Straßen-km" : "leer = Schätzung") : "selbst eintragen"}</span></label>`;
   }
   function bindKm() {
     box.querySelectorAll("[data-segkm]").forEach((inp) => inp.addEventListener("input", () => {
