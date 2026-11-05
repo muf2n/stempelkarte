@@ -24,9 +24,10 @@ export const APP_URL = "https://muf2n.github.io/stempelkarte/#alltag/geld";
 export const GMAIL_CRON = "30 6 * * *"; // täglich 06:30 UTC ≈ 07:30 Wien (Winterzeit)
 export const PENDING_MS = 15 * 60 * 1000;
 export const AT_CACHE_MS = 55 * 60 * 1000;
-export const SCAN_MAX = 100;
-export const CONCURRENCY = 3;
-export const MAX_RETRY = 4;
+export const SCAN_MAX = 35;  // Cloudflare (gratis) erlaubt ~50 Unteranfragen pro Lauf – Rest kommt beim nächsten Lauf
+export const CONCURRENCY = 1;   // eine Anfrage nach der anderen (Gmail-Limit pro Nutzer)
+export const GAP_MS = 400;       // Pause zwischen zwei Anfragen
+export const MAX_RETRY = 6;
 export const BODY_MAX = 6000;
 const MAX_DETS = 40;
 const CRON_GAP_MS = 20 * 3600 * 1000;
@@ -56,7 +57,7 @@ export const MSG = {
 
 let sleepFn = (ms) => new Promise((ok) => setTimeout(ok, ms));
 export function _setSleep(fn) { sleepFn = fn || ((ms) => new Promise((ok) => setTimeout(ok, ms))); }
-const backoff = (attempt) => Math.min(16000, 1000 * 2 ** attempt) + Math.floor(Math.random() * 300);
+const backoff = (attempt) => Math.min(30000, 2000 * 2 ** attempt) + Math.floor(Math.random() * 500);
 
 /* ---------- Verschlüsselung (AES-256-GCM, Schlüssel per HKDF/SHA-256) ---------- */
 
@@ -201,7 +202,7 @@ async function mapLimit(items, n, fn) {
   const worker = async () => {
     while (i < items.length && !failed) {
       const k = i++;
-      try { out[k] = await fn(items[k], k); } catch (e) { failed = true; throw e; } // nach einem Fehler nichts Neues mehr starten
+      try { out[k] = await fn(items[k], k); if (GAP_MS && i < items.length) await sleepFn(GAP_MS); } catch (e) { failed = true; throw e; } // nach einem Fehler nichts Neues mehr starten
     }
   };
   await Promise.all(Array.from({ length: Math.min(n, items.length) }, worker));

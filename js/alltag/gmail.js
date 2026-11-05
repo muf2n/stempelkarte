@@ -17,7 +17,7 @@ export const GMAIL_SCOPE = "https://www.googleapis.com/auth/gmail.readonly";
 const API = "https://gmail.googleapis.com/gmail/v1/users/me/";
 const TOKEN_MS = 55 * 60 * 1000;
 const MAX_MAILS = 150;
-const BATCH = 4;          // Gmail-Limit „Units per minute per user“ schonen
+const BATCH = 2;          // Gmail-Limit „Units per minute per user“ schonen
 
 // Suchanfrage liegt in subs-detect.js (gemeinsam mit dem Server, tools/mcp/src/gmail.js)
 export const QUERY = GMAIL_QUERY;
@@ -190,7 +190,7 @@ async function api(path, token) {
       // Google meldet Tempolimits auch als 403 („Quota exceeded“, „rateLimitExceeded“) → warten statt abbrechen
       try { const t = await r.clone().text(); limited = /quota|rateLimit|userRateLimitExceeded|RESOURCE_EXHAUSTED/i.test(t); } catch { /* egal */ }
     }
-    if (limited && attempt < 5) { await new Promise((ok) => setTimeout(ok, Math.min(20000, 1500 * 2 ** attempt) + Math.random() * 500)); continue; }
+    if (limited && attempt < 5) { await new Promise((ok) => setTimeout(ok, Math.min(30000, 2500 * 2 ** attempt) + Math.random() * 500)); continue; }
     break;
   }
   if (r.ok) return r.json();
@@ -245,7 +245,7 @@ export async function fetchMails({ onProgress, token } = {}) {
     })));
     for (const m of got) if (m) mails.push(m);
     done += chunk.length;
-    if (i + BATCH < ids.length) await new Promise((ok) => setTimeout(ok, 250)); // sanft bleiben
+    if (i + BATCH < ids.length) await new Promise((ok) => setTimeout(ok, 700)); // sanft bleiben
     if (onProgress) onProgress(done, ids.length);
   }
   return mails;

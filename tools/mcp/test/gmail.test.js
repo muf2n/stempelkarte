@@ -407,14 +407,16 @@ test("Backoff: 403 rateLimitExceeded → warten und weitermachen; dauerhaft → 
   let r = await t.req("/gmail/scan");
   assert.equal(r.status, 200, r.text);
   assert.equal(r.data.found, 2);
-  assert.equal(t.sleeps.length, 2);
-  assert.ok(t.sleeps[1] > t.sleeps[0] - 300, "wachsende Pausen");
+  const backs = t.sleeps.filter((ms) => ms > 1000); // nur Backoff-Pausen, nicht die kurzen Abstände zwischen Anfragen
+  assert.equal(backs.length, 2);
+  assert.ok(backs[1] > backs[0] - 300, "wachsende Pausen");
   t.sleeps.length = 0;
   t.gm.quotaFails = 1000;
   t.setNow(NOW + 2 * DAY);
   r = await t.req("/gmail/scan");
   assert.equal(r.data.error.code, "quota");
-  assert.ok(t.sleeps.length >= MAX_RETRY && t.sleeps.length <= MAX_RETRY * 3, "begrenzte Wiederholungen");
+  const backs2 = t.sleeps.filter((ms) => ms > 1000);
+  assert.ok(backs2.length >= MAX_RETRY && backs2.length <= MAX_RETRY * 3, "begrenzte Wiederholungen");
   assert.equal(t.g.get(`${t.base}/meta/gmail_server`).lastError.code, "quota");
 });
 
