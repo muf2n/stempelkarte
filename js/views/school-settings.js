@@ -59,7 +59,8 @@ export function mount(el, c) {
         <button type="button" class="btn primary sm" id="sc-addbtn">${icon("plus", 18)}<span>Schulblock hinzufügen</span></button>
         <p class="note">Im Block zählen nur deine Arbeitstage (meist Mo – Fr), Feiertage bleiben Feiertage.</p>
       </div>
-    </div>`;
+    </div>
+    <div class="rm-opt sc-stray" id="sc-stray" hidden></div>`;
 
   $(".sc-wd").addEventListener("click", async (ev) => {
     const b = ev.target.closest("[data-d]");
@@ -113,10 +114,46 @@ export function mount(el, c) {
   if (snap) update(snap);
 }
 
+/** Einträge „Schule“, die an keinem eingestellten Schultag liegen (weder Block noch wöchentlicher Schultag). */
+function strayEntries(s) {
+  if (!s || !Array.isArray(s.entries)) return [];
+  const cur = readSchool(s.settings);
+  return s.entries.filter((e) => {
+    if (!e || e.kind !== "schule" || !e.start) return false;
+    const d = new Date(e.start);
+    const k = ctx.util.dayKey(d);
+    if (cur.days.includes(d.getDay())) return false;
+    return !cur.blocks.some((b) => b.from <= k && k <= b.to);
+  }).sort((a, b) => a.start - b.start);
+}
+
+let strayKey = null;
+function renderStray() {
+  const box = root && root.querySelector("#sc-stray");
+  if (!box) return;
+  const list = strayEntries(snap);
+  const key = list.map((e) => e.id).join(",");
+  if (key === strayKey && box.isConnected) return;
+  strayKey = key;
+  if (!list.length) { box.hidden = true; box.innerHTML = ""; return; }
+  const esc = ctx.util.esc;
+  const ex = list.slice(0, 4).map((e) => fmtD(ctx.util.dayKey(new Date(e.start)))).join(", ") + (list.length > 4 ? " …" : "");
+  box.hidden = false;
+  box.innerHTML = `<div class="lbl">Aufräumen</div>
+    <p class="note"><b>${list.length} Schul-Einträge</b> liegen außerhalb deiner Schulblöcke (z. B. ${esc(ex)}). Sie werden im Kalender als „Schule“ angezeigt.</p>
+    <button type="button" class="btn ghost sm" id="sc-stray-del">${icon("trash", 18)}<span>Diese ${list.length} Einträge löschen</span></button>`;
+  ctx.ui.confirmButton(box.querySelector("#sc-stray-del"), "Wirklich alle löschen?", async () => {
+    let n = 0;
+    for (const e of strayEntries(snap)) { try { await ctx.store.deleteEntry(e.id); n++; } catch (err) { console.error(err); } }
+    ctx.ui.toast(n + " Schul-Einträge gelöscht.");
+  });
+}
+
 export function update(s) {
   snap = s;
   if (!root || !snap || !root.querySelector(".sc-wd")) return;
   const cur = readSchool(snap.settings);
+  renderStray();
   root.querySelectorAll(".sc-wd [data-d]").forEach((b) => b.setAttribute("aria-pressed", String(cur.days.includes(Number(b.dataset.d)))));
   const key = JSON.stringify(cur.blocks);
   if (key === lastKey) return;

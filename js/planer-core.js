@@ -289,6 +289,8 @@ export function buildIndex(snap, fromKey, toKey, deps = {}) {
     if (!(st > 0) || st > toTs || (en && en < fromTs)) continue;
     if (e.kind && e.kind !== "work") {
       const k = keyOf(new Date(st));
+      // eigener „Schule“-Eintrag an einem Tag, der schon als Berufsschule angezeigt wird → nicht doppelt zeigen
+      if (e.kind === "schule" && u.schoolLabel) { try { if (u.schoolLabel(st, s)) continue; } catch { /* egal */ } }
       const lbl = u.kindLabel ? u.kindLabel(e.kind) : e.kind;
       add(k, { uid: "x" + e.id, type: "abwesend", title: lbl, sub: e.note ? String(e.note).split("\n")[0] : "Eintrag", emoji: e.kind === "krank" ? "🤒" : e.kind === "schule" ? "📚" : "🌴", start: null, end: null, done: false, open: "entry:" + e.id, check: null, cls: "", hue: null }, false);
       continue;
