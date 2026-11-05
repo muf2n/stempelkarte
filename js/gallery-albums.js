@@ -8,6 +8,9 @@
 // Update 9 (Agent T) – Hauptkategorien: Sammlung a_photo_folders { id, name, emoji, color, order, created },
 //   Alben bekommen optional folderId. ensureFolders() legt beim ersten Start (nur ohne Kategorien) die Standard-
 //   Kategorien an und sortiert bestehende Adress-/Ort-Alben ein – danach nie wieder (Flag foldersInit).
+// Update 9 (Agent U) – aktive Kategorie „Neue Fotos gehen nach …“: settings.gallery.activeFolderId (synchronisiert,
+//   ersetzt autoFolder – beide werden gleich geschrieben, damit ältere Stände weiter passen). Eingestempelt an einem
+//   Ort mit photoFolderId → dieser gilt vorübergehend (ausschaltbar für die laufende Schicht, localStorage).
 import { collection } from "./alltag/db.js";
 import * as photos from "./photos.js";
 import * as geo from "./geo.js";
@@ -40,6 +43,7 @@ export function settings() {
   const g = rawSettings();
   const out = { auto: g.auto !== false, radius: G.cleanRadius(g.radius, G.DEFAULT_RADIUS), foldersInit: !!g.foldersInit };
   if (typeof g.autoFolder === "string") out.autoFolder = g.autoFolder; // fehlt = Standard „Baustellen“
+  if (typeof g.activeFolderId === "string") out.activeFolderId = g.activeFolderId; // Update 9 (Agent U)
   return out;
 }
 export async function saveSettings(partial) {
@@ -53,8 +57,61 @@ export function foldersCol() { return fcol || (fcol = collection("photo_folders"
 export function folders() { return G.sortFolders(foldersCol().all().map(G.normFolder).filter(Boolean)); }
 export function folderById(id) { const f = id ? foldersCol().get(id) : null; return f ? G.normFolder(f) : null; }
 export function folderIds() { return new Set(folders().map((f) => f.id)); }
-/** Kategorie, in die neue Adress-/Ort-Alben automatisch kommen (null = keine). */
-export function autoFolderId() { return G.resolveAutoFolder(folders(), settings().autoFolder); }
+/** Selbst gewählte Kategorie für neue Adress-/Ort-Alben (ohne Ort-Vorgabe; null = keine). */
+export function autoFolderId() { return G.resolveAutoFolder(folders(), G.activeSetting(rawSettings())); }
+
+/* ---------- Aktive Kategorie (Update 9, Agent U) ---------- */
+
+const NOPLACE_KEY = "sk-ga-noplace"; // Ort-Vorgabe für diese Schicht ignorieren: "<start>|<placeId>"
+function shiftKey() {
+  const r = store.get().running;
+  const pid = G.runningPlaceId(r);
+  return r && pid ? `${r.start}|${pid}` : "";
+}
+function placeIgnored() {
+  const k = shiftKey();
+  if (!k) return false;
+  try { return localStorage.getItem(NOPLACE_KEY) === k; } catch { return false; }
+}
+/** Aktive Kategorie mit Quelle → { id, folder, source: "place"|"manual"|"default"|"none", place } */
+export function activeFolder() {
+  const snap = store.get();
+  const r = G.resolveActiveFolder({
+    folders: folders(), gallery: rawSettings(), placeId: G.runningPlaceId(snap.running),
+    places: snap.places || [], ignorePlace: placeIgnored(),
+  });
+  return { ...r, folder: r.id ? folderById(r.id) : null };
+}
+/** Aktive Kategorie setzen ("" / null = keine). Gilt sofort, auch wenn gerade ein Ort vorgibt (für diese Schicht). */
+export async function setActiveFolder(id) {
+  const v = id && id !== G.OHNE_KAT ? String(id) : "";
+  const cur = activeFolder();
+  if (cur.source === "place") { try { localStorage.setItem(NOPLACE_KEY, shiftKey()); } catch { /* egal */ } }
+  await saveSettings({ activeFolderId: v, autoFolder: v });
+  notifyActive();
+}
+/** Ort-Vorgabe wieder einschalten (nach „Ignorieren“). */
+export function usePlaceFolder() {
+  try { localStorage.removeItem(NOPLACE_KEY); } catch { /* egal */ }
+  notifyActive();
+}
+/** Ort-Vorgabe gibt es für die laufende Schicht, ist aber ausgeschaltet? → Ort | null */
+export function ignoredPlace() {
+  if (!placeIgnored()) return null;
+  const snap = store.get();
+  const pid = G.runningPlaceId(snap.running);
+  const pl = (snap.places || []).find((p) => p.id === pid);
+  return pl && pl.photoFolderId && folderById(pl.photoFolderId) ? pl : null;
+}
+const activeSubs = new Set();
+function notifyActive() { for (const cb of activeSubs) { try { cb(); } catch (e) { console.error(e); } } }
+/** Bei Änderung der aktiven Kategorie (Einstellung, Kategorien, Schicht) benachrichtigen. → unsub */
+export function onActiveChange(cb) {
+  activeSubs.add(cb);
+  const u1 = store.subscribe(() => cb());
+  const u2 = foldersCol().watch(() => cb());
+  return () => { activeSubs.delete(cb); try { u1(); } catch { /* egal */ } try { u2(); } catch { /* egal */ } };
+}
 
 export async function foldersReady(ms = 4000) {
   const c = foldersCol();
@@ -109,7 +166,7 @@ export async function deleteFolder(id, { target = null } = {}) {
   const plan = G.deleteFolderPlan(albums(), id, t);
   for (const p of plan) await patchAlbum(p.id, { folderId: p.folderId });
   // war es die Auto-Kategorie für neue Adress-Alben → dorthin, wohin die Alben gewandert sind (sonst keine)
-  if (autoFolderId() === id) { try { await saveSettings({ autoFolder: t || "" }); } catch (e) { console.error(e); } }
+  if (autoFolderId() === id) { try { await saveSettings({ autoFolder: t || "", activeFolderId: t || "" }); } catch (e) { console.error(e); } }
   await soft(foldersCol().remove(id));
   return plan.length;
 }
@@ -142,7 +199,7 @@ export async function createAlbum(data, { place = null } = {}) {
   data = { ...data };
   if (data.folderId === undefined && (data.kind === "address" || data.kind === "place")) {
     try { await ensureFolders(); } catch (e) { console.warn("Kategorien:", e); }
-    const fid = G.folderForNewAlbum(data, { folders: folders(), autoFolder: settings().autoFolder, place });
+    const fid = G.folderForNewAlbum(data, { folders: folders(), autoFolder: settings().autoFolder, activeFolderId: activeFolder().id, place });
     if (fid) data.folderId = fid;
   }
   if (!data.folderId || data.folderId === G.OHNE_KAT) delete data.folderId;
@@ -178,7 +235,7 @@ let fileQueue = Promise.resolve();
  * Foto (schon gespeichert) nachträglich mit Position + Album versehen. Läuft in einer Warteschlange,
  * damit zwei schnelle Fotos an derselben Adresse nicht zwei Alben anlegen.
  * opts = { pos?: {lat,lng,acc} | Promise, auto?: false (keine Alben), placeId? }
- * → { album|null, pos|null }
+ * → { album|null, pos|null, created (Album neu angelegt) }
  */
 export function autoFile(photo, opts = {}) {
   const job = fileQueue.then(() => doFile(photo, opts));
@@ -187,7 +244,8 @@ export function autoFile(photo, opts = {}) {
 }
 
 async function doFile(photo, opts) {
-  if (!photo || !photo.id) return { album: null, pos: null };
+  if (!photo || !photo.id) return { album: null, pos: null, created: false };
+  let created = false;
   let pos = null;
   try { pos = await (opts.pos !== undefined ? opts.pos : currentPosition()); } catch { pos = null; }
   if (pos && !G.hasPos(pos)) pos = null;
@@ -203,6 +261,7 @@ async function doFile(photo, opts) {
     const m = G.matchLocation(pos, { places: pls, albums: albums(), defaultRadius: set.radius });
     if (auto && m.type === "place") {
       album = m.album || await placeAlbum(m.place);
+      if (!m.album) created = true;
       addr = m.place.addr || "";
       // Foto ohne Ort (nicht eingestempelt dort) → mit dem gespeicherten Ort verknüpfen (erscheint im Ort-Blatt)
       if (!photo.placeId) { patch.placeId = m.place.id; patch.place = m.place.name || ""; }
@@ -215,21 +274,23 @@ async function doFile(photo, opts) {
         // nach der Wartezeit noch einmal prüfen (andere Geräte/Fotos)
         const again = G.matchLocation(pos, { places: pls, albums: albums(), defaultRadius: set.radius });
         if (again.type === "address") album = again.album;
-        else album = await createAlbum({ kind: "address", name: G.albumNameFrom(data) || G.coordName(pos), lat: pos.lat, lng: pos.lng, radius: set.radius, addr });
+        else { album = await createAlbum({ kind: "address", name: G.albumNameFrom(data) || G.coordName(pos), lat: pos.lat, lng: pos.lng, radius: set.radius, addr }); created = true; }
       }
     }
   } else if (auto && (opts.placeId || photo.placeId)) {
     // kein GPS, aber eingestempelt an einem Ort → Ort-Album
     const pid = opts.placeId || photo.placeId;
     const pl = pls.find((p) => p.id === pid) || { id: pid, name: photo.place || "Ort" };
+    const had = albums().some((a) => a.kind === "place" && a.placeId === pid);
     album = await placeAlbum(pl);
+    if (!had && album) created = true;
   }
   if (addr) patch.addr = addr;
   if (album) { patch.albumIds = G.changeIds(photo.albumIds, album.id); patch.albMig = true; }
   if (Object.keys(patch).length) {
     try { await photos.updatePhoto(photo.id, patch); } catch (e) { console.error("Foto einsortieren:", e); }
   }
-  return { album, pos };
+  return { album, pos, created };
 }
 
 /* ---------- Migration alter Fotos (einmal beim Öffnen der Galerie, danach nur Neues) ---------- */

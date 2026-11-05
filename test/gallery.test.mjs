@@ -288,3 +288,103 @@ test("Kategorien: Reihenfolge + Löschen", () => {
   assert.deepEqual(G.deleteFolderPlan(albums, "x", "y"), [{ id: "a1", folderId: "y" }, { id: "a3", folderId: "y" }], "→ andere Kategorie");
   assert.deepEqual(G.deleteFolderPlan(albums, "x", "x"), [{ id: "a1", folderId: null }, { id: "a3", folderId: null }], "Ziel = sich selbst → Ohne");
 });
+
+/* ---------- Update 9 (Agent U): aktive Kategorie ---------- */
+
+const FS = [
+  { id: G.BAU_ID, name: "Baustellen", emoji: "🏗️" },
+  { id: G.SCHULE_ID, name: "Berufsschule", emoji: "🏫" },
+  { id: "fW", name: "Wohnungen", emoji: "🏠" },
+];
+
+test("Aktive Kategorie: Einstellung, Standard, alte autoFolder-Einstellung", () => {
+  assert.deepEqual(G.resolveActiveFolder({ folders: FS, gallery: {} }).id, G.BAU_ID, "fehlt → Baustellen");
+  assert.equal(G.resolveActiveFolder({ folders: FS, gallery: {} }).source, "default");
+  assert.equal(G.resolveActiveFolder({ folders: FS, gallery: { activeFolderId: "fW" } }).id, "fW");
+  assert.equal(G.resolveActiveFolder({ folders: FS, gallery: { activeFolderId: "fW" } }).source, "manual");
+  assert.equal(G.resolveActiveFolder({ folders: FS, gallery: { autoFolder: "fW" } }).id, "fW", "alte Einstellung gilt weiter");
+  assert.equal(G.resolveActiveFolder({ folders: FS, gallery: { autoFolder: "fW", activeFolderId: G.BAU_ID } }).id, G.BAU_ID, "activeFolderId hat Vorrang");
+  assert.equal(G.resolveActiveFolder({ folders: FS, gallery: { activeFolderId: "" } }).id, null, "\"\" = keine");
+  assert.equal(G.resolveActiveFolder({ folders: FS, gallery: { activeFolderId: "weg" } }).id, null, "gelöschte Kategorie → keine");
+  assert.equal(G.activeSetting({ autoFolder: "" }), "");
+  assert.equal(G.activeSetting(null), undefined);
+});
+
+test("Aktive Kategorie: Ort mit Foto-Kategorie überschreibt, solange eingestempelt", () => {
+  const places = [{ id: "pX", name: "Firma X", photoFolderId: "fW" }, { id: "pY", name: "Ohne", photoFolderId: "" }, { id: "pZ", name: "Alt", photoFolderId: "weg" }];
+  const g = { activeFolderId: G.BAU_ID };
+  const r = G.resolveActiveFolder({ folders: FS, gallery: g, placeId: "pX", places });
+  assert.equal(r.id, "fW"); assert.equal(r.source, "place"); assert.equal(r.place.name, "Firma X"); assert.equal(r.manualId, G.BAU_ID);
+  assert.equal(G.resolveActiveFolder({ folders: FS, gallery: g, placeId: "pX", places, ignorePlace: true }).id, G.BAU_ID, "für die Schicht ausgeschaltet");
+  assert.equal(G.resolveActiveFolder({ folders: FS, gallery: g, placeId: "pY", places }).source, "manual", "Ort ohne Foto-Kategorie");
+  assert.equal(G.resolveActiveFolder({ folders: FS, gallery: g, placeId: "pZ", places }).id, G.BAU_ID, "ungültige Foto-Kategorie ignoriert");
+  assert.equal(G.resolveActiveFolder({ folders: FS, gallery: g, placeId: null, places }).id, G.BAU_ID, "nicht eingestempelt");
+  assert.equal(G.runningPlaceId({ placeId: "a", segments: [{ placeId: "b" }, { placeId: "c" }] }), "c", "letzter Abschnitt");
+  assert.equal(G.runningPlaceId({ placeId: "a", segments: [{ placeId: null }] }), "a");
+  assert.equal(G.runningPlaceId(null), null);
+});
+
+test("Regel: neues Adress-Album → aktive Kategorie; Ort-Album → Foto-Kategorie des Orts vor Schule", () => {
+  const addr = { kind: "address", name: "Musterstraße 5, Graz" };
+  assert.equal(G.folderForNewAlbum(addr, { folders: FS, activeFolderId: "fW" }), "fW");
+  assert.equal(G.folderForNewAlbum(addr, { folders: FS, activeFolderId: null }), null, "aktiv = keine");
+  assert.equal(G.folderForNewAlbum(addr, { folders: FS, activeFolderId: "weg" }), null);
+  assert.equal(G.folderForNewAlbum(addr, { folders: FS, autoFolder: undefined }), G.BAU_ID, "ohne activeFolderId: alte Logik");
+  assert.equal(G.folderForNewAlbum({ kind: "custom", name: "x" }, { folders: FS, activeFolderId: "fW" }), null, "eigene Alben nie");
+  const lbs = { kind: "place", name: "LBS Graz" };
+  assert.equal(G.folderForNewAlbum(lbs, { folders: FS, activeFolderId: "fW", place: { name: "LBS Graz" } }), G.SCHULE_ID, "Schule bleibt Schule");
+  assert.equal(G.folderForNewAlbum(lbs, { folders: FS, activeFolderId: "fW", place: { name: "LBS Graz", photoFolderId: "fW" } }), "fW", "Foto-Kategorie des Orts gewinnt");
+  assert.equal(G.folderForNewAlbum({ kind: "place", name: "Firma" }, { folders: FS, activeFolderId: G.BAU_ID, place: { name: "Firma" } }), G.BAU_ID);
+});
+
+test("Regel im Ablauf: drei neue Adressen → Wohnungen, bekannte Adresse bleibt, Umschalten wirkt ab dem nächsten", () => {
+  const P = (dLat) => move(GRAMBACH, dLat);
+  const albums = [{ id: "alt", kind: "address", ...P(0), radius: 80, folderId: G.BAU_ID }];
+  let active = "fW";
+  const take = (pos) => {
+    const m = G.matchLocation(pos, { albums });
+    if (m.type === "address") return m.album;
+    const a = { id: "a" + albums.length, kind: "address", ...pos, radius: 80 };
+    a.folderId = G.folderForNewAlbum(a, { folders: FS, activeFolderId: active });
+    albums.push(a);
+    return a;
+  };
+  const n1 = take(P(1000)), n2 = take(P(2000)), n3 = take(P(3000));
+  assert.deepEqual([n1, n2, n3].map((a) => a.folderId), ["fW", "fW", "fW"]);
+  assert.equal(new Set([n1.id, n2.id, n3.id]).size, 3, "drei Alben");
+  assert.equal(take(P(10)).id, "alt"); assert.equal(albums[0].folderId, G.BAU_ID, "bestehendes Album bleibt in Baustellen");
+  assert.equal(take(P(1020)).id, n1.id, "zurück an Adresse 1 → dasselbe Album");
+  active = G.BAU_ID;
+  assert.equal(take(P(5000)).folderId, G.BAU_ID, "nach dem Umschalten → Baustellen");
+  assert.equal(albums.find((a) => a.id === n1.id).folderId, "fW", "frühere Alben bleiben");
+});
+
+test("Einsatz-Titel → Kategorie-Vorschlag", () => {
+  assert.equal(G.einsatzFolderSuggestion("Wohnungen Gries", FS).id, "fW");
+  assert.equal(G.einsatzFolderSuggestion("wohnungen gries", FS).id, "fW", "Groß/Klein egal");
+  assert.equal(G.einsatzFolderSuggestion("Großbaustelle Liebenau", FS), null, "nur am Wortanfang");
+  assert.equal(G.einsatzFolderSuggestion("Baustellen-Runde", FS).id, G.BAU_ID);
+  assert.equal(G.einsatzFolderSuggestion("Kundendienst", FS), null);
+  assert.equal(G.einsatzFolderSuggestion("", FS), null);
+  assert.equal(G.einsatzFolderSuggestion("Ab", [{ id: "k", name: "Ab" }]), null, "zu kurze Namen nie");
+  assert.equal(G.einsatzFolderSuggestion("Wohnungen Süd", [...FS, { id: "fWS", name: "Wohnungen Süd" }]).id, "fWS", "längster Treffer");
+});
+
+test("Zielname + Alben der letzten 14 Tage aus anderen Kategorien", () => {
+  assert.equal(G.destLabel({ name: "Musterstraße 5, Graz" }, { name: "Wohnungen" }), "Wohnungen › Musterstraße 5, Graz");
+  assert.equal(G.destLabel({ name: "Musterstraße 5, Graz" }, null), "Musterstraße 5, Graz");
+  const now = Date.UTC(2026, 10, 5);
+  const D = 86400000;
+  const ids = new Set(FS.map((f) => f.id));
+  const albums = [
+    { id: "a", kind: "address", folderId: G.BAU_ID, created: now - 30 * D },
+    { id: "b", kind: "address", folderId: G.BAU_ID, created: now - 2 * D },
+    { id: "c", kind: "address", folderId: "fW", created: now - 1 * D },
+    { id: "d", kind: "custom", created: now - 40 * D },
+    { id: "e", kind: "address", folderId: "weg", created: now - 20 * D },
+  ];
+  const items = [{ id: "p1", ts: now - 3 * D, albumIds: ["a"] }, { id: "p2", ts: now - 20 * D, albumIds: ["e"] }, { id: "p3", ts: now - 1000, albumIds: ["d"] }];
+  const r = G.recentAlbumsElsewhere(albums, items, "fW", ids, { now });
+  assert.deepEqual(r.map((x) => x.album.id), ["d", "b", "a"], "neueste zuerst, ohne eigene Kategorie, ohne alte");
+  assert.equal(r[0].folderId, G.OHNE_KAT);
+});

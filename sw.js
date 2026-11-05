@@ -125,6 +125,8 @@ const SHELL = [
   "js/gallery-albums.js",
   "js/alltag/galerie.js",
   "css/alltag-galerie.css",
+  "js/gallery-active.js", // Update 9 (Agent U) – aktive Kategorie
+  "css/gallery-active.css",
   "js/app.js"
 ];
 

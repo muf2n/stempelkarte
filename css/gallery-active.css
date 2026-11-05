@@ -1,0 +1,110 @@
+/* Update 9 (Agent U) – Galerie: aktive Kategorie „Neue Fotos gehen nach …“ (Chip, Auswahl, Toast mit „Ändern“).
+   Wird von js/gallery-active.js nachgeladen. Präfix .ga- ; Farbe pro Kategorie über --fc (inline). */
+.ga-host, .ga-pick, .ga-toast { --fc: #64748b; }
+.ga-chip, .ga-row, .ga-fchip, .ga-ez, .ga-info {
+  --fc-soft: color-mix(in srgb, var(--fc) 13%, var(--card));
+  --fc-line: color-mix(in srgb, var(--fc) 38%, var(--line));
+  --fc-ink: color-mix(in srgb, var(--fc) 78%, var(--ink));
+}
+@media (prefers-color-scheme: dark) {
+  .ga-chip, .ga-row, .ga-fchip, .ga-ez, .ga-info {
+    --fc-soft: color-mix(in srgb, var(--fc) 22%, var(--card));
+    --fc-line: color-mix(in srgb, var(--fc) 50%, var(--line));
+    --fc-ink: color-mix(in srgb, var(--fc) 50%, #fff);
+  }
+}
+
+/* Chip */
+.ga-host { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 8px; min-width: 0; }
+.ga-host:empty { display: none; }
+.ga-pre { color: var(--muted); font-size: .84rem; font-weight: 600; }
+.ga-chip {
+  display: inline-flex; align-items: center; flex-wrap: wrap; gap: 2px 7px; min-height: 44px; max-width: 100%;
+  padding: 6px 14px; border-radius: 999px; border: 1.5px solid var(--fc-line); background: var(--fc-soft);
+  color: var(--ink); font: inherit; font-size: .95rem; text-align: left; cursor: pointer;
+  box-shadow: 0 4px 12px -8px var(--fc);
+}
+.ga-chip:focus-visible { outline: none; box-shadow: var(--ring); }
+.ga-chip.is-none { border-style: dashed; }
+.ga-lbl { color: var(--muted); font-weight: 600; font-size: .86rem; }
+.ga-val { color: var(--fc-ink); font-weight: 750; overflow-wrap: anywhere; }
+.ga-chip.is-none .ga-val { color: var(--muted); }
+.ga-src { color: var(--muted); font-size: .8rem; font-weight: 600; }
+.ga-caret { color: var(--fc-ink); font-size: .9rem; margin-left: auto; }
+.ph-cap-active .ga-chip { width: 100%; border-radius: 14px; }
+
+/* Einsatz-Vorschlag */
+.ga-ez {
+  flex: 1 1 100%; display: flex; align-items: center; gap: 10px; flex-wrap: wrap;
+  padding: 10px 10px 10px 14px; border-radius: 14px; border: 1px solid var(--fc-line); background: var(--fc-soft);
+  font-size: .9rem; color: var(--ink);
+}
+.ga-ez-t { flex: 1 1 200px; min-width: 0; }
+.ga-ez-t b { color: var(--fc-ink); white-space: nowrap; }
+.ga-ez-b { display: flex; gap: 6px; align-items: center; margin-left: auto; }
+.ga-ez-x { width: 40px; height: 40px; border-radius: 10px; border: 1px solid var(--line); background: var(--card); color: var(--muted); font: inherit; cursor: pointer; }
+.ga-ez-x:focus-visible { outline: none; box-shadow: var(--ring); }
+
+/* Auswahl-Blatt */
+.ga-pick { display: flex; flex-direction: column; gap: 10px; }
+.ga-why { margin: 0; }
+.ga-info { padding: 10px 12px; border-radius: 12px; border: 1px solid var(--fc-line); background: var(--fc-soft); font-size: .9rem; }
+.ga-list { display: flex; flex-direction: column; gap: 6px; max-height: 46vh; overflow: auto; }
+.ga-row {
+  display: flex; align-items: center; gap: 12px; width: 100%; min-height: 56px; padding: 8px 12px; text-align: left;
+  border: 1px solid var(--line); border-radius: 14px; background: var(--card); color: var(--ink); font: inherit; cursor: pointer;
+}
+.ga-row[aria-pressed="true"] { border-color: var(--fc); background: var(--fc-soft); box-shadow: inset 0 0 0 1px var(--fc); }
+.ga-row:focus-visible, .ga-fchip:focus-visible, .ga-emoji:focus-visible, .ga-new:focus-visible { outline: none; box-shadow: var(--ring); }
+.ga-emo { flex: none; width: 38px; height: 38px; display: grid; place-items: center; border-radius: 12px; font-size: 1.3rem; background: var(--fc-soft, color-mix(in srgb, var(--fc) 13%, var(--card))); }
+.ga-row-t { display: flex; flex-direction: column; min-width: 0; flex: 1 1 auto; }
+.ga-row-t b { font-weight: 650; overflow-wrap: anywhere; }
+.ga-row-t small { color: var(--muted); font-size: .8rem; }
+.ga-tick { flex: none; width: 22px; color: var(--fc-ink); font-weight: 800; text-align: center; }
+.ga-new {
+  min-height: 48px; padding: 8px 12px; border-radius: 14px; border: 1.5px dashed var(--line); background: transparent;
+  color: var(--accent); font: inherit; font-weight: 700; cursor: pointer;
+}
+.ga-form { display: flex; flex-direction: column; gap: 10px; padding: 12px; border-radius: 14px; border: 1px solid var(--line); background: color-mix(in srgb, var(--accent) 5%, var(--card)); }
+.ga-form[hidden] { display: none; }
+.ga-newrow { display: flex; gap: 8px; align-items: center; }
+.ga-newrow input { flex: 1 1 auto; min-width: 0; min-height: 44px; padding: 8px 12px; font: inherit; font-size: 16px; border: 1px solid var(--line); border-radius: 12px; background: var(--card); color: var(--ink); }
+.ga-emo-prev { background: var(--card); border: 1px solid var(--line); }
+.ga-emojis { display: grid; grid-template-columns: repeat(auto-fill, minmax(42px, 1fr)); gap: 6px; }
+.ga-emoji { height: 42px; border-radius: 10px; border: 1px solid var(--line); background: var(--card); font-size: 1.2rem; cursor: pointer; padding: 0; }
+.ga-emoji[aria-pressed="true"] { border-color: var(--accent); box-shadow: inset 0 0 0 1px var(--accent); background: color-mix(in srgb, var(--accent) 12%, var(--card)); }
+
+/* Foto einsortieren */
+.ga-cur { display: flex; align-items: center; gap: 12px; padding: 10px; border-radius: 14px; border: 1px solid var(--line); background: var(--card); }
+.ga-cur img { width: 56px; height: 56px; object-fit: cover; border-radius: 10px; flex: none; }
+.ga-cur span { display: flex; flex-direction: column; min-width: 0; }
+.ga-cur small { color: var(--muted); font-size: .8rem; }
+.ga-cur b { overflow-wrap: anywhere; }
+.ga-h { color: var(--muted); font-size: .9rem; font-weight: 600; margin-top: 4px; }
+.ga-h b { color: var(--ink); overflow-wrap: anywhere; }
+.ga-fchips { display: flex; flex-wrap: wrap; gap: 6px; }
+.ga-fchip {
+  display: inline-flex; align-items: center; gap: 6px; min-height: 40px; padding: 6px 12px; border-radius: 999px;
+  border: 1px solid var(--fc-line); background: var(--card); color: var(--ink); font: inherit; font-size: .9rem; font-weight: 600; cursor: pointer;
+}
+.ga-fchip[aria-pressed="true"] { background: var(--fc-soft); border-color: var(--fc); color: var(--fc-ink); box-shadow: inset 0 0 0 1px var(--fc); }
+
+/* Toast mit Knopf */
+.toast.ga-toast { display: flex; align-items: center; gap: 12px; pointer-events: auto; text-align: left; padding: 10px 10px 10px 16px; z-index: 61; }
+.toast.ga-toast[hidden] { display: none; }
+.toast.ga-toast.ga-up { bottom: calc(var(--tabbar-h) + env(safe-area-inset-bottom) + 84px); }
+.ga-toast-t { min-width: 0; overflow-wrap: anywhere; }
+.ga-toast-b {
+  flex: none; min-height: 40px; padding: 0 14px; border-radius: 10px;
+  border: 1px solid color-mix(in srgb, currentColor 45%, transparent);
+  background: color-mix(in srgb, currentColor 14%, transparent);
+  color: inherit; font: inherit; font-weight: 700; cursor: pointer;
+}
+.ga-toast-b:focus-visible { outline: 3px solid var(--accent); outline-offset: 2px; }
+
+/* In der Galerie (Alltag › Galerie) */
+.gl-active { padding: 2px 0; }
+.gl.in-album .gl-active { display: none; }
+.gl-pick .gl-prow > span.gl-prow-t { display: flex; flex-direction: column; min-width: 0; flex: 1 1 auto; }
+.gl-pick .gl-prow > span.gl-pchk { flex: none; width: 26px; height: 26px; display: grid; place-items: center; border-radius: 999px; border: 1.5px solid var(--line); color: transparent; }
+.gl-pick .gl-prow[aria-pressed="true"] > span.gl-pchk { background: var(--gl-c); border-color: var(--gl-c); color: #fff; }

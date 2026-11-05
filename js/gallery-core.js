@@ -537,12 +537,16 @@ export function resolveAutoFolder(folders, setting) {
  *   sonst die eingestellte Auto-Kategorie.
  * opts = { folders, autoFolder (Einstellungswert), place? }
  */
-export function folderForNewAlbum(album, { folders = [], autoFolder, place = null } = {}) {
+export function folderForNewAlbum(album, { folders = [], autoFolder, activeFolderId, place = null } = {}) {
   if (!album || (album.kind !== "address" && album.kind !== "place")) return null;
+  // Update 9 (Agent U): Ort mit eigener „Foto-Kategorie“ → dessen Ort-Album kommt dorthin
+  if (album.kind === "place" && place && place.photoFolderId && byId(folders, String(place.photoFolderId))) return String(place.photoFolderId);
   if (album.kind === "place" && (isSchoolName(album.name) || (place && isSchoolName(place.name)))) {
     const s = schoolFolder(folders);
     if (s) return s.id;
   }
+  // Update 9 (Agent U): aufgelöste aktive Kategorie hat Vorrang (null = keine); sonst die alte Einstellung
+  if (activeFolderId !== undefined) return activeFolderId && byId(folders, String(activeFolderId)) ? String(activeFolderId) : null;
   return resolveAutoFolder(folders, autoFolder);
 }
 
@@ -629,4 +633,88 @@ export function nextFolderOrder(folders) {
 export function deleteFolderPlan(albums, folderId, target = null) {
   const t = target && target !== folderId && target !== OHNE_KAT ? target : null;
   return (albums || []).filter((a) => a && a.folderId === folderId).map((a) => ({ id: a.id, folderId: t }));
+}
+
+/* ---------- Aktive Kategorie „Neue Fotos gehen nach …“ (Update 9, Agent U) ----------
+ *   settings.gallery.activeFolderId: ID | "" (keine) | fehlt (→ alte Einstellung autoFolder, sonst „Baustellen“).
+ *   Eingestempelt an einem Ort mit photoFolderId → dieser überschreibt vorübergehend (source "place").
+ */
+
+/** Rohwert der aktiven Kategorie aus settings.gallery (undefined = Standard). */
+export function activeSetting(g) {
+  g = g || {};
+  if (typeof g.activeFolderId === "string") return g.activeFolderId;
+  if (typeof g.autoFolder === "string") return g.autoFolder;
+  return undefined;
+}
+
+/**
+ * Aktive Kategorie auflösen.
+ *   opts = { folders, gallery (settings.gallery), placeId (Ort der laufenden Schicht), places, ignorePlace }
+ * → { id: folderId|null, source: "place"|"manual"|"default"|"none", place: Ort|null, manualId }
+ */
+export function resolveActiveFolder({ folders = [], gallery = {}, placeId = null, places = [], ignorePlace = false } = {}) {
+  const raw = activeSetting(gallery);
+  const manualId = resolveAutoFolder(folders, raw);
+  if (placeId && !ignorePlace) {
+    const pl = (places || []).find((p) => p && p.id === placeId) || null;
+    if (pl && pl.photoFolderId && byId(folders, String(pl.photoFolderId))) {
+      return { id: String(pl.photoFolderId), source: "place", place: pl, manualId };
+    }
+  }
+  if (!manualId) return { id: null, source: "none", place: null, manualId: null };
+  return { id: manualId, source: raw === undefined ? "default" : "manual", place: null, manualId };
+}
+
+/** Ort der laufenden Schicht (letzter Abschnitt vor der Schicht selbst) oder null. */
+export function runningPlaceId(running) {
+  if (!running) return null;
+  const segs = Array.isArray(running.segments) ? running.segments : [];
+  const s = segs[segs.length - 1];
+  return (s && s.placeId) || running.placeId || null;
+}
+
+/**
+ * Einsatz-Titel enthält einen Kategorie-Namen? → längste passende Kategorie oder null.
+ *   „Wohnungen Gries“ → 🏠 Wohnungen. Treffer nur am Wortanfang, Namen ab 3 Zeichen, Groß/Klein + Umlaute egal.
+ */
+export function einsatzFolderSuggestion(title, folders) {
+  const t = fold(title);
+  if (!t) return null;
+  let best = null;
+  for (const f of folders || []) {
+    if (!f) continue;
+    const n = fold(f.name).trim();
+    if (n.length < 3) continue;
+    const re = new RegExp(`(^|[^a-z0-9])${n.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}`);
+    if (re.test(t) && (!best || n.length > best.len)) best = { f, len: n.length };
+  }
+  return best ? best.f : null;
+}
+
+/** „Wohnungen › Musterstraße 5, Graz“ (ohne Kategorie nur der Album-Name). */
+export function destLabel(album, folder) {
+  const a = album && album.name ? album.name : "";
+  return folder && folder.name ? (a ? `${folder.name} › ${a}` : folder.name) : a;
+}
+
+/**
+ * Alben aus ANDEREN Kategorien, die in den letzten `days` Tagen benutzt wurden (neuestes Foto oder angelegt).
+ * → [{ album, last, folderId }] neueste zuerst.
+ */
+export function recentAlbumsElsewhere(albums, items, folderId, folderIds, { now = Date.now(), days = 14 } = {}) {
+  const since = now - days * 86400000;
+  const lastBy = new Map();
+  for (const it of items || []) {
+    for (const id of cleanIds(it && it.albumIds)) if ((Number(it.ts) || 0) > (lastBy.get(id) || 0)) lastBy.set(id, Number(it.ts) || 0);
+  }
+  const out = [];
+  for (const a of albums || []) {
+    if (!a || a.kind === "virtual") continue;
+    const fid = albumFolderId(a, folderIds);
+    if (fid === folderId) continue;
+    const last = Math.max(lastBy.get(a.id) || 0, Number(a.created) || 0);
+    if (last >= since) out.push({ album: a, last, folderId: fid });
+  }
+  return out.sort((x, y) => y.last - x.last);
 }

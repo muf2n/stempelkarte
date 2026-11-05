@@ -1,9 +1,9 @@
 // Playwright-Test für Alltag › Galerie (lokaler Modus) inkl. Hauptkategorien (Agent T).
-//   cd <worktree> && python3 -m http.server 8861 &   then   node tests/galerie-e2e.cjs [screenshot-dir]
+//   cd <worktree> && python3 -m http.server 8862 &   then   node tests/galerie-e2e.cjs [screenshot-dir]
 // Fremde Domains werden abgefangen, Nominatim wird per page.route nachgebildet, die Position per Kontext-Geolocation.
 const { chromium } = require("playwright");
 const path = require("path");
-const BASE = process.env.BASE || "http://localhost:8861/";
+const BASE = process.env.BASE || "http://localhost:8862/";
 const OUT = process.argv[2] || require("os").tmpdir();
 
 const pad = (n) => String(n).padStart(2, "0");
@@ -16,8 +16,13 @@ const FIRMA = { latitude: 47.0402, longitude: 15.4089 };                        
 const SEIERSBERG = { lat: 47.0062, lng: 15.4028 };                                  // EXIF-GPS
 const LBS = { latitude: 47.0905, longitude: 15.4040 };                              // gespeicherter Ort Berufsschule
 
+// Update 9 (Agent U) – wechselnde Wohnungen (je ≈ 550 m auseinander)
+const W = [0, 1, 2, 3, 4, 5].map((i) => ({ latitude: 47.0600 + i * 0.005, longitude: 15.4500 }));
+const WSTR = ["Musterstraße 5", "Griesgasse 12", "Lendplatz 3", "Annenstraße 40", "Keplerstraße 8", "Mariahilferstraße 2"];
+
 function nominatimFor(lat, lng) {
   const near = (p, m) => Math.hypot((lat - p.latitude) * 111320, (lng - p.longitude) * 75900) < m;
+  for (let i = 0; i < W.length; i++) if (near(W[i], 200)) { const [road, hn] = WSTR[i].split(/ (?=\d)/); return { address: { road, house_number: hn, city: "Graz", postcode: "8020" } }; }
   if (near(GRAMBACH, 300)) return { display_name: "1, Thomas-Arbesser-Straße, Grambach, Bezirk Graz-Umgebung, Steiermark, 8074, Österreich", address: { house_number: "1", road: "Thomas-Arbesser-Straße", village: "Grambach", municipality: "Grambach", postcode: "8074", state: "Steiermark", country: "Österreich" } };
   if (near(LIEBENAU, 300)) return { address: { house_number: "24", road: "Liebenauer Hauptstraße", suburb: "Liebenau", city: "Graz", postcode: "8041" } };
   if (Math.hypot((lat - SEIERSBERG.lat) * 111320, (lng - SEIERSBERG.lng) * 75900) < 300) return { address: { house_number: "10", road: "Am Seiersberg", town: "Seiersberg-Pirka", postcode: "8055" } };
@@ -581,6 +586,182 @@ function nominatimFor(lat, lng) {
   await page.waitForSelector(".gl-fgrid");
   ok(!(await page.$(".sheet")), "Tages-Blatt → „Alle Fotos in der Galerie“");
 
+  /* ---------- Update 9 (Agent U): aktive Kategorie „Neue Fotos gehen nach …“ ---------- */
+  const waName = (i) => `${WSTR[i]}, Graz`;
+  const chipTxt = async (sel) => (await page.innerText(sel)).replace(/\s+/g, " ").trim();
+  const gaToast = async (re) => until(async () => { const t = await page.evaluate(() => { const e = document.getElementById("ga-toast"); return e && !e.hidden ? e.textContent : ""; }); return re.test(t) ? t : null; }, "Toast " + re);
+  const openCam = async (buf, name) => {
+    await page.setInputFiles("[data-r=photo] label[data-ph-cam] input.ph-file", { name, mimeType: "image/jpeg", buffer: buf });
+    await page.waitForSelector('.sheet [data-ph="save"]:not([disabled])');
+  };
+  const noDrive = () => page.evaluate(() => { const e = document.getElementById("drive-toast"); if (e) e.hidden = true; });
+  const saveCam = async () => { await page.click('.sheet [data-ph="save"]'); await page.waitForSelector(".sheet", { state: "detached" }); };
+  await page.evaluate(() => { location.hash = "#heute"; });
+  await page.waitForSelector("[data-r=photo] .ph-cam", { state: "visible" });
+  // 1) Kategorie „Wohnungen“ direkt im Aufnahme-Blatt anlegen
+  await ctx.setGeolocation(W[0]);
+  await openCam(IMG.p1, "w1.jpg");
+  ok(/Kategorie: 🏗️ Baustellen/.test(await chipTxt('.sheet [data-ga="chip"]')), "Aufnahme-Blatt: Chip „📂 Kategorie: 🏗️ Baustellen ▾“");
+  await noDrive();
+  await shot("ga-capture-390.png", false);
+  await page.click('.sheet [data-ga="chip"]');
+  await page.waitForSelector('.sheet [data-gp="new"]');
+  ok((await page.$$('.sheet [data-gpick]')).length === 2, "Auswahl: alle Hauptkategorien + „Keine Kategorie“");
+  await page.click('.sheet [data-gp="new"]');
+  await page.fill('.sheet [data-gp="name"]', "Wohnungen");
+  await page.click('.sheet [data-gemo="🏠"]');
+  await noDrive();
+  await shot("ga-picker-390.png", false);
+  await page.click('.sheet [data-gp="create"]');
+  await page.waitForFunction(() => document.querySelectorAll(".sheet").length === 1);
+  const fW = await until(async () => (await folders()).find((f) => f.name === "Wohnungen"), "Kategorie Wohnungen angelegt");
+  ok(fW.emoji === "🏠" && (await gset()).activeFolderId === fW.id, "„+ Neue Hauptkategorie“ im Aufnahme-Blatt: 🏠 Wohnungen angelegt und aktiv (settings.gallery.activeFolderId)");
+  await page.waitForTimeout(150);
+  ok(/Kategorie: 🏠 Wohnungen/.test(await chipTxt('.sheet [data-ga="chip"]')), "Chip im Aufnahme-Blatt zeigt sofort 🏠 Wohnungen");
+  await saveCam();
+  // 2) drei Fotos an drei Adressen → drei Alben in Wohnungen
+  const t1 = await gaToast(/Wohnungen › Musterstraße 5, Graz/);
+  ok(t1.includes("In „Wohnungen › Musterstraße 5, Graz“ gespeichert") && t1.includes("Ändern"), "Toast: „In „Wohnungen › Musterstraße 5, Graz“ gespeichert“ + Ändern");
+  await noDrive();
+  await shot("ga-toast-390.png", false);
+  for (const i of [1, 2]) {
+    await ctx.setGeolocation(W[i]);
+    await page.waitForTimeout(300);
+    await openCam(IMG.p2, `w${i + 1}.jpg`);
+    await saveCam();
+    await gaToast(new RegExp(`Wohnungen › ${WSTR[i]}`));
+  }
+  const wAlb = [];
+  for (const i of [0, 1, 2]) wAlb.push(await until(async () => (await albums()).find((a) => a.name === waName(i)), "Album " + i));
+  ok(wAlb.every((a) => a.folderId === fW.id && a.kind === "address") && new Set(wAlb.map((a) => a.id)).size === 3, "3 Fotos an 3 Adressen → 3 Alben, alle in 🏠 Wohnungen");
+  // 3) Foto an bekannter Adresse → Album bleibt, wo es ist
+  const nAlb0 = (await albums()).length;
+  const liebFolder = (await albumOf(a3.id)).folderId || null;
+  await ctx.setGeolocation(LIEBENAU);
+  await page.waitForTimeout(300);
+  await openCam(IMG.p3, "lieb.jpg");
+  await saveCam();
+  await gaToast(/Baustelle Liebenau/);
+  ok((await albums()).length === nAlb0 && ((await albumOf(a3.id)).folderId || null) === liebFolder, "Foto an bestehender Album-Adresse → kein neues Album, Kategorie bleibt");
+  await ctx.setGeolocation(W[1]);
+  await page.waitForTimeout(300);
+  await openCam(IMG.p3, "w2b.jpg");
+  await saveCam();
+  await gaToast(/Wohnungen › Griesgasse 12/);
+  ok((await albums()).length === nAlb0, "Zurück an Adresse 2 → dasselbe Album in Wohnungen");
+  // 4) in der Galerie (Kopf) auf Baustellen umschalten → nächste neue Adresse dorthin
+  await goHash("#alltag/galerie", ".gl-active [data-ga=chip]");
+  ok(/Neue Fotos gehen nach.*🏠 Wohnungen/.test(await chipTxt(".gl-active")), "Galerie-Kopf: „Neue Fotos gehen nach 📂 Kategorie: 🏠 Wohnungen ▾“");
+  ok((await txt(".gl-hint")).includes("🏠 Wohnungen"), "Alben-Reiter: Hinweis nennt die aktive Kategorie");
+  await page.click(".gl-active [data-ga=chip]");
+  await page.click('.sheet [data-gpick="f_bau"]');
+  await page.waitForSelector(".sheet", { state: "detached" });
+  await page.waitForTimeout(150);
+  ok((await gset()).activeFolderId === "f_bau" && /🏗️ Baustellen/.test(await chipTxt(".gl-active")), "Umgeschaltet auf 🏗️ Baustellen");
+  await ctx.setGeolocation(W[3]);
+  await page.waitForTimeout(300);
+  await page.setInputFiles('.gl-head input[data-in="cam"]', { name: "w4.jpg", mimeType: "image/jpeg", buffer: IMG.p4 });
+  await page.waitForSelector('.sheet [data-ph="save"]:not([disabled])');
+  ok(/🏗️ Baustellen/.test(await chipTxt('.sheet [data-ga="chip"]')), "Aufnahme aus der Galerie: Chip zeigt Baustellen");
+  await saveCam();
+  await gaToast(/Baustellen › Annenstraße 40/);
+  const w4 = await until(async () => (await albums()).find((a) => a.name === waName(3)), "Album 4");
+  ok(w4.folderId === "f_bau", "Nächste neue Adresse → Baustellen");
+  ok((await albumOf(wAlb[0].id)).folderId === fW.id, "Frühere Wohnungen-Alben bleiben in Wohnungen");
+  // 5) Einstellung bleibt nach Neuladen
+  await page.click(".gl-active [data-ga=chip]");
+  await page.click(`.sheet [data-gpick="${fW.id}"]`);
+  await page.waitForSelector(".sheet", { state: "detached" });
+  await page.reload();
+  await page.waitForTimeout(600);
+  if (await page.isVisible("#btn-local")) await page.click("#btn-local");
+  await goHash("#alltag/galerie", ".gl-active [data-ga=chip]");
+  await page.waitForTimeout(300);
+  ok((await gset()).activeFolderId === fW.id && /🏠 Wohnungen/.test(await chipTxt(".gl-active")), "Nach Neuladen: aktive Kategorie 🏠 Wohnungen gemerkt");
+  await page.click('[data-g="settings"]');
+  ok((await page.inputValue('.sheet [data-s="autofolder"]')) === fW.id, "Einstellungen zeigen dieselbe aktive Kategorie (eine Quelle)");
+  await closeSheet();
+  // 6) Ort-Vorgabe: Firma → Foto-Kategorie Baustellen
+  await page.evaluate(() => { location.hash = "#orte"; });
+  await page.waitForTimeout(500);
+  await page.click(".place-item[data-id=pF]");
+  await page.waitForSelector("#pf-photofolder option[value=f_bau]", { state: "attached" });
+  await page.selectOption("#pf-photofolder", "f_bau");
+  await noDrive();
+  await shot("ga-place-390.png", false);
+  await page.click(".sheet [data-r=save]");
+  await page.waitForSelector(".sheet", { state: "detached" });
+  ok(await page.evaluate(() => import("/js/store.js").then((m) => m.get().places.find((p) => p.id === "pF").photoFolderId)) === "f_bau", "Ort „Firma“: Foto-Kategorie gespeichert");
+  await page.evaluate(() => import("/js/store.js").then((m) => { const r = m.get().running; return m.setRunning({ ...r, placeId: "pF", place: "Firma Elektro Maier", segments: r.segments.map((x) => ({ ...x, placeId: "pF", place: "Firma Elektro Maier" })) }); }));
+  await page.evaluate(() => { location.hash = "#heute"; });
+  await page.waitForSelector("[data-r=photo] .ph-cam", { state: "visible" });
+  await ctx.setGeolocation(W[4]);
+  await page.waitForTimeout(300);
+  await openCam(IMG.p5, "w5.jpg");
+  const pc = await chipTxt('.sheet [data-ga="chip"]');
+  ok(/🏗️ Baustellen/.test(pc) && pc.includes("(von Ort Firma Elektro Maier)"), "Eingestempelt bei Firma: Chip „🏗️ Baustellen (von Ort Firma Elektro Maier)“");
+  await noDrive();
+  await shot("ga-capture-place-390.png", false);
+  await saveCam();
+  await gaToast(/Baustellen › Keplerstraße 8/);
+  ok((await albums()).find((a) => a.name === waName(4)).folderId === "f_bau" && (await gset()).activeFolderId === fW.id, "Neue Adresse während Ort-Schicht → Baustellen, eigene Wahl bleibt Wohnungen");
+  await page.evaluate(() => import("/js/store.js").then((m) => { const r = m.get().running; return m.setRunning({ ...r, placeId: null, place: "", segments: r.segments.map((x) => ({ ...x, placeId: null, place: "" })) }); }));
+  // 7) Einsatz-Banner (einmal pro Tag)
+  await page.evaluate(async (today) => { const A = await import("/js/gallery-albums.js"); await A.setActiveFolder("f_bau"); const m = await import("/js/store.js"); await m.saveTodo({ kind: "einsatz", title: "Wohnungen Gries", date: today }); }, TODAY);
+  await goHash("#alltag/galerie", ".gl-active .ga-ez");
+  ok((await chipTxt(".gl-active .ga-ez")).includes("Heute Einsatz „Wohnungen Gries“ – Fotos nach 🏠 Wohnungen?"), "Banner: „Heute Einsatz „Wohnungen Gries“ – Fotos nach 🏠 Wohnungen?“");
+  await noDrive();
+  await shot("ga-banner-390.png", false);
+  await page.click('.gl-active [data-ga="ezno"]');
+  await page.waitForTimeout(150);
+  ok(!(await page.$(".gl-active .ga-ez")) && (await gset()).activeFolderId === "f_bau", "✕ blendet aus, Kategorie bleibt");
+  await page.reload();
+  await page.waitForTimeout(600);
+  if (await page.isVisible("#btn-local")) await page.click("#btn-local");
+  await goHash("#alltag/galerie", ".gl-active [data-ga=chip]");
+  await page.waitForTimeout(300);
+  ok(!(await page.$(".gl-active .ga-ez")), "Heute nicht noch einmal vorgeschlagen");
+  await page.evaluate(() => localStorage.removeItem("sk-ga-ez"));
+  await goHash("#heute", "[data-r=photo]"); await goHash("#alltag/galerie", ".gl-active .ga-ez");
+  await page.click('.gl-active [data-ga="ezyes"]');
+  await page.waitForTimeout(200);
+  ok((await gset()).activeFolderId === fW.id && !(await page.$(".gl-active .ga-ez")) && /🏠 Wohnungen/.test(await chipTxt(".gl-active")), "„Ja“ schaltet auf 🏠 Wohnungen, Banner weg");
+  // 8) „Ändern“ im Toast: neues Album in andere Kategorie, Foto in anderes Album
+  await ctx.setGeolocation(W[5]);
+  await page.waitForTimeout(300);
+  await page.setInputFiles('.gl-head input[data-in="cam"]', { name: "w6.jpg", mimeType: "image/jpeg", buffer: IMG.p1 });
+  await page.waitForSelector('.sheet [data-ph="save"]:not([disabled])');
+  await saveCam();
+  await gaToast(/Wohnungen › Mariahilferstraße 2/);
+  const w6 = await until(async () => (await albums()).find((a) => a.name === waName(5)), "Album 6");
+  await page.click("#ga-toast .ga-toast-b");
+  await page.waitForSelector('.sheet [data-gcf="f_bau"]');
+  ok((await txt('.sheet [data-gc="dest"]')) === "Wohnungen › Mariahilferstraße 2, Graz", "„Ändern“ öffnet „Foto einsortieren“ mit Ziel");
+  await noDrive();
+  await shot("ga-change-390.png", false);
+  await page.click('.sheet [data-gcf="f_bau"]');
+  await page.waitForTimeout(200);
+  ok((await albumOf(w6.id)).folderId === "f_bau" && (await txt('.sheet [data-gc="dest"]')) === "Baustellen › Mariahilferstraße 2, Graz", "Neues Album per „Ändern“ nach Baustellen verschoben");
+  const ph6 = (await idx()).find((x) => x.albumIds.includes(w6.id));
+  await page.click(`.sheet [data-gca="${wAlb[0].id}"]`);
+  await page.waitForSelector(".sheet", { state: "detached" });
+  await until(async () => (await idx()).find((x) => x.id === ph6.id && x.albumIds.includes(wAlb[0].id) && !x.albumIds.includes(w6.id)), "Foto verschoben");
+  ok(!(await albums()).some((a) => a.id === w6.id), "Foto per „Ändern“ in anderes Album, leeres neues Album entfernt");
+  // 9) Schnell-Korrektur: Alben der letzten 14 Tage aus anderen Kategorien holen
+  await goHash(`#alltag/galerie/k/${fW.id}`, ".gl-fhead");
+  await page.click('[data-g="pull"]');
+  await page.waitForSelector(`.sheet [data-pull="${w4.id}"]`);
+  ok(!(await page.$(`.sheet [data-pull="${wAlb[0].id}"]`)), "Holen-Liste: nur Alben anderer Kategorien");
+  await page.click(`.sheet [data-pull="${w4.id}"]`);
+  ok((await txt('.sheet [data-pl="ok"]')) === "1 Album hierher holen", "Auswahl zählt mit");
+  await noDrive();
+  await shot("ga-pull-390.png", false);
+  await page.click('.sheet [data-pl="ok"]');
+  await page.waitForSelector(".sheet", { state: "detached" });
+  await page.waitForTimeout(200);
+  ok((await albumOf(w4.id)).folderId === fW.id && !!(await page.$(`.gl-acard[data-album="${w4.id}"]`)), "„Alben aus anderer Kategorie hierher holen“ → Annenstraße 40 jetzt in Wohnungen");
+  await shot("ga-kat-wohnungen-390.png");
+
   /* ---------- Screenshots ---------- */
   await page.evaluate(() => { location.hash = "#alltag"; });
   await page.waitForSelector('.al-tile[data-id="galerie"]');
@@ -654,6 +835,22 @@ function nominatimFor(lat, lng) {
     await shot(`gl-album-${name}.png`, false, p2);
     if (name === "390-dark") {
       await p2.click('[data-s="done"]');
+      // Update 9 (Agent U) – aktive Kategorie dunkel: Galerie-Kopf + Auswahl + Aufnahme-Blatt
+      await p2.evaluate(() => { localStorage.removeItem("sk-ga-ez"); location.hash = "#alltag/galerie"; });
+      await p2.waitForSelector(".gl-active [data-ga=chip]");
+      await p2.evaluate(() => import("/js/gallery-albums.js").then((A) => A.setActiveFolder("f_bau")));
+      await p2.waitForSelector(".gl-active .ga-ez");
+      await shot(`ga-banner-${name}.png`, false, p2);
+      await p2.click(".gl-active [data-ga=chip]");
+      await p2.click('.sheet [data-gp="new"]');
+      await shot(`ga-picker-${name}.png`, false, p2);
+      await p2.click(".sheet .close");
+      await p2.evaluate(() => { location.hash = "#heute"; });
+      await p2.waitForSelector("[data-r=photo] .ph-cam", { state: "visible" });
+      await p2.setInputFiles("[data-r=photo] label[data-ph-cam] input.ph-file", { name: "d.jpg", mimeType: "image/jpeg", buffer: IMG.p2 });
+      await p2.waitForSelector('.sheet [data-ph="save"]:not([disabled])');
+      await shot(`ga-capture-${name}.png`, false, p2);
+      await p2.click(".sheet .close");
       await p2.evaluate(() => { location.hash = "#heute"; });
       await p2.waitForTimeout(500);
       await shot(`gl-heute-${name}.png`, false, p2);

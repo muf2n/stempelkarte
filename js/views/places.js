@@ -2,6 +2,7 @@
 import * as plans from "./plans.js";
 import { mountGallery } from "./gallery.js"; // Update 9 – Fotos
 import { mountPlaceMaterial } from "../alltag/material.js"; // Update 9 – Material
+import * as galleryAlbums from "../gallery-albums.js"; // Update 9 (Agent U) – Foto-Kategorie pro Ort
 
 const LEAFLET_CSS = "https://unpkg.com/leaflet@1.9.4/dist/leaflet.css";
 const LEAFLET_JS = "https://unpkg.com/leaflet@1.9.4/dist/leaflet.js";
@@ -290,6 +291,9 @@ export function openPlaceForm(place, presetLoc, ctx) {
       `</div>` +
       `<label>Google-Maps-Link (optional)<input id="pf-link" type="url" inputmode="url" autocomplete="off" placeholder="Link hier einfügen" value="${esc(place ? place.link || "" : "")}"></label>` +
       `<p class="hint" data-r="linkhint" hidden></p>` +
+      // Update 9 (Agent U) – Foto-Kategorie: eingestempelt hier → neue Foto-Alben in diese Galerie-Kategorie
+      `<label>Foto-Kategorie (Galerie)<select id="pf-photofolder" data-r="photofolder"><option value="">Keine – aktive Kategorie gilt</option></select></label>` +
+      `<p class="note" style="margin-top:-4px">Bist du hier eingestempelt, kommen neue Foto-Alben in diese Hauptkategorie.</p>` +
     `</div>` +
     (isNew ? "" : `<div data-r="material" style="margin-top:14px"></div>`) +
     (isNew ? "" : `<div data-r="photos" style="margin-top:14px"></div>`) +
@@ -367,6 +371,19 @@ export function openPlaceForm(place, presetLoc, ctx) {
       fLink.addEventListener("change", onLink);
       fLink.addEventListener("paste", () => setTimeout(onLink, 0));
 
+      // Update 9 (Agent U) – Foto-Kategorie füllen (Kategorien können noch laden)
+      const fPF = $("[data-r=photofolder]");
+      const fillPF = () => {
+        const cur = fPF.dataset.touched ? fPF.value : String((place && place.photoFolderId) || "");
+        const fs = galleryAlbums.folders();
+        fPF.innerHTML = `<option value="">Keine – aktive Kategorie gilt</option>` +
+          fs.map((f) => `<option value="${esc(f.id)}">${esc(f.emoji)} ${esc(f.name)}</option>`).join("") +
+          (cur && !fs.some((f) => f.id === cur) ? `<option value="${esc(cur)}">(Kategorie gelöscht)</option>` : "");
+        fPF.value = cur;
+      };
+      fPF.addEventListener("change", () => { fPF.dataset.touched = "1"; });
+      try { fillPF(); galleryAlbums.foldersReady().then(() => { if (fPF.isConnected) fillPF(); }).catch(() => {}); } catch (err) { console.error(err); }
+
       const saveBtn = $("[data-r=save]");
       saveBtn.addEventListener("click", async () => {
         const name = fName.value.trim();
@@ -382,6 +399,7 @@ export function openPlaceForm(place, presetLoc, ctx) {
           lng: st.lng,
           radius: Math.round(Number(fRad.value) || 150),
         };
+        if (fPF.value) data.photoFolderId = fPF.value; else delete data.photoFolderId; // Update 9 (Agent U)
         if (isNew) delete data.id;
         c.ui.setBusy(saveBtn, true, "Speichert …");
         try {

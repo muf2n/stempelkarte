@@ -13,6 +13,7 @@ import * as timer from "../timer.js";
 import { icon } from "../icons.js";
 import { esc, WD, clock, dayKey as toDayKey } from "../util.js";
 import { openViewer, openCapture, runningMeta, sharePhoto, camIcon } from "../views/gallery.js";
+import { mountActiveChip } from "../gallery-active.js"; // Update 9 (Agent U) – aktive Kategorie
 
 const TABS = [["alben", "Alben", "grid"], ["alle", "Alle Fotos", "image"], ["karte", "Karte", "map"]];
 const TAB_KEY = "sk-gl-tab";
@@ -120,6 +121,7 @@ export function mount(el, ctx) {
         TABS.map(([id, t, ic]) => `<button type="button" class="gl-tab" role="tab" data-tab="${id}" aria-selected="${id === S.tab}">${icon(ic, 18)}<span>${t}</span></button>`).join("") +
         `<button type="button" class="gl-gear" data-g="settings" aria-label="Galerie-Einstellungen" title="Einstellungen">${icon("gear", 20)}</button>` +
       `</div>` +
+      `<div class="gl-active" data-g="active"></div>` +
       `<div class="gl-page" data-g="page"></div>` +
       `<div class="gl-selbar" data-g="selbar" hidden></div>` +
     `</div>`;
@@ -130,6 +132,7 @@ export function mount(el, ctx) {
     if (ev.target.closest('[data-g="settings"]')) openSettings();
   });
   wireGrid(root);
+  try { const ch = mountActiveChip(root.querySelector('[data-g="active"]'), { label: "Neue Fotos gehen nach" }); S.unsubs.push(() => ch.destroy()); } catch (e) { console.error(e); }
   root.querySelector('[data-g="selbar"]').addEventListener("click", onSelBar);
 
   ({ albumId: S.albumId, folderId: S.folderId } = routeFromHash());
@@ -343,7 +346,7 @@ function renderAlbums() {
   const set = A.settings();
   const folders = foldersAll();
   const nAlb = list.filter((x) => x.a.kind !== "virtual").length;
-  const hint = set.auto ? `<p class="gl-hint">📍 Neue Fotos werden automatisch nach Adresse einsortiert (Umkreis ${set.radius} m)${(() => { const af = A.autoFolderId() && A.folderById(A.autoFolderId()); return af ? `, neue Adress-Alben kommen in ${esc(af.emoji)} ${esc(af.name)}` : ""; })()}.</p>` : "";
+  const hint = set.auto ? `<p class="gl-hint">📍 Neue Fotos werden automatisch nach Adresse einsortiert (Umkreis ${set.radius} m)${(() => { const af = A.activeFolder().folder; return af ? `, neue Adress-Alben kommen in ${esc(af.emoji)} ${esc(af.name)} (oben umschaltbar)` : ""; })()}.</p>` : "";
   const head =
     `<div class="gl-head">` +
       `<div class="gl-sum"><b>${folders.length ? `${folders.length} ${folders.length === 1 ? "Kategorie" : "Kategorien"}` : nAlben(nAlb)}</b><span>${folders.length ? `${esc(nAlben(nAlb))} · ` : ""}${esc(nFotos(total))}</span></div>` +
@@ -407,6 +410,7 @@ function renderFolder() {
     `</div>` +
     `<div class="gl-aacts">` +
       `<button type="button" class="btn sm ghost" data-g="newalbum">${icon("plus", 18)}<span>Neues Album</span></button>` +
+      (f.virtual ? "" : `<button type="button" class="btn sm ghost" data-g="pull">${icon("swap", 18)}<span>Alben aus anderer Kategorie hierher holen</span></button>`) +
       (g.st.count ? `<button type="button" class="btn sm ghost" data-g="fphotos">${icon("image", 18)}<span>Alle ${esc(nFotos(g.st.count))}</span></button>` : "") +
       (nSel ? (S.aselecting ? `<button type="button" class="btn sm ghost" data-g="aselall">Alle (${nSel})</button>` : `<button type="button" class="btn sm ghost" data-g="aselect">${icon("check2", 18)}<span>Auswählen</span></button>`) : "") +
     `</div>` +
@@ -706,6 +710,7 @@ function wireGrid(root) {
       case "aselall": { const ids = selectableAlbumIds(); const all = ids.every((id) => S.asel.has(id)); S.asel = new Set(all ? [] : ids); render(true); break; }
       case "fphotos": { const fid = S.folderId; S.f = { folderId: fid, albumId: "", from: "", to: "", q: "" }; S.tab = "alle"; lsSet(TAB_KEY, "alle"); S.pushed = false; location.hash = "alltag/galerie"; break; }
       case "afolder": { const a = curAlbum(); if (a) changeAlbumFolder([a.id]); break; }
+      case "pull": { const f = A.folderById(S.folderId); if (f) pullSheet(f); break; }
       case "select": S.selecting = true; S.sel.clear(); render(true); break;
       case "selall": { const ids = visibleList().map((x) => x.id); const all = ids.every((id) => S.sel.has(id)); S.sel = new Set(all ? [] : ids); render(true); break; }
       case "clear": S.f = { folderId: "", albumId: "", from: "", to: "", q: "" }; S.limit = PAGE; render(false); break;
@@ -1193,8 +1198,8 @@ function openSettings() {
         `<div class="lbl">Umkreis für dieselbe Adresse</div>` +
         `<div class="gl-rads" role="group" aria-label="Umkreis">${G.RADIUS_CHOICES.map((r) => `<button type="button" class="gl-chip" data-rad="${r}" aria-pressed="${r === radius}">${r} m</button>`).join("")}</div>` +
         `<p class="note">Gilt für neue Adress-Alben. Bestehende Alben: im Album unter „Bearbeiten“. Adressen kommen von OpenStreetMap (Nominatim).</p>` +
-        (foldersAll().length ? `<div class="fields"><label>Neue Adress-Alben automatisch in Kategorie …${folderSelectHTML('data-s="autofolder"', A.autoFolderId() || "", { noneLabel: "Keine (Ohne Kategorie)" })}</label></div>` +
-          `<p class="note">Gilt auch für Alben gespeicherter Orte. Orte mit „Schule“ oder „LBS“ im Namen kommen in die Berufsschul-Kategorie.</p>` : "") +
+        (foldersAll().length ? `<div class="fields"><label>Neue Fotos gehen nach … (aktive Kategorie)${folderSelectHTML('data-s="autofolder"', A.autoFolderId() || "", { noneLabel: "Keine (Ohne Kategorie)" })}</label></div>` +
+          `<p class="note">Neue Adress-Alben landen in dieser Kategorie – schneller umschalten geht über „📂 Kategorie“ oben in der Galerie oder beim Fotografieren. Gilt auch für Alben gespeicherter Orte; ein Ort mit eigener „Foto-Kategorie“ (in „Orte“) gilt, solange du dort eingestempelt bist. Orte mit „Schule“ oder „LBS“ im Namen kommen in die Berufsschul-Kategorie.</p>` : "") +
         `<div class="row"><button type="button" class="btn primary" data-s="save">Speichern</button></div>` +
       `</div>`,
     onMount(el, close) {
@@ -1204,7 +1209,7 @@ function openSettings() {
         if (ev.target.closest('[data-s="save"]')) {
           try {
             const af = el.querySelector('[data-s="autofolder"]');
-            await A.saveSettings({ auto: el.querySelector('[data-s="auto"]').checked, radius, ...(af ? { autoFolder: af.value } : {}) });
+            await A.saveSettings({ auto: el.querySelector('[data-s="auto"]').checked, radius, ...(af ? { autoFolder: af.value, activeFolderId: af.value } : {}) });
             close(); ctx.ui.toast("Gespeichert.");
             if (S) render();
           } catch (e) { console.error(e); }
@@ -1360,6 +1365,49 @@ function pickFolder({ title = "Kategorie wählen", current = null } = {}) {
         new MutationObserver((_, mo) => { if (!el.isConnected) { mo.disconnect(); finish(null); } }).observe(el.parentNode || document.body, { childList: true });
       },
     });
+  });
+}
+
+/** Update 9 (Agent U) – Schnell-Korrektur: Alben der letzten 14 Tage aus anderen Kategorien hierher holen. */
+function pullSheet(f) {
+  const ctx = S.ctx;
+  const m = amap();
+  const ids = fids();
+  const list = G.recentAlbumsElsewhere(albumsAll(), S.items, f.id, ids, { days: 14 });
+  const pick = new Set();
+  sheet({
+    title: `Nach ${f.emoji} ${f.name} holen`,
+    bodyHTML:
+      `<div class="gl-sheet gl-pick" ${fstyle(f)}>` +
+        `<p class="note">Alben der letzten 14 Tage aus anderen Kategorien – antippen und hierher holen. Fotos bleiben in ihren Alben.</p>` +
+        (list.length ? `<div class="gl-plist" data-pl="list">${list.map(({ album: a, last, folderId }) => {
+          const from = folderObj(folderId) || OHNE_F;
+          const n = G.itemsOfAlbum(S.items, a.id, m).length;
+          return `<button type="button" class="gl-prow" data-pull="${esc(a.id)}" aria-pressed="false">${albumGlyph(a, 18)}<span class="gl-prow-t"><b>${esc(a.name)}</b><small>${esc(from.emoji)} ${esc(from.name)} · ${esc(nFotos(n))} · ${esc(fmtKey(toDayKey(last)))}</small></span><span class="gl-pchk" aria-hidden="true">${icon("check", 16)}</span></button>`;
+        }).join("")}</div>` +
+          `<div class="row"><button type="button" class="btn ghost" data-pl="all">Alle (${list.length})</button><button type="button" class="btn primary" data-pl="ok" disabled>Hierher holen</button></div>`
+          : `<div class="gl-empty"><p>In den letzten 14 Tagen gibt es keine Alben in anderen Kategorien.</p></div>`) +
+      `</div>`,
+    onMount(el, close) {
+      const ok = el.querySelector('[data-pl="ok"]');
+      const upd = () => {
+        el.querySelectorAll("[data-pull]").forEach((b) => b.setAttribute("aria-pressed", String(pick.has(b.dataset.pull))));
+        if (ok) { ok.disabled = !pick.size; ok.textContent = pick.size ? `${nAlben(pick.size)} hierher holen` : "Hierher holen"; }
+      };
+      el.addEventListener("click", async (ev) => {
+        const b = ev.target.closest("[data-pull]");
+        if (b) { pick.has(b.dataset.pull) ? pick.delete(b.dataset.pull) : pick.add(b.dataset.pull); upd(); return; }
+        if (ev.target.closest('[data-pl="all"]')) { const every = list.every((x) => pick.has(x.album.id)); pick.clear(); if (!every) list.forEach((x) => pick.add(x.album.id)); upd(); return; }
+        if (ev.target.closest('[data-pl="ok"]') && pick.size) {
+          ui.setBusy(ok, true, "Verschiebt …");
+          const n = pick.size;
+          await A.setAlbumsFolder([...pick], f.id);
+          close();
+          ctx.ui.toast(`${nAlben(n)} → ${f.emoji} ${f.name}`, 2600);
+          if (S) render(true);
+        }
+      });
+    },
   });
 }
 

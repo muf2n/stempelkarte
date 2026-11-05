@@ -3,6 +3,7 @@
 import * as photos from "../photos.js";
 import { esc, dayKey as toDayKey, clock, fmtDate } from "../util.js";
 import * as albumsMod from "../gallery-albums.js"; // Update 9 – Galerie (automatische Alben)
+import { mountActiveChip, savedToast } from "../gallery-active.js"; // Update 9 (Agent U) – aktive Kategorie
 
 const GRID_SVG = '<svg class="ico" width="SZ" height="SZ" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><rect x="4" y="4" width="7" height="7" rx="2"/><rect x="13" y="4" width="7" height="7" rx="2"/><rect x="4" y="13" width="7" height="7" rx="2"/><rect x="13" y="13" width="7" height="7" rx="2"/></svg>';
 /** Update 9 – Galerie öffnen (Alltag › Galerie), optional direkt ein Album. */
@@ -16,7 +17,7 @@ function galleryBtn(cls, label = "Galerie", size = 18) {
 /** Update 9 – nach dem Speichern: Position + Album anhängen (blockiert das Speichern nicht). */
 export function fileAfterSave(photo, ctx, posP, opts = {}) {
   albumsMod.autoFile(photo, { pos: posP, auto: opts.auto, placeId: photo && photo.placeId }).then((r) => {
-    if (r && r.album && opts.toast !== false) ctx.ui.toast(`📍 Im Album „${r.album.name}“`, 2600);
+    if (r && r.album && opts.toast !== false) savedToast(r, photo); // „In „Kategorie › Album“ gespeichert“ + Ändern
   }).catch((e) => console.error("Foto einsortieren:", e));
 }
 
@@ -68,12 +69,15 @@ export function openCapture(file, ctx, meta = {}, opts = {}) {
   const posP = opts.file === false ? null : albumsMod.currentPosition();
   if (posP) posP.catch(() => {});
   const where = [meta.place || "", meta.dayKey ? fmtDate(keyToDate(meta.dayKey)) : ""].filter(Boolean).join(" · ");
+  // Update 9 (Agent U) – Chip „Neue Fotos gehen nach …“ nur, wenn automatisch einsortiert wird
+  const showActive = !!posP && opts.auto !== false && albumsMod.settings().auto;
   ctx.ui.openSheet({
     title: "Foto speichern",
     bodyHTML:
       `<div class="ph-cap">` +
         `<div class="ph-cap-img" data-ph="prev"><span class="note">Bild wird vorbereitet …</span></div>` +
         (where ? `<p class="note ph-cap-where">${camIcon(16)}<span>${esc(where)}</span></p>` : "") +
+        (showActive ? `<div class="ph-cap-active" data-ph="active"></div>` : "") +
         `<div class="fields"><label>Notiz (optional)<input type="text" data-ph="note" maxlength="300" autocomplete="off" placeholder="z. B. Verteiler vor dem Anschließen"></label></div>` +
         `<div class="row"><button type="button" class="btn ghost" data-ph="cancel">Verwerfen</button>` +
         `<button type="button" class="btn primary" data-ph="save" disabled>Speichern</button></div>` +
@@ -82,6 +86,7 @@ export function openCapture(file, ctx, meta = {}, opts = {}) {
       const $ = (s) => sheet.querySelector(`[data-ph="${s}"]`);
       const save = $("save");
       let img = null;
+      if (showActive) { try { mountActiveChip($("active")); } catch (e) { console.error(e); } }
       work.then((r) => {
         img = r;
         const box = $("prev");
