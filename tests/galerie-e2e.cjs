@@ -267,7 +267,7 @@ function nominatimFor(lat, lng) {
 
   /* ---------- Mehrfachauswahl: Zu Album, Verschieben, Löschen ---------- */
   const longPress = async (sel) => {
-    const b = await page.$(sel); const r = await b.boundingBox();
+    const b = await page.$(sel); await b.scrollIntoViewIfNeeded(); const r = await b.boundingBox();
     await page.mouse.move(r.x + r.width / 2, r.y + r.height / 2);
     await page.mouse.down(); await page.waitForTimeout(650); await page.mouse.up();
     await page.waitForTimeout(150);

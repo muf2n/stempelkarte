@@ -127,6 +127,9 @@ const SHELL = [
   "css/alltag-galerie.css",
   "js/gallery-active.js", // Update 9 (Agent U) – aktive Kategorie
   "css/gallery-active.css",
+  "js/media-import-core.js", // Update 9 (Agent W3) – Kamera-Fotos übernehmen
+  "js/media-import.js",
+  "css/media-import.css",
   "js/app.js"
 ];
 

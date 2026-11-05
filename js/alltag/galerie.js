@@ -14,6 +14,7 @@ import { icon } from "../icons.js";
 import { esc, WD, clock, dayKey as toDayKey } from "../util.js";
 import { openViewer, openCapture, runningMeta, sharePhoto, camIcon } from "../views/gallery.js";
 import { mountActiveChip } from "../gallery-active.js"; // Update 9 (Agent U) – aktive Kategorie
+import * as MI from "../media-import.js"; // Update 9 (Agent W3) – Kamera-Fotos übernehmen
 
 const TABS = [["alben", "Alben", "grid"], ["alle", "Alle Fotos", "image"], ["karte", "Karte", "map"]];
 const TAB_KEY = "sk-gl-tab";
@@ -134,6 +135,7 @@ export function mount(el, ctx) {
   wireGrid(root);
   try { const ch = mountActiveChip(root.querySelector('[data-g="active"]'), { label: "Neue Fotos gehen nach" }); S.unsubs.push(() => ch.destroy()); } catch (e) { console.error(e); }
   root.querySelector('[data-g="selbar"]').addEventListener("click", onSelBar);
+  try { S.unsubs.push(MI.wire(root)); } catch (e) { console.error(e); } // Update 9 (Agent W3) – Kamera-Fotos übernehmen
 
   ({ albumId: S.albumId, folderId: S.folderId } = routeFromHash());
   const onHash = () => {
@@ -351,7 +353,8 @@ function renderAlbums() {
     `<div class="gl-head">` +
       `<div class="gl-sum"><b>${folders.length ? `${folders.length} ${folders.length === 1 ? "Kategorie" : "Kategorien"}` : nAlben(nAlb)}</b><span>${folders.length ? `${esc(nAlben(nAlb))} · ` : ""}${esc(nFotos(total))}</span></div>` +
       addButtons() +
-    `</div>`;
+    `</div>` +
+    MI.cardHTML(); // Update 9 (Agent W3)
   // Ohne Kategorien: Alben wie bisher direkt
   if (!folders.length) {
     pg.innerHTML = head +
@@ -1201,8 +1204,10 @@ function openSettings() {
         (foldersAll().length ? `<div class="fields"><label>Neue Fotos gehen nach … (aktive Kategorie)${folderSelectHTML('data-s="autofolder"', A.autoFolderId() || "", { noneLabel: "Keine (Ohne Kategorie)" })}</label></div>` +
           `<p class="note">Neue Adress-Alben landen in dieser Kategorie – schneller umschalten geht über „📂 Kategorie“ oben in der Galerie oder beim Fotografieren. Gilt auch für Alben gespeicherter Orte; ein Ort mit eigener „Foto-Kategorie“ (in „Orte“) gilt, solange du dort eingestempelt bist. Orte mit „Schule“ oder „LBS“ im Namen kommen in die Berufsschul-Kategorie.</p>` : "") +
         `<div class="row"><button type="button" class="btn primary" data-s="save">Speichern</button></div>` +
+        MI.settingsHTML() + // Update 9 (Agent W3) – Kamera-Fotos (speichert sofort)
       `</div>`,
     onMount(el, close) {
+      MI.wireSettings(el);
       el.addEventListener("click", async (ev) => {
         const r = ev.target.closest("[data-rad]");
         if (r) { radius = Number(r.dataset.rad); el.querySelectorAll("[data-rad]").forEach((x) => x.setAttribute("aria-pressed", String(x === r))); return; }

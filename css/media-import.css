@@ -1,0 +1,140 @@
+/* Update 9 – Kamera-Fotos übernehmen (js/media-import.js). Präfix .mi- */
+:root {
+  --mi-c: #0369a1;
+  --mi-ok: #059669;
+  --mi-ok-soft: #d3f4e6;
+  --mi-warn: #b45309;
+  --mi-warn-soft: #fdefd3;
+  --mi-off: #64748b;
+  --mi-soft: color-mix(in srgb, #0284c7 9%, var(--card));
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    --mi-c: #38bdf8; --mi-ok: #34d399; --mi-ok-soft: rgba(52, 211, 153, .16);
+    --mi-warn: #fbbf24; --mi-warn-soft: rgba(251, 191, 36, .14); --mi-off: #94a3b8;
+    --mi-soft: color-mix(in srgb, #0ea5e9 14%, var(--card));
+  }
+}
+
+/* Karte in der Galerie */
+.mi-card {
+  display: flex; flex-direction: column; gap: 10px; padding: 12px 14px 14px; border-radius: 18px;
+  background: var(--mi-soft); border: 1px solid color-mix(in srgb, var(--mi-c) 22%, var(--line));
+}
+.mi-card-h { display: flex; align-items: center; gap: 10px; min-width: 0; }
+.mi-card-ic { flex: none; width: 38px; height: 38px; border-radius: 12px; display: grid; place-items: center; font-size: 1.25rem; background: var(--card); box-shadow: var(--shadow); }
+.mi-card-t { display: flex; flex-direction: column; min-width: 0; line-height: 1.25; }
+.mi-card-t b { color: var(--ink); font-size: .98rem; }
+.mi-card-t small { color: var(--muted); font-size: .82rem; }
+.mi-days { display: flex; gap: 6px; flex-wrap: wrap; }
+.mi-day {
+  position: relative; display: inline-flex; align-items: center; gap: 5px; min-height: 38px; padding: 6px 14px; border-radius: 999px;
+  border: 1px solid var(--line); background: var(--card); color: var(--ink); font: inherit; font-size: .9rem; font-weight: 600; cursor: pointer;
+}
+.mi-day[aria-pressed="true"], .mi-date.is-on { background: var(--mi-c); border-color: var(--mi-c); color: #fff; }
+@media (prefers-color-scheme: dark) { .mi-day[aria-pressed="true"], .mi-date.is-on { color: #04222f; } }
+.mi-day:focus-visible, .mi-date:focus-within { outline: none; box-shadow: var(--ring); }
+.mi-date input { position: absolute; inset: 0; width: 100%; height: 100%; opacity: 0; cursor: pointer; border: 0; padding: 0; }
+.mi-date input::-webkit-calendar-picker-indicator { position: absolute; inset: 0; width: 100%; height: 100%; cursor: pointer; }
+.mi-acts { display: flex; gap: 8px; flex-wrap: wrap; }
+.mi-acts .btn { flex: 1 1 auto; justify-content: center; }
+.mi-pick { cursor: pointer; position: relative; }
+.mi-pick.btn.primary { background: linear-gradient(135deg, #0ea5e9 0%, #0369a1 100%); color: #fff; border-color: transparent; }
+.mi-file { position: absolute; width: 1px; height: 1px; opacity: 0; pointer-events: none; overflow: hidden; }
+
+/* Vorschau-Blatt */
+.mi-sheet { display: flex; flex-direction: column; gap: 12px; }
+.mi-top { display: flex; align-items: flex-start; justify-content: space-between; gap: 10px; }
+.mi-sum { display: flex; flex-direction: column; line-height: 1.25; min-width: 0; }
+.mi-sum b { color: var(--ink); font-size: 1.02rem; }
+.mi-sum small { color: var(--muted); font-size: .85rem; }
+.mi-allnone { display: flex; gap: 4px; flex: none; }
+.mi-legend { margin: 0; color: var(--muted); font-size: .8rem; line-height: 1.5; }
+.mi-dot { display: inline-block; width: 10px; height: 10px; border-radius: 3px; margin: 0 4px 0 2px; vertical-align: -1px; }
+.mi-dot.is-ok { background: var(--mi-ok); }
+.mi-dot.is-off { background: var(--mi-off); opacity: .55; }
+.mi-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; }
+@media (min-width: 600px) { .mi-grid { grid-template-columns: repeat(4, minmax(0, 1fr)); } }
+@media (min-width: 1000px) { .mi-grid { grid-template-columns: repeat(5, minmax(0, 1fr)); } }
+.mi-tile {
+  position: relative; display: block; aspect-ratio: 1; padding: 0; border-radius: 14px; overflow: hidden; cursor: pointer;
+  border: 2px solid transparent; background: var(--line); font: inherit; color: #fff; text-align: left;
+  transition: transform .12s ease, opacity .15s ease, filter .15s ease;
+}
+.mi-tile:active { transform: scale(.97); }
+.mi-tile:focus-visible { outline: none; box-shadow: var(--ring); }
+.mi-tile img { display: block; width: 100%; height: 100%; object-fit: cover; }
+.mi-noimg { position: absolute; inset: 0; display: grid; place-items: center; font-size: 1.6rem; color: var(--muted); }
+.mi-tile[aria-pressed="false"] img, .mi-tile[aria-pressed="false"] .mi-noimg { filter: grayscale(1); opacity: .42; }
+.mi-tile[aria-pressed="true"] { border-color: var(--mi-ok); box-shadow: 0 0 0 2px color-mix(in srgb, var(--mi-ok) 35%, transparent); }
+.mi-tile[disabled] { cursor: default; }
+.mi-tile[disabled] img { opacity: .28; }
+.mi-chk {
+  position: absolute; right: 6px; top: 6px; width: 24px; height: 24px; border-radius: 999px; display: grid; place-items: center;
+  font-size: .82rem; font-weight: 800; border: 2px solid #fff; background: rgba(15, 23, 42, .35); color: transparent;
+  box-shadow: 0 1px 4px rgba(0, 0, 0, .3);
+}
+.mi-tile[aria-pressed="true"] .mi-chk { background: var(--mi-ok); color: #fff; }
+.mi-tile[disabled] .mi-chk { display: none; }
+.mi-cap {
+  position: absolute; left: 0; right: 0; bottom: 0; display: flex; flex-direction: column; gap: 0; padding: 14px 7px 5px; line-height: 1.15;
+  background: linear-gradient(to top, rgba(0, 0, 0, .72), rgba(0, 0, 0, 0));
+}
+.mi-cap b { font-size: .84rem; font-variant-numeric: tabular-nums; }
+.mi-cap b small { font-weight: 500; opacity: .85; }
+.mi-cap small { font-size: .7rem; opacity: .92; line-height: 1.15; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; overflow-wrap: anywhere; }
+.mi-tile.is-off .mi-cap small, .mi-tile.is-priv .mi-cap small, .mi-tile.is-dup .mi-cap small { color: #e2e8f0; }
+.mi-tile.is-ok .mi-cap small { color: #bbf7d0; }
+.mi-foot {
+  position: sticky; bottom: 0; display: flex; gap: 8px; justify-content: flex-end; align-items: center; flex-wrap: wrap;
+  padding: 10px 0 2px; background: var(--card); border-top: 1px solid var(--line); z-index: 1;
+}
+.mi-foot .btn { width: auto; margin: 0; }
+.mi-foot .btn.ghost { flex: 0 0 auto; }
+.mi-foot .btn.primary { flex: 1 1 auto; justify-content: center; }
+.mi-prog { flex: 1; display: flex; flex-direction: column; gap: 6px; }
+.mi-prog b { color: var(--ink); font-size: .9rem; }
+.mi-prog-bar { height: 8px; border-radius: 999px; background: var(--line); overflow: hidden; }
+.mi-prog-bar span { display: block; height: 100%; border-radius: inherit; background: linear-gradient(90deg, #0ea5e9, var(--mi-ok)); transition: width .25s ease; }
+.mi-busy .mi-tile { pointer-events: none; }
+.mi-busy .mi-allnone .btn { opacity: .5; pointer-events: none; }
+
+/* Hinweis (Xiaomi) */
+.mi-hint {
+  display: flex; gap: 10px; align-items: flex-start; padding: 10px 12px; border-radius: 14px;
+  background: var(--mi-warn-soft); color: var(--ink); font-size: .85rem; line-height: 1.4;
+  border: 1px solid color-mix(in srgb, var(--mi-warn) 30%, transparent);
+}
+.mi-hint-ic { flex: none; font-size: 1.1rem; line-height: 1.2; }
+
+/* Einstellungs-Karte */
+.mi-set { display: flex; flex-direction: column; gap: 10px; margin-top: 18px; padding-top: 16px; border-top: 1px solid var(--line); }
+.mi-set-h { margin: 0; font-family: var(--f-display); font-size: 1.05rem; color: var(--ink); }
+.mi-perm { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; justify-content: space-between; padding: 10px 12px; border-radius: 14px; background: var(--mi-soft); }
+.mi-perm-t { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; font-size: .9rem; color: var(--ink); }
+.mi-perm-n { flex-basis: 100%; margin: 0; }
+.mi-pill { display: inline-flex; align-items: center; gap: 4px; padding: 3px 9px; border-radius: 999px; font-size: .8rem; font-weight: 700; }
+.mi-pill.is-ok { background: var(--mi-ok-soft); color: var(--mi-ok); }
+.mi-pill.is-warn { background: var(--mi-warn-soft); color: var(--mi-warn); }
+.mi-pill.is-off { background: color-mix(in srgb, var(--mi-off) 16%, transparent); color: var(--mi-off); }
+.mi-set-acts { justify-content: flex-start; }
+
+/* Schalter (wie .switch der App) */
+.mi-switch { display: flex; align-items: flex-start; gap: 12px; padding: 12px; border: 1px solid var(--line); border-radius: 14px; cursor: pointer; }
+.mi-switch > span { flex: 1; display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.mi-switch b { color: var(--ink); font-size: .95rem; }
+.mi-switch small { color: var(--muted); font-size: .82rem; line-height: 1.35; }
+.mi-switch input[type="checkbox"] {
+  order: 2; flex: none; position: relative; width: 48px; height: 28px; min-height: 0; padding: 0; margin: 2px 0 0; border: 0;
+  border-radius: 999px; background: var(--line); cursor: pointer; transition: background-color .2s ease; -webkit-appearance: none; appearance: none;
+}
+.mi-switch input[type="checkbox"]::after {
+  content: ""; position: absolute; top: 3px; left: 3px; width: 22px; height: 22px; border-radius: 50%;
+  background: #fff; box-shadow: 0 1px 3px rgba(0, 0, 0, .3); transition: transform .2s ease;
+}
+.mi-switch input[type="checkbox"]:checked { background: var(--mi-ok); }
+.mi-switch input[type="checkbox"]:checked::after { transform: translateX(20px); }
+.mi-switch input[type="checkbox"]:focus { box-shadow: none; }
+.mi-switch input[type="checkbox"]:focus-visible { outline: 3px solid var(--accent); outline-offset: 2px; }
+.mi-acts .btn, .mi-foot .btn { min-height: 52px; }
+.mi-pick.btn { font-size: .98rem; gap: 6px; padding: 10px 12px; }

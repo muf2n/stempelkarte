@@ -514,4 +514,5 @@ renderTopbar();
 safe(lockscreen.init, ctx);
 if (native.isNative()) { document.documentElement.classList.add("is-native"); setTimeout(() => native.checkApkUpdate((m) => ui.toast(m, 4000)), 4000); }
 if (native.isNative()) import("./native-sync.js").then((m) => m.start(ctx)).catch((err) => console.warn("Android-Abgleich:", err));
+if (native.isNative()) import("./media-import.js").then((m) => m.startNative(ctx)).catch((err) => console.warn("Kamera-Import:", err)); // Update 9 (Agent W3)
 boot();
