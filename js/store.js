@@ -87,7 +87,8 @@ function compareTodos(a, b) {
 }
 
 function normTodo(t, id) {
-  const kind = t?.kind === "termin" || t?.kind === "einsatz" ? t.kind : "todo";
+  // Update 9 – Planer: „geburtstag“ (jährlich; bday "MM-DD", byear, remindDays) – übrige Felder bleiben über ...t erhalten
+  const kind = t?.kind === "termin" || t?.kind === "einsatz" || t?.kind === "geburtstag" ? t.kind : "todo";
   const rm = Number(t?.remindMin);
   return {
     ...t,

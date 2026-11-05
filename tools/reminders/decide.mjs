@@ -277,6 +277,7 @@ export function decideTodos(now, todos, pushlog) {
   const sentMap = (pushlog && pushlog.todoSent && typeof pushlog.todoSent === "object") ? pushlog.todoSent : {};
   for (const t of (Array.isArray(todos) ? todos : [])) {
     if (!t || !t.id || !t.remind || t.done || t.kind === "einsatz") continue;
+    if (t.kind === "geburtstag") { const b = decideBirthday(now, t, sentMap); if (b) out.push(b); continue; }
     const date = String(t.date || ""), time = String(t.time || "");
     if (!/^\d{4}-\d{2}-\d{2}$/.test(date) || !/^\d{1,2}:\d{2}$/.test(time)) continue;
     const [y, m, d] = date.split("-").map(Number);
@@ -298,4 +299,66 @@ export function decideTodos(now, todos, pushlog) {
     });
   }
   return out;
+}
+
+/* ---- Update 9: Geburtstage (jährlich) ---- */
+const WD_SHORT = ["So", "Mo", "Di", "Mi", "Do", "Fr", "Sa"];
+
+/** Geburtstag {m, d, y|null} aus bday "MM-DD" (+ byear) oder date "YYYY-MM-DD"; sonst null. */
+export function parseBirthday(t) {
+  let m, d, y = null;
+  const b = /^(\d{1,2})-(\d{1,2})$/.exec(String((t && t.bday) || ""));
+  if (b) { m = Number(b[1]); d = Number(b[2]); }
+  else if (/^\d{4}-\d{2}-\d{2}$/.test(String((t && t.date) || ""))) [y, m, d] = t.date.split("-").map(Number);
+  else return null;
+  if (!(m >= 1 && m <= 12 && d >= 1 && d <= 31)) return null;
+  const by = Number(t.byear);
+  if (Number.isInteger(by) && by > 1850 && by < 2200) y = by;
+  return { m, d, y };
+}
+
+/** Geburtstag im Jahr y als {y, m, d}; 29.2. → 28.2. in Nicht-Schaltjahren. */
+export function birthdayIn(b, y) {
+  let d = b.d;
+  const leap = (y % 4 === 0 && y % 100 !== 0) || y % 400 === 0;
+  if (b.m === 2 && d === 29 && !leap) d = 28;
+  const last = new Date(Date.UTC(y, b.m, 0)).getUTCDate();
+  return { y, m: b.m, d: Math.min(d, last) };
+}
+
+/**
+ * Geburtstags-Erinnerung: jedes Jahr remindDays (Standard 1) Tage vorher um time (Standard 09:00, Wiener Zeit),
+ * nachholen bis 3 h danach; einmal pro Jahr (pushlog.todoSent[id] = "YYYY-MM-DD HH:MM" des Geburtstags).
+ */
+export function decideBirthday(now, t, sentMap = {}) {
+  const b = parseBirthday(t);
+  if (!b) return null;
+  const time = /^\d{1,2}:\d{2}$/.test(String(t.time || "")) ? String(t.time) : "09:00";
+  const [hh, mm] = time.split(":").map(Number);
+  let before = Number(t.remindDays);
+  if (!Number.isFinite(before) || before < 0) before = 1;
+  before = Math.min(60, Math.round(before));
+  const v = vienna(now);
+  for (const y of [v.y - 1, v.y, v.y + 1]) {
+    const o = birthdayIn(b, y);
+    const r = new Date(Date.UTC(o.y, o.m - 1, o.d - before));
+    const at = viennaToTs(r.getUTCFullYear(), r.getUTCMonth() + 1, r.getUTCDate(), hh, mm);
+    if (now < at || now >= at + 3 * HOUR) continue;
+    const key = `${o.y}-${pad(o.m)}-${pad(o.d)}`;
+    const stamp = `${key} ${pad(hh)}:${pad(mm)}`;
+    if (sentMap[t.id] === stamp) return null;
+    const name = String(t.title || "").trim() || "Jemand";
+    const age = b.y && o.y >= b.y ? o.y - b.y : null;
+    const wd = WD_SHORT[new Date(Date.UTC(o.y, o.m - 1, o.d)).getUTCDay()];
+    const when = before === 0 ? "Heute" : before === 1 ? `Morgen (${wd}, ${o.d}.${o.m}.)` : `In ${before} Tagen (${wd}, ${o.d}.${o.m}.)`;
+    return {
+      type: "birthday",
+      title: `🎂 Geburtstag: ${name}`,
+      body: `${when}${age != null ? ` – wird ${age}` : ""}`,
+      tag: `todo-${t.id}`,
+      url: "./#agenda",
+      log: [[["todoSent", t.id], stamp]],
+    };
+  }
+  return null;
 }

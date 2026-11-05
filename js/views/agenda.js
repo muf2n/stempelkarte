@@ -2,6 +2,8 @@
 // Daten: store.saveTodo/deleteTodo, snap.todos. Der Kalender (Einträge) bleibt reine Arbeitszeit.
 import { icon } from "../icons.js";
 import { einsatzFor, einsaetze } from "../einsatz.js";
+import * as PC from "./planer-cal.js"; // Update 9 – Planer-Ansichten
+import { buildIndex, CATS } from "../planer-core.js";
 
 const WD = ["So", "Mo", "Di", "Mi", "Do", "Fr", "Sa"];
 const WD_LONG = ["Sonntag", "Montag", "Dienstag", "Mittwoch", "Donnerstag", "Freitag", "Samstag"];
@@ -19,8 +21,15 @@ let lastKey = "";
 let doneOpen = false;
 let stripScrolled = "";
 const MODE_KEY = "stempelkarte.planerMode";
-let mode = "list";            // "list" (Aufgaben & Termine) | "einsatz" (Einsatzplan)
-try { if (localStorage.getItem(MODE_KEY) === "einsatz") mode = "einsatz"; } catch { /* egal */ }
+const MODES = ["list", "tag", "woche", "monat", "einsatz"];
+let mode = "list";            // "list" | "tag" | "woche" | "monat" | "einsatz" (Update 9)
+try { const m0 = localStorage.getItem(MODE_KEY); if (MODES.includes(m0)) mode = m0; } catch { /* egal */ }
+let focusDay = null;          // Update 9: Tag/Woche – gewählter Tag
+let calMonth = null;          // Update 9: Monat – {y, m}
+let calSel = null;            // Update 9: Monat – gewählter Tag
+let bdAll = false;            // Update 9: alle Geburtstage zeigen
+let snapVer = 0;
+let calScrolled = "";
 let ezMonth = null;           // {y, m} des Einsatzplan-Kalenders
 
 const pad = (n) => String(n).padStart(2, "0");
@@ -98,7 +107,9 @@ function itemHTML(t, tKey) {
   const overdue = !t.done && isKey(t.date) && (t.date < tKey ||
     (t.date === tKey && t.time && t.time < `${pad(new Date().getHours())}:${pad(new Date().getMinutes())}` && t.kind === "termin"));
   const meta = [];
-  if (t.kind === "termin") meta.push(`<span class="ag-badge">Termin</span>`);
+  if (t.cat && CATS[t.cat]) meta.push(`<span class="ag-badge pl-cat">${CATS[t.cat].emoji} ${CATS[t.cat].label}</span>`);
+  else if (t.kind === "termin") meta.push(`<span class="ag-badge">Termin</span>`);
+  if (t.countdown && !t.done && isKey(t.date) && t.date >= tKey) meta.push(`<span class="pl-cdb">⏳ noch ${PC.daysBetween(tKey, t.date)} T.</span>`);
   if (t.time) meta.push(`<span class="ag-time">${icon("clock", 14)}${esc(t.time)}</span>`);
   if (isKey(t.date) && (t.date < tKey || t.done)) meta.push(`<span>${esc(dayLabel(t.date))}</span>`);
   if (overdue && t.date < tKey) meta.push(`<span class="ag-late">überfällig</span>`);
@@ -133,13 +144,17 @@ function stripHTML(todos, tKey) {
     k[t.kind === "termin" ? "termin" : "todo"]++;
     marks.set(t.date, k);
   }
+  let idx = null; // Update 9: farbige Punkte je Typ
+  try { idx = buildIndex(snap, `${y}-${pad(m + 1)}-01`, `${y}-${pad(m + 1)}-${pad(n)}`, deps()); } catch (e) { console.error(e); }
   let days = "";
   for (let d = 1; d <= n; d++) {
     const k = `${y}-${pad(m + 1)}-${pad(d)}`;
     const wd = new Date(y, m, d).getDay();
     const mk = marks.get(k);
-    const dots = mk ? `<span class="ag-dots">${mk.termin ? `<i class="t"></i>` : ""}${mk.todo ? `<i></i>` : ""}</span>` : `<span class="ag-dots"></span>`;
-    const lbl = `${WD_LONG[wd]}, ${d}. ${MONTHS[m]}` + (mk ? ` – ${mk.termin ? mk.termin + " Termin(e)" : ""}${mk.termin && mk.todo ? ", " : ""}${mk.todo ? mk.todo + " Aufgabe(n)" : ""}` : "");
+    const types = idx && idx.get(k) ? new Set([...idx.get(k).types].filter((x) => x !== "einsatz")) : null;
+    const dots = types ? PC.dotsHTML(types) : `<span class="ag-dots"></span>`;
+    const extra = types ? [...types].filter((x) => x !== "termin" && x !== "aufgabe" && x !== "event").map((x) => ({ geburtstag: "Geburtstag", feiertag: "Feiertag", schule: "Schule" }[x])).filter(Boolean) : [];
+    const lbl = `${WD_LONG[wd]}, ${d}. ${MONTHS[m]}` + (mk ? ` – ${mk.termin ? mk.termin + " Termin(e)" : ""}${mk.termin && mk.todo ? ", " : ""}${mk.todo ? mk.todo + " Aufgabe(n)" : ""}` : "") + (extra.length ? ` – ${extra.join(", ")}` : "");
     days += `<button type="button" class="ag-day${k === tKey ? " today" : ""}${wd === 0 || wd === 6 ? " we" : ""}" data-day="${k}" aria-pressed="${k === selDay}" aria-label="${esc(lbl)}">` +
       `<span class="ag-wd">${WD[wd]}</span><span class="ag-dn">${d}</span>${dots}</button>`;
   }
@@ -154,10 +169,12 @@ function render() {
   if (!root || !snap) return;
   applyMode();
   if (mode === "einsatz") { renderEinsatz(); return; }
-  const todos = (snap.todos || []).filter((t) => t.kind !== "einsatz");
+  renderCountdown();
+  if (mode !== "list") { renderCal(); return; }
+  const todos = (snap.todos || []).filter((t) => t.kind !== "einsatz" && t.kind !== "geburtstag");
   const tKey = todayKey();
   const minute = `${new Date().getHours()}:${new Date().getMinutes()}`;
-  const key = JSON.stringify(["list", todos, tKey, selDay, month, doneOpen, minute.slice(0, -1)]);
+  const key = JSON.stringify(["list", snapVer, tKey, selDay, month, doneOpen, bdAll, minute.slice(0, -1)]);
   if (key === lastKey) return;
   lastKey = key;
 
@@ -168,8 +185,12 @@ function render() {
 
   if (selDay) {
     const items = todos.filter((t) => t.date === selDay && !t.done);
+    let ex = [];
+    try { ex = buildIndex(snap, selDay, selDay, deps()).get(selDay).allDay.filter((it) => ["geburtstag", "feiertag", "schule", "einsatz"].includes(it.type)); } catch { ex = []; }
+    const exHTML = ex.length ? `<div class="pl-allday pl-selx">${ex.map((it) =>
+      `<div class="pl-ad pl-t-${it.type}">${it.open ? `<button type="button" class="pl-ad-m" data-popen="${esc(it.open)}">` : `<span class="pl-ad-m">`}<span aria-hidden="true">${it.emoji}</span><b>${esc(it.title)}</b><span class="pl-ad-s">${esc(it.sub)}</span>${it.open ? "</button>" : "</span>"}</div>`).join("")}</div>` : "";
     html += section(`${esc(dayLabel(selDay, true))}<button type="button" class="btn sm ghost ag-clear" data-act="clearday">Alle Tage</button>`,
-      items.length ? listHTML(items, tKey) : `<p class="note ag-none">Nichts geplant. Tippe oben auf ＋, um für diesen Tag etwas einzutragen.</p>`, "ag-sel");
+      exHTML + (items.length ? listHTML(items, tKey) : `<p class="note ag-none">Nichts geplant. Tippe oben auf ＋, um für diesen Tag etwas einzutragen.</p>`), "ag-sel");
   } else {
     const openCount = g.today.length + g.soon.length + g.nodate.length;
     if (!openCount) {
@@ -183,6 +204,7 @@ function render() {
     }
     if (g.nodate.length) html += section(`Ohne Datum <span class="ag-count">${g.nodate.length}</span>`, listHTML(g.nodate, tKey), "ag-nodate");
   }
+  html += PC.birthdaysHTML(snap.todos || [], tKey, bdAll); // Update 9
   if (g.done.length) {
     const shown = g.done.slice(0, DONE_SHOW);
     html += `<details class="ag-sec ag-done"${doneOpen ? " open" : ""}><summary class="ag-h">Erledigt <span class="ag-count">${g.done.length}</span></summary>` +
@@ -251,8 +273,12 @@ export function openTodoForm(todo = null, ctx = C, preset = null) {
     kind: base.kind || pre.kind || (pre.time ? "termin" : "todo"),
     date: isKey(base.date) ? base.date : (isKey(pre.date) ? pre.date : null),
     time: normTime(base.time || pre.time),
-    remind: todo ? !!base.remind : !!(pre.time || pre.kind === "termin"),
-    remindMin: Number.isFinite(Number(base.remindMin)) ? Number(base.remindMin) : 30,
+    remind: todo ? !!base.remind : (typeof pre.remind === "boolean" ? pre.remind : !!(pre.time || pre.kind === "termin")),
+    remindMin: Number.isFinite(Number(base.remindMin)) ? Number(base.remindMin) : (Number.isFinite(Number(pre.remindMin)) ? Number(pre.remindMin) : 30),
+    // Update 9: Kategorie, Ende, Countdown
+    cat: CATS[base.cat] ? base.cat : (todo ? null : (CATS[pre.cat] ? pre.cat : null)),
+    endTime: normTime(base.endTime || pre.endTime),
+    countdown: todo ? !!base.countdown : !!pre.countdown,
   };
   if (!REMIND_OPTS.some(([v]) => v === st.remindMin)) REMIND_OPTS.push([st.remindMin, `${st.remindMin} Min vorher`]);
 
@@ -262,6 +288,9 @@ export function openTodoForm(todo = null, ctx = C, preset = null) {
       `<div><div class="lbl">Art</div><div class="chips ag-kind" data-r="kind">` +
         `<button type="button" class="chip" data-k="todo">${icon("check", 18)}<span>Aufgabe</span></button>` +
         `<button type="button" class="chip" data-k="termin">${icon("calendar", 18)}<span>Termin</span></button></div></div>` +
+      `<div><div class="lbl">Kategorie <small>(optional)</small></div><div class="chips pl-cats" data-r="cat">` +
+        Object.entries(CATS).map(([k, v]) => `<button type="button" class="chip" data-cat="${k}"><span aria-hidden="true">${v.emoji}</span><span>${v.label}</span></button>`).join("") +
+      `</div></div>` +
       `<div><div class="lbl">Wann?</div><div class="chips ag-when" data-r="when">` +
         `<button type="button" class="chip" data-w="today">Heute</button>` +
         `<button type="button" class="chip" data-w="tomorrow">Morgen</button>` +
@@ -269,7 +298,9 @@ export function openTodoForm(todo = null, ctx = C, preset = null) {
       `<div class="row ag-dt">` +
         `<label>Datum<input type="date" data-r="date" value="${esc(st.date || "")}"></label>` +
         `<label data-r="timewrap"><span data-r="timelbl">Uhrzeit</span><input type="time" data-r="time" step="300" value="${esc(st.time || "")}"></label>` +
+        `<label data-r="endwrap">bis <small>(optional)</small><input type="time" data-r="endtime" step="300" value="${esc(st.endTime || "")}"></label>` +
       `</div>` +
+      `<label class="switch pl-cdsw" data-r="cdwrap"><input type="checkbox" data-r="countdown"${st.countdown ? " checked" : ""}><span>⏳ Countdown oben im Planer anzeigen</span></label>` +
       `<div class="ag-rem" data-r="remwrap">` +
         `<label class="switch"><input type="checkbox" data-r="remind"${st.remind ? " checked" : ""}><span>${bell(18)} Erinnern</span></label>` +
         `<label class="ag-remmin" data-r="remminwrap">Wann erinnern?<select data-r="remmin">` +
@@ -287,7 +318,8 @@ export function openTodoForm(todo = null, ctx = C, preset = null) {
     `</div>`;
 
   return c.ui.openSheet({
-    title: isNew ? "Neu im Planer" : (base.kind === "termin" ? "Termin" : "Aufgabe"),
+    title: isNew ? (pre.title0 || (st.cat ? `Neu: ${CATS[st.cat].label}` : st.kind === "termin" && pre.kind ? "Neuer Termin" : pre.kind === "todo" ? "Neue Aufgabe" : "Neu im Planer"))
+      : (CATS[base.cat] ? CATS[base.cat].label : base.kind === "termin" ? "Termin" : "Aufgabe"),
     bodyHTML,
     onMount(sheet, close) {
       const $ = (r) => sheet.querySelector(`[data-r="${r}"]`);
@@ -301,6 +333,9 @@ export function openTodoForm(todo = null, ctx = C, preset = null) {
         });
         $("timelbl").textContent = st.kind === "termin" ? "Uhrzeit" : "Uhrzeit (optional)";
         $("timewrap").hidden = !st.date;
+        $("endwrap").hidden = !st.date || !st.time;
+        $("cdwrap").hidden = !st.date;
+        $("cat").querySelectorAll("[data-cat]").forEach((b) => b.setAttribute("aria-pressed", String(b.dataset.cat === st.cat)));
         $("remwrap").hidden = !st.date;
         $("remminwrap").hidden = !st.remind;
         const hint = $("remhint");
@@ -327,6 +362,16 @@ export function openTodoForm(todo = null, ctx = C, preset = null) {
         $("remind").checked = st.remind;
         draw();
       });
+      $("cat").addEventListener("click", (ev) => {
+        const b = ev.target.closest("[data-cat]");
+        if (!b) return;
+        st.cat = st.cat === b.dataset.cat ? null : b.dataset.cat;
+        if (st.cat && st.cat !== "erinnerung" && isNew && !st.countdown) { st.countdown = true; $("countdown").checked = true; }
+        if (st.cat && st.cat !== "erinnerung" && !st.date) { st.date = selDay || todayKey(); $("date").value = st.date; }
+        draw();
+      });
+      $("countdown").addEventListener("change", () => { st.countdown = $("countdown").checked; });
+      $("endtime").addEventListener("input", () => { st.endTime = normTime($("endtime").value); });
       $("when").addEventListener("click", (ev) => {
         const b = ev.target.closest("[data-w]");
         if (!b) return;
@@ -360,6 +405,9 @@ export function openTodoForm(todo = null, ctx = C, preset = null) {
           time: st.date ? st.time : null,
           remind: !!(st.remind && st.date && st.time),
           remindMin: st.remindMin,
+          cat: st.cat || null,
+          endTime: st.date && st.time && st.endTime && st.endTime > st.time ? st.endTime : null,
+          countdown: !!(st.countdown && st.date),
           note: $("note").value.trim(),
           done: !!base.done,
           doneAt: base.doneAt ?? null,
@@ -368,7 +416,7 @@ export function openTodoForm(todo = null, ctx = C, preset = null) {
         try {
           await c.store.saveTodo(data);
           close();
-          c.ui.toast(isNew ? (st.kind === "termin" ? "Termin gespeichert" : "Aufgabe gespeichert") : "Gespeichert", 1800);
+          c.ui.toast(isNew ? (st.cat ? `${CATS[st.cat].label} gespeichert` : st.kind === "termin" ? "Termin gespeichert" : "Aufgabe gespeichert") : "Gespeichert", 1800);
         } catch { c.ui.setBusy(saveBtn, false); }
       });
 
@@ -391,12 +439,17 @@ export function mount(el, ctx) {
   C = ctx;
   el.innerHTML =
     `<div class="stack ag">` +
+      `<div data-r="cd"></div>` +
       `<div class="card ag-head">` +
         `<div class="section-h ag-top"><h2>Planer</h2></div>` +
-        `<div class="ez-switch" role="group" aria-label="Ansicht im Planer">` +
-          `<button type="button" class="ez-sw" data-mode="list">Aufgaben &amp; Termine</button>` +
-          `<button type="button" class="ez-sw" data-mode="einsatz">Einsatzplan</button>` +
+        `<div class="ez-switch pl-switch" role="group" aria-label="Ansicht im Planer">` +
+          `<button type="button" class="ez-sw" data-mode="list">Liste</button>` +
+          `<button type="button" class="ez-sw" data-mode="tag">Tag</button>` +
+          `<button type="button" class="ez-sw" data-mode="woche">Woche</button>` +
+          `<button type="button" class="ez-sw" data-mode="monat">Monat</button>` +
+          `<button type="button" class="ez-sw" data-mode="einsatz" aria-label="Einsatzplan">Einsatz</button>` +
         `</div>` +
+        `<div data-r="qc">${PC.quickCreateHTML()}</div>` +
         `<div class="ag-listhead" data-r="listhead">` +
         `<form class="ag-quick" data-r="quick" autocomplete="off">` +
           `<input type="text" data-r="qtext" maxlength="140" enterkeyhint="done" placeholder="Neue Aufgabe oder Termin…" aria-label="Neue Aufgabe oder Termin">` +
@@ -407,6 +460,8 @@ export function mount(el, ctx) {
         `</div>` +
         `<div class="ez" data-r="ez" hidden></div>` +
       `</div>` +
+      `<div class="card pl-cal" data-r="cal" hidden></div>` +
+      `<div class="pl-below" data-r="below" hidden></div>` +
       `<div class="ag-lists" data-r="lists"></div>` +
       `<div class="ez-next-wrap" data-r="eznext" hidden></div>` +
     `</div>`;
@@ -428,6 +483,8 @@ export function mount(el, ctx) {
   el.addEventListener("click", (ev) => {
     const sw = ev.target.closest("[data-mode]");
     if (sw && el.contains(sw)) { setMode(sw.dataset.mode); return; }
+    const pb = ev.target.closest("[data-pnew], [data-popen], [data-pcheck], [data-pslot], [data-pnav], [data-pday], [data-psel], [data-pact]");
+    if (pb && el.contains(pb)) { onPlanerClick(pb, ev); return; }
     const ez = ev.target.closest("[data-ezday], [data-ezact], [data-ezid]");
     if (ez && el.contains(ez)) { onEinsatzClick(ez); return; }
     const b = ev.target.closest("[data-act], [data-day]");
@@ -455,14 +512,21 @@ export function mount(el, ctx) {
     }
   });
 
+  PC.attachSwipe(el.querySelector("[data-r=cal]"), (dir) => { calNav(dir); pulse(dir); });
+  el.querySelector("[data-r=cal]").addEventListener("keydown", (ev) => {
+    if (ev.target.closest("input, textarea, select")) return;
+    if (ev.key === "ArrowLeft" || ev.key === "ArrowRight") { if (ev.target.closest(".pl-slot")) return; calNav(ev.key === "ArrowLeft" ? -1 : 1); }
+  });
+
   snap = ctx.store.get ? ctx.store.get() : null;
   render();
   // Minütlich neu zeichnen (überfällig, Tageswechsel) – nur wenn sichtbar
-  setInterval(() => { if (root && !root.hidden) render(); }, 60000);
+  setInterval(() => { if (root && !root.hidden) { render(); PC.moveNowLine(root); } }, 60000);
 }
 
 export function update(s) {
   snap = s;
+  snapVer++;
   if (selDay && !isKey(selDay)) selDay = null;
   render();
 }
@@ -472,8 +536,149 @@ export function onShow() {
   if (!selDay) month = { y: d.getFullYear(), m: d.getMonth() };
   if (!ezMonth) ezMonth = { y: d.getFullYear(), m: d.getMonth() };
   stripScrolled = "";
+  calScrolled = "";
   lastKey = "";
   render();
+}
+
+/* ---------- Update 9: Ansichten Tag · Woche · Monat ---------- */
+
+function deps() { return { util: (C && C.util) || {}, einsatzFor, now: Date.now() }; }
+
+function renderCountdown() {
+  const el = root.querySelector("[data-r=cd]");
+  if (!el) return;
+  const k = JSON.stringify([snapVer, todayKey()]);
+  if (el.dataset.k === k) return;
+  el.dataset.k = k;
+  el.innerHTML = PC.countdownHTML(snap.todos || [], todayKey());
+}
+
+function ensureCal() {
+  const tk = todayKey();
+  if (!focusDay) focusDay = tk;
+  if (!calMonth) { const d = new Date(); calMonth = { y: d.getFullYear(), m: d.getMonth() }; }
+  if (!calSel) calSel = tk;
+}
+
+function renderCal() {
+  ensureCal();
+  const tk = todayKey();
+  const minute = new Date().getHours() * 60 + new Date().getMinutes();
+  const st = settingsOf();
+  // Jetzt-Linie bewegt sich separat; neu zeichnen nur bei Datenänderung, Wechsel oder alle 15 Min (laufende Schicht)
+  const key = JSON.stringify(["cal", mode, snapVer, tk, focusDay, calMonth, calSel, bdAll, Math.floor(minute / 15), st.holidays]);
+  if (key === lastKey) return;
+  lastKey = key;
+  const cal = root.querySelector("[data-r=cal]");
+  const below = root.querySelector("[data-r=below]");
+  const old = cal.querySelector("[data-pscroll]");
+  const oldTop = old ? old.scrollTop : null;
+  let html = "";
+  try {
+    if (mode === "tag") html = PC.dayViewHTML(snap, focusDay, deps());
+    else if (mode === "woche") html = PC.weekViewHTML(snap, focusDay, deps());
+    else html = PC.monthViewHTML(snap, calMonth, calSel, deps());
+  } catch (e) { console.error(e); html = `<p class="note">Ansicht konnte nicht gezeichnet werden.</p>`; }
+  cal.innerHTML = html;
+  cal.dataset.view = mode;
+  below.innerHTML = mode === "monat" ? PC.birthdaysHTML(snap.todos || [], tk, bdAll) : "";
+  below.hidden = mode !== "monat";
+  const sc = cal.querySelector("[data-pscroll]");
+  if (sc) {
+    const sk = `${mode}|${mode === "woche" ? PC.mondayOf(focusDay) : focusDay}`;
+    const H = mode === "woche" ? PC.H_WEEK : PC.H_DAY;
+    const showsToday = mode === "tag" ? focusDay === tk : (tk >= PC.mondayOf(focusDay) && tk <= addDays(PC.mondayOf(focusDay), 6));
+    if (calScrolled !== sk || oldTop == null) {
+      calScrolled = sk;
+      requestAnimationFrame(() => PC.scrollToMorning(sc, H, showsToday));
+    } else sc.scrollTop = oldTop;
+  }
+}
+
+function pulse(dir) {
+  const cal = root && root.querySelector("[data-r=cal]");
+  if (!cal) return;
+  cal.classList.remove("pl-in-l", "pl-in-r");
+  void cal.offsetWidth;
+  cal.classList.add(dir > 0 ? "pl-in-r" : "pl-in-l");
+}
+
+/** dir: -1 zurück, 1 weiter, 0 heute. */
+function calNav(dir) {
+  if (mode !== "tag" && mode !== "woche" && mode !== "monat") return;
+  ensureCal();
+  const tk = todayKey();
+  if (mode === "tag") focusDay = dir === 0 ? tk : addDays(focusDay, dir);
+  else if (mode === "woche") focusDay = dir === 0 ? tk : addDays(focusDay, 7 * dir);
+  else {
+    const d0 = new Date();
+    const d = dir === 0 ? new Date(d0.getFullYear(), d0.getMonth(), 1) : new Date(calMonth.y, calMonth.m + dir, 1);
+    calMonth = { y: d.getFullYear(), m: d.getMonth() };
+    const inMonth = (k) => k && Number(k.slice(0, 4)) === calMonth.y && Number(k.slice(5, 7)) === calMonth.m + 1;
+    calSel = dir === 0 ? tk : (inMonth(tk) ? tk : `${calMonth.y}-${pad(calMonth.m + 1)}-01`);
+  }
+  render();
+}
+
+/** Datum, für das „Neu erstellen“ etwas anlegt. */
+function baseDay() {
+  if (mode === "tag" || mode === "woche") return focusDay || todayKey();
+  if (mode === "monat") return calSel || todayKey();
+  return selDay || todayKey();
+}
+
+function nextHour(day) {
+  const d = new Date();
+  if (day !== todayKey()) return "09:00";
+  return `${pad(Math.min(23, d.getHours() + 1))}:00`;
+}
+
+export function quickCreate(kind, ctx = C) {
+  const c = ctx || C;
+  const day = baseDay();
+  if (kind === "geburtstag") return PC.openBirthdayForm(null, c, { date: day });
+  if (kind === "einsatz") return openEinsatzForm(day, einsatzFor(day, c.store.get().todos || []), c);
+  if (kind === "termin") return openTodoForm(null, c, { kind: "termin", date: day, time: nextHour(day) });
+  if (kind === "aufgabe") return openTodoForm(null, c, { kind: "todo", date: mode === "list" && !selDay ? null : day });
+  if (kind === "event") return openTodoForm(null, c, { kind: "termin", cat: "event", countdown: true, date: day === todayKey() ? addDays(day, 7) : day });
+  if (kind === "erinnerung") return openTodoForm(null, c, { kind: "todo", cat: "erinnerung", date: day, time: nextHour(day), remind: true, remindMin: 0 });
+  return null;
+}
+
+function onPlanerClick(b, ev) {
+  const todos = C.store.get().todos || [];
+  if (b.dataset.pnew) { quickCreate(b.dataset.pnew); return; }
+  if (b.dataset.pact === "bdall") { bdAll = !bdAll; lastKey = ""; render(); return; }
+  if (b.dataset.pcheck) {
+    if (b.dataset.busy) return;
+    b.dataset.busy = "1";
+    b.setAttribute("aria-pressed", String(b.getAttribute("aria-pressed") !== "true"));
+    toggleDone(b.dataset.pcheck).finally(() => { delete b.dataset.busy; });
+    return;
+  }
+  if (b.dataset.pnav != null) { const dir = Number(b.dataset.pnav); calNav(dir); if (dir) pulse(dir); return; }
+  if (b.dataset.pday) { focusDay = b.dataset.pday; setMode("tag"); return; }
+  if (b.dataset.psel) { calSel = b.dataset.psel; render(); return; }
+  if (b.dataset.pslot) {
+    const r = b.getBoundingClientRect();
+    const h = Number(b.dataset.h) || 0;
+    const frac = ev && ev.clientY && r.height ? Math.min(0.99, Math.max(0, (ev.clientY - r.top) / r.height)) : 0;
+    const min = h * 60 + Math.floor((frac * 60) / 15) * 15;
+    openTodoForm(null, C, { kind: "termin", date: b.dataset.pslot, time: `${pad(Math.floor(min / 60))}:${pad(min % 60)}` });
+    return;
+  }
+  if (b.dataset.popen) {
+    const [kind, id] = b.dataset.popen.split(/:(.*)/s);
+    if (kind === "todo") { const t = todos.find((x) => x.id === id); if (t) openTodoForm(t, C); }
+    else if (kind === "bday") { const t = todos.find((x) => x.id === id); if (t) PC.openBirthdayForm(t, C); }
+    else if (kind === "einsatz") { const t = todos.find((x) => x.id === id); if (t) openEinsatzForm(mode === "tag" ? focusDay : t.date, t); }
+    else if (kind === "einsatzday") openEinsatzForm(id, null);
+    else if (kind === "entry") {
+      const e = (C.store.get().entries || []).find((x) => x.id === id);
+      if (e && C.openEntryForm) C.openEntryForm(e);
+    }
+  }
 }
 
 /* ---------- Einsatzplan (Update 8) ---------- */
@@ -489,20 +694,29 @@ export function showEinsatzplan() {
 }
 
 function setMode(m) {
-  mode = m === "einsatz" ? "einsatz" : "list";
+  mode = MODES.includes(m) ? m : "list";
   try { localStorage.setItem(MODE_KEY, mode); } catch { /* egal */ }
   lastKey = "";
   stripScrolled = "";
+  calScrolled = "";
   render();
 }
 
 function applyMode() {
   if (!root) return;
+  const agEl = root.querySelector(".ag");
+  if (agEl) agEl.dataset.pmode = mode;
   const ez = mode === "einsatz";
   root.querySelectorAll("[data-mode]").forEach((b) => b.setAttribute("aria-pressed", String(b.dataset.mode === mode)));
   const show = (r, on) => { const x = root.querySelector(`[data-r=${r}]`); if (x) x.hidden = !on; };
-  show("listhead", !ez);
-  show("lists", !ez);
+  const list = mode === "list";
+  const cal = mode === "tag" || mode === "woche" || mode === "monat";
+  show("listhead", list);
+  show("lists", list);
+  show("cal", cal);
+  if (!cal) show("below", false);
+  show("qc", !ez);
+  show("cd", !ez);
   show("ez", ez);
   show("eznext", ez);
 }
