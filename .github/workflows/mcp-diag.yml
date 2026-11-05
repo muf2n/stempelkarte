@@ -1,0 +1,22 @@
+name: MCP-Diagnose (manuell)
+on: workflow_dispatch
+permissions:
+  contents: read
+jobs:
+  diag:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: tools/mcp
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - run: npm ci --ignore-scripts
+      - name: Lese-Werkzeuge prüfen (nur ok/Fehlerstelle, keine Inhalte)
+        env:
+          TZ: Europe/Vienna
+          FIREBASE_SERVICE_ACCOUNT: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
+          STEMPEL_UID: ${{ secrets.STEMPEL_UID }}
+        run: node diag.mjs
