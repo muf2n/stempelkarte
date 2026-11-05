@@ -6,6 +6,7 @@ import {
   esc, hm, dayKey, startOfWeek, holidayName, schoolLabel, schoolCreditMin, creditMin, kindLabel, WD,
 } from "../util.js";
 import { countByDays } from "../photos.js"; // Update 9 – Foto-Anzahl je Tag
+import { verbautOn, shortLine } from "../alltag/material-core.js"; // Update 9 – Material je Tag (rein, ohne DOM)
 
 const DAY = 86400000;
 const RE_DATE = /^\d{4}-\d{2}-\d{2}$/;
@@ -211,6 +212,7 @@ function renderPaper() {
   }).join("");
   el.querySelector(".rp-sum").textContent = `${hm(sum)} h`;
   photoCounts(rows);
+  materialLines();
 
   const ta = el.querySelector("#rp-notes");
   const note = String(ap.notes[weekKey(ws)] || "");
@@ -247,6 +249,22 @@ async function photoCounts(rows) {
   } catch { /* nur Anzeige */ }
 }
 
+/** Update 9: „Material: 2× Steckdose, 25 m NYM-J …“ je Tag aus verbauten Materialien (nur Anzeige). */
+let matItems = [];
+function materialLines() {
+  if (!cur) return;
+  for (const td of cur.el.querySelectorAll("[data-rp-day]")) {
+    const act = td.parentElement && td.parentElement.querySelector(".rp-act");
+    if (!act) continue;
+    const line = shortLine(verbautOn(matItems, td.dataset.rpDay));
+    let d = act.querySelector(".rp-mat");
+    if (!line) { if (d) d.remove(); continue; }
+    td.parentElement.classList.remove("rp-empty"); // Tag mit Material ist nicht leer
+    if (!d) { d = document.createElement("div"); d.className = "rp-mat"; act.appendChild(d); }
+    d.innerHTML = `<b>Material:</b> ${esc(line)}`;
+  }
+}
+
 async function flushNote() {
   if (!cur || !cur.saveTimer) return;
   clearTimeout(cur.saveTimer);
@@ -281,6 +299,8 @@ function weekText(snap) {
     if (r.acts.length) parts.push(r.acts.join("; "));
     if (r.people.length) parts.push(`mit: ${r.people.join(", ")}`);
     if (r.places.length) parts.push(`Ort: ${r.places.join(", ")}`);
+    const mat = shortLine(verbautOn(matItems, r.key)); // Update 9 – Material
+    if (mat) parts.push(`Material: ${mat}`);
     lines.push(`${r.wd} ${fmtD(r.date, false)}: ${parts.length ? parts.join(" · ") : "–"}${r.min > 0 ? ` (${hm(r.min)} h)` : ""}`);
   }
   lines.push("", `Wochensumme: ${hm(sum)} h`);
@@ -330,6 +350,7 @@ export function closeReport(fromPop = false) {
   cur = null;
   photoKey = "";
   try { c.unsub && c.unsub(); } catch { /* egal */ }
+  try { c.matOff && c.matOff(); } catch { /* egal */ }
   document.removeEventListener("keydown", onKey);
   window.removeEventListener("popstate", onPop);
   c.el.remove();
@@ -427,6 +448,12 @@ export function openReport(ctx, { weekStart } = {}) {
 
   renderPaper();
   try { cur.unsub = ctx.store.subscribe(() => { if (cur) renderPaper(); }); } catch { /* egal */ }
+  // Update 9 – verbautes Material (Alltag-Sammlung, erst hier geladen)
+  const mine = cur;
+  import("../alltag/db.js").then(({ collection }) => {
+    if (cur !== mine) return;
+    mine.matOff = collection("material_items").watch((list) => { matItems = list || []; if (cur === mine) renderPaper(); });
+  }).catch((err) => console.warn("Material fürs Berichtsheft nicht geladen:", err));
   try { el.focus({ preventScroll: true }); } catch { /* egal */ }
   return { close: () => closeReport() };
 }

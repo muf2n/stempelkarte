@@ -3,7 +3,7 @@
 // Icons und Schriftdateien (fonts.gstatic.com): cache-first.
 // Alle anderen fremden Domains (Firebase, Google APIs, Nominatim, OSM, unpkg) werden nicht angefasst.
 
-const VERSION = "20261105-0720"; // wird beim Veröffentlichen automatisch ersetzt
+const VERSION = "20261105-0800"; // wird beim Veröffentlichen automatisch ersetzt
 const CACHE = "stempelkarte-" + VERSION;
 const FONT_CACHE = "stempelkarte-fonts"; // versionsunabhängig, bleibt erhalten
 const NET_TIMEOUT_MS = 4000; // bei schlechtem Netz nach dieser Zeit auf den Cache ausweichen
@@ -112,6 +112,10 @@ const SHELL = [
   "js/alltag/unterwegs-fuel.js",
   "js/alltag/unterwegs-places.js",
   "css/alltag-unterwegs.css",
+  // Update 9 – Material
+  "js/alltag/material.js",
+  "js/alltag/material-core.js",
+  "css/alltag-material.css",
   "js/app.js"
 ];
 

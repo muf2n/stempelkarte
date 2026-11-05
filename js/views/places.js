@@ -1,6 +1,7 @@
 // Reiter „Orte“: Karte (Leaflet, lazy geladen), Liste der Arbeitsorte und Formular zum Anlegen/Bearbeiten.
 import * as plans from "./plans.js";
 import { mountGallery } from "./gallery.js"; // Update 9 – Fotos
+import { mountPlaceMaterial } from "../alltag/material.js"; // Update 9 – Material
 
 const LEAFLET_CSS = "https://unpkg.com/leaflet@1.9.4/dist/leaflet.css";
 const LEAFLET_JS = "https://unpkg.com/leaflet@1.9.4/dist/leaflet.js";
@@ -290,6 +291,7 @@ export function openPlaceForm(place, presetLoc, ctx) {
       `<label>Google-Maps-Link (optional)<input id="pf-link" type="url" inputmode="url" autocomplete="off" placeholder="Link hier einfügen" value="${esc(place ? place.link || "" : "")}"></label>` +
       `<p class="hint" data-r="linkhint" hidden></p>` +
     `</div>` +
+    (isNew ? "" : `<div data-r="material" style="margin-top:14px"></div>`) +
     (isNew ? "" : `<div data-r="photos" style="margin-top:14px"></div>`) +
     `<div class="stack" style="margin-top:14px">` +
       `<button type="button" class="btn primary" data-r="save">Speichern</button>` +
@@ -390,6 +392,10 @@ export function openPlaceForm(place, presetLoc, ctx) {
           c.ui.setBusy(saveBtn, false);
         }
       });
+
+      // Update 9 – Material dieser Baustelle
+      const mtHost = $("[data-r=material]");
+      if (mtHost) { try { mountPlaceMaterial(mtHost, place); } catch (err) { console.error(err); } }
 
       // Update 9 – Fotos dieser Baustelle
       const phHost = $("[data-r=photos]");

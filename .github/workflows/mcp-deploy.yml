@@ -16,6 +16,7 @@ on:
     paths:
       - "tools/mcp/**"
       - "js/cal-core.js"
+      - "js/alltag/material-core.js"
       - ".github/workflows/mcp-deploy.yml"
   workflow_dispatch:
 

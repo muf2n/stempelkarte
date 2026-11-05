@@ -4569,3 +4569,7 @@ span.pl-agi { cursor: default; }
 .cal-gev-cal { color: var(--muted); font-weight: 600; font-size: .86rem; }
 .cal-gev-cal i { width: 12px; height: 12px; border-radius: 50%; background: var(--c); display: inline-block; }
 .cal-gev-note { white-space: pre-wrap; display: block !important; color: var(--muted); }
+
+/* Update 9 – Material (Berichtsheft-Zeile „Material: …“) */
+.rp-mat { margin-top: 3px; font-size: .86em; color: var(--muted); }
+.rp-mat b { font-weight: 700; color: var(--ink); }
