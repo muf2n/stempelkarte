@@ -68,6 +68,7 @@ export function mount(el, ctx) {
       <div class="ai-foot">
         <button type="button" class="ai-link" data-a="clear">Verlauf löschen</button>
         <span class="ai-usage"></span>
+        <button type="button" class="ai-link" data-a="trash">Papierkorb</button>
         <button type="button" class="ai-link" data-a="url">Server</button>
       </div>
     </div>`;
@@ -150,7 +151,11 @@ export function mount(el, ctx) {
       if (data.usage) {
         usageEl.textContent = `Diesen Monat: ${Number(data.usage.usd || 0).toFixed(2).replace(".", ",")} $ von ${data.usage.capUsd} $`;
       }
-      if (actions.length && ctx && ctx.toast) ctx.toast(`${voice.assistantName()} hat etwas eingetragen ✓`);
+      if (actions.length && ctx && ctx.toast) {
+        ctx.toast(actions.includes("loeschen")
+          ? `${voice.assistantName()} hat gelöscht – rückgängig im Papierkorb`
+          : `${voice.assistantName()} hat etwas eingetragen ✓`);
+      }
     } catch (err) {
       const msg = err && err.name === "TypeError"
         ? "Server nicht erreichbar. Ist er schon eingerichtet und bist du online?"
@@ -214,6 +219,8 @@ export function mount(el, ctx) {
     if (a === "clear") {
       if (!hist.length) return;
       ui.confirmButton(e.target.closest("button"), "Wirklich löschen?", () => { hist = []; save(); render(); });
+    } else if (a === "trash") {
+      import("./trash.js").then((m) => m.openTrash()).catch((err) => { console.error(err); ui.toast("Papierkorb konnte nicht geladen werden."); });
     } else if (a === "url") {
       ui.openSheet({
         title: "Claude-Server",

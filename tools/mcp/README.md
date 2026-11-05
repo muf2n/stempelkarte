@@ -21,8 +21,53 @@ Er läuft kostenlos als **Cloudflare Worker** und liest/schreibt dieselben Fires
 | `todos_lesen`, `todo_anlegen`, `termin_anlegen`, `einsatz_anlegen`, `todo_erledigt`, `planer_lesen` | Planer |
 | `geld_lesen`, `ausgabe_eintragen` | Alltag → Geld |
 | `schule_lesen`, `hausaufgabe_anlegen`, `pruefung_anlegen` | Alltag → Schule & Lernen |
+| `material_anlegen`, `material_lesen` | Alltag → Material |
+| `loeschen_vorschlagen` | **Schritt 1 beim Löschen** – sucht passende Elemente und zeigt eine Liste mit Bestätigungscode (löscht noch nichts) |
+| `loeschen_bestaetigen` | **Schritt 2** – löscht mit dem Code, nachdem du „Ja“ gesagt hast; alles kommt vorher in den Papierkorb |
+| `rueckgaengig` | stellt die letzte (oder eine bestimmte) Claude-Löschung aus dem Papierkorb wieder her |
 
-**Löschen geht absichtlich nicht.** Alles, was Claude anlegt, bekommt das Feld `src: "claude"`.
+Alles, was Claude anlegt, bekommt das Feld `src: "claude"`.
+
+### Sicheres Löschen
+
+„Lösch meine Termine im Dezember“, „Lösch die Schul-Einträge, die nicht in meinen Schulblöcken liegen“,
+„Nimm die Sonnencreme von der Packliste Kroatien“ – Claude kann löschen, aber **immer in zwei Schritten**:
+
+1. `loeschen_vorschlagen {was, suche?, von?, bis?, id?}` sucht die Elemente und antwortet mit einer Liste
+   (Datum, Art, Titel) und einem **Bestätigungscode** (6 Zeichen, 10 Minuten gültig, höchstens 200 Elemente).
+   Der Vorschlag liegt in `users/{uid}/meta/ai_pending_delete`. Claude zeigt dir die Liste und fragt
+   „Soll ich diese X löschen?“.
+2. Erst nach deinem ausdrücklichen **Ja** ruft Claude `loeschen_bestaetigen {bestaetigungs_code}` auf.
+   Ohne gültigen Code (falsch, abgelaufen, schon benutzt) wird nichts gelöscht. Im In-App-Assistenten (`/chat`)
+   lehnt der Server eine Bestätigung im selben Zug wie den Vorschlag ab – du musst also wirklich vorher antworten.
+   In der Claude-App fragt Claude zusätzlich selbst nach, bevor das Werkzeug läuft.
+
+| `was` | Sammlung | Suche in | Datum |
+|---|---|---|---|
+| `termin` (auch `event`), `aufgabe`, `geburtstag`, `einsatz` | `todos` | Titel, Notiz, Ort | Datum (Serien aufgeklappt) |
+| `eintrag` (auch `urlaub`, `krank`, `zeitausgleich`, `schule`) | `entries` | Notiz, Ort, Art | Tag des Eintrags |
+| `material` | `a_material_items` | Name, Notiz, Baustelle | Tag |
+| `ausgabe` (Buchung, auch Einnahmen) | `a_money_tx` | Notiz, Kategorie | Datum |
+| `hausaufgabe`, `pruefung`, `note` | `a_school_tasks`, `a_school_exams`, `a_school_grades` | Titel/Fach/Stoff | Fälligkeit/Datum |
+| `packliste` (einzelne Gegenstände, `liste` = Name der Liste) | `a_travel_packing` | Gegenstand | – |
+| `abo` | `a_money_subs` | Name | – |
+| `ort` | `places` | Name, Adresse | – (Einträge behalten den Ortsnamen als Text) |
+
+- **Zeiträume:** `von`/`bis` verstehen TT.MM.JJJJ, JJJJ-MM-TT, „24.12.“, „heute“, „Dezember“, „im Dezember“,
+  „nächste Woche“, „letzte Woche“. Alles andere rechnet Claude selbst in ein Datum um.
+- **Serientermine:** Claude fragt zuerst „ganze Serie oder nur am Datum X?“ (`serie: "ganz"` bzw. `"nur_datum"`).
+  „Nur am Datum“ setzt – wie der Kalender der App – eine Ausnahme (`exdates`) am Termin.
+- **Schule außerhalb der Blöcke:** `was: "eintrag", nur_ausserhalb_schulblock: true` findet „Schule“-Einträge, die
+  weder an einem wöchentlichen Schultag noch in einem Schulblock liegen.
+- **Nie löschbar:** Passwort-Tresor, Fotos, Einstellungen und die laufende Schicht (zuerst ausstempeln).
+  Ganz ohne Suchtext/Zeitraum/ID löscht Claude nichts.
+
+**Papierkorb / Rückgängig:** Vor dem Löschen wird jedes Dokument nach `users/{uid}/a_trash/{id}` kopiert
+(`{path, data, op, deletedAt, by: "claude", batchId}`; `path` relativ zu `users/{uid}/`). `rueckgaengig` stellt den
+letzten (oder mit `batch` einen bestimmten) Stapel wieder her – Ausnahmen von Serien und Packlisten-Gegenstände
+werden dabei einzeln zurückgesetzt, spätere Änderungen bleiben erhalten. Einträge älter als 30 Tage werden beim
+nächsten Zugriff entfernt. In der App: **Übersicht → Einstellungen → Papierkorb** oder im Assistenten unten
+**Papierkorb** – mit „Wiederherstellen“ und „Endgültig löschen“.
 
 ## Einrichtung (einmalig, ca. 15 Minuten)
 

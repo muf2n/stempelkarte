@@ -14,6 +14,7 @@ import {
 import { best, norm, score } from "./match.js";
 import { expandTodo, nextInstance, describeRule, parseRRule, formatRRule, normCalendars, finalizeEvent } from "./cal.js"; // Update 9 – Kalender
 import * as MAT from "./material.js";
+import { DELETE_TOOLS } from "./delete.js";
 import { DEFAULT_CATS, suggestCategory, parseAmount, budgetLevel, upcoming, monthlyCost, round2, INTERVALS } from "./money.js";
 
 const SRC = "claude";
@@ -1349,6 +1350,9 @@ tool({
     return out.join("\n");
   },
 });
+
+/* ===== Sicheres Löschen (Vorschlag → Bestätigung → Papierkorb) ===== */
+for (const t of DELETE_TOOLS) tool(t);
 
 export function toolList() {
   return TOOLS.map(({ name, title, description, inputSchema, annotations }) => ({ name, title, description, inputSchema, annotations }));

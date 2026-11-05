@@ -209,8 +209,9 @@ export class FakeGoogle {
       t.done = true;
     }
     // Vorbedingungen prüfen (atomar: erst alle prüfen, dann schreiben)
+    const relOf = (w) => (w.delete || w.update.name).slice(this.root().length + 1);
     for (const w of req.writes) {
-      const rel = w.update.name.slice(this.root().length + 1);
+      const rel = relOf(w);
       const d = this.docs.get(rel);
       const cd = w.currentDocument;
       if (cd && cd.exists === true && !d) return reply(404, { error: { code: 404, status: "NOT_FOUND", message: "no doc" } });
@@ -219,7 +220,8 @@ export class FakeGoogle {
     }
     const results = [];
     for (const w of req.writes) {
-      const rel = w.update.name.slice(this.root().length + 1);
+      const rel = relOf(w);
+      if (w.delete) { this.docs.delete(rel); results.push({ updateTime: this.stamp() }); continue; }
       const prev = this.docs.get(rel);
       let fields;
       if (w.updateMask) {
