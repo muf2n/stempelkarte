@@ -3,6 +3,7 @@
 
 import { dueReminders, reminderText } from "../../js/cal-core.js";
 import { effectiveMode } from "../../js/privat-core.js"; // Update 9 – Privat / Arbeit
+import * as SV from "../../js/alltag/money-core.js"; // Update 9 – Sparziele (Lohn-Erinnerung, Aufrunden)
 
 export const TZ = "Europe/Vienna";
 const HOUR = 3600000;
@@ -376,4 +377,59 @@ export function decideBirthday(now, t, sentMap = {}) {
     };
   }
   return null;
+}
+
+/* ---- Update 9: Sparziele – Spar-Erinnerung am Zahltag / fixen Tag, Aufrunden am Sonntag ---- */
+/**
+ * Spar-Push (getrennt von decide(), send.mjs ruft beides auf).
+ * - goal.reminder {on, amount, mode:"payday"|"day", day}: einmal pro Monat und Ziel (pushlog.savingsSent[goalId] = "YYYY-MM").
+ *   payday: sobald die Lohn-Buchung da ist (Buchungsdatum höchstens 3 Tage zurück), zwischen 08:00 und 21:00.
+ *   day: am eingestellten Tag ab 09:00 (nachholen bis 21:00).
+ *   Nicht, wenn das Ziel erreicht oder die Erinnerung in der App schon erledigt/ausgeblendet ist (remindAck).
+ * - settings.money.roundup {on, push, step}: Sonntag ab 18:00 (bis 21:00) einmal pro Woche (pushlog.roundupSent = Montag der Woche).
+ * money: {goals, txs, bank}
+ */
+export function decideSavings(now, settings, pushlog, money = {}) {
+  const out = [];
+  const s = settings || {};
+  if (!normReminders(s.reminders).enabled) return out;
+  const log = pushlog || {};
+  const v = vienna(now);
+  const min = v.hh * 60 + v.mm;
+  const goals = (Array.isArray(money.goals) ? money.goals : []).filter((g) => g && g.id);
+  const txs = Array.isArray(money.txs) ? money.txs : [];
+  const bank = money.bank || null;
+  const sent = log.savingsSent && typeof log.savingsSent === "object" ? log.savingsSent : {};
+  for (const g of goals) {
+    const due = SV.reminderDue(g, v.key, { txs, goals, bank });
+    if (!due || sent[g.id] === due.mk) continue;
+    if (due.kind === "payday") {
+      if (min < 8 * 60 || min >= 21 * 60 || SV.daysBetween(due.date, v.key) > 3) continue;
+    } else if (due.date !== v.key || min < 9 * 60 || min >= 21 * 60) continue;
+    const msg = SV.reminderMessage(g, due);
+    out.push({
+      type: "savings", title: msg.title,
+      body: msg.body + (due.linked ? " – überweisen in der BAWAG-App" : ""),
+      tag: `spar-${g.id}`, url: "./#alltag/geld", log: [[["savingsSent", g.id], due.mk]],
+    });
+  }
+  const ru = SV.roundupSettings(s);
+  if (ru.on && ru.push && v.wd === 0 && min >= 18 * 60 && min < 21 * 60) {
+    const w = SV.roundUpWeek(txs, v.key, ru.step);
+    if (w.total >= 0.01 && log.roundupSent !== w.from) {
+      const goal = goals.find((g) => g.id === ru.goalId);
+      out.push({
+        type: "roundup", title: "🪙 Aufrunden",
+        body: `Diese Woche hättest du durch Aufrunden ${SV.eur(w.total)} sparen können${goal ? ` – für ${goal.emoji ? goal.emoji + " " : ""}${goal.name}` : ""}.`,
+        tag: "spar-aufrunden", url: "./#alltag/geld", log: [[["roundupSent"], w.from]],
+      });
+    }
+  }
+  return out;
+}
+
+/** Braucht decideSavings Geld-Daten? (spart Firestore-Lesen, wenn nichts eingeschaltet ist) */
+export function savingsWanted(settings, goals) {
+  const ru = SV.roundupSettings(settings || {});
+  return (ru.on && ru.push) || (Array.isArray(goals) && goals.some((g) => g && SV.goalReminder(g).on));
 }

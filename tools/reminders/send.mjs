@@ -1,6 +1,6 @@
 // Verschickt fällige Erinnerungen per Firebase Cloud Messaging (läuft alle 15 min in GitHub Actions).
 // Benötigt das Secret FIREBASE_SERVICE_ACCOUNT (JSON des Dienstkonto-Schlüssels).
-import { decide, dayKeyVienna, TZ } from "./decide.mjs";
+import { decide, dayKeyVienna, TZ, decideSavings, savingsWanted } from "./decide.mjs";
 
 const raw = (process.env.FIREBASE_SERVICE_ACCOUNT || "").trim();
 if (!raw) {
@@ -161,6 +161,23 @@ for (const userRef of refs) {
     const todos = todoSnap.docs.map((d) => ({ ...d.data(), id: d.id })).filter((t) => !t.done);
 
     const due = decide(now, settings, running, todayEntries, pushlog, todos);
+    // Update 9 – Sparziele: Spar-Erinnerung (Zahltag/fixer Tag) und Aufrunden (Sonntag)
+    try {
+      const goalSnap = await userRef.collection("a_money_goals").get();
+      const goals = goalSnap.docs.map((d) => ({ ...d.data(), id: d.id }));
+      if (savingsWanted(settings, goals)) {
+        const since = dayKeyVienna(now - 100 * 86400000);
+        const [txSnap, bankSnap] = await Promise.all([
+          userRef.collection("a_money_tx").where("date", ">=", since).get(),
+          meta.doc("bank").get(),
+        ]);
+        const txs = txSnap.docs.map((d) => ({ ...d.data(), id: d.id }));
+        const bank = bankSnap.exists ? bankSnap.data() : null;
+        due.push(...decideSavings(now, settings, pushlog, { goals, txs, bank }));
+      }
+    } catch (e) {
+      console.warn(`[${uid}] Sparziele nicht lesbar:`, e && e.message ? e.message : e);
+    }
     if (logSnap.exists) await pruneLog(meta.doc("pushlog"), pushlog, todayKey);
     let live = tokens;
     for (const n of due) {

@@ -629,7 +629,57 @@ export async function moneyExtra(d) {
     const accs = Array.isArray(bank.accounts) ? bank.accounts : [];
     const bal = bank.balance;
     const left = bank.valid_until ? Math.floor((Date.parse(bank.valid_until) - d.now) / 86400000) : null;
+    const per = accs.length > 1 && bank.balances ? accs.map((a) => { const b = bank.balances[a.uid]; return `${s(a.name) || "Konto"} ••${s(a.iban_last4)}: ${b && Number.isFinite(Number(b.amount)) ? eur(b.amount) : "unbekannt"}`; }).join(" · ") : ""; // Update 9 – mehrere Konten
     out.push("", `Bankkonto (${s(bank.aspsp) || "Bank"}${accs.length ? ", " + accs.map((a) => `••${s(a.iban_last4)}`).join(", ") : ""}): ${bal && Number.isFinite(Number(bal.amount)) ? `Kontostand ${eur(bal.amount)}${bal.at ? ` (Stand ${fmtDateTime(bal.at)})` : ""}` : "Kontostand unbekannt"}${bank.lastSync ? ` · zuletzt abgeglichen ${fmtDateTime(bank.lastSync)}` : ""}${left != null ? ` · Zugang noch ${Math.max(0, left)} Tage gültig` : ""}`);
+    if (per) out.push(`Konten: ${per}`);
+  }
+  return out;
+}
+
+/* ===================== Update 9 – Sparziele: echtes Konto, Erinnerung, Aufrunden ===================== */
+
+/** Zeilen für geld_lesen: Sparziele (verbunden → echter Kontostand), Spar-Erinnerungen, Aufrunden dieser Woche. */
+export async function savingsSection(d, goals, txs, today) {
+  const [bank, settings] = await Promise.all([d.doc("meta/bank").catch(() => null), d.settings().catch(() => ({}))]);
+  const bk = bank && bank.linked ? bank : null;
+  const list = (goals || []).filter((g) => g && g.id);
+  const out = [];
+  if (list.length) {
+    out.push("", "Sparziele:");
+    for (const g of list) {
+      const cur = MC.goalCurrent(g, list, bk);
+      const tg = Number(g.target) || 0, sv = cur.amount;
+      const pm = MC.goalPerMonth({ ...g, saved: sv }, today);
+      let line = `- ${g.emoji ? g.emoji + " " : ""}${g.name || "Ziel"}: ${eur(sv)} von ${eur(tg)}${tg > 0 ? ` (${Math.min(100, Math.round(sv / tg * 100))} %)` : ""}${isKey(g.date) ? ` bis ${fmtKey(g.date)}` : ""}${pm.done ? " – erreicht 🎉" : pm.perMonth ? ` – noch ${eur(pm.perMonth)} pro Monat nötig` : ""}`;
+      if (cur.linked) {
+        const acc = cur.account;
+        const name = acc ? `${s(acc.name) || "Konto"}${acc.iban_last4 ? ` ••${s(acc.iban_last4)}` : ""}` : `${s(g.bank.name) || "Konto"}${g.bank.last4 ? ` ••${s(g.bank.last4)}` : ""}`;
+        if (cur.missing) line += ` · 🏦 verbunden mit ${name}, aber das Konto ist gerade nicht freigegeben`;
+        else if (cur.unknown) line += ` · 🏦 echtes Konto ${name}, Kontostand noch unbekannt`;
+        else {
+          line += ` · 🏦 echter Kontostand ${name}${g.bank.mode === "fixed" ? ` (fester Anteil ${eur(g.bank.alloc || 0)} von ${eur(cur.balance.amount)})` : Number(g.bank.offset) > 0 ? ` (${eur(cur.balance.amount)} − Startbetrag ${eur(g.bank.offset)})` : ""}${cur.balance.at ? `, Stand ${fmtDateTime(cur.balance.at)}` : ""}`;
+          if (g.bank.mode !== "fixed" && !pm.done && acc) {
+            const f = MC.monthlyInflow((bk.balanceHistory || {})[acc.uid], today);
+            if (f && f.perMonth > 0.5) line += ` · Ø ${eur(f.perMonth)} Zuwachs pro Monat (3 Monate) → ca. ${MC.monthsToGoal(pm.rest, f.perMonth)} Monate bis zum Ziel`;
+          }
+        }
+        line += " · einzahlen nur per Überweisung in der BAWAG-App";
+      }
+      const r = MC.goalReminder(g);
+      if (r.on && r.amount > 0) {
+        const due = MC.reminderDue(g, today, { txs, goals: list, bank: bk });
+        line += ` · 🔔 Erinnerung ${eur(r.amount)} ${r.mode === "day" ? `am ${r.day}. jedes Monats (09:00)` : "am Zahltag"}`;
+        line += g.remindAck === String(today).slice(0, 7) ? " (diesen Monat erledigt)" : due ? ` (fällig seit ${fmtKey(due.date)})` : "";
+      }
+      out.push(line + ` (ID ${g.id})`);
+    }
+  }
+  const ru = MC.roundupSettings(settings);
+  if (ru.on) {
+    const w = MC.roundUpWeek(txs, today, ru.step);
+    const goal = list.find((g) => g.id === ru.goalId);
+    const booked = ru.booked[w.from] || 0;
+    out.push("", `Aufrunden (auf ${ru.step} €): Diese Woche (seit ${fmtKey(w.from)}) hättest du durch Aufrunden ${eur(w.total)} sparen können (${w.count} Ausgaben)${goal ? ` – Ziel „${goal.name}“` : ""}${booked > 0 ? `, davon ${eur(booked)} schon gebucht` : ""}${ru.push ? " · Push sonntags 18:00" : ""}.`);
   }
   return out;
 }

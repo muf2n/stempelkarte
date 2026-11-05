@@ -4932,3 +4932,55 @@ div.entry.ek-schcard:hover { border-color: var(--sch-line); }
 .cal-ical code { font-size: .78rem; word-break: break-all; }
 .cal-secret { border-left: 3px solid var(--danger); padding-left: 8px; }
 .pl-tools .pl-greconnect { display: inline-flex; align-items: center; gap: 4px; min-height: 30px; height: auto; padding: 3px 10px; border-radius: 999px; font-size: .76rem; width: auto; flex: 0 0 auto; color: var(--muted); border-color: var(--line); }
+
+/* Update 9 – Sparziele (echtes Konto, Spar-Erinnerung, Aufrunden) – js/alltag/money-savings.js */
+.sv-banner { display: flex; flex-direction: column; gap: 10px; padding: 14px 16px; border-left: 5px solid var(--c, #14b8a6);
+  background: linear-gradient(135deg, color-mix(in srgb, var(--c, #14b8a6) 16%, var(--card)) 0%, var(--card) 80%); margin-bottom: 12px; }
+.sv-banner-t { display: flex; flex-direction: column; gap: 3px; min-width: 0; }
+.sv-banner-t b { font-family: var(--f-display); font-size: 1.12rem; }
+.sv-banner-t span { font-size: .95rem; line-height: 1.4; }
+.sv-banner-t small { color: var(--muted); font-size: .84rem; }
+.sv-banner-a { display: flex; gap: 8px; flex-wrap: wrap; }
+.sv-banner-a .btn { flex: 1 1 0; min-width: 0; }
+.sv-real { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 8px; margin-top: -2px; }
+.sv-chip { display: inline-flex; align-items: center; gap: 4px; padding: 3px 9px; border-radius: 999px; font-size: .8rem; font-weight: 600;
+  background: var(--soft); color: var(--ink); white-space: nowrap; }
+.sv-chip.real { background: color-mix(in srgb, var(--run) 16%, var(--card)); color: var(--run); }
+.sv-acc { color: var(--muted); font-size: .82rem; font-variant-numeric: tabular-nums; overflow-wrap: anywhere; }
+.sv-eta { margin: 0; font-size: .9rem; color: var(--ink); }
+.sv-eta b { font-family: var(--f-mono); }
+.sv-transfer { margin: 0; padding: 10px 12px; border-radius: var(--r-sm); background: var(--soft); font-size: .86rem; line-height: 1.4; color: var(--ink); }
+.mn-goal .bk-warn, .mn-goal .note { margin: 0; }
+.sv-ru { display: flex; flex-direction: column; gap: 10px; margin-top: 12px;
+  background: linear-gradient(135deg, color-mix(in srgb, #ca8a04 13%, var(--card)) 0%, var(--card) 75%); border-color: color-mix(in srgb, #ca8a04 28%, var(--line)); }
+.sv-ru-off { flex-direction: row; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
+.sv-ru-head { display: flex; align-items: center; gap: 12px; min-width: 0; }
+.sv-ru-head > div { flex: 1; min-width: 0; display: flex; flex-direction: column; }
+.sv-ru-head .mn-h { margin: 0; }
+.sv-ru-head small { color: var(--muted); font-size: .84rem; }
+.sv-ru-ic { flex: none; width: 42px; height: 42px; border-radius: 13px; display: grid; place-items: center; font-size: 1.35rem; background: color-mix(in srgb, #ca8a04 18%, var(--card)); }
+.sv-ru-amt { flex: none; font-family: var(--f-mono); font-size: 1.5rem; font-weight: 600; font-variant-numeric: tabular-nums; letter-spacing: -.01em; }
+.sv-ru-txt, .sv-ru-hint, .sv-ru-ok { margin: 0; font-size: .92rem; line-height: 1.4; }
+.sv-ru-txt b { font-family: var(--f-mono); }
+.sv-ru-ok { color: var(--run); font-weight: 700; }
+.sv-ru-opts { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; }
+.sv-ru-opts .chips { flex: none; }
+.sv-ru-goal { flex: 1 1 180px; min-width: 0; display: flex; flex-direction: column; gap: 4px; font-size: .82rem; font-weight: 600; color: var(--muted); }
+.sv-ru-goal select { width: 100%; }
+.sv-ru .btn.primary { align-self: flex-start; }
+.sv-ru-push { min-height: 40px; font-size: .94rem !important; }
+.sv-ru-offbtn { align-self: flex-start; font-size: .84rem; color: var(--muted); }
+.sv-fs { border: 1px solid var(--line); border-radius: var(--r-sm); padding: 4px 12px 10px; margin: 12px 0 0; display: flex; flex-direction: column; gap: 10px; min-width: 0; }
+.sv-fs > .switch { min-height: 44px; }
+.sv-fs .note { margin: 0; }
+.sv-link-body, .sv-rem-body { display: flex; flex-direction: column; gap: 10px; }
+.sv-link-body[hidden], .sv-rem-body[hidden], .sv-fs [hidden] { display: none !important; }
+.sv-dim { opacity: .5; }
+.bk-accs { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 6px; }
+.bk-accs li { display: flex; justify-content: space-between; align-items: baseline; gap: 10px; padding: 8px 12px; border-radius: 12px; background: var(--soft); }
+.bk-accs li span { min-width: 0; overflow-wrap: anywhere; font-weight: 600; }
+.bk-accs li small { color: var(--muted); font-weight: 500; }
+.bk-accs li b { font-family: var(--f-mono); font-variant-numeric: tabular-nums; white-space: nowrap; }
+.bk-more { font-size: .86rem; color: var(--muted); }
+.bk-more summary { cursor: pointer; font-weight: 600; color: var(--ink); }
+.bk-more p { margin: 6px 0 0; line-height: 1.45; }

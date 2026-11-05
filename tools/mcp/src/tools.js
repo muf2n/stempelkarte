@@ -20,7 +20,7 @@ import { vienna } from "./time.js";
 import { DEFAULT_CATS, suggestCategory, parseAmount, budgetLevel, upcoming, monthlyCost, round2, INTERVALS } from "./money.js";
 import * as AB from "./subs.js"; // Update 9 – Abos: „Wie lange noch“, Fristen, Katalog (gemeinsam mit der Web-App)
 import * as MC from "./moneycore.js";
-import { READ_TOOLS, schoolSection, moneyExtra } from "./read.js"; // Update 9 – Claude sieht (fast) alles
+import { READ_TOOLS, schoolSection, moneyExtra, savingsSection } from "./read.js"; // Update 9 – Claude sieht (fast) alles
 import { WRITE_TOOLS } from "./write.js"; // Update 9 – Claude darf (fast) alles ändern
 import { SETTINGS_TOOLS } from "./settings.js"; // Update 9 – Einstellungen nur mit Bestätigung
 import { GMAIL_TOOLS } from "./gmail.js"; // Gmail dauerhaft (nur lesen): mails_suchen, mail_lesen
@@ -1061,7 +1061,7 @@ export const catName = (map, id) => { const c = map.get(id); return c ? `${c.emo
 tool({
   name: "geld_lesen",
   title: "Geld-Übersicht",
-  description: "Geld-Bereich der App (Alltag → Geld): Einnahmen, Ausgaben und Saldo eines Monats, Ausgaben je Kategorie, Budget-Stand (Warnung ab 80 %), kommende Abo-Zahlungen, Sparziele (mit „pro Monat nötig“), Teilen-Gruppen mit Salden („Max schuldet dir …“) und – falls verbunden – Kontostand der Bank. Mit buchungen: true auch die einzelnen Buchungen. Ohne Angabe: aktueller Monat.",
+  description: "Geld-Bereich der App (Alltag → Geld): Einnahmen, Ausgaben und Saldo eines Monats, Ausgaben je Kategorie, Budget-Stand (Warnung ab 80 %), kommende Abo-Zahlungen, Sparziele (mit „pro Monat nötig“; mit echtem Bankkonto verbundene Ziele mit Kontostand und Prognose; Spar-Erinnerungen), Aufrunden dieser Woche, Teilen-Gruppen mit Salden („Max schuldet dir …“) und – falls verbunden – Kontostand der Bank. Mit buchungen: true auch die einzelnen Buchungen. Ohne Angabe: aktueller Monat.",
   inputSchema: {
     type: "object",
     properties: {
@@ -1112,14 +1112,7 @@ tool({
       if (up.length) out.push("Nächste Zahlungen (31 Tage):", ...up.slice(0, 12).map((u) => `- ${fmtKeyWd(u.date)}: ${u.sub.name || "Abo"} ${eur(u.sub.amount)} (${INTERVALS[u.sub.interval] || "monatlich"})`));
       out.push("(Laufzeiten, Kündigungsfristen und Kündigungslinks: abos_lesen)");
     }
-    if (goals.length) {
-      out.push("", "Sparziele:");
-      for (const g of goals) {
-        const tg = Number(g.target) || 0, sv = Number(g.saved) || 0;
-        const pm = MC.goalPerMonth(g, today);
-        out.push(`- ${g.emoji ? g.emoji + " " : ""}${g.name || "Ziel"}: ${eur(sv)} von ${eur(tg)}${tg > 0 ? ` (${Math.min(100, Math.round(sv / tg * 100))} %)` : ""}${isKey(g.date) ? ` bis ${fmtKey(g.date)}` : ""}${pm.done ? " – erreicht 🎉" : pm.perMonth ? ` – noch ${eur(pm.perMonth)} pro Monat nötig` : ""}`);
-      }
-    }
+    out.push(...(await savingsSection(d, goals, txs, today))); // Update 9 – Sparziele (echtes Konto, Erinnerung, Aufrunden)
     out.push(...extra);
     if (args.buchungen === true && list.length) {
       out.push("", "Buchungen:");

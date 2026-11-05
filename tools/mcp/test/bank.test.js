@@ -475,3 +475,116 @@ test("normalizeTx: Datum-Fallback, Betrag mit Vorzeichen, gleiche Daten → glei
   assert.equal(a.id, b.id);
   assert.equal(await normalizeTx(tx({ status: "PDNG" }), "x"), null);
 });
+
+/* ---------- Update 9 – Sparziele: mehrere Konten, Salden je Konto, Verlauf ---------- */
+import { addHistoryPoint, backfillHistory, mainAccountUid, matchAccount, HISTORY_POINTS } from "../src/bank.js";
+
+const SPAR = { uid: "acc-2", account_id: { iban: "AT021400012345678901" }, name: "Online Sparen", product: "Sparkonto", currency: "EUR", identification_hash: "h-spar" };
+const GIRO = { uid: "acc-1", account_id: { iban: "AT611904300234573201" }, name: "Konto Florian", currency: "EUR", identification_hash: "h-giro" };
+
+test("zwei Konten: balances je Konto, balance = Hauptkonto (Giro), Verlauf aus Buchungen rekonstruiert", async () => {
+  const t = await setup();
+  t.eb.sessionAccounts = [SPAR, GIRO]; // Reihenfolge der Bank egal – Hauptkonto ist das Nicht-Sparkonto
+  t.eb.balances["acc-2"] = [{ balance_type: "CLBD", balance_amount: { currency: "EUR", amount: "600.00" }, reference_date: "2026-11-05" }];
+  t.eb.pages["acc-2"] = [[
+    tx({ entry_reference: "S1", credit_debit_indicator: "CRDT", transaction_amount: { currency: "EUR", amount: "100.00" }, booking_date: "2026-10-01", debtor: { name: "Florian" }, remittance_information: ["Dauerauftrag Sparen"] }),
+    tx({ entry_reference: "S2", credit_debit_indicator: "CRDT", transaction_amount: { currency: "EUR", amount: "100.00" }, booking_date: "2026-11-01", debtor: { name: "Florian" }, remittance_information: ["Dauerauftrag Sparen"] }),
+  ]];
+  const r = await t.link();
+  assert.equal(r.status, 200, JSON.stringify(r.data));
+  const meta = t.g.get(`${t.base}/meta/bank`);
+  assert.equal(meta.accounts.length, 2);
+  assert.deepEqual(meta.accounts.map((a) => [a.uid, a.iban_last4, a.name, a.hash]), [["acc-2", "8901", "Online Sparen", "h-spar"], ["acc-1", "3201", "Konto Florian", "h-giro"]]);
+  assert.equal(meta.accounts[0].product, "Sparkonto");
+  assert.equal(meta.mainUid, "acc-1");
+  assert.equal(meta.balance.amount, 1234.56, "balance = Hauptkonto, nicht die Summe");
+  assert.equal(meta.balances["acc-1"].amount, 1234.56);
+  assert.deepEqual({ ...meta.balances["acc-2"], at: 0 }, { amount: 600, currency: "EUR", date: "2026-11-05", at: 0 });
+  const h = meta.balanceHistory["acc-2"];
+  assert.equal(h.length, 91, "90 Tage zurück + heute");
+  assert.deepEqual(h[h.length - 1], { d: "2026-11-05", a: 600 });
+  assert.equal(h.find((p) => p.d === "2026-10-31").a, 500);
+  assert.equal(h.find((p) => p.d === "2026-11-01").a, 600);
+  assert.equal(h.find((p) => p.d === "2026-09-30").a, 400);
+  // Status liefert alles für die App (uid, Salden, Verlauf), aber keine Sitzung
+  const st = await t.req("/bank/status", { method: "GET" });
+  assert.equal(st.data.accounts.length, 2);
+  assert.equal(st.data.accounts.find((a) => a.main).uid, "acc-1");
+  assert.equal(st.data.balances["acc-2"].amount, 600);
+  assert.equal(st.data.balanceHistory["acc-2"].length, 91);
+  assert.ok(!JSON.stringify(st.data).includes("AT0214"), "keine volle IBAN");
+  // Buchungen beider Konten importiert
+  assert.equal(t.g.list(`${t.base}/a_money_tx`).length, 3);
+});
+
+test("Cron ergänzt einen Tagespunkt je Konto (gleicher Tag wird ersetzt)", async () => {
+  const t = await setup();
+  t.eb.sessionAccounts = [GIRO, SPAR];
+  t.eb.balances["acc-2"] = [{ balance_type: "CLBD", balance_amount: { currency: "EUR", amount: "600.00" } }];
+  await t.link();
+  t.eb.balances["acc-2"] = [{ balance_type: "CLBD", balance_amount: { currency: "EUR", amount: "650.00" } }];
+  await runBankCron(t.env, { fetchImpl: t.fetchImpl, now: NOW + 3 * 3600e3 });
+  let h = t.g.get(`${t.base}/meta/bank`).balanceHistory["acc-2"];
+  assert.deepEqual(h[h.length - 1], { d: "2026-11-05", a: 650 });
+  const n = h.length;
+  t.eb.balances["acc-2"] = [{ balance_type: "CLBD", balance_amount: { currency: "EUR", amount: "700.00" } }];
+  await runBankCron(t.env, { fetchImpl: t.fetchImpl, now: NOW + 86400e3 });
+  h = t.g.get(`${t.base}/meta/bank`).balanceHistory["acc-2"];
+  assert.equal(h.length, n + 1);
+  assert.deepEqual(h.slice(-2), [{ d: "2026-11-05", a: 650 }, { d: "2026-11-06", a: 700 }]);
+  assert.equal(t.g.get(`${t.base}/meta/bank`).balances["acc-2"].amount, 700);
+});
+
+test("Fehler bei einem Konto hält das andere nicht auf", async () => {
+  const t = await setup();
+  t.eb.sessionAccounts = [GIRO, SPAR];
+  t.eb.fail = { path: /acc-2\/transactions/, status: 500, error: "ASPSP_ERROR" };
+  t.eb.balances["acc-2"] = [{ balance_type: "CLBD", balance_amount: { currency: "EUR", amount: "600.00" } }];
+  const r = await t.link();
+  assert.equal(r.status, 200);
+  const meta = t.g.get(`${t.base}/meta/bank`);
+  assert.equal(t.g.list(`${t.base}/a_money_tx`).length, 1, "Giro-Buchung trotzdem da");
+  assert.equal(meta.balances["acc-1"].amount, 1234.56);
+  assert.equal(meta.lastError.code, "ASPSP_ERROR");
+});
+
+test("Neu verbinden mit zusätzlichem Sparkonto: neue uids, Verlauf über identification_hash übernommen", async () => {
+  const t = await setup();
+  t.eb.sessionAccounts = [GIRO];
+  await t.link();
+  const h1 = t.g.get(`${t.base}/meta/bank`).balanceHistory["acc-1"];
+  assert.ok(h1.length > 2);
+  // später: Sparkonto im Control Panel verknüpft und „Mit BAWAG verbinden“ erneut – Bank vergibt neue uids
+  t.setNow(NOW + 2 * 86400e3);
+  t.eb.sessionAccounts = [{ ...GIRO, uid: "acc-1b" }, { ...SPAR, uid: "acc-2b" }];
+  t.eb.balances["acc-1b"] = t.eb.balances["acc-1"];
+  t.eb.balances["acc-2b"] = [{ balance_type: "CLBD", balance_amount: { currency: "EUR", amount: "300.00" } }];
+  const r = await t.link();
+  assert.equal(r.status, 200, JSON.stringify(r.data));
+  const meta = t.g.get(`${t.base}/meta/bank`);
+  assert.deepEqual(meta.accounts.map((a) => a.uid), ["acc-1b", "acc-2b"]);
+  assert.equal(meta.mainUid, "acc-1b");
+  assert.ok(!("acc-1" in meta.balanceHistory), "alte uid weg");
+  const h = meta.balanceHistory["acc-1b"];
+  assert.ok(h.length >= h1.length, "Verlauf übernommen");
+  assert.equal(h[0].d, h1[0].d);
+  assert.equal(meta.balances["acc-2b"].amount, 300);
+  const st = await t.req("/bank/status", { method: "GET" });
+  assert.deepEqual(st.data.accounts.map((a) => `${a.name} ••${a.iban_last4}`), ["Konto Florian ••3201", "Online Sparen ••8901"]);
+});
+
+test("Verlauf-Hilfen: addHistoryPoint, backfillHistory, mainAccountUid, matchAccount", () => {
+  let h = [];
+  for (let i = 0; i < 130; i++) h = addHistoryPoint(h, `2026-0${1 + Math.floor(i / 28)}-${String(1 + (i % 28)).padStart(2, "0")}`, i);
+  assert.equal(h.length, HISTORY_POINTS);
+  assert.equal(h[h.length - 1].a, 129);
+  assert.deepEqual(addHistoryPoint([{ d: "2026-11-02", a: 1 }, { d: "2026-11-01", a: 0 }], "2026-11-02", 5), [{ d: "2026-11-01", a: 0 }, { d: "2026-11-02", a: 5 }]);
+  const b = backfillHistory(100, [{ date: "2026-11-03", type: "in", amount: 50 }, { date: "2026-11-02", type: "out", amount: 10 }], "2026-11-01", "2026-11-04");
+  assert.deepEqual(b, [{ d: "2026-11-01", a: 60 }, { d: "2026-11-02", a: 50 }, { d: "2026-11-03", a: 100 }, { d: "2026-11-04", a: 100 }]);
+  assert.equal(mainAccountUid([{ uid: "s", name: "Sparkonto" }, { uid: "g", name: "Girokonto" }]), "g");
+  assert.equal(mainAccountUid([{ uid: "s", name: "Sparkonto" }, { uid: "g", name: "Girokonto" }], "s"), "s");
+  assert.equal(mainAccountUid([{ uid: "s", name: "Sparkonto" }]), "s");
+  assert.equal(matchAccount({ uid: "x", hash: "h" }, [{ uid: "y", hash: "h" }]).uid, "y");
+  assert.equal(matchAccount({ uid: "x", iban_last4: "1234" }, [{ uid: "z", iban_last4: "1234" }]).uid, "z");
+  assert.equal(matchAccount({ uid: "x" }, [{ uid: "z" }]), null);
+});

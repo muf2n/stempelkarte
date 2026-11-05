@@ -3,8 +3,11 @@
 // Doku: https://enablebanking.com/docs/api/reference/  ·  FAQ: https://enablebanking.com/docs/faq/
 //
 // Gespeichert wird:
-//   users/{uid}/meta/bank          {linked, session_id, aspsp, valid_until, accounts:[{uid, iban_last4, name, currency, balance}],
-//                                   linkedAt, lastSync, lastError, balance, renewTodo, rateLimitedAt}
+//   users/{uid}/meta/bank          {linked, session_id, aspsp, valid_until, accounts:[{uid, iban_last4, name, currency, balance, hash, product}],
+//                                   linkedAt, lastSync, lastError, balance, renewTodo, rateLimitedAt,
+//                                   mainUid, balances:{accountUid:{amount, currency, date, at}},
+//                                   balanceHistory:{accountUid:[{d:"YYYY-MM-DD", a:Betrag}, …]} (letzte 120 Tage)}
+//                                  balance = Saldo des Hauptkontos (Girokonto; Kompatibilität mit älteren App-Ständen)
 //   users/{uid}/meta/bank_pending  {stateHash, aspsp, valid_until, exp, used}
 //   users/{uid}/meta/bank_seen     {ids:[…]} – schon einmal importierte bk_-IDs (gelöschte nicht neu anlegen)
 //   users/{uid}/a_money_tx/bk_…    Buchungen (Form wie js/alltag/money.js + src:"bank", bankRef, counterparty)
@@ -336,9 +339,7 @@ class Bank {
     if (!(await safeEqualHex(await sha256Hex(state), pend.stateHash))) throw new HttpError(400, "Ungültiger Rückruf (state passt nicht) – bitte neu starten.");
     await this.fs.commit([this.fs.patchWrite(this.p("meta/bank_pending"), { used: true })]);
     const s = await this.eb.session(str(code));
-    const accounts = (s.accounts || []).filter((a) => a && a.uid).map((a) => ({
-      uid: a.uid, iban_last4: ibanLast4(a), name: str(a.name || a.product || "Konto").slice(0, 60), currency: str(a.currency) || "EUR",
-    }));
+    const accounts = sessionAccounts(s.accounts);
     const old = await this.meta();
     if (old && old.session_id && old.session_id !== s.session_id) {
       try { await this.eb.deleteSession(old.session_id); } catch { /* alte Sitzung egal */ }
@@ -348,6 +349,7 @@ class Bank {
       linked: true, session_id: s.session_id, aspsp: (s.aspsp && s.aspsp.name) || pend.aspsp.name,
       valid_until: validUntil, accounts, linkedAt: this.now, lastSync: null, lastError: null,
       balance: null, rateLimitedAt: null, expired: false, renewTodo: (old && old.renewTodo) || null,
+      ...carryOverBalances(old, accounts), // Update 9 – Sparziele: Verlauf/Salden bei neuer Freigabe behalten
     };
     await this.fs.commit([this.fs.setWrite(this.p("meta/bank"), clean(meta))]);
     if (!accounts.length) {
@@ -372,16 +374,25 @@ class Bank {
 
     const raw = [];
     const accounts = (meta.accounts || []).map((a) => ({ ...a }));
+    const fresh = new Set(); // Konten mit neuem Saldo in diesem Abgleich
     let err = null;
     try {
       for (const a of accounts) {
         const accKey = a.iban_last4 || a.name || "konto";
-        const list = await this.eb.allTransactions(a.uid, from);
-        for (const t of list) raw.push({ t, accKey, acc: a });
+        // Update 9 – Sparziele: mehrere Konten (z. B. Girokonto + Sparkonto). Fehler bei einem Konto
+        // (außer abgelaufen/Rate-Limit) halten die anderen nicht auf.
+        try {
+          const list = await this.eb.allTransactions(a.uid, from);
+          for (const t of list) raw.push({ t, accKey, acc: a });
+        } catch (e) {
+          if (isExpired(e) || isRate(e) || !(e instanceof EbError)) throw e;
+          err ||= e;
+          continue;
+        }
         try {
           const b = await this.eb.balances(a.uid);
           const bal = pickBalance(b.balances);
-          if (bal) a.balance = { ...bal, at: this.now };
+          if (bal) { a.balance = { ...bal, at: this.now }; fresh.add(a.uid); }
         } catch (e) { if (isExpired(e) || isRate(e)) throw e; /* Saldo optional */ }
       }
     } catch (e) {
@@ -399,10 +410,9 @@ class Bank {
     }
 
     const res = await this.upsert(raw, from);
-    const eurBal = accounts.filter((a) => a.balance && a.balance.currency === "EUR");
-    const balance = eurBal.length ? { amount: round2(eurBal.reduce((s, a) => s + a.balance.amount, 0)), currency: "EUR", at: this.now } : meta.balance || null;
+    const perAcc = await accountBalances(meta, accounts, fresh, raw, { from, today, now: this.now });
     const partial = {
-      accounts, balance, lastSync: err ? meta.lastSync || null : this.now,
+      accounts, ...perAcc, lastSync: err ? meta.lastSync || null : this.now,
       lastError: err ? { code: (err instanceof EbError && err.code) || "ERROR", msg: ebMessage(err), at: this.now } : null,
       lastImport: { at: this.now, ...res }, expired: err ? isExpired(err) : false,
       ...(err && isRate(err) ? { rateLimitedAt: this.now } : { rateLimitedAt: null }),
@@ -503,9 +513,14 @@ class Bank {
     return {
       linked: true, aspsp: m.aspsp || DEFAULT_ASPSP, valid_until: m.valid_until || null,
       daysLeft: daysLeft(m.valid_until, this.now), expired: !!m.expired || (daysLeft(m.valid_until, this.now) ?? 1) < 0,
-      accounts: (m.accounts || []).map((a) => ({ iban_last4: a.iban_last4 || "", name: a.name || "", currency: a.currency || "EUR", balance: a.balance || null })),
+      accounts: (m.accounts || []).map((a) => ({
+        uid: a.uid || "", iban_last4: a.iban_last4 || "", name: a.name || "", currency: a.currency || "EUR", balance: a.balance || null,
+        ...(a.hash ? { hash: a.hash } : {}), ...(a.product ? { product: a.product } : {}), main: !!a.uid && a.uid === m.mainUid,
+      })),
       lastSync: m.lastSync || null, balance: m.balance || null, lastError: m.lastError || null, linkedAt: m.linkedAt || null,
       lastImport: m.lastImport || null,
+      // Update 9 – Sparziele: Salden je Konto + Tagesverlauf (für „echte“ Sparziele in der App)
+      mainUid: m.mainUid || null, balances: m.balances || {}, balanceHistory: m.balanceHistory || {},
     };
   }
 
@@ -524,6 +539,105 @@ async function safeEqualHex(a, b) {
   let diff = x.length ^ y.length;
   for (let i = 0; i < Math.max(x.length, y.length); i++) diff |= (x.charCodeAt(i) || 0) ^ (y.charCodeAt(i) || 0);
   return diff === 0;
+}
+
+/* ---------- Update 9 – Sparziele: mehrere Konten, Salden je Konto, Verlauf ---------- */
+
+export const HISTORY_POINTS = 120;
+const SAVINGS_NAME = /spar|sav(e|ing)|tagesgeld|festgeld|kapital|depot|bauspar/i;
+
+/** Konten einer Sitzung → gespeicherte Form (nie die volle IBAN). identification_hash bleibt über Sitzungen gleich. */
+export function sessionAccounts(list) {
+  return (list || []).filter((a) => a && a.uid).map((a) => clean({
+    uid: a.uid, iban_last4: ibanLast4(a), name: str(a.name || a.product || "Konto").slice(0, 60), currency: str(a.currency) || "EUR",
+    hash: str(a.identification_hash) || undefined,
+    product: str(a.product) && str(a.product) !== str(a.name) ? str(a.product).slice(0, 60) : undefined,
+  }));
+}
+
+/** Hauptkonto (für das alte Feld „balance“): gemerkt, sonst das erste Nicht-Sparkonto, sonst das erste. */
+export function mainAccountUid(accounts, preferred = null) {
+  const list = (accounts || []).filter((a) => a && a.uid);
+  if (preferred && list.some((a) => a.uid === preferred)) return preferred;
+  const giro = list.find((a) => !SAVINGS_NAME.test(`${a.name || ""} ${a.product || ""}`) && (a.currency || "EUR") === "EUR");
+  return (giro || list[0] || {}).uid || null;
+}
+
+/** Gleiches Konto in einer neuen Sitzung finden (uid → identification_hash → IBAN-Ende + Name). */
+export function matchAccount(acc, list) {
+  if (!acc) return null;
+  const l = list || [];
+  return l.find((x) => x.uid && x.uid === acc.uid) ||
+    (acc.hash ? l.find((x) => x.hash && x.hash === acc.hash) : null) ||
+    (acc.iban_last4 ? l.find((x) => x.iban_last4 === acc.iban_last4 && (x.currency || "EUR") === (acc.currency || "EUR")) : null) || null;
+}
+
+/** Tagespunkt ergänzen/ersetzen, sortiert, höchstens HISTORY_POINTS. */
+export function addHistoryPoint(hist, day, amount) {
+  const m = new Map();
+  for (const p of Array.isArray(hist) ? hist : []) if (p && isKey(p.d) && Number.isFinite(Number(p.a))) m.set(p.d, round2(Number(p.a)));
+  if (isKey(day) && Number.isFinite(Number(amount))) m.set(day, round2(Number(amount)));
+  return [...m.entries()].sort((a, b) => (a[0] < b[0] ? -1 : 1)).slice(-HISTORY_POINTS).map(([d, a]) => ({ d, a }));
+}
+
+/**
+ * Verlauf rückwärts aus den Buchungen rekonstruieren (beim ersten Abgleich eines Kontos):
+ * Stand am Ende von Tag d = heutiger Saldo − Summe aller Buchungen nach d. txs: [{date, type, amount}].
+ */
+export function backfillHistory(current, txs, from, today) {
+  if (!Number.isFinite(Number(current)) || !isKey(from) || !isKey(today) || from > today) return [];
+  const byDay = new Map();
+  for (const t of txs || []) {
+    if (!t || !isKey(t.date) || t.date > today) continue;
+    const v = (t.type === "in" ? 1 : -1) * (Number(t.amount) || 0);
+    byDay.set(t.date, (byDay.get(t.date) || 0) + v);
+  }
+  const out = [];
+  let bal = Number(current), d = today, guard = 0;
+  while (d >= from && guard++ < HISTORY_POINTS) {
+    out.push({ d, a: round2(bal) });
+    bal -= byDay.get(d) || 0; // Stand am Ende des Vortags
+    d = addDays(d, -1);
+  }
+  return out.reverse();
+}
+
+/** Bei neuer Freigabe (andere Konto-uids): Salden/Verlauf auf die neuen uids übertragen, Hauptkonto merken. */
+export function carryOverBalances(old, accounts) {
+  const balances = {}, balanceHistory = {};
+  const oldAccs = (old && Array.isArray(old.accounts)) ? old.accounts : [];
+  for (const a of accounts) {
+    const prev = matchAccount(a, oldAccs) || (old && old.balances && old.balances[a.uid] ? { uid: a.uid } : null);
+    if (!prev) continue;
+    if (old.balances && old.balances[prev.uid]) balances[a.uid] = old.balances[prev.uid];
+    if (old.balanceHistory && Array.isArray(old.balanceHistory[prev.uid])) balanceHistory[a.uid] = old.balanceHistory[prev.uid];
+  }
+  const oldMain = old && old.mainUid ? oldAccs.find((x) => x.uid === old.mainUid) : null;
+  const mapped = oldMain ? matchAccount(oldMain, accounts) : null;
+  return { balances, balanceHistory, mainUid: mainAccountUid(accounts, mapped && mapped.uid) };
+}
+
+/** Nach einem Abgleich: balances, balanceHistory, mainUid und balance (Hauptkonto). */
+export async function accountBalances(meta, accounts, fresh, raw, { from, today, now }) {
+  const balances = {}, balanceHistory = {};
+  const oldB = (meta && meta.balances) || {}, oldH = (meta && meta.balanceHistory) || {};
+  for (const a of accounts) {
+    if (oldB[a.uid]) balances[a.uid] = oldB[a.uid];
+    if (Array.isArray(oldH[a.uid])) balanceHistory[a.uid] = oldH[a.uid];
+    if (!fresh.has(a.uid) || !a.balance) continue;
+    balances[a.uid] = clean({ amount: a.balance.amount, currency: a.balance.currency || "EUR", date: a.balance.date || today, at: now });
+    let hist = balanceHistory[a.uid] || [];
+    if (hist.length < 2) {
+      const norm = [];
+      for (const r of raw) if (r.acc && r.acc.uid === a.uid) { const n = await normalizeTx(r.t, "x"); if (n) norm.push(n); }
+      if (norm.length || daysDiff(today, from) >= 20) hist = backfillHistory(a.balance.amount, norm, from, today).concat(hist);
+    }
+    balanceHistory[a.uid] = addHistoryPoint(hist, today, a.balance.amount);
+  }
+  const mainUid = mainAccountUid(accounts, meta && meta.mainUid);
+  const mb = mainUid && balances[mainUid];
+  const balance = mb && fresh.has(mainUid) ? { amount: mb.amount, currency: mb.currency || "EUR", at: now } : (meta && meta.balance) || null;
+  return { balances, balanceHistory, mainUid, balance };
 }
 
 /* ---------- HTTP ---------- */

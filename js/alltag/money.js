@@ -9,6 +9,7 @@ import * as ui from "../ui.js";
 import { createGmail } from "./money-gmail.js";
 import { createBank, bankMark } from "./money-bank.js";
 import { createSubs } from "./money-subs.js"; // Update 9 – Abos: Kündigen, Fristen, Katalog
+import { createSavings } from "./money-savings.js"; // Update 9 – Sparziele: echtes Konto, Spar-Erinnerung, Aufrunden
 
 const TABS = [
   ["uebersicht", "Übersicht", "pie"],
@@ -68,6 +69,7 @@ export function mount(el, ctx) {
     goSubs: () => { S.tab = "abos"; lsSet(TAB_KEY, S.tab); render(); window.scrollTo({ top: 0 }); },
   });
   const bk = createBank({ ui, render: () => queue() });
+  const sv = createSavings({ col, ui, render: () => queue(), bank: bk, safeWrite: (p, m) => safeWrite(p, m) });
   const ab = createSubs({ col, ui, render: () => queue(), catOf: (id) => catOf(id), cats: () => cats(), safeWrite: (p, m) => safeWrite(p, m), gmCardHTML: () => gm.cardHTML() });
 
   /* ---------- Daten-Hilfen ---------- */
@@ -251,14 +253,14 @@ export function mount(el, ctx) {
       `<h3 class="mn-h">Nächste Zahlungen</h3>` +
       `<ul class="mn-mini">${up.map((u) => `<li><span>${esc(dueLabel(u.date))}</span><b>${esc(u.sub.name)}</b><em>${amt(u.sub.amount)}</em></li>`).join("")}</ul>` +
     `</section>` : "";
-    const goals = col.goals.all().filter((g) => (Number(g.saved) || 0) < (Number(g.target) || 0)).slice(0, 3);
+    const goals = col.goals.all().map((g) => ({ ...g, saved: sv.current(g).amount, real: sv.isLinked(g) })).filter((g) => (Number(g.saved) || 0) < (Number(g.target) || 0)).slice(0, 3);
     const goalBox = goals.length ? `<section class="card mn-card">` +
       `<h3 class="mn-h">Sparziele</h3>` +
-      goals.map((g) => `<button type="button" class="mn-goal-mini" data-mn="gotab" data-tab="ziele"><span>${esc(g.emoji || "🎯")} ${esc(g.name)}</span><div class="progress"><div style="width:${pct(g.saved, g.target)}%"></div></div><small>${amt(g.saved)} von ${amt(g.target)}</small></button>`).join("") +
+      goals.map((g) => `<button type="button" class="mn-goal-mini" data-mn="gotab" data-tab="ziele"><span>${esc(g.emoji || "🎯")} ${esc(g.name)}${g.real ? " 🏦" : ""}</span><div class="progress"><div style="width:${pct(g.saved, g.target)}%"></div></div><small>${amt(g.saved)} von ${amt(g.target)}</small></button>`).join("") +
     `</section>` : "";
 
     const hasAny = txs().length > 0;
-    return monthNav() + gm.hintHTML() +
+    return monthNav() + gm.hintHTML() + sv.bannerHTML() +
       (hasAny ? "" : `<div class="hint mn-welcome">👋 Trag deine erste Einnahme (z. B. Lehrlingsentschädigung) oder Ausgabe ein – die Kategorie wird aus der Notiz erkannt.</div>`) +
       `<div class="mn-ov">${hero}${bk.linked() ? bk.cardHTML() : ""}${donut}${bars}${warnBox}${upBox}${goalBox}${bk.linked() ? "" : bk.cardHTML()}</div>`;
   }
@@ -368,31 +370,7 @@ export function mount(el, ctx) {
   /* ---------- Sparziele ---------- */
 
   function pageGoals() {
-    const goals = col.goals.all().sort((a, b) => (a.done === b.done ? (a.created || 0) - (b.created || 0) : a.done ? 1 : -1));
-    if (!goals.length) return emptyBox("Noch keine Sparziele", "Spar auf etwas Bestimmtes – z. B. Führerschein, Moped oder neues Handy.", "newgoal");
-    const totalSaved = goals.reduce((s, g) => s + (Number(g.saved) || 0), 0);
-    return `<div class="mn-goal-sum"><span>Gespart insgesamt</span><b>${amt(totalSaved)}</b></div>` +
-      `<div class="mn-goals">` + goals.map((g) => {
-        const p = M.goalPerMonth(g);
-        const pc = pct(g.saved, g.target);
-        let info;
-        if (p.done) info = `🎉 Ziel erreicht!`;
-        else if (p.late) info = `Zieldatum vorbei – noch ${amt(p.rest)}`;
-        else if (p.perMonth != null) info = `noch <b>${amt(p.perMonth)}</b> pro Monat (${p.months} ${p.months === 1 ? "Monat" : "Monate"})`;
-        else info = `noch ${amt(p.rest)}`;
-        return `<article class="card mn-goal${p.done ? " done" : ""}" style="--c:${esc(g.color || "#14b8a6")}">` +
-          `<button type="button" class="mn-goal-head" data-mn="editgoal" data-id="${esc(g.id)}">` +
-            `<span class="mn-goal-emo">${esc(g.emoji || "🎯")}</span>` +
-            `<span class="mn-goal-t"><b>${esc(g.name || "Sparziel")}</b><small>${M.isKey(g.date) ? "bis " + esc(M.fmtDate(g.date)) : "ohne Datum"}</small></span>` +
-            `<span class="mn-goal-p">${Math.floor(pc)} %</span>` +
-          `</button>` +
-          `<div class="mn-goal-bar"><div style="width:${pc}%"></div></div>` +
-          `<div class="mn-goal-v"><b>${amt(g.saved)}</b><span>von ${amt(g.target)}</span></div>` +
-          `<p class="mn-goal-info">${info}</p>` +
-          `<div class="row"><button type="button" class="btn sm primary" data-mn="deposit" data-id="${esc(g.id)}">${icon("plus", 16)} Einzahlen</button>` +
-          `<button type="button" class="btn sm ghost" data-mn="withdraw" data-id="${esc(g.id)}">Abheben</button></div>` +
-        `</article>`;
-      }).join("") + `</div>`;
+    return sv.goalsPageHTML(emptyBox); // Update 9 – Sparziele: Karten, echtes Konto, Aufrunden in money-savings.js
   }
 
   /* ---------- Abos ---------- */
@@ -714,10 +692,11 @@ export function mount(el, ctx) {
           `<div class="row"><label>Zielbetrag (€)<input id="mn-g-target" inputmode="decimal" placeholder="1.500" value="${g.target ? esc(String(g.target).replace(".", ",")) : ""}"></label>` +
           `<label>Schon gespart (€)<input id="mn-g-saved" inputmode="decimal" placeholder="0" value="${g.saved ? esc(String(g.saved).replace(".", ",")) : ""}"></label></div>` +
           `<label>Bis wann? (optional)<input id="mn-g-date" type="date" value="${esc(g.date || "")}"></label>` +
-        `</div>` +
+        `</div>` + sv.goalSheetHTML(g) +
         `<div class="row">${isNew ? "" : `<button type="button" class="btn danger sm" data-del>Löschen</button>`}<button type="button" class="btn primary" data-save>Speichern</button></div>`,
       onMount(sheet, close) {
         let emoji = g.emoji || "🎯";
+        const readSv = sv.bindGoalSheet(sheet, g);
         sheet.addEventListener("click", (ev) => {
           const b = ev.target.closest("[data-emo]");
           if (!b) return;
@@ -733,8 +712,10 @@ export function mount(el, ctx) {
           if (!name) { ui.toast("Wie heißt dein Ziel?"); return; }
           if (!(target > 0)) { ui.toast("Bitte einen Zielbetrag eingeben."); return; }
           if (!(saved >= 0)) { ui.toast("„Schon gespart“ ist ungültig."); return; }
+          const extra = readSv();
+          if (extra.error) { ui.toast(extra.error); return; }
           close();
-          await safeWrite(col.goals.put({ ...(goal || {}), name, target, saved, date: M.isKey(date) ? date : "", emoji }), "Gespeichert ✓");
+          await safeWrite(col.goals.put({ ...(goal || {}), name, target, saved, date: M.isKey(date) ? date : "", emoji, ...extra }), "Gespeichert ✓");
         });
         const del = sheet.querySelector("[data-del]");
         if (del) ui.confirmButton(del, "Wirklich löschen?", async () => { close(); await safeWrite(col.goals.remove(goal.id), "Gelöscht"); });
@@ -743,6 +724,8 @@ export function mount(el, ctx) {
   }
 
   function openDeposit(goal, sign = 1) {
+    if (!goal) return;
+    if (sv.isLinked(goal)) { ui.toast("Echtes Konto: Geld überweisen kannst du in der BAWAG-App (z. B. Dauerauftrag aufs Sparkonto).", 4200); return; }
     ui.openSheet({
       title: sign > 0 ? `Einzahlen: ${goal.name}` : `Abheben: ${goal.name}`,
       bodyHTML: `<div class="fields">` +
@@ -916,6 +899,8 @@ export function mount(el, ctx) {
     if (g && el.contains(g) && gm.onClick(g)) return;
     const b = ev.target.closest("[data-bk]");
     if (b && el.contains(b) && bk.onClick(b)) return;
+    const svT = ev.target.closest("[data-sv]");
+    if (svT && el.contains(svT) && sv.onClick(svT)) return;
     const abT = ev.target.closest("[data-ab]");
     if (abT && el.contains(abT) && ab.onClick(abT)) return;
     const t = ev.target.closest("[data-tab], [data-mn]");
@@ -973,6 +958,8 @@ export function mount(el, ctx) {
   }
   el.addEventListener("click", onClick);
   el.addEventListener("input", onInput);
+  const onChange = (ev) => { if (ev.target && ev.target.dataset) sv.onChange(ev.target); }; // Update 9 – Sparziele (Aufrunden)
+  el.addEventListener("change", onChange);
   const onToggle = (ev) => { if (ev.target.classList && ev.target.classList.contains("gm-help")) gm.onToggleHelp(ev.target.open, ev.target); };
   el.addEventListener("toggle", onToggle, true);
 
@@ -988,6 +975,7 @@ export function mount(el, ctx) {
     offs.forEach((off) => off());
     el.removeEventListener("click", onClick);
     el.removeEventListener("input", onInput);
+    el.removeEventListener("change", onChange);
     el.removeEventListener("toggle", onToggle, true);
     document.removeEventListener("visibilitychange", onVis);
     el.innerHTML = "";

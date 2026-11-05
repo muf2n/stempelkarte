@@ -600,14 +600,36 @@ const TOOL_MATERIAL_STATUS = {
 
 /* ===================== Geld: Budget, Sparziel, Einzahlung, Teilen ===================== */
 
+/* Update 9 – Sparziele: Spar-Erinnerung setzen (goal.reminder {on, amount, mode, day}) */
+async function goalReminderWrite(d, args, m, goals, name) {
+  if (!m) throw new UserError(`Kein Sparziel passt zu „${name}“.${goals.length ? ` Vorhanden: ${goals.map((g) => g.name).join(", ")}.` : ""}`);
+  const g = m.item;
+  const old = MC.goalReminder(g);
+  if (args.aus === true) {
+    await d.commit([d.fs.patchWrite(d.p(`a_money_goals/${g.id}`), { reminder: { ...old, on: false }, updated: d.now }, { exists: true })]);
+    return `Spar-Erinnerung für „${g.name}“ ausgeschaltet.`;
+  }
+  const v = args.betrag != null ? parseAmount(args.betrag) : old.amount;
+  if (!(v > 0) || v > 100000) throw new UserError("Bitte einen betrag pro Monat angeben (z. B. 50).");
+  const mode = s(args.modus) === "tag" ? "day" : s(args.modus) === "zahltag" ? "payday" : old.mode;
+  const day = mode === "day" ? Math.min(31, Math.max(1, Math.round(Number(args.tag ?? old.day) || 1))) : null;
+  if (mode === "day" && args.tag == null && !(g.reminder && g.reminder.mode === "day")) throw new UserError("Für modus tag bitte den tag im Monat angeben (1–31).");
+  const reminder = { on: true, amount: round2(v), mode, day };
+  await d.commit([d.fs.patchWrite(d.p(`a_money_goals/${g.id}`), { reminder, updated: d.now }, { exists: true })]);
+  return `Spar-Erinnerung für „${g.name}“: ${eur(reminder.amount)} pro Monat, ${mode === "day" ? `am ${day}. um 09:00` : "am Zahltag (sobald Lohn/Lehrlingsentschädigung eingeht)"} – per Push und als Hinweis in Geld › Übersicht.${MC.goalLinked(g) ? " Das Ziel ist ein echtes Konto: überweisen in der BAWAG-App." : ""}`;
+}
+
 const TOOL_GELD_W = {
   name: "geld_eintragen",
   title: "Budget/Sparziel/Teilen",
-  description: "Schreibt im Geld-Bereich – aktion: budget (Monatsbudget gesamt oder für eine kategorie, betrag 0 = kein Limit), sparziel (anlegen/ändern: name, ziel_betrag, bis, emoji), einzahlung (in ein Sparziel einzahlen; negativer betrag = entnehmen) oder teilen (Ausgabe in einer Teilen-Gruppe: gruppe, beschreibung, betrag, bezahlt_von, fuer; neue Gruppe mit personen). Buchungen selbst: ausgabe_eintragen. Kein Geld wird wirklich überwiesen.",
+  description: "Schreibt im Geld-Bereich – aktion: budget (Monatsbudget gesamt oder für eine kategorie, betrag 0 = kein Limit), sparziel (anlegen/ändern: name, ziel_betrag, bis, emoji), einzahlung (in ein Sparziel einzahlen; negativer betrag = entnehmen; nicht bei Zielen mit echtem Bankkonto), erinnerung (Spar-Erinnerung eines Sparziels: name, betrag pro Monat, modus zahltag = sobald Lohn/Lehrlingsentschädigung eingeht oder tag = fixer Tag im Monat um 09:00; aus: true schaltet ab) oder teilen (Ausgabe in einer Teilen-Gruppe: gruppe, beschreibung, betrag, bezahlt_von, fuer; neue Gruppe mit personen). Buchungen selbst: ausgabe_eintragen. Kein Geld wird wirklich überwiesen.",
   inputSchema: {
     type: "object",
     properties: {
-      aktion: { type: "string", enum: ["budget", "sparziel", "einzahlung", "teilen"] },
+      aktion: { type: "string", enum: ["budget", "sparziel", "einzahlung", "erinnerung", "teilen"] },
+      modus: { type: "string", enum: ["zahltag", "tag"], description: "Erinnerung: zahltag (Standard) oder tag" },
+      tag: { type: "integer", minimum: 1, maximum: 31, description: "Erinnerung mit modus tag: Tag im Monat" },
+      aus: { type: "boolean", description: "Erinnerung: true = ausschalten" },
       kategorie: { type: "string", description: "Budget: Kategorie oder \"gesamt\" (Standard)" },
       betrag: { type: ["number", "string"], description: "Euro" },
       name: { type: "string", description: "Sparziel-Name" },
@@ -642,16 +664,18 @@ const TOOL_GELD_W = {
       await d.commit([d.fs.setWrite(d.p(`a_money_budget/${id}`), { ...(cur || { created: d.now }), id, amount: v, updated: d.now })]);
       return v > 0 ? `Budget ${label}: ${cur && Number(cur.amount) > 0 ? `${eur(cur.amount)} → ` : ""}${eur(v)} pro Monat.` : `Budget ${label} entfernt (kein Limit mehr).`;
     }
-    if (a === "sparziel" || a === "einzahlung") {
+    if (a === "sparziel" || a === "einzahlung" || a === "erinnerung") {
       const goals = await d.alltag("money_goals");
       const name = need(args.name, "Bitte den Namen des Sparziels angeben.");
       const m = goals.length ? best(name, goals, (g) => g.name, 70) : null;
+      if (a === "erinnerung") return goalReminderWrite(d, args, m, goals, name); // Update 9 – Sparziele
       if (a === "einzahlung") {
         if (!m) throw new UserError(`Kein Sparziel passt zu „${name}“.${goals.length ? ` Vorhanden: ${goals.map((g) => g.name).join(", ")}.` : ""}`);
         const v = parseAmount(String(args.betrag ?? "").replace(/^-/, ""));
         if (!(v > 0)) throw new UserError("Bitte einen betrag angeben (negativ = entnehmen).");
         const sign = /^\s*-/.test(String(args.betrag)) || Number(args.betrag) < 0 ? -1 : 1;
         const g = m.item;
+        if (MC.goalLinked(g)) throw new UserError(`„${g.name}“ ist mit einem echten Bankkonto verbunden – der Stand kommt von der Bank. Geld überweisen geht in der BAWAG-App (z. B. Dauerauftrag aufs Sparkonto).`);
         const saved = round2(Math.max(0, (Number(g.saved) || 0) + sign * v));
         await d.commit([d.fs.patchWrite(d.p(`a_money_goals/${g.id}`), { saved, updated: d.now }, { exists: true })]);
         const tg = Number(g.target) || 0;

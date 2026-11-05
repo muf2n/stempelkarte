@@ -375,3 +375,213 @@ export function shareText(group) {
   }
   return lines.join("\n");
 }
+
+/* ---------- Update 9 – Sparziele: echtes Konto, Lohn-Erinnerung, Aufrunden ---------- */
+// Eigener Abschnitt (reine Funktionen) – benutzt von money-savings.js (App), tools/reminders/decide.mjs (Push)
+// und dem MCP-Server (geld_lesen). bank = Form von /bank/status bzw. users/{uid}/meta/bank:
+//   {accounts:[{uid, iban_last4, name, hash, product}], balances:{uid:{amount, currency, date, at}},
+//    balanceHistory:{uid:[{d, a}]}, lastSync}
+// goal.bank = {uid, hash, last4, name, mode:"all"|"fixed", offset?, alloc?}
+// goal.reminder = {on, amount, mode:"payday"|"day", day?}; goal.remindAck = "YYYY-MM" (erledigt/ausgeblendet)
+
+/** Konto eines Sparziels in der Bank-Liste finden (uid → identification_hash → IBAN-Ende). */
+export function goalAccount(goal, bank) {
+  const l = goal && goal.bank;
+  const accs = (bank && Array.isArray(bank.accounts)) ? bank.accounts : [];
+  if (!l || !accs.length) return null;
+  return accs.find((a) => a.uid && a.uid === l.uid) ||
+    (l.hash ? accs.find((a) => a.hash && a.hash === l.hash) : null) ||
+    (l.last4 ? accs.find((a) => a.iban_last4 === l.last4) : null) || null;
+}
+
+/** Saldo eines Kontos {amount, at, date} oder null. */
+export function accountBalance(acc, bank) {
+  if (!acc) return null;
+  const b = (bank && bank.balances && bank.balances[acc.uid]) || acc.balance || null;
+  if (!b || !Number.isFinite(Number(b.amount))) return null;
+  return { amount: round2(b.amount), at: Number(b.at) || null, date: b.date || null };
+}
+
+const isLinked = (g) => !!(g && g.bank && (g.bank.uid || g.bank.hash || g.bank.last4));
+export const goalLinked = isLinked;
+
+/**
+ * Aktueller Stand eines Sparziels.
+ * Nicht verbunden: saved. Verbunden: „all“ = Kontostand − Startbetrag − feste Anteile anderer Ziele am selben Konto,
+ * „fixed“ = fester Anteil (höchstens, was nach früher angelegten festen Anteilen noch auf dem Konto liegt).
+ * → {amount, linked, account, balance, missing, unknown}
+ */
+export function goalCurrent(goal, goals = [], bank = null) {
+  if (!isLinked(goal)) return { amount: round2(Number(goal && goal.saved) || 0), linked: false };
+  const acc = goalAccount(goal, bank);
+  const bal = accountBalance(acc, bank);
+  if (!acc) return { amount: 0, linked: true, missing: true, account: null, balance: null };
+  if (!bal) return { amount: 0, linked: true, unknown: true, account: acc, balance: null };
+  const same = (goals || []).filter((g) => g && g.id !== goal.id && isLinked(g) && goalAccount(g, bank) === acc);
+  const fixedOf = (g) => Math.max(0, Number(g.bank.alloc) || 0);
+  const order = (g) => [Number(g.created) || 0, String(g.id || "")];
+  const before = (a, b) => { const x = order(a), y = order(b); return x[0] - y[0] || (x[1] < y[1] ? -1 : x[1] > y[1] ? 1 : 0); };
+  if (goal.bank.mode === "fixed") {
+    const earlier = same.filter((g) => g.bank.mode === "fixed" && before(g, goal) < 0).reduce((s, g) => s + fixedOf(g), 0);
+    const amount = Math.max(0, Math.min(fixedOf(goal), bal.amount - earlier));
+    return { amount: round2(amount), linked: true, account: acc, balance: bal };
+  }
+  const fixed = same.filter((g) => g.bank.mode === "fixed").reduce((s, g) => s + fixedOf(g), 0);
+  const amount = Math.max(0, bal.amount - (Number(goal.bank.offset) || 0) - fixed);
+  return { amount: round2(amount), linked: true, account: acc, balance: bal };
+}
+
+/** Nicht zugeteilter Rest eines Kontos (nur wenn kein „ganzer Kontostand“-Ziel darauf zeigt), sonst null. */
+export function accountFree(acc, goals = [], bank = null) {
+  const bal = accountBalance(acc, bank);
+  if (!bal) return null;
+  const on = (goals || []).filter((g) => isLinked(g) && goalAccount(g, bank) === acc);
+  if (!on.length || on.some((g) => g.bank.mode !== "fixed")) return null;
+  return round2(bal.amount - on.reduce((s, g) => s + Math.max(0, Number(g.bank.alloc) || 0), 0));
+}
+
+/**
+ * Durchschnittlicher monatlicher Zuwachs aus dem Tagesverlauf [{d, a}] der letzten `days` Tage (Standard 3 Monate).
+ * → {perMonth, days, from, to} oder null (weniger als 14 Tage Verlauf).
+ */
+export function monthlyInflow(history, today = todayKey(), days = 92) {
+  const start = addDays(today, -days);
+  const pts = (Array.isArray(history) ? history : []).filter((p) => p && isKey(p.d) && p.d <= today && p.d >= start && Number.isFinite(Number(p.a)))
+    .sort((a, b) => (a.d < b.d ? -1 : 1));
+  if (pts.length < 2) return null;
+  const first = pts[0], last = pts[pts.length - 1];
+  const span = daysBetween(first.d, last.d);
+  if (span < 14) return null;
+  return { perMonth: round2(((Number(last.a) - Number(first.a)) / span) * 30.44), days: span, from: first.d, to: last.d };
+}
+
+/** Monate bis zum Ziel bei gleichbleibendem Zuwachs (null, wenn kein Zuwachs). */
+export function monthsToGoal(rest, perMonth) {
+  if (!(rest > 0)) return 0;
+  if (!(Number(perMonth) > 0.5)) return null;
+  return Math.ceil(rest / Number(perMonth));
+}
+
+/* Lohn / Lehrlingsentschädigung erkennen */
+export const SALARY_RE = /(lehrlings\s*-?\s*entsch(ä|ae)digung|lehrlingsgeld|lohn|gehalt|bez(ü|ue)ge|entgelt|salary|payroll)/i;
+const txText = (t) => `${t.note || ""} ${t.counterparty || ""} ${t.bankText || ""}`;
+const SAL_EXCLUDE = /(r(ü|ue)ck(zahlung|erstattung|buchung)|steuer|finanzamt|arbeitnehmerveranlagung|familienbeihilfe)/i;
+
+/** Ist die Buchung eine Lohn-/Gehaltszahlung? (Eingang, Stichwort oder Kategorie „Einkommen“, ≥ 50 €) */
+export function isSalaryTx(t) {
+  if (!t || t.type !== "in" || !(Number(t.amount) >= 50) || !isKey(t.date)) return false;
+  const text = txText(t);
+  if (SAL_EXCLUDE.test(text)) return false;
+  return SALARY_RE.test(text) || t.category === "einkommen";
+}
+
+/**
+ * Zahltag im Monat von `today` (nur bis heute): größte Lohn-Buchung; ohne Treffer der größte Eingang,
+ * der in mindestens einem der zwei Vormonate in ähnlicher Höhe (±25 %) schon kam („regelmäßig“).
+ * → {date, amount, id, source:"lohn"|"regel"} oder null
+ */
+export function detectPayday(txs, today = todayKey()) {
+  const mk = monthOf(today);
+  const ins = (txs || []).filter((t) => t && t.type === "in" && isKey(t.date) && t.date <= today && Number(t.amount) > 0);
+  const cur = ins.filter((t) => monthOf(t.date) === mk);
+  if (!cur.length) return null;
+  const pick = (list, source) => {
+    const t = [...list].sort((a, b) => (Number(b.amount) - Number(a.amount)) || (a.date < b.date ? -1 : 1))[0];
+    return t ? { date: t.date, amount: round2(t.amount), id: t.id || null, source } : null;
+  };
+  const sal = cur.filter(isSalaryTx);
+  if (sal.length) return pick(sal, "lohn");
+  const prev = [shiftMonth(mk, -1), shiftMonth(mk, -2)];
+  const regular = cur.filter((t) => Number(t.amount) >= 100 && prev.some((pm) =>
+    ins.some((x) => monthOf(x.date) === pm && Math.abs(Number(x.amount) - Number(t.amount)) <= Number(t.amount) * 0.25)));
+  return regular.length ? pick(regular, "regel") : null;
+}
+
+/** Erinnerung eines Ziels normalisieren. */
+export function goalReminder(goal) {
+  const r = goal && goal.reminder && typeof goal.reminder === "object" ? goal.reminder : {};
+  const day = Math.min(31, Math.max(1, Math.round(Number(r.day) || 1)));
+  return { on: r.on === true, amount: round2(Math.max(0, Number(r.amount) || 0)), mode: r.mode === "day" ? "day" : "payday", day };
+}
+
+/** Tag des Monats (1–31) auf den Monat begrenzen → "YYYY-MM-DD". */
+export function dayInMonth(mk, day) {
+  const [y, m] = mk.split("-").map(Number);
+  const last = new Date(y, m, 0).getDate();
+  return `${mk}-${pad(Math.min(day, last))}`;
+}
+
+/**
+ * Ist die Spar-Erinnerung dieses Ziels in diesem Monat fällig (und noch nicht erledigt/ausgeblendet)?
+ * ctx: {txs, goals, bank} → {mk, date, kind, amount, rest, payday?} oder null
+ */
+export function reminderDue(goal, today = todayKey(), ctx = {}) {
+  const r = goalReminder(goal);
+  if (!r.on || !(r.amount > 0) || !goal || goal.archived) return null;
+  const mk = monthOf(today);
+  if (goal.remindAck === mk) return null;
+  const cur = goalCurrent(goal, ctx.goals || [], ctx.bank || null);
+  const rest = round2(Math.max(0, (Number(goal.target) || 0) - cur.amount));
+  if (!(rest > 0)) return null;
+  let date, payday = null;
+  if (r.mode === "day") {
+    date = dayInMonth(mk, r.day);
+    if (date > today) return null;
+  } else {
+    payday = detectPayday(ctx.txs || [], today);
+    if (!payday) return null;
+    date = payday.date;
+  }
+  return { mk, date, kind: r.mode, amount: round2(Math.min(r.amount, rest)), rest, payday, linked: cur.linked };
+}
+
+/** Text für Banner und Push. */
+export function reminderMessage(goal, due) {
+  const what = `${goal.emoji ? goal.emoji + " " : ""}${goal.name || "dein Sparziel"}`;
+  const title = due.kind === "payday" ? "💰 Lohn ist da!" : "💰 Zeit zum Sparen";
+  const body = `Leg diesen Monat ${eur(due.amount)} für ${what} zur Seite (noch ${eur(due.rest)} bis zum Ziel)`;
+  return { title, body, text: `${title} ${body}` };
+}
+
+/* Aufrunden */
+
+/** Aufrundungsbetrag auf den nächsten vollen Euro (step 1) bzw. 5 € (step 5); glatte Beträge → 0. */
+export function roundUpOf(amount, step = 1) {
+  const c = Math.round((Number(amount) || 0) * 100);
+  const s = (Number(step) === 5 ? 5 : 1) * 100;
+  if (!(c > 0)) return 0;
+  return ((s - (c % s)) % s) / 100;
+}
+
+/** Montag der Woche von key. */
+export function weekStart(key = todayKey()) {
+  const d = dateOf(key);
+  const wd = (d.getDay() + 6) % 7; // Mo = 0
+  return addDays(key, -wd);
+}
+
+const RU_SKIP = new Set(["sparen"]);
+/**
+ * Aufrunden für alle Ausgaben der Woche (Montag bis `today`). Sparen/Sparziel-Buchungen zählen nicht.
+ * → {from, to, total, count}
+ */
+export function roundUpWeek(txs, today = todayKey(), step = 1) {
+  const from = weekStart(today);
+  let cents = 0, count = 0;
+  for (const t of txs || []) {
+    if (!t || t.type === "in" || !isKey(t.date) || t.date < from || t.date > today) continue;
+    if (RU_SKIP.has(t.category) || t.goalId || t.roundup) continue;
+    const r = roundUpOf(t.amount, step);
+    if (r > 0) { cents += Math.round(r * 100); count++; }
+  }
+  return { from, to: today, total: cents / 100, count };
+}
+
+/** settings.money.roundup normalisieren. booked = {Wochenbeginn: schon gebuchter Betrag}. */
+export function roundupSettings(settings) {
+  const m = settings && settings.money && typeof settings.money === "object" ? settings.money : {};
+  const r = m.roundup && typeof m.roundup === "object" ? m.roundup : {};
+  const booked = {};
+  for (const [k, v] of Object.entries(r.booked && typeof r.booked === "object" ? r.booked : {})) if (isKey(k) && Number(v) > 0) booked[k] = round2(v);
+  return { on: r.on === true, step: Number(r.step) === 5 ? 5 : 1, push: r.push === true, goalId: r.goalId ? String(r.goalId) : "", booked };
+}
