@@ -114,8 +114,9 @@ async function registerBio() {
   let counter = 0;
   try { if (typeof r.getAuthenticatorData === "function") counter = L.parseAuthData(r.getAuthenticatorData()).counter; } catch { /* 0 */ }
   const cred = { id: L.b64url(pk.rawId), publicKey: L.b64(spki), alg, counter, label: deviceLabel(), created: Date.now() };
-  await S.saveCfg({ creds: [...cfg.creds.filter((c) => c.id !== cred.id), cred] });
-  lsSet(devKey(), cred.id);
+  lsSet(devKey(), cred.id); // vor saveCfg: das löst das Neuzeichnen aus
+  try { await S.saveCfg({ creds: [...cfg.creds.filter((c) => c.id !== cred.id), cred] }); }
+  catch (err) { lsSet(devKey(), null); throw err; }
   return cred;
 }
 

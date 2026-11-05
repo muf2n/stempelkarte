@@ -113,7 +113,7 @@ function check() {
 function bump() {
   if (!st.cfg.enabled || !st.sess || document.visibilityState === "hidden") return;
   const now = Date.now();
-  if (now - st.lastTouch < 1000) return;
+  if (now - st.lastTouch < 1000 && Number(st.sess.until) <= now + autoMs()) return; // kürzere Sperrzeit gilt sofort
   st.lastTouch = now;
   const n = L.touch(st.sess, st.ident, autoMs(), now);
   if (n) writeSess(n); else check();

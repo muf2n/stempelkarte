@@ -225,7 +225,7 @@ const PIN = "2580", PIN2 = "135790";
   await page.evaluate(() => { window.__moneyLockTest.reauth = async () => false; });
   await page.click('.ml-tools [data-ml-t="lock"]');
   await page.waitForSelector(".ml-lock");
-  await typePin(PIN);
+  await typePin((PIN + "000000").slice(0, 6)); // alte PIN, auf 6 Stellen aufgefüllt (neue PIN ist 6-stellig)
   await page.waitForSelector('.ml-lock .ml-err:text("Falsche PIN")');
   ok(true, "alte PIN gilt nicht mehr");
   await typePin(PIN2);
