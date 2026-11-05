@@ -142,10 +142,18 @@ export function systemPrompt(now, { mode = "text", short = true, name = "" } = {
     "Antworte kurz, freundlich und auf Deutsch (österreichisch, Du-Form). Zeiten im 24-h-Format, Datum TT.MM.JJJJ, Beträge wie 1.234,56 €.",
     "Für alle Daten benutzt du die Werkzeuge – erfinde nie Zahlen, Zeiten oder Einträge.",
     "Bei Änderungen (einstempeln, ausstempeln, nachtragen, anlegen, abhaken …) führe das Werkzeug aus, wenn die Absicht klar ist, und bestätige danach knapp, was gespeichert wurde. Ist etwas unklar (z. B. welcher Tag, welche Uhrzeit), frag kurz nach statt zu raten.",
-    "Löschen kannst du nichts – dafür auf die App verweisen. Keine Rechts- oder Steuerberatung; bei Taggeld/Kollektivvertrag auf den Lohnzettel bzw. Betrieb verweisen.",
+    "LÖSCHEN geht nur in zwei Schritten: 1) loeschen_vorschlagen aufrufen, 2) dem Nutzer IMMER die gefundene Liste (Datum, Art, Titel) zeigen und fragen „Soll ich diese X löschen?“ – dann aufhören und auf seine Antwort warten. " +
+      "Erst wenn er in seiner nächsten Nachricht ausdrücklich Ja sagt, loeschen_bestaetigen mit dem Code aufrufen. Nie beide im selben Zug. Bei Serienterminen vorher fragen: ganze Serie oder nur am Datum X. " +
+      "Datumsangaben wie „im Dezember“, „am 24.12.“, „nächste Woche“ kannst du direkt bei von/bis übergeben, alles andere selbst in TT.MM.JJJJ umrechnen. " +
+      "Nach dem Löschen erwähnen, dass es 30 Tage im Papierkorb liegt (rueckgaengig). Passwort-Tresor, Fotos und Einstellungen löschst du nie; die laufende Schicht auch nicht (zuerst ausstempeln).",
+    "Keine Rechts- oder Steuerberatung; bei Taggeld/Kollektivvertrag auf den Lohnzettel bzw. Betrieb verweisen.",
     ...extra,
   ].join("\n");
 }
+
+const PROPOSE = "loeschen_vorschlagen";
+const CONFIRM = "loeschen_bestaetigen";
+export const SAME_TURN_MSG = "Abgelehnt: Du hast das Löschen gerade erst vorgeschlagen. Zeig dem Nutzer zuerst die Liste, frag „Soll ich diese löschen?“ und warte auf seine Antwort. loeschen_bestaetigen erst in der nächsten Runde nach seinem ausdrücklichen Ja aufrufen. Es wurde nichts gelöscht.";
 
 class HttpError extends Error {
   constructor(status, msg) { super(msg); this.status = status; }
@@ -214,6 +222,7 @@ export async function runChat({ env, fetchImpl, now, data, messages, mode = "tex
   const system = systemPrompt(now, { mode, short, name });
   const conv = messages.map((m) => ({ ...m }));
   const actions = [];
+  let proposed = false;
   let inTok = 0, outTok = 0;
   let reply = "";
   try {
@@ -227,10 +236,13 @@ export async function runChat({ env, fetchImpl, now, data, messages, mode = "tex
       if (res.stop_reason !== "tool_use" || !uses.length) { reply = text; break; }
       conv.push({ role: "assistant", content });
       const results = [];
+      // Löschen nie im selben Zug bestätigen, in dem es vorgeschlagen wurde – erst muss der Nutzer antworten.
+      if (uses.some((u) => u.name === PROPOSE)) proposed = true;
       for (const u of uses) {
         const t = findTool(u.name);
         let out, isError = false;
         if (!t) { out = `Unbekanntes Werkzeug: ${u.name}`; isError = true; }
+        else if (u.name === CONFIRM && proposed) { out = SAME_TURN_MSG; isError = true; }
         else {
           const args = u.input && typeof u.input === "object" ? u.input : {};
           const bad = checkArgs(t.inputSchema, args);
@@ -238,7 +250,8 @@ export async function runChat({ env, fetchImpl, now, data, messages, mode = "tex
           else {
             try {
               out = String(await t.run(args, data));
-              if (!t.annotations.readOnlyHint && !actions.includes(t.name)) actions.push(t.name);
+              const act = t.action || t.name;
+              if (!t.annotations.readOnlyHint && !actions.includes(act)) actions.push(act);
             } catch (e) {
               isError = true;
               out = e instanceof UserError || (e && e.expose) ? e.message : "Interner Fehler beim Zugriff auf die Daten.";

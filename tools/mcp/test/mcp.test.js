@@ -64,12 +64,13 @@ test("tools/list: alle Werkzeuge mit deutschen Beschreibungen und Schemas", asyn
     "einsatz_anlegen", "einstempeln", "geld_lesen", "hausaufgabe_anlegen", "material_anlegen", "material_lesen", "orte_lesen", "pause",
     "planer_lesen", "pruefung_anlegen", "schule_lesen", "status_heute", "termin_anlegen", "todo_anlegen",
     "todo_erledigt", "todos_lesen", "wochen_zusammenfassung",
+    "loeschen_vorschlagen", "loeschen_bestaetigen", "rueckgaengig",
   ].sort());
   for (const x of result.tools) {
     assert.equal(x.inputSchema.type, "object");
     assert.ok(x.description.length > 40);
     assert.match(x.description, /[äöüß]|die|der|und/);
-    assert.equal(x.annotations.destructiveHint, false);
+    assert.equal(x.annotations.destructiveHint, x.name === "loeschen_bestaetigen");
   }
 });
 

@@ -165,6 +165,11 @@ export class Firestore {
     return w;
   }
 
+  /** Dokument löschen (wie deleteDoc). */
+  deleteWrite(path) {
+    return { delete: this.name(path) };
+  }
+
   /** Nur bestimmte Felder ändern (wie setDoc mit merge bzw. updateDoc). */
   patchWrite(path, partial, precondition = null) {
     const w = {

@@ -1,0 +1,37 @@
+/* Papierkorb (Claude-Löschungen). Wird von js/alltag/trash.js nachgeladen. Präfix .pk- */
+.pk { --pk-c: #b45309; --pk-soft: color-mix(in srgb, var(--pk-c) 10%, var(--card)); }
+@media (prefers-color-scheme: dark) { .pk { --pk-c: #fbbf24; --pk-soft: color-mix(in srgb, var(--pk-c) 13%, var(--card)); } }
+.pk-intro { margin: 0 0 12px; }
+.pk-list { list-style: none; margin: 0; padding: 0; display: grid; gap: 12px; }
+.pk-batch {
+  border: 1px solid var(--line); border-radius: 16px; background: var(--card);
+  padding: 12px 14px; display: grid; gap: 10px; min-width: 0;
+}
+.pk-head { display: flex; align-items: center; gap: 10px; min-width: 0; }
+.pk-ic {
+  flex: none; width: 34px; height: 34px; border-radius: 10px; display: grid; place-items: center;
+  background: var(--pk-soft); color: var(--pk-c);
+}
+.pk-ht { display: grid; min-width: 0; flex: 1; }
+.pk-ht b { font-size: .98rem; }
+.pk-ht small { color: var(--muted); font-size: .8rem; }
+.pk-left {
+  flex: none; font-size: .74rem; font-weight: 600; color: var(--pk-c); background: var(--pk-soft);
+  padding: 3px 8px; border-radius: 999px; white-space: nowrap;
+}
+.pk-items, .pk-more ul { margin: 0; padding: 0 0 0 2px; list-style: none; display: grid; gap: 4px; }
+.pk-items li, .pk-more li {
+  font-size: .86rem; line-height: 1.35; padding-left: 14px; position: relative; overflow-wrap: anywhere;
+}
+.pk-items li::before, .pk-more li::before {
+  content: ""; position: absolute; left: 2px; top: .55em; width: 5px; height: 5px; border-radius: 50%; background: var(--muted); opacity: .6;
+}
+.pk-more summary { cursor: pointer; font-size: .84rem; color: var(--accent); margin-bottom: 4px; }
+.pk-acts { display: flex; flex-wrap: wrap; gap: 8px; }
+.pk-acts .btn { flex: 1 1 auto; white-space: nowrap; padding-inline: 12px; }
+.pk-del { color: var(--danger) !important; }
+.pk-del[data-armed] { background: color-mix(in srgb, var(--danger) 12%, var(--card)) !important; border-color: var(--danger) !important; }
+.pk-empty { display: grid; justify-items: center; gap: 4px; text-align: center; padding: 28px 12px; color: var(--muted); }
+.pk-empty span { color: var(--pk-c); opacity: .8; }
+.pk-empty b { color: var(--ink, inherit); }
+.pk-empty small { font-size: .84rem; }

@@ -134,6 +134,7 @@ export function mount(el, c) {
           <div id="watch-panel"></div>
           <div id="comfort-panel"></div>
           <button type="button" class="btn ghost sm" id="ov-plans-link">Geplante Schichten (Auto-Stempeln) öffnen</button>
+          <button type="button" class="btn ghost sm" id="ov-trash">${icon("trash", 18)}<span>Papierkorb (von Claude gelöscht)</span></button>
           <div class="lbl">Konto</div>
           <div id="ov-account"></div>
         </div>
@@ -195,6 +196,10 @@ export function mount(el, c) {
     import(mod).then((m) => { extraPanels.push(m); m.mount($(sel), ctx); if (lastSnapForExtras) m.update(lastSnapForExtras); })
       .catch((err) => console.error(err));
   }
+  $("#ov-trash").addEventListener("click", () => {
+    import("../alltag/trash.js").then((m) => m.openTrash())
+      .catch((err) => { console.error(err); ctx.ui.toast("Papierkorb konnte nicht geladen werden."); });
+  });
   const pl = $("#ov-plans-link");
   if (pl) pl.addEventListener("click", () => {
     ctx.go("orte");

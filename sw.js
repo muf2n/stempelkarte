@@ -3,7 +3,7 @@
 // Icons und Schriftdateien (fonts.gstatic.com): cache-first.
 // Alle anderen fremden Domains (Firebase, Google APIs, Nominatim, OSM, unpkg) werden nicht angefasst.
 
-const VERSION = "20261105-1225"; // wird beim Veröffentlichen automatisch ersetzt
+const VERSION = "20261105-1300"; // wird beim Veröffentlichen automatisch ersetzt
 const CACHE = "stempelkarte-" + VERSION;
 const FONT_CACHE = "stempelkarte-fonts"; // versionsunabhängig, bleibt erhalten
 const NET_TIMEOUT_MS = 4000; // bei schlechtem Netz nach dieser Zeit auf den Cache ausweichen
@@ -92,6 +92,9 @@ const SHELL = [
   "js/alltag/money-core.js",
   "js/alltag/money.js",
   "js/alltag/assistant.js",
+  "js/alltag/trash.js", // Papierkorb (Claude-Löschungen)
+  "js/alltag/trash-core.js",
+  "css/alltag-trash.css",
   // Update 9 – Claude-Sprachmodus
   "js/alltag/voice.js",
   "js/alltag/voice-core.js",

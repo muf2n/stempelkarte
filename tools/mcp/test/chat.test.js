@@ -96,7 +96,7 @@ test("Werkzeug-Schleife: einstempeln über den Chat, Antwort + actions + Verbrau
   assert.equal(c.headers["anthropic-version"], "2023-06-01");
   assert.equal(c.body.model, "claude-haiku-4-5");
   assert.equal(c.body.max_tokens, 1024);
-  assert.equal(c.body.tools.length, 22);
+  assert.equal(c.body.tools.length, 25);
   assert.ok(c.body.tools.every((x) => x.name && x.description && x.input_schema.type === "object"));
   assert.match(c.body.system, /Elektriker-Lehrling/);
   assert.match(c.body.system, /Mi, 04\.11\.2026, 10:00 Uhr/);
@@ -285,4 +285,60 @@ test("assistantName: Persona-Zeile im Systemprompt, bereinigt", async () => {
   assert.equal(sanitizeName("Anna-Lena  Maier"), "Anna-Lena Maier");
   assert.equal(sanitizeName("Jürgen"), "Jürgen");
   assert.match(systemPrompt(NOW, { mode: "voice", name: "Jarvis" }), /Du heißt Jarvis[\s\S]*SPRACHMODUS/);
+});
+
+test("Löschen: Bestätigung im selben Zug wie der Vorschlag wird abgelehnt; nächste Runde klappt, actions enthält „loeschen“", async () => {
+  let code = null;
+  const both = (body) => {
+    const r = body.messages[body.messages.length - 1].content;
+    return r;
+  };
+  const t = await setupChat({
+    script: [
+      // Runde 1: Vorschlag und Bestätigung im selben Inhalt
+      { id: "m", type: "message", role: "assistant", stop_reason: "tool_use", usage: { input_tokens: 10, output_tokens: 10 },
+        content: [{ type: "tool_use", id: "v1", name: "loeschen_vorschlagen", input: { was: "termin", suche: "Zahnarzt" } },
+          { type: "tool_use", id: "c1", name: "loeschen_bestaetigen", input: { bestaetigungs_code: "AAAAAA" } }] },
+      (body) => {
+        const [v, c] = both(body);
+        assert.equal(v.is_error, undefined);
+        code = /bestaetigungs_code: ([A-Z0-9]{6})/.exec(v.content)[1];
+        assert.equal(c.is_error, true);
+        assert.match(c.content, /Abgelehnt: Du hast das Löschen gerade erst vorgeschlagen/);
+        // nächster Versuch in derselben Runde – mit dem richtigen Code – ebenfalls abgelehnt
+        return use("loeschen_bestaetigen", { bestaetigungs_code: code }, "c2");
+      },
+      (body) => {
+        const [c] = both(body);
+        assert.equal(c.is_error, true);
+        assert.match(c.content, /zuerst die Liste/);
+        return end("Ich hab 1 Termin gefunden: Do, 03.12.2026 Zahnarzt. Soll ich diesen 1 löschen?");
+      },
+      // Runde 2 (Nutzer sagt Ja)
+      () => use("loeschen_bestaetigen", { bestaetigungs_code: code }, "c3"),
+      (body) => {
+        const [c] = both(body);
+        assert.equal(c.is_error, undefined, c.content);
+        assert.match(c.content, /Gelöscht: 1 Element/);
+        return end("Erledigt, gelöscht. Liegt 30 Tage im Papierkorb.");
+      },
+    ],
+  });
+  t.g.set(`${t.base}/todos/t2`, { kind: "termin", title: "Zahnarzt", date: "2026-12-03", time: "08:00", done: false, createdAt: 2 });
+  let res = await t.post(msg("Lösch den Zahnarzttermin"));
+  let out = await res.json();
+  assert.equal(res.status, 200);
+  assert.deepEqual(out.actions, [], "Vorschlag ist keine Änderung");
+  assert.ok(t.g.get(`${t.base}/todos/t2`), "nichts gelöscht in Runde 1");
+  assert.match(t.calls[0].body.system, /Soll ich diese X löschen\?/);
+  assert.match(t.calls[0].body.system, /Nie beide im selben Zug/);
+  res = await t.post({ messages: [
+    { role: "user", content: "Lösch den Zahnarzttermin" },
+    { role: "assistant", content: out.reply },
+    { role: "user", content: "Ja, bitte löschen" },
+  ] });
+  out = await res.json();
+  assert.deepEqual(out.actions, ["loeschen"]);
+  assert.equal(t.g.get(`${t.base}/todos/t2`), null);
+  assert.equal(t.g.list(`${t.base}/a_trash`).length, 1);
 });
