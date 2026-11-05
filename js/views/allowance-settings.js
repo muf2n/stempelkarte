@@ -2,6 +2,7 @@
 // Wird im Einstellungs-Panel (#allowance-panel) eingehängt.
 import { icon } from "../icons.js";
 import { readAllowance, parseNum } from "../travel.js";
+import { readTripSettings, readVehicles, defaultVehicle, vehicleLabel } from "../trip-core.js"; // Update 9 – Fahrtenbuch
 
 let ctx = null;
 let root = null;
@@ -74,10 +75,29 @@ export function mount(el, c) {
       <label class="switch"><input type="checkbox" id="al-car"><span>Eigenes Auto (Kilometergeld)</span></label>
       <label class="rm-inline" id="al-kmrate-row"><span>Kilometergeld</span><input type="text" inputmode="decimal" id="al-kmrate"><span>€ pro km</span></label>
       <p class="note">Nur bei Fahrten mit deinem eigenen Auto. Mit dem Firmenauto gibt es kein Kilometergeld.</p>
+    </div>
+    <div class="rm-opt al-fb">
+      <div class="lbl">Fahrtenbuch</div>
+      <label class="switch"><input type="checkbox" id="al-road"><span>Straßen-km berechnen</span></label>
+      <p class="note">Datenschutz: Für die Straßen-km werden Start- und Zielkoordinaten deiner Fahrten an den öffentlichen Routing-Dienst OSRM (router.project-osrm.org) geschickt – einmal pro Fahrt, das Ergebnis wird gespeichert. Ausgeschaltet gilt die Schätzung (Luftlinie × Umwegfaktor).</p>
+      <div class="al-veh"><span id="al-veh-txt"></span><button type="button" class="btn ghost sm" id="al-veh">Fahrzeuge verwalten</button></div>
     </div>`;
 
   $("#al-on").addEventListener("change", (ev) => save({ enabled: ev.target.checked }, ev.target.checked ? "Taggeld wird berechnet" : "Taggeld ausgeschaltet"));
   $("#al-car").addEventListener("change", (ev) => save({ ownCar: ev.target.checked }));
+  // Update 9 – Fahrtenbuch: Straßen-km (OSRM) an/aus, Fahrzeuge
+  $("#al-road").addEventListener("change", async (ev) => {
+    const on = ev.target.checked;
+    try {
+      await ctx.store.saveSettings({ trips: { ...readTripSettings(snap && snap.settings), roadKm: on } });
+      if (!on) import("../road-km.js").then((m) => m.clear()).catch(() => {});
+      ctx.ui.toast(on ? "Straßen-km werden berechnet" : "Straßen-km aus – es gilt die Schätzung");
+    } catch { /* Store zeigt Toast */ }
+  });
+  $("#al-veh").addEventListener("click", () => {
+    import("./triplog.js").then((m) => m.openVehicles(ctx, { month: new Date() }))
+      .catch((err) => { console.error(err); ctx.ui.toast("Fahrzeuge konnten nicht geladen werden."); });
+  });
 
   for (const [id, key, min, max, allowEmpty] of NUM_FIELDS) {
     const inp = $(id);
@@ -122,6 +142,10 @@ export function update(s) {
   $("#al-opts").classList.toggle("off", !a.enabled);
   $("#al-car").checked = a.ownCar;
   $("#al-kmrate-row").hidden = !a.ownCar;
+  $("#al-road").checked = readTripSettings(snap.settings).roadKm;
+  const vs = readVehicles(snap.settings);
+  const dv = defaultVehicle(snap.settings);
+  $("#al-veh-txt").textContent = vs.length ? `${vs.length} ${vs.length === 1 ? "Fahrzeug" : "Fahrzeuge"}${dv ? ` · Standard: ${vehicleLabel(dv)}` : ""}` : "Noch keine Fahrzeuge";
   for (const [id, key] of NUM_FIELDS) {
     const inp = $(id);
     if (document.activeElement !== inp) inp.value = show(key, a[key]);

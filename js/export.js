@@ -116,6 +116,13 @@ export function entriesCSV(entries, { from, to, settings = null, days = null, pl
   return "﻿" + rows.map(r => r.map(cell).join(";")).join("\r\n") + "\r\n";
 }
 
+// Update 9 – Fahrtenbuch (klassisches österreichisches Format): Kopf + Zeilen aus trip-core.logRows,
+// danach Summenzeilen. Gleiche Konventionen wie oben (Semikolon, BOM, CRLF).
+export function fahrtenbuchCSV(head, rows, sums = []) {
+  const all = [head, ...rows, ...(sums.length ? [[], ...sums] : [])];
+  return "\uFEFF" + all.map(r => r.map(cell).join(";")).join("\r\n") + "\r\n";
+}
+
 export function download(filename, text, mime = "text/csv;charset=utf-8") {
   const blob = new Blob([text], { type: mime });
   const standalone = (typeof navigator !== "undefined" && navigator.standalone === true) ||
