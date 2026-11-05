@@ -375,3 +375,240 @@ export function shareText(group) {
   }
   return lines.join("\n");
 }
+
+/* ---------- Update 9 – Budget-Warnungen & „Kann ich mir das leisten?“ ---------- */
+// Reine Logik, gemeinsam genutzt von der App (money.js), den Push-Erinnerungen (tools/reminders/decide.mjs)
+// und dem Claude-Werkzeug „leisten_pruefen“ (tools/mcp). Keine Uhr: „heute“ wird immer übergeben.
+
+/** Kategorien, die nicht ins Gesamt-Budget zählen (Geld bleibt ja da: Sparen, Umbuchungen aufs eigene Konto). */
+export const BUDGET_EXCLUDE = new Set(["sparen", "umbuchung", "transfer", "uebertrag"]);
+const excludedTx = (t) => BUDGET_EXCLUDE.has(t.category) || t.transfer === true || !!t.goalId;
+
+/** Ganze Euro ohne Cent, sonst mit: 162 € / 12,50 € */
+export function eurS(v) {
+  const r = round2(Math.abs(Number(v) || 0));
+  return eur(r, { cents: Math.round(r * 100) % 100 !== 0 });
+}
+
+export function daysInMonthOf(key) {
+  const [y, m] = String(key).split("-").map(Number);
+  return new Date(y, m, 0).getDate();
+}
+/** Verbleibende Tage im Monat inkl. heute (am Monatsletzten: 1). */
+export function daysLeftInMonth(key) {
+  return daysInMonthOf(key) - Number(String(key).slice(8, 10)) + 1;
+}
+export const monthEndKey = (key) => `${String(key).slice(0, 7)}-${String(daysInMonthOf(key)).padStart(2, "0")}`;
+
+/** Ausgaben des Monats fürs Budget: {total, byCat: Map, lastId: Map cat→neueste Buchungs-ID} */
+export function budgetSpend(txs, mk) {
+  const byCat = new Map(), last = new Map();
+  let total = 0;
+  const list = (txs || []).filter((t) => t && t.type !== "in" && monthOf(t.date) === mk)
+    .sort((a, b) => (a.date < b.date ? -1 : a.date > b.date ? 1 : (Number(a.created) || 0) - (Number(b.created) || 0)));
+  for (const t of list) {
+    const a = Number(t.amount) || 0;
+    const c = t.category || "sonstiges";
+    byCat.set(c, (byCat.get(c) || 0) + a);
+    last.set(c, t.id);
+    if (!excludedTx(t)) { total += a; last.set("total", t.id); }
+  }
+  for (const [k, v] of byCat) byCat.set(k, round2(v));
+  return { total: round2(total), byCat, lastId: last };
+}
+
+/**
+ * Budget-Stand aller Kategorien mit Limit (money_budget: {id: Kategorie|"total", amount}).
+ * → [{id, name, emoji, limit, spent, left, ratio, level, lastId}] (Gesamt zuerst)
+ */
+export function budgetStatus(txs, budgets, mk, cats = DEFAULT_CATS) {
+  const sp = budgetSpend(txs, mk);
+  const cmap = new Map((cats || []).map((c) => [c.id, c]));
+  const rows = [];
+  const lim = new Map((budgets || []).filter((b) => b && b.id && Number(b.amount) > 0).map((b) => [b.id, round2(b.amount)]));
+  const push = (id, name, emoji, limit, spent) => rows.push({ id, name, emoji, limit, spent, left: round2(limit - spent), ...budgetLevel(spent, limit), lastId: sp.lastId.get(id) || null });
+  if (lim.has("total")) push("total", "Gesamt", "💶", lim.get("total"), sp.total);
+  for (const [id, l] of lim) {
+    if (id === "total") continue;
+    const c = cmap.get(id) || DEFAULT_CATS.find((x) => x.id === id);
+    if (c && c.type === "in") continue;
+    push(id, c ? c.name : id, c ? c.emoji || "" : "", l, sp.byCat.get(id) || 0);
+  }
+  return rows;
+}
+
+/** Tempo-Prognose: an welchem Tag wäre das Budget bei gleichem Tempo weg? null = reicht. */
+export function paceOverDay(spent, limit, today) {
+  const day = Number(String(today).slice(8, 10));
+  const dim = daysInMonthOf(today);
+  if (!(limit > 0) || !(spent > 0) || !(day >= 1)) return null;
+  if (spent >= limit) return day;
+  const perDay = spent / day;
+  const at = Math.ceil(limit / perDay);
+  return at <= dim ? at : null;
+}
+
+/** Budget-Satz für eine Zeile (App-Banner und Push teilen den Text). */
+export function budgetAlertText(row, kind, today) {
+  const nm = row.id === "total" ? "Gesamtbudget" : `Budget ${row.name}`;
+  const dl = daysLeftInMonth(today);
+  if (kind === "80") return `⚠️ ${nm} fast aufgebraucht: ${eurS(row.spent)} von ${eurS(row.limit)} – noch ${eurS(row.left)} bis Monatsende (${dl} ${dl === 1 ? "Tag" : "Tage"})`;
+  if (kind === "100") return `🛑 ${nm} erreicht – STOPP, nichts mehr für ${row.id === "total" ? "Extras" : row.name} ausgeben diesen Monat`;
+  if (kind === "over") return `🛑 ${nm} überschritten um ${eurS(-row.left)}`;
+  if (kind === "pace") {
+    const d = paceOverDay(row.spent, row.limit, today);
+    return `🐢 ${nm}: Bei diesem Tempo bist du am ${d}. über dem Budget – lieber etwas langsamer.`;
+  }
+  return "";
+}
+
+/** Stufe einer Zeile als Zahl: 0 ok, 1 ≥ 80 %, 2 = erreicht/überschritten. */
+export const levelRank = (r) => (r.ratio >= 1 ? 2 : r.ratio >= 0.8 ? 1 : 0);
+
+/** Einstellungen settings.money.alerts mit Standardwerten. */
+export function normAlerts(a) {
+  const x = a && typeof a === "object" ? a : {};
+  return { on: x.on !== false, at80: x.at80 !== false, at100: x.at100 !== false, over: x.over !== false, pace: x.pace !== false };
+}
+
+/**
+ * Welche Budget-Warnungen sind neu? (für Push und App-Banner gleich)
+ * state = {month, sent:{cat:{80, 100, pace, limit, spent, lastTxId}}}; liefert [{cat, kind, text, row, mark}] –
+ * höchstens eine Meldung pro Kategorie (die stärkste); mark = was danach in state.sent[cat] gemerkt wird.
+ */
+export function budgetAlerts(rows, state, today, alerts = {}) {
+  const al = normAlerts(alerts);
+  const out = [];
+  if (!al.on) return out;
+  const mk = monthOf(today);
+  const sent = state && state.month === mk && state.sent && typeof state.sent === "object" ? state.sent : {};
+  const day = Number(today.slice(8, 10));
+  for (const r of rows || []) {
+    let s = sent[r.id] && typeof sent[r.id] === "object" ? sent[r.id] : {};
+    if (s.limit != null && Number(s.limit) !== r.limit) s = {}; // Budget geändert → neu anfangen
+    const base = { limit: r.limit, spent: r.spent, lastTxId: r.lastId || null };
+    let kind = null;
+    const flags = {};
+    if (r.ratio > 1 && al.over && (s["100"] || s.over) && r.spent > (Number(s.spent) || 0) + 0.004) { kind = "over"; flags.over = true; }
+    else if (r.ratio >= 1 && !s["100"] && (al.at100 || al.over)) { kind = r.ratio > 1 && !al.at100 ? "over" : r.ratio > 1 ? "over100" : "100"; flags["100"] = true; flags["80"] = true; }
+    else if (r.ratio >= 0.8 && r.ratio < 1 && !s["80"] && al.at80) { kind = "80"; flags["80"] = true; }
+    else if (r.ratio < 0.8 && al.pace && !s.pace && day >= 3 && day <= 15 && paceOverDay(r.spent, r.limit, today)) { kind = "pace"; flags.pace = true; }
+    if (!kind) continue;
+    let text;
+    if (kind === "over100") { text = `${budgetAlertText(r, "over", today)} – STOPP, nichts mehr für ${r.id === "total" ? "Extras" : r.name} ausgeben diesen Monat`; kind = "100"; }
+    else text = budgetAlertText(r, kind, today);
+    out.push({ cat: r.id, kind, text, row: r, mark: { ...s, ...flags, ...base } });
+  }
+  return out;
+}
+
+/** Neue Warnungen in den Zustand übernehmen (nur die erfolgreich gemeldeten übergeben). */
+export function applyAlerts(state, today, alerts) {
+  const mk = monthOf(today);
+  const sent = state && state.month === mk && state.sent && typeof state.sent === "object" ? { ...state.sent } : {};
+  for (const a of alerts || []) sent[a.cat] = a.mark;
+  return { month: mk, sent };
+}
+
+/** „Pizza 12 €“ / „Handy um 300,50“ → {amount: 12, note: "Pizza"}; ohne Betrag amount NaN. */
+export function splitNoteAmount(text) {
+  const s = String(text || "");
+  const m = /(?:^|\s)(?:um\s+|für\s+|€\s*)?(\d{1,3}(?:\.\d{3})+(?:,\d{1,2})?|\d+(?:[.,]\d{1,2})?)\s*(?:€|eur(?:o)?)?(?=\s|$|[!?.])/i.exec(s);
+  if (!m) return { amount: NaN, note: s.trim() };
+  const amount = parseAmount(m[1]);
+  const note = (s.slice(0, m.index) + " " + s.slice(m.index + m[0].length)).replace(/\s+(um|für)\s*$/i, "").replace(/\s+/g, " ").trim();
+  return { amount, note };
+}
+
+/**
+ * „Kann ich mir das leisten?“
+ * input: {amount, cat?, note?, today, txs, budgets, cats?, rules?, subs?, goals?, bank? (meta/bank)}
+ * → {verdict: "ja"|"knapp"|"nein", headline, reasons:[…], cat, catName, after (Rest im Kategorie-Budget | null),
+ *    afterTotal, afterBank, daysLeft}
+ */
+export function affordCheck(input) {
+  const { today } = input;
+  const amount = round2(input.amount);
+  const cats = input.cats && input.cats.length ? input.cats : DEFAULT_CATS;
+  const outIds = new Set(cats.filter((c) => c.type !== "in").map((c) => c.id));
+  let cat = input.cat && outIds.has(input.cat) ? input.cat : null;
+  let catSource = cat ? "given" : "";
+  if (!cat) {
+    const sg = suggestCategory(input.note || "", input.rules || [], outIds);
+    if (sg) { cat = sg.cat; catSource = "note"; }
+  }
+  if (!cat) { cat = "sonstiges"; catSource = "default"; }
+  const c = cats.find((x) => x.id === cat) || DEFAULT_CATS.find((x) => x.id === cat) || { id: cat, name: "Sonstiges", emoji: "📦" };
+  const mk = monthOf(today);
+  const daysLeft = daysLeftInMonth(today);
+  const dl = `noch ${daysLeft} ${daysLeft === 1 ? "Tag" : "Tage"} im Monat`;
+  const rows = budgetStatus(input.txs, input.budgets, mk, cats);
+  const rowCat = rows.find((r) => r.id === cat) || null;
+  const rowTot = BUDGET_EXCLUDE.has(cat) ? null : rows.find((r) => r.id === "total") || null;
+
+  // Abos bis Monatsende (noch nicht gebucht → next ≥ heute)
+  const end = monthEndKey(today);
+  const ups = upcoming(input.subs || [], today, daysBetween(today, end)).filter((u) => u.date <= end);
+  const subsAll = round2(ups.reduce((s, u) => s + (Number(u.sub.amount) || 0), 0));
+  const subsCat = round2(ups.filter((u) => (u.sub.category || "abos") === cat).reduce((s, u) => s + (Number(u.sub.amount) || 0), 0));
+  const subsTot = round2(ups.filter((u) => !BUDGET_EXCLUDE.has(u.sub.category || "abos")).reduce((s, u) => s + (Number(u.sub.amount) || 0), 0));
+
+  const reasons = [];
+  let level = 0; // 0 ja, 1 knapp, 2 nein
+  let headline = "";
+  const tight = (limit) => Math.max(5, limit * 0.1);
+  const after = rowCat ? round2(rowCat.left - subsCat - amount) : null;
+  const afterTotal = rowTot ? round2(rowTot.left - subsTot - amount) : null;
+  const nm = `Budget ${c.name}`;
+
+  if (rowCat) {
+    reasons.push(`${nm}: ${eurS(rowCat.spent)} von ${eurS(rowCat.limit)} ausgegeben${subsCat > 0 ? `, ${eurS(subsCat)} Abos kommen noch` : ""}`);
+    if (after < 0) { level = 2; headline = `🛑 Nein – damit wärst du ${eurS(-after)} über dem ${nm} (${dl})`; }
+    else if (after < tight(rowCat.limit)) { level = 1; headline = `⚠️ Knapp – danach nur noch ${eurS(after)} im ${nm} (${dl})`; }
+    else headline = `✅ Ja – danach noch ${eurS(after)} im ${nm}`;
+  }
+  if (rowTot) {
+    reasons.push(`Gesamtbudget: ${eurS(rowTot.spent)} von ${eurS(rowTot.limit)} ausgegeben${subsTot > 0 ? `, ${eurS(subsTot)} Abos bis Monatsende` : ""} → danach ${afterTotal < 0 ? `${eurS(-afterTotal)} drüber` : `noch ${eurS(afterTotal)}`}`);
+    if (afterTotal < 0 && level < 2) { level = 2; headline = `🛑 Nein – damit wärst du ${eurS(-afterTotal)} über deinem Gesamtbudget (${dl})`; }
+    else if (afterTotal >= 0 && afterTotal < tight(rowTot.limit) && level < 1) { level = 1; headline = `⚠️ Knapp – danach nur noch ${eurS(afterTotal)} im Gesamtbudget`; }
+    else if (!headline) headline = `✅ Ja – danach noch ${eurS(afterTotal)} im Gesamtbudget`;
+  }
+
+  // Kontostand (Bank)
+  const bal = input.bank && input.bank.linked !== false && input.bank.balance && Number.isFinite(Number(input.bank.balance.amount)) ? round2(input.bank.balance.amount) : null;
+  const afterBank = bal != null ? round2(bal - subsAll - amount) : null;
+  if (bal != null) {
+    reasons.push(`Konto: ${eur(bal)}${subsAll > 0 ? ` − ${eurS(subsAll)} Abos bis Monatsende` : ""} → danach ${eur(afterBank)}`);
+    if (afterBank < 0) { if (level < 2 || !rowCat) headline = `🛑 Nein – dein Konto wäre danach mit ${eurS(-afterBank)} im Minus`; level = 2; }
+    else if (afterBank < 20 && level < 1) { level = 1; headline = `⚠️ Knapp – am Konto blieben danach nur ${eurS(afterBank)}`; }
+  } else if (subsAll > 0) reasons.push(`Bis Monatsende kommen noch ${eurS(subsAll)} Abo-Zahlungen (${ups.slice(0, 3).map((u) => u.sub.name).filter(Boolean).join(", ")}).`);
+
+  // Sparziele: was diesen Monat noch zurückgelegt werden sollte
+  const goals = (input.goals || []).filter((g) => g && !g.done && (Number(g.saved) || 0) < (Number(g.target) || 0));
+  if (goals.length) {
+    const monthTxs = monthTx(input.txs || [], mk);
+    const inc = monthTxs.filter((t) => t.type === "in").reduce((s, t) => s + (Number(t.amount) || 0), 0);
+    const outSum = monthTxs.filter((t) => t.type !== "in").reduce((s, t) => s + (Number(t.amount) || 0), 0);
+    const free = afterBank != null ? afterBank : inc > 0 ? round2(inc - outSum - subsAll - amount) : null;
+    const need = goals.map((g) => ({ g, p: goalPerMonth(g, today) })).filter((x) => x.p.perMonth > 0);
+    const needSum = round2(need.reduce((s, x) => s + x.p.perMonth, 0));
+    if (free != null && need.length && free < needSum) {
+      const g = need[0].g;
+      reasons.push(`Dein Sparziel ${g.emoji ? g.emoji + " " : ""}${g.name || "Ziel"} bekäme diesen Monat dann weniger (geplant ${eurS(need[0].p.perMonth)}${need.length > 1 ? `, alle Ziele zusammen ${eurS(needSum)}` : ""}).`);
+      if (level < 1) { level = 1; if (!headline || headline.startsWith("✅")) headline = `⚠️ Knapp – dann bleibt weniger fürs Sparziel ${g.name || ""}`.trim(); }
+    }
+  }
+
+  if (!headline) {
+    headline = bal == null ? `✅ Ja – für ${c.name} ist kein Budget gesetzt` : `✅ Ja – am Konto bleiben danach ${eur(afterBank)}`;
+    if (!rowCat && !rowTot) reasons.push(`Für ${c.name} ist kein Monatsbudget festgelegt (Geld › Budget).`);
+  }
+  const verdict = level === 2 ? "nein" : level === 1 ? "knapp" : "ja";
+  if (level === 2) reasons.push("Die App kann Kartenzahlungen nicht sperren – eine echte Sperre geht nur in der BAWAG-App (Karten → Limits).");
+  return { verdict, headline, reasons, cat, catName: c.name, catEmoji: c.emoji || "", catSource, amount, after, afterTotal, afterBank, daysLeft, subsTotal: subsAll };
+}
+
+/** Kurzer deutscher Text (für Claude/Jarvis und zum Teilen). */
+export function affordText(r) {
+  return [`${r.headline}`, `Betrag: ${eurS(r.amount)} · Kategorie: ${r.catEmoji ? r.catEmoji + " " : ""}${r.catName}${r.catSource === "note" ? " (aus der Notiz erkannt)" : ""}`, ...r.reasons.map((x) => "- " + x)].join("\n");
+}

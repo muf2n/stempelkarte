@@ -1,6 +1,6 @@
 // Verschickt fällige Erinnerungen per Firebase Cloud Messaging (läuft alle 15 min in GitHub Actions).
 // Benötigt das Secret FIREBASE_SERVICE_ACCOUNT (JSON des Dienstkonto-Schlüssels).
-import { decide, dayKeyVienna, TZ } from "./decide.mjs";
+import { decide, decideBudget, applyBudgetAlerts, dayKeyVienna, TZ } from "./decide.mjs";
 
 const raw = (process.env.FIREBASE_SERVICE_ACCOUNT || "").trim();
 if (!raw) {
@@ -125,6 +125,30 @@ async function pruneLog(ref, log, todayKey) {
   if (args.length) await ref.update(...args).catch(() => {});
 }
 
+/** Update 9 – Budget: Budgets, Kategorien, Buchungen des laufenden Monats und Warn-Zustand (null ohne Budget). */
+async function loadBudget(userRef, meta, uid) {
+  try {
+    const bSnap = await userRef.collection("a_money_budget").get();
+    const budgets = bSnap.docs.map((d) => ({ ...d.data(), id: d.id })).filter((b) => Number(b.amount) > 0);
+    if (!budgets.length) return null;
+    const first = todayKey.slice(0, 7) + "-01";
+    const [txSnap, catSnap, stSnap] = await Promise.all([
+      userRef.collection("a_money_tx").where("date", ">=", first).get(),
+      userRef.collection("a_money_cats").get().catch(() => ({ docs: [] })),
+      meta.doc("budget_alerts").get(),
+    ]);
+    return {
+      budgets,
+      txs: txSnap.docs.map((d) => ({ ...d.data(), id: d.id })),
+      cats: catSnap.docs.map((d) => ({ ...d.data(), id: d.id })),
+      state: stSnap.exists ? stSnap.data() : null,
+    };
+  } catch (e) {
+    console.warn(`[${uid}] Budget nicht lesbar:`, e && e.message ? e.message : e);
+    return null;
+  }
+}
+
 const now = Date.now();
 const todayKey = dayKeyVienna(now);
 console.log(`Lauf um ${new Date(now).toISOString()} (${TZ}: ${todayKey})`);
@@ -162,6 +186,10 @@ for (const userRef of refs) {
 
     const due = decide(now, settings, running, todayEntries, pushlog, todos);
     if (logSnap.exists) await pruneLog(meta.doc("pushlog"), pushlog, todayKey);
+    // Update 9 – Budget-Warnungen: nur lesen, wenn es überhaupt ein Budget gibt
+    const budget = await loadBudget(userRef, meta, uid);
+    if (budget) due.push(...decideBudget(now, settings, budget.txs, budget.budgets, budget.cats, budget.state));
+    const budgetSent = [];
     let live = tokens;
     for (const n of due) {
       if (!live.length) break;
@@ -200,11 +228,18 @@ for (const userRef of refs) {
         live = live.filter((t) => !bad.includes(t));
         console.log(`[${uid}] ${bad.length} ungültige(s) Token entfernt`);
       }
-      if (res.successCount > 0) {
+      if (res.successCount > 0 && n.alerts) {
+        budgetSent.push(...n.alerts);
+        sent++;
+        console.log(`[${uid}] gesendet: ${n.type} (${n.alerts.map((a) => a.kind).join(", ")})`);
+      } else if (res.successCount > 0) {
         await writeLog(meta.doc("pushlog"), [...n.log, [["updatedAt"], now]]);
         sent++;
         console.log(`[${uid}] gesendet: ${n.type}`);
       }
+    }
+    if (budgetSent.length) {
+      await meta.doc("budget_alerts").set({ ...applyBudgetAlerts(budget.state, todayKey, budgetSent), updatedAt: now });
     }
   } catch (e) {
     console.error(`[${uid}] Fehler:`, e && e.message ? e.message : e);

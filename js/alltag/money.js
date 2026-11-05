@@ -9,6 +9,7 @@ import * as ui from "../ui.js";
 import { createGmail } from "./money-gmail.js";
 import { createBank, bankMark } from "./money-bank.js";
 import { createSubs } from "./money-subs.js"; // Update 9 – Abos: Kündigen, Fristen, Katalog
+import { createBudgetGuard } from "./money-budget.js"; // Update 9 – Budget-Warnungen, „Kann ich mir das leisten?“
 
 const TABS = [
   ["uebersicht", "Übersicht", "pie"],
@@ -25,6 +26,8 @@ const GOAL_EMOJIS = ["🎯", "🚗", "📱", "🏍️", "✈️", "🎮", "💻"
 const lsGet = (k) => { try { return localStorage.getItem(k); } catch { return null; } };
 const lsSet = (k, v) => { try { localStorage.setItem(k, v); } catch { /* egal */ } };
 const amt = (v, o) => esc(M.eur(v, o));
+// #alltag/geld?tab=budget (z. B. aus einer Budget-Push-Nachricht)
+const hashTab = () => { try { const m = /[?&]tab=([a-z]+)/.exec(location.hash || ""); return m && TABS.some((t) => t[0] === m[1]) ? m[1] : null; } catch { return null; } };
 const ruleId = (kw) => "r_" + String(kw).toLowerCase().replace(/[^a-z0-9]/g, (c) => "_" + c.charCodeAt(0).toString(36));
 
 export function mount(el, ctx) {
@@ -39,7 +42,7 @@ export function mount(el, ctx) {
     gmail: collection("money_gmail"), // nur {connected, lastScan, handled} – keine Mails
   };
   const S = {
-    tab: TABS.some((t) => t[0] === lsGet(TAB_KEY)) ? lsGet(TAB_KEY) : "uebersicht",
+    tab: hashTab() || (TABS.some((t) => t[0] === lsGet(TAB_KEY)) ? lsGet(TAB_KEY) : "uebersicht"),
     mk: M.monthOf(M.todayKey()),
     q: "",
     catFilter: "",
@@ -55,6 +58,7 @@ export function mount(el, ctx) {
       `<div class="mn-tabs" role="tablist" aria-label="Geld-Bereiche">` +
         TABS.map(([id, label, ic]) => `<button type="button" role="tab" class="mn-tab" data-tab="${id}" aria-selected="${id === S.tab}">${icon(ic, 18)}<span>${label}</span></button>`).join("") +
       `</div>` +
+      `<div class="mn-alert-host"></div>` +
       `<div class="mn-page"></div>` +
       `<button type="button" class="mn-fab" data-mn="fab" aria-label="Hinzufügen">${icon("plus", 26)}</button>` +
     `</div>`;
@@ -68,6 +72,10 @@ export function mount(el, ctx) {
     goSubs: () => { S.tab = "abos"; lsSet(TAB_KEY, S.tab); render(); window.scrollTo({ top: 0 }); },
   });
   const bk = createBank({ ui, render: () => queue() });
+  const bg = createBudgetGuard({
+    el, col, ui, cats: () => cats(), catOf: (id) => catOf(id), bankStatus: () => bk.status(), safeWrite: (p, m) => safeWrite(p, m),
+    goBudget: () => { S.tab = "budget"; lsSet(TAB_KEY, S.tab); render(); window.scrollTo({ top: 0 }); },
+  });
   const ab = createSubs({ col, ui, render: () => queue(), catOf: (id) => catOf(id), cats: () => cats(), safeWrite: (p, m) => safeWrite(p, m), gmCardHTML: () => gm.cardHTML() });
 
   /* ---------- Daten-Hilfen ---------- */
@@ -141,6 +149,7 @@ export function mount(el, ctx) {
     const fab = el.querySelector(".mn-fab");
     fab.setAttribute("aria-label", FAB_LABEL[S.tab] || "Hinzufügen");
     fab.hidden = S.tab === "budget";
+    if (allLoaded()) bg.check(); // Update 9: neue Buchung über 80/100 % → Banner
   }
   const FAB_LABEL = { uebersicht: "Buchung hinzufügen", buchungen: "Buchung hinzufügen", ziele: "Sparziel hinzufügen", abos: "Abo hinzufügen", teilen: "Hinzufügen" };
 
@@ -258,7 +267,7 @@ export function mount(el, ctx) {
     `</section>` : "";
 
     const hasAny = txs().length > 0;
-    return monthNav() + gm.hintHTML() +
+    return monthNav() + gm.hintHTML() + `<div class="mn-afford-row">${bg.affordBtnHTML()}</div>` +
       (hasAny ? "" : `<div class="hint mn-welcome">👋 Trag deine erste Einnahme (z. B. Lehrlingsentschädigung) oder Ausgabe ein – die Kategorie wird aus der Notiz erkannt.</div>`) +
       `<div class="mn-ov">${hero}${bk.linked() ? bk.cardHTML() : ""}${donut}${bars}${warnBox}${upBox}${goalBox}${bk.linked() ? "" : bk.cardHTML()}</div>`;
   }
@@ -324,7 +333,7 @@ export function mount(el, ctx) {
     const by = new Map(M.byCategory(list, "out").map((x) => [x.cat, x.sum]));
     const rows = [];
     const totalLimit = b.get("total") || 0;
-    const tot = M.totals(list).out;
+    const tot = M.budgetSpend(list, S.mk).total; // Update 9: Sparen/Umbuchungen zählen nicht ins Gesamt-Budget
     if (totalLimit > 0) rows.push({ id: "total", name: "Gesamt", emoji: "", spent: tot, limit: totalLimit, color: "var(--accent)", ...M.budgetLevel(tot, totalLimit) });
     for (const c of [...map.values()].filter((c) => c.type !== "in")) {
       const lim = b.get(c.id) || 0;
@@ -352,17 +361,18 @@ export function mount(el, ctx) {
       return `<li class="mn-bud ${r.level}${r.id === "total" ? " total" : ""}" style="--c:${esc(r.color)}">` +
         `<div class="mn-bud-top"><span>${r.emoji ? esc(r.emoji) + " " : ""}<b>${esc(r.name)}</b></span><span class="mn-bud-v">${amt(r.spent)} <small>/ ${amt(r.limit)}</small></span></div>` +
         `<div class="mn-bud-bar"><div style="width:${Math.min(100, r.ratio * 100).toFixed(1)}%"></div>${cur ? `<i style="left:${(dayFrac * 100).toFixed(1)}%" title="Heute"></i>` : ""}</div>` +
-        `<small class="mn-bud-msg">${msg}</small>` +
+        `<small class="mn-bud-msg">${r.level === "over" ? `<em class="mn-stopp" title="Budget erreicht – nichts mehr ausgeben">STOPP</em> ` : ""}${msg}</small>` +
       `</li>`;
     };
 
     return monthNav() +
       `<div class="mn-budget-head"><p class="note">Monatliches Budget pro Kategorie. Ab 80 % gibt’s eine Warnung, ab 100 % wird’s rot.</p>` +
-      `<button type="button" class="btn primary sm" data-mn="editbudget">${icon("pencil", 16)} Budget festlegen</button></div>` +
+      `<div class="mn-budget-btns">${bg.affordBtnHTML()}<button type="button" class="btn primary sm" data-mn="editbudget">${icon("pencil", 16)} Budget festlegen</button></div></div>` +
       (rows.length
         ? `<ul class="mn-buds">${rows.map(rowHTML).join("")}</ul>`
         : emptyBox("Noch kein Budget", "Leg fest, wie viel du pro Monat z. B. für Essen gehen oder Freizeit ausgeben willst.", "editbudget", "+ Budget festlegen")) +
-      (without.length ? `<section class="card mn-card"><h3 class="mn-h">Ohne Budget</h3><ul class="mn-mini mn-mini-cat">${without.map((x) => { const c = catOf(x.cat, map); return `<li><span>${esc(c.emoji)}</span><b>${esc(c.name)}</b><em>${amt(x.sum)}</em></li>`; }).join("")}</ul></section>` : "");
+      (without.length ? `<section class="card mn-card"><h3 class="mn-h">Ohne Budget</h3><ul class="mn-mini mn-mini-cat">${without.map((x) => { const c = catOf(x.cat, map); return `<li><span>${esc(c.emoji)}</span><b>${esc(c.name)}</b><em>${amt(x.sum)}</em></li>`; }).join("")}</ul></section>` : "") +
+      bg.budgetExtrasHTML();
   }
 
   /* ---------- Sparziele ---------- */
@@ -916,6 +926,8 @@ export function mount(el, ctx) {
     if (g && el.contains(g) && gm.onClick(g)) return;
     const b = ev.target.closest("[data-bk]");
     if (b && el.contains(b) && bk.onClick(b)) return;
+    const bgT = ev.target.closest("[data-bg]");
+    if (bgT && el.contains(bgT) && bg.onClick(bgT)) return;
     const abT = ev.target.closest("[data-ab]");
     if (abT && el.contains(abT) && ab.onClick(abT)) return;
     const t = ev.target.closest("[data-tab], [data-mn]");
@@ -985,6 +997,7 @@ export function mount(el, ctx) {
 
   return () => {
     alive = false;
+    bg.destroy();
     offs.forEach((off) => off());
     el.removeEventListener("click", onClick);
     el.removeEventListener("input", onInput);

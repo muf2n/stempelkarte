@@ -278,7 +278,7 @@ export function createBank(opts) {
   }
   refresh(true);
 
-  return { cardHTML, onClick, refresh, linked: () => !!(R.status && R.status.linked) };
+  return { cardHTML, onClick, refresh, linked: () => !!(R.status && R.status.linked), status: () => R.status }; // status: Update 9 – „Kann ich mir das leisten?“
 }
 
 /** Markierung für Bank-Buchungen in Listen. */
