@@ -9,6 +9,9 @@
 
 import { keyOf, dateOf, isKey, addDays, nextDue, round2 } from "./money-core.js";
 
+/** Gmail-Suche nach Abo-Mails (Browser: gmail.js, Server: tools/mcp/src/gmail.js – dort mit after: statt newer_than:). */
+export const GMAIL_QUERY = 'newer_than:400d (subject:(abo OR abonnement OR subscription OR mitgliedschaft OR "your receipt" OR rechnung OR beleg OR bestellbestätigung OR "trial" OR testzeitraum OR gekündigt OR kündigung OR cancelled OR verlängert OR renewal) OR from:(googleplay-noreply@google.com OR no_reply@email.apple.com OR netflix OR spotify OR amazon OR disneyplus OR youtube OR paypal))';
+
 /* ---------- Bekannte Dienste ---------- */
 // re: Treffer in Absender + Betreff + Text (Kleinbuchstaben). from: nur im Absender. cat: Kategorie in money_cats.
 // via: Sammel-Absender (Google Play, Apple, PayPal) – dort wird zuerst nach einem konkreten Dienst im Text gesucht.

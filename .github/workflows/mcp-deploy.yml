@@ -7,6 +7,9 @@
 #   ANTHROPIC_API_KEY      – optional, nur für den In-App-Assistenten (/chat)
 #   ENABLEBANKING_APP_ID   – optional, Bankverbindung (Enable Banking Application-ID)
 #   ENABLEBANKING_KEY      – optional, Bankverbindung (Inhalt der .pem-Datei mit dem privaten Schlüssel)
+#   GOOGLE_OAUTH_CLIENT_ID     – optional, „Gmail dauerhaft verbinden“ (Web-OAuth-Client, Projekt stempelkarte-40682)
+#   GOOGLE_OAUTH_CLIENT_SECRET – optional, Clientschlüssel dazu
+#   GMAIL_ENC_KEY              – optional, Zufallstext (40+ Zeichen) zum Verschlüsseln des Gmail-Refresh-Tokens
 # Ohne CLOUDFLARE_API_TOKEN wird der Lauf übersprungen (Hinweis, kein Fehler).
 name: MCP-Connector veröffentlichen
 
@@ -21,6 +24,7 @@ on:
       - "js/privat-core.js"
       - "js/alltag/subs-core.js"
       - "js/alltag/subs-catalog.js"
+      - "js/alltag/subs-detect.js"
       - "js/alltag/money-core.js"
       - "js/travel.js"
       - "js/trip-core.js"
@@ -43,13 +47,15 @@ jobs:
     defaults:
       run:
         working-directory: tools/mcp
-    env:
-      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
-      CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+    # L9: Cloudflare-Token und Worker-Secrets NICHT auf Job-Ebene – nur die Schritte bekommen sie, die sie brauchen
+    # (nicht npm ci / npm test, wo Install-Skripte fremder Pakete laufen könnten).
     steps:
       - name: Einrichtung prüfen
         id: check
         working-directory: .
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
         run: |
           if [ -z "$CLOUDFLARE_API_TOKEN" ]; then
             echo "::notice title=MCP-Connector::CLOUDFLARE_API_TOKEN ist nicht gesetzt – Veröffentlichung übersprungen (siehe tools/mcp/README.md)."
@@ -68,7 +74,7 @@ jobs:
 
       - name: Abhängigkeiten installieren
         if: steps.check.outputs.skip != 'true'
-        run: npm ci --no-audit --no-fund
+        run: npm ci --no-audit --no-fund --ignore-scripts
 
       - name: Tests
         if: steps.check.outputs.skip != 'true'
@@ -76,27 +82,43 @@ jobs:
 
       - name: Worker veröffentlichen
         if: steps.check.outputs.skip != 'true'
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
         run: npx wrangler deploy
 
       - name: Worker-Secrets setzen
         if: steps.check.outputs.skip != 'true'
         env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
           FIREBASE_SERVICE_ACCOUNT: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
           STEMPEL_TOKEN: ${{ secrets.STEMPEL_TOKEN }}
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
           STEMPEL_UID: ${{ secrets.STEMPEL_UID }}
           ENABLEBANKING_APP_ID: ${{ secrets.ENABLEBANKING_APP_ID }}
           ENABLEBANKING_KEY: ${{ secrets.ENABLEBANKING_KEY }}
+          GOOGLE_OAUTH_CLIENT_ID: ${{ secrets.GOOGLE_OAUTH_CLIENT_ID }}
+          GOOGLE_OAUTH_CLIENT_SECRET: ${{ secrets.GOOGLE_OAUTH_CLIENT_SECRET }}
+          GMAIL_ENC_KEY: ${{ secrets.GMAIL_ENC_KEY }}
         run: |
           # Nur gesetzte Secrets übertragen (leere würden vorhandene überschreiben). Inhalte werden nie ausgegeben.
           node -e '
-            const names = ["FIREBASE_SERVICE_ACCOUNT", "STEMPEL_TOKEN", "ANTHROPIC_API_KEY", "STEMPEL_UID", "ENABLEBANKING_APP_ID", "ENABLEBANKING_KEY"];
+            const names = ["FIREBASE_SERVICE_ACCOUNT", "STEMPEL_TOKEN", "ANTHROPIC_API_KEY", "STEMPEL_UID", "ENABLEBANKING_APP_ID", "ENABLEBANKING_KEY", "GOOGLE_OAUTH_CLIENT_ID", "GOOGLE_OAUTH_CLIENT_SECRET", "GMAIL_ENC_KEY"];
             const out = {};
             for (const n of names) { const v = process.env[n]; if (v && v.trim()) out[n] = v; }
             require("fs").writeFileSync(process.env.RUNNER_TEMP + "/mcp-secrets.json", JSON.stringify(out), { mode: 0o600 });
             console.log("Secrets:", Object.keys(out).join(", ") || "keine");
             if (!out.STEMPEL_TOKEN) console.log("::warning title=MCP-Connector::STEMPEL_TOKEN fehlt – /mcp lehnt alle Anfragen ab.");
             if (!!out.ENABLEBANKING_APP_ID !== !!out.ENABLEBANKING_KEY) console.log("::warning title=Bankverbindung::Nur eines von ENABLEBANKING_APP_ID / ENABLEBANKING_KEY ist gesetzt – es braucht beide.");
+            const gm = ["GOOGLE_OAUTH_CLIENT_ID", "GOOGLE_OAUTH_CLIENT_SECRET"].filter((n) => out[n]);
+            if (gm.length === 1) console.log("::warning title=Gmail dauerhaft::Es braucht beide: GOOGLE_OAUTH_CLIENT_ID und GOOGLE_OAUTH_CLIENT_SECRET (GMAIL_ENC_KEY ist optional).");
+            if (out.GMAIL_ENC_KEY && out.GMAIL_ENC_KEY.trim().length < 32) console.log("::warning title=Gmail dauerhaft::GMAIL_ENC_KEY ist zu kurz (mindestens 32, besser 40+ Zeichen).");
           '
           if [ "$(cat "$RUNNER_TEMP/mcp-secrets.json")" != "{}" ]; then npx wrangler secret bulk "$RUNNER_TEMP/mcp-secrets.json"; fi
           rm -f "$RUNNER_TEMP/mcp-secrets.json"
+
+      - name: Secrets-Datei sicher entfernen
+        if: always()
+        working-directory: .
+        run: rm -f "$RUNNER_TEMP/mcp-secrets.json"

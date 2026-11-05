@@ -1,6 +1,6 @@
 // Verschickt fällige Erinnerungen per Firebase Cloud Messaging (läuft alle 15 min in GitHub Actions).
 // Benötigt das Secret FIREBASE_SERVICE_ACCOUNT (JSON des Dienstkonto-Schlüssels).
-import { decide, dayKeyVienna, TZ } from "./decide.mjs";
+import { decide, decideBudget, applyBudgetAlerts, dayKeyVienna, decideSavings, savingsWanted } from "./decide.mjs";
 
 const raw = (process.env.FIREBASE_SERVICE_ACCOUNT || "").trim();
 if (!raw) {
@@ -125,11 +125,43 @@ async function pruneLog(ref, log, todayKey) {
   if (args.length) await ref.update(...args).catch(() => {});
 }
 
+/** Update 9 – Budget: Budgets, Kategorien, Buchungen des laufenden Monats und Warn-Zustand (null ohne Budget). */
+async function loadBudget(userRef, meta, uid) {
+  try {
+    const bSnap = await userRef.collection("a_money_budget").get();
+    const budgets = bSnap.docs.map((d) => ({ ...d.data(), id: d.id })).filter((b) => Number(b.amount) > 0);
+    if (!budgets.length) return null;
+    const first = todayKey.slice(0, 7) + "-01";
+    const [txSnap, catSnap, stSnap] = await Promise.all([
+      userRef.collection("a_money_tx").where("date", ">=", first).get(),
+      userRef.collection("a_money_cats").get().catch(() => ({ docs: [] })),
+      meta.doc("budget_alerts").get(),
+    ]);
+    return {
+      budgets,
+      txs: txSnap.docs.map((d) => ({ ...d.data(), id: d.id })),
+      cats: catSnap.docs.map((d) => ({ ...d.data(), id: d.id })),
+      state: stSnap.exists ? stSnap.data() : null,
+    };
+  } catch (e) {
+    warn("Budget", e);
+    return null;
+  }
+}
+
 const now = Date.now();
 const todayKey = dayKeyVienna(now);
-console.log(`Lauf um ${new Date(now).toISOString()} (${TZ}: ${todayKey})`);
 
-let users = 0, sent = 0;
+// M8: Die Logs dieses Workflows sind öffentlich (öffentliches Repo). Deshalb nur Zählwerte ausgeben –
+// keine UID, keine Art der Erinnerung, keine Titel, Uhrzeiten, Budget- oder Geburtstagstexte, keine Fehlermeldungen
+// mit Inhalten (nur Fehler-Codes).
+let users = 0, sent = 0, failed = 0, removed = 0, warnings = 0, errors = 0;
+const errCodes = new Set();
+function codeOf(e) {
+  const c = e && (e.code ?? e.status);
+  return c != null && /^[A-Za-z0-9/_.-]{1,60}$/.test(String(c)) ? String(c) : "?";
+}
+function warn(_area, e) { warnings++; errCodes.add(codeOf(e)); }
 const refs = await db.collection("users").listDocuments();
 for (const userRef of refs) {
   const uid = userRef.id;
@@ -149,7 +181,7 @@ for (const userRef of refs) {
       meta.doc("pushlog").get(),
       userRef.collection("entries").where("start", ">=", now - 36 * 3600000).get(),
       userRef.collection("todos").where("remind", "==", true).get().catch((e) => {
-        console.warn(`[${uid}] Aufgaben nicht lesbar:`, e && e.message ? e.message : e);
+        warn("Aufgaben", e);
         return { docs: [] };
       }),
     ]);
@@ -161,7 +193,28 @@ for (const userRef of refs) {
     const todos = todoSnap.docs.map((d) => ({ ...d.data(), id: d.id })).filter((t) => !t.done);
 
     const due = decide(now, settings, running, todayEntries, pushlog, todos);
+    // Update 9 – Sparziele: Spar-Erinnerung (Zahltag/fixer Tag) und Aufrunden (Sonntag)
+    try {
+      const goalSnap = await userRef.collection("a_money_goals").get();
+      const goals = goalSnap.docs.map((d) => ({ ...d.data(), id: d.id }));
+      if (savingsWanted(settings, goals)) {
+        const since = dayKeyVienna(now - 100 * 86400000);
+        const [txSnap, bankSnap] = await Promise.all([
+          userRef.collection("a_money_tx").where("date", ">=", since).get(),
+          meta.doc("bank").get(),
+        ]);
+        const txs = txSnap.docs.map((d) => ({ ...d.data(), id: d.id }));
+        const bank = bankSnap.exists ? bankSnap.data() : null;
+        due.push(...decideSavings(now, settings, pushlog, { goals, txs, bank }));
+      }
+    } catch (e) {
+      warn("Sparziele", e);
+    }
     if (logSnap.exists) await pruneLog(meta.doc("pushlog"), pushlog, todayKey);
+    // Update 9 – Budget-Warnungen: nur lesen, wenn es überhaupt ein Budget gibt
+    const budget = await loadBudget(userRef, meta, uid);
+    if (budget) due.push(...decideBudget(now, settings, budget.txs, budget.budgets, budget.cats, budget.state));
+    const budgetSent = [];
     let live = tokens;
     for (const n of due) {
       if (!live.length) break;
@@ -190,7 +243,7 @@ for (const userRef of refs) {
         res.successCount += r0.successCount;
         r0.responses.forEach((r, i) => {
           if (!r.success && r.error && BAD_TOKEN.has(r.error.code)) bad.push(list[i]);
-          else if (!r.success) console.warn(`[${uid}] Senden fehlgeschlagen:`, r.error && r.error.code);
+          else if (!r.success) { failed++; errCodes.add(codeOf(r.error)); }
         });
       }
       if (bad.length) {
@@ -198,16 +251,28 @@ for (const userRef of refs) {
         for (const t of bad) args.push(new FieldPath("tokens", t), FieldValue.delete());
         await meta.doc("push").update(...args);
         live = live.filter((t) => !bad.includes(t));
-        console.log(`[${uid}] ${bad.length} ungültige(s) Token entfernt`);
+        removed += bad.length;
       }
-      if (res.successCount > 0) {
+      if (res.successCount > 0 && n.alerts) {
+        budgetSent.push(...n.alerts);
+        sent++;
+      } else if (res.successCount > 0) {
         await writeLog(meta.doc("pushlog"), [...n.log, [["updatedAt"], now]]);
         sent++;
-        console.log(`[${uid}] gesendet: ${n.type}`);
       }
     }
+    if (budgetSent.length) {
+      await meta.doc("budget_alerts").set({ ...applyBudgetAlerts(budget.state, todayKey, budgetSent), updatedAt: now });
+    }
   } catch (e) {
-    console.error(`[${uid}] Fehler:`, e && e.message ? e.message : e);
+    errors++;
+    errCodes.add(codeOf(e));
   }
 }
-console.log(`Fertig: ${users} Nutzer mit Push, ${sent} Erinnerung(en) gesendet.`);
+const extra = [
+  failed ? `${failed} nicht zugestellt` : "",
+  removed ? `${removed} ungültige(s) Token entfernt` : "",
+  warnings ? `${warnings} Warnung(en)` : "",
+  errors ? `${errors} Fehler` : "",
+].filter(Boolean);
+console.log(`${users} Nutzer, ${sent} Nachricht(en) gesendet${extra.length ? ` · ${extra.join(" · ")} (Codes: ${[...errCodes].join(", ")})` : ""}.`);

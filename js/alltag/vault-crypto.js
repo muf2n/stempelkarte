@@ -13,6 +13,12 @@
 // Eintrag (a_vault_items/{id}): { id, iv, ct } (+ updated/created von db.js)
 
 export const ITER = 600000;
+/** L12: Untergrenze für gespeicherte PBKDF2-Runden. Ein Meta-Dokument mit weniger Runden (z. B. von jemandem
+ *  mit Schreibzugriff ausgetauscht, um Passwort-Rateversuche zu erleichtern) wird beim Entsperren abgelehnt. */
+export const MIN_ITER = 100000;
+let minIter = MIN_ITER;
+/** Nur für Tests (Node-Unit-Tests bzw. localhost-Test-Haken in vault.js): schnellere Schlüsselableitung erlauben. */
+export function _setMinIterForTests(n) { minIter = Number.isInteger(n) && n >= 1 ? Math.min(n, MIN_ITER) : MIN_ITER; }
 export const VERSION = 1;
 export const KDF = "PBKDF2-SHA256";
 export const BACKUP_FORMAT = "stempelkarte-tresor";
@@ -93,12 +99,19 @@ async function open(key, ivB64, ctB64, aad) {
   return new Uint8Array(await subtle().decrypt({ name: "AES-GCM", iv, additionalData: te.encode(aad), tagLength: 128 }, key, ct));
 }
 
+const thousands = (n) => String(Math.trunc(Number(n) || 0)).replace(/\B(?=(\d{3})+(?!\d))/g, ".");
+function weakIter(iter) {
+  return new VaultError("weak-kdf", `Der Tresor verwendet zu wenige Schlüssel-Runden (${thousands(iter)} statt mindestens ${thousands(MIN_ITER)}). ` +
+    "Aus Sicherheitsgründen wird er so nicht entsperrt – die Tresor-Daten könnten manipuliert worden sein. Stell ihn aus einer Sicherung wieder her.");
+}
+
 export function checkMeta(meta) {
   const ok = meta && typeof meta === "object" && meta.v === VERSION && meta.kdf === KDF &&
     Number.isInteger(meta.iter) && meta.iter >= 1 && meta.iter <= 10000000 &&
     typeof meta.salt === "string" && typeof meta.wrappedKey === "string" && typeof meta.wrapIv === "string" &&
     meta.verifier && typeof meta.verifier.iv === "string" && typeof meta.verifier.ct === "string";
   if (!ok) throw new VaultError("format", "Tresor-Daten sind beschädigt oder haben ein unbekanntes Format.");
+  if (meta.iter < minIter) throw weakIter(meta.iter);
   return meta;
 }
 
@@ -130,6 +143,7 @@ async function wrapRaw(raw, password, iter) {
 /** Neuen Tresor anlegen → { meta, key } (key = nicht exportierbarer DEK). */
 export async function createVault(password, { iter = ITER } = {}) {
   if (!Number.isInteger(iter) || iter < 1) throw new VaultError("format", "Ungültige Rundenzahl.");
+  if (iter < minIter) throw weakIter(iter);
   const raw = randomBytes(32);
   try {
     const w = await wrapRaw(raw, password, iter);
@@ -157,6 +171,7 @@ export async function unlockVault(password, meta) {
 
 /** Master-Passwort ändern: DEK mit neuem Passwort/Salt neu einpacken → neues Meta. Einträge bleiben gleich. */
 export async function changePassword(meta, oldPassword, newPassword, { iter = meta && meta.iter || ITER } = {}) {
+  if (!Number.isInteger(iter) || iter < minIter) throw weakIter(iter);
   const raw = await unwrapRaw(meta, oldPassword);
   try {
     const w = await wrapRaw(raw, newPassword, iter);
@@ -182,6 +197,54 @@ export async function decryptItem(key, rec) {
   try { return JSON.parse(td.decode(bytes)); }
   catch { throw new VaultError("tampered", "Eintrag ist beschädigt."); }
 }
+
+/* ---------- Dateien (Dokumente): in Stücke geteilt, jedes Stück eigener IV ---------- */
+// Datei-ID zufällig (verrät nichts). Stück n von total: a_vault_files/{fileId}_{n} = { id, n, total, iv, ct }
+// AAD = Datei-ID + n + total → vertauschte, fehlende oder fremde Stücke fallen auf.
+// 512 KiB Klartext → 512 KiB + 16 Byte Tag → ≈ 683 kB base64 (< 700 kB, Firestore-Dokument max. 1 MiB).
+export const CHUNK_BYTES = 512 * 1024;
+const aadChunk = (fileId, n, total) => `tresor:file:v1:${fileId}:${n}:${total}`;
+
+/** Zufällige Datei-ID (32 Hex-Zeichen, als Firestore-Dokument-ID geeignet). */
+export function newFileId() {
+  return [...randomBytes(16)].map((b) => b.toString(16).padStart(2, "0")).join("");
+}
+
+/** Bytes verschlüsseln → [{ id, n, total, iv, ct }] (Reihenfolge n = 0 … total-1). */
+export async function encryptFile(key, fileId, bytes, { chunkBytes = CHUNK_BYTES } = {}) {
+  if (!fileId || !/^[A-Za-z0-9-]{8,64}$/.test(fileId)) throw new VaultError("format", "Ungültige Datei-ID.");
+  const u8 = bytes instanceof Uint8Array ? bytes : new Uint8Array(bytes);
+  const total = Math.max(1, Math.ceil(u8.length / chunkBytes));
+  const out = [];
+  for (let n = 0; n < total; n++) {
+    const s = await seal(key, u8.subarray(n * chunkBytes, Math.min(u8.length, (n + 1) * chunkBytes)), aadChunk(fileId, n, total));
+    out.push({ id: `${fileId}_${n}`, n, total, iv: s.iv, ct: s.ct });
+  }
+  return out;
+}
+
+/** Stücke entschlüsseln → Uint8Array. Wirft VaultError("tampered"), wenn ein Stück fehlt, vertauscht oder verändert ist. */
+export async function decryptFile(key, fileId, chunks, expectTotal) {
+  if (!Array.isArray(chunks) || !chunks.length) throw new VaultError("tampered", "Datei fehlt.");
+  const total = Number(expectTotal) || chunks[0].total;
+  if (!Number.isInteger(total) || total < 1 || chunks.length !== total) throw new VaultError("tampered", "Datei ist unvollständig.");
+  const parts = new Array(total);
+  for (const c of chunks) {
+    if (!c || c.total !== total || !Number.isInteger(c.n) || c.n < 0 || c.n >= total || parts[c.n] || c.id !== `${fileId}_${c.n}`) {
+      throw new VaultError("tampered", "Datei ist beschädigt (Stücke passen nicht zusammen).");
+    }
+    try { parts[c.n] = await open(key, c.iv, c.ct, aadChunk(fileId, c.n, total)); }
+    catch { throw new VaultError("tampered", "Datei kann nicht entschlüsselt werden (verändert oder falscher Schlüssel)."); }
+  }
+  const len = parts.reduce((a, p) => a + p.length, 0);
+  const out = new Uint8Array(len);
+  let o = 0;
+  for (const p of parts) { out.set(p, o); o += p.length; p.fill(0); }
+  return out;
+}
+
+/** Gespeicherte Größe (base64-Zeichen ≈ Bytes in Firestore) einer Stückliste. */
+export const storedSize = (chunks) => (chunks || []).reduce((a, c) => a + (c.ct ? c.ct.length : 0) + (c.iv ? c.iv.length : 0) + 40, 0);
 
 /* ---------- Sicherung (verschlüsselt, gleiches Format) ---------- */
 

@@ -3,7 +3,7 @@
 // Icons und Schriftdateien (fonts.gstatic.com): cache-first.
 // Alle anderen fremden Domains (Firebase, Google APIs, Nominatim, OSM, unpkg) werden nicht angefasst.
 
-const VERSION = "20261105-1600"; // wird beim Veröffentlichen automatisch ersetzt
+const VERSION = "20261105-2130"; // wird beim Veröffentlichen automatisch ersetzt
 const CACHE = "stempelkarte-" + VERSION;
 const FONT_CACHE = "stempelkarte-fonts"; // versionsunabhängig, bleibt erhalten
 const NET_TIMEOUT_MS = 4000; // bei schlechtem Netz nach dieser Zeit auf den Cache ausweichen
@@ -106,6 +106,7 @@ const SHELL = [
   "js/alltag/money-gmail.js",
   // Update 9 – Abos (Kündigen, Fristen, Katalog)
   "js/alltag/money-subs.js",
+  "js/alltag/money-budget.js",
   "js/alltag/subs-core.js",
   "js/alltag/subs-catalog.js",
   // Update 9 – Bankverbindung (BAWAG über Enable Banking)
@@ -114,11 +115,18 @@ const SHELL = [
   "js/alltag/money-lock-core.js",
   "js/alltag/money-lock-state.js",
   "css/alltag-moneylock.css",
+  "js/alltag/money-savings.js",
   "bank-callback.html",
+  "js/bank-callback.js",
+  "js/appbar-settings.js",
   // Update 9 – Passwort-Tresor
   "js/alltag/vault.js",
   "js/alltag/vault-crypto.js",
   "js/alltag/vault-core.js",
+  "js/alltag/vault-docs.js",
+  "js/alltag/vault-docs-core.js",
+  "js/alltag/vault-files.js",
+  "css/alltag-vault-docs.css",
   "js/alltag/qr.js",
   // Update 9 – Unterwegs
   "js/alltag/unterwegs.js",

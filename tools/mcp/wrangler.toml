@@ -13,6 +13,11 @@ preview_urls = false
 #   ENABLEBANKING_APP_ID      – Application-ID aus dem Enable-Banking-Control-Panel (Bankverbindung)
 #   ENABLEBANKING_KEY         – privater Schlüssel (.pem-Inhalt) dieser Application
 #   BANK_REDIRECT_URL         – (Var) Rückruf-Adresse, Standard https://muf2n.github.io/stempelkarte/bank-callback.html
+#   GOOGLE_OAUTH_CLIENT_ID    – Web-OAuth-Client (Projekt stempelkarte-40682) für „Gmail dauerhaft verbinden“
+#   GOOGLE_OAUTH_CLIENT_SECRET – Clientschlüssel dazu
+#   GMAIL_ENC_KEY             – Zufallstext (≥ 32, besser 40+ Zeichen): verschlüsselt das Gmail-Refresh-Token (AES-256-GCM, HKDF)
+#   ALLOW_LOCALHOST_CORS      – (Var) "1" erlaubt CORS von http://localhost/127.0.0.1 (nur Entwicklung, in Produktion NICHT setzen)
+#   GMAIL_REDIRECT_URL        – (Var) Rückruf-Adresse, Standard https://stempelkarte-mcp.lippa-florian.workers.dev/gmail/callback
 
 [vars]
 FIREBASE_PROJECT_ID = "stempelkarte-40682"
@@ -23,5 +28,6 @@ enabled = false
 
 # Bank-Abgleich (Enable Banking) 4× täglich (UTC): 05, 11, 16, 21 Uhr ≈ 06/12/17/22 Uhr Wien (Winterzeit).
 # Viele Banken erlauben nur 4 automatische Abrufe pro Tag – nicht öfter einstellen.
+# Gmail-Abo-Scan 1× täglich 06:30 UTC ≈ 07:30 Wien (Winterzeit) – muss zu GMAIL_CRON in src/gmail.js passen.
 [triggers]
-crons = ["0 5,11,16,21 * * *"]
+crons = ["0 5,11,16,21 * * *", "30 6 * * *"]

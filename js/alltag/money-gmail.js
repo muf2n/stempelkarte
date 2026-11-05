@@ -1,6 +1,12 @@
 // Geld › Abos: Karte „Abos aus Gmail erkennen“ (Verbinden, Mails prüfen, Treffer übernehmen/ignorieren).
-// Mails und Token bleiben im Speicher; gespeichert wird nur money_gmail/meta = {connected, lastScan, scanned, found, handled:[…]}.
+// Zwei Wege:
+//  • „Dauerhaft verbinden (Server)“: der eigene Worker (tools/mcp/src/gmail.js) hält ein verschlüsseltes Refresh-Token,
+//    prüft täglich und schreibt Erkennungen nach money_gmail/meta.serverDets (nur erkannte Felder, keine Mails).
+//  • „Nur diese Sitzung“ (Browser, wie bisher): Mails und Token bleiben im Speicher.
+// Gespeichert wird nur money_gmail/meta = {connected, lastScan, scanned, found, handled:[…], serverDets, serverScan}.
 import * as G from "./gmail.js";
+import { serverUrl, idToken, aiAvailable } from "./ai-client.js";
+import { isNative, plugin } from "../native.js";
 import * as D from "./subs-detect.js";
 import * as M from "./money-core.js";
 import * as K from "./subs-catalog.js"; // Update 9 – Abos: Katalog (Beschreibung, Kündigungslink, Anleitung)
@@ -15,6 +21,47 @@ const MAX_HANDLED = 400;
 
 // Sitzungs-Zustand (überlebt Tab-/Bereichswechsel, nicht das Neuladen)
 const R = { dets: null, busy: false, progress: "", err: null, errMsg: "", scanned: 0, helpOpen: false, hintShown: false, hintClosed: false };
+
+/* ---------- Server-Modus („Gmail dauerhaft verbinden“) ---------- */
+
+const SV_CACHE = "stempelkarte.gmail.server";
+const SV_REFRESH_MS = 60 * 1000;
+const SV_TEXT = {
+  401: "Anmeldung abgelehnt – bitte die App neu laden oder ab- und wieder anmelden.",
+  403: "Der Server lehnt diese Seite ab (Herkunft nicht erlaubt).",
+  404: "Der Server kennt „Gmail dauerhaft“ noch nicht – ist die neueste Version veröffentlicht?",
+  409: "Gmail ist noch nicht dauerhaft verbunden.",
+  503: "Gmail ist am Server noch nicht eingerichtet – siehe „Einrichtung“ unten.",
+};
+function svRead() { try { const c = JSON.parse(lsGet(SV_CACHE) || "null"); return c && typeof c === "object" ? c : null; } catch { return null; } }
+const SV = { status: svRead(), loaded: false, loading: false, busy: "", err: "", at: 0, armed: false, armTimer: null, waiting: false, setupOpen: false };
+
+async function svApi(path, method = "POST") {
+  if (typeof navigator !== "undefined" && navigator.onLine === false) throw new Error("Du bist offline – dafür wird Internet gebraucht.");
+  const token = await idToken();
+  let res;
+  try {
+    res = await fetch(serverUrl() + path, {
+      method,
+      headers: { Authorization: "Bearer " + token, ...(method === "POST" ? { "Content-Type": "application/json" } : {}) },
+      body: method === "POST" ? "{}" : undefined,
+    });
+  } catch { throw new Error("Keine Verbindung zum Server – bist du online?"); }
+  let data = null;
+  try { data = await res.json(); } catch { /* leer */ }
+  if (!res.ok) { const e = new Error((data && data.error) || SV_TEXT[res.status] || `Fehler ${res.status}`); e.status = res.status; e.data = data; throw e; }
+  return data || {};
+}
+
+function fmtWhen(ts) {
+  if (!ts) return "";
+  const d = new Date(Number(ts));
+  const today = M.todayKey(), k = M.keyOf(d);
+  const hm = `${String(d.getHours()).padStart(2, "0")}:${String(d.getMinutes()).padStart(2, "0")}`;
+  if (k === today) return `heute, ${hm}`;
+  if (k === M.addDays(today, -1)) return `gestern, ${hm}`;
+  return `${M.fmtDate(k)}, ${hm}`;
+}
 
 const lsGet = (k) => { try { return localStorage.getItem(k); } catch { return null; } };
 const lsSet = (k, v) => { try { localStorage.setItem(k, v); } catch { /* egal */ } };
@@ -44,10 +91,110 @@ export function createGmail(opts) {
     await patchMeta({ handled: list.slice(-MAX_HANDLED) });
   }
 
-  function actions() {
-    if (!R.dets) return [];
-    return D.planActions(R.dets, col.subs.all(), handledSet(), M.todayKey());
+  const serverOn = () => aiAvailable(); // nur mit Google-Anmeldung (bzw. Test-Haken auf localhost)
+  const svConnected = () => !!(serverOn() && SV.status && SV.status.connected);
+
+  /** Erkennungen aus dieser Sitzung (Browser) + vom Server (money_gmail/meta.serverDets), pro Dienst die neueste. */
+  function allDets() {
+    const server = Array.isArray(meta().serverDets) ? meta().serverDets : [];
+    if (!R.dets && !server.length) return null;
+    const map = new Map();
+    for (const d of [...server, ...(R.dets || [])]) {
+      if (!d || !d.key) continue;
+      const c = map.get(d.key);
+      if (!c || (Number(d.mailTs) || 0) > (Number(c.mailTs) || 0)) map.set(d.key, d);
+    }
+    return [...map.values()].sort((a, b) => (Number(b.mailTs) || 0) - (Number(a.mailTs) || 0));
   }
+
+  function actions() {
+    const dets = allDets();
+    if (!dets) return [];
+    return D.planActions(dets, col.subs.all(), handledSet(), M.todayKey());
+  }
+
+  function svSet(st) {
+    SV.status = st; SV.loaded = true;
+    lsSet(SV_CACHE, JSON.stringify(st));
+  }
+
+  async function svRefresh(force = false) {
+    if (!serverOn() || SV.loading) return;
+    if (!force && SV.at && Date.now() - SV.at < SV_REFRESH_MS) return;
+    SV.loading = true; SV.at = Date.now();
+    try { svSet(await svApi("/gmail/status", "GET")); SV.statusErr = ""; }
+    catch (err) { SV.loaded = true; SV.statusErr = err.message || String(err); } // still: Fehler erst beim Tippen zeigen
+    finally { SV.loading = false; render(); }
+  }
+
+  async function svConnect() {
+    if (SV.busy) return;
+    // Fenster sofort aus dem Tipp heraus öffnen (Popup-Blocker), die Google-Adresse kommt gleich danach
+    const B = isNative() ? plugin("Browser") : null;
+    let win = null;
+    if (!B) { try { win = window.open("", "_blank"); } catch { win = null; } }
+    SV.busy = "connect"; SV.err = ""; render();
+    try {
+      const { url } = await svApi("/gmail/start");
+      if (!url || !/^https:\/\/accounts\.google\.com\//.test(url)) throw new Error("Keine gültige Google-Adresse erhalten.");
+      SV.waiting = true;
+      if (B) await B.open({ url });
+      else if (win && !win.closed) win.location.href = url;
+      else { window.location.assign(url); return; }
+      ui.toast("Bei Google anmelden und das Häkchen „E-Mails ansehen“ setzen – danach hierher zurückkommen.", 5200);
+    } catch (err) {
+      try { if (win) win.close(); } catch { /* egal */ }
+      SV.err = err.message || String(err);
+      if (err.status === 503) SV.setupOpen = true;
+    } finally {
+      SV.busy = ""; SV.at = 0;
+      render();
+    }
+  }
+
+  async function svScan() {
+    if (SV.busy) return;
+    SV.busy = "scan"; SV.err = ""; render();
+    try {
+      const r = await svApi("/gmail/scan");
+      if (r.status) svSet(r.status);
+      if (r.error) SV.err = r.error.msg || "Prüfen fehlgeschlagen.";
+      else {
+        const n = Number(r.pending) || 0;
+        ui.toast(n ? (n === 1 ? "1 Hinweis zu deinen Abos" : `${n} Hinweise zu deinen Abos`) : `Nichts Neues – ${Number(r.mails) || 0} Mails geprüft`, 2800);
+      }
+    } catch (err) {
+      SV.err = err.message || String(err);
+    } finally { SV.busy = ""; render(); }
+  }
+
+  async function svDisconnect() {
+    if (SV.busy) return;
+    if (!SV.armed) {
+      SV.armed = true;
+      clearTimeout(SV.armTimer);
+      SV.armTimer = setTimeout(() => { SV.armed = false; render(); }, 4000);
+      render();
+      return;
+    }
+    SV.busy = "disconnect"; SV.err = ""; render();
+    try {
+      await svApi("/gmail/disconnect");
+      svSet({ configured: true, connected: false });
+      ui.toast("Gmail getrennt – der Zugriff ist bei Google widerrufen.", 3600);
+    } catch (err) {
+      SV.err = err.message || String(err);
+    } finally { SV.busy = ""; SV.armed = false; render(); }
+  }
+
+  // Nach der Google-Anmeldung (anderer Tab/Browser) beim Zurückkommen den Status neu holen
+  if (typeof document !== "undefined" && !createGmail._vis) {
+    createGmail._vis = true;
+    const back = () => { if (document.visibilityState !== "hidden" && SV.waiting) { SV.waiting = false; SV.at = 0; createGmail._refresh && createGmail._refresh(true); } };
+    document.addEventListener("visibilitychange", back);
+    window.addEventListener("focus", back);
+  }
+  createGmail._refresh = svRefresh;
 
   /* ---------- Scan (MUSS synchron aus dem Tipp starten) ---------- */
 
@@ -185,7 +332,7 @@ export function createGmail(opts) {
   }
 
   function helpHTML() {
-    return `<details class="gm-help"${R.helpOpen ? " open" : ""}><summary>Anleitung (einmalig einrichten)</summary>` +
+    return `<details class="gm-help"${R.helpOpen ? " open" : ""}><summary>${serverOn() ? "Anleitung „nur diese Sitzung“" : "Anleitung (einmalig einrichten)"}</summary>` +
       `<ol>` +
         `<li><a href="https://console.cloud.google.com/apis/library/gmail.googleapis.com?project=stempelkarte-40682" target="_blank" rel="noopener">Google Cloud Console</a> öffnen, Projekt <b>stempelkarte-40682</b> wählen und die <b>Gmail API</b> aktivieren.</li>` +
         `<li><b>Google Auth Platform</b> (früher „OAuth-Zustimmungsbildschirm“) → <b>Datenzugriff</b> → „Bereiche hinzufügen oder entfernen“ → <code>…/auth/gmail.readonly</code> eintragen → Aktualisieren → Speichern.</li>` +
@@ -196,8 +343,68 @@ export function createGmail(opts) {
     `</details>`;
   }
 
+  function setupHTML() {
+    return `<details class="gm-help gm-setup"${SV.setupOpen ? " open" : ""}><summary>Einrichtung „dauerhaft“ (einmalig in der Google Cloud Console)</summary>` +
+      `<ol>` +
+        `<li><a href="https://console.cloud.google.com/apis/credentials?project=stempelkarte-40682" target="_blank" rel="noopener">APIs &amp; Dienste → Anmeldedaten</a> → OAuth-2.0-Client <b>„Web client (auto created by Google Service)“</b> öffnen (oder einen neuen <b>Webanwendung</b>-Client anlegen).</li>` +
+        `<li>Bei <b>Autorisierte Weiterleitungs-URIs</b> „+ URI hinzufügen“: <code>https://stempelkarte-mcp.lippa-florian.workers.dev/gmail/callback</code> → Speichern.</li>` +
+        `<li><b>Client-ID</b> und <b>Clientschlüssel</b> kopieren und auf GitHub (Repository → Settings → Secrets and variables → Actions) als <code>GOOGLE_OAUTH_CLIENT_ID</code> und <code>GOOGLE_OAUTH_CLIENT_SECRET</code> eintragen.</li>` +
+        `<li>Danach unter Actions „MCP-Connector veröffentlichen“ → Run workflow. (Die Verschlüsselung richtet der Server automatisch ein.)</li>` +
+      `</ol>` +
+      `<p class="note">Gmail API und der Bereich <code>gmail.readonly</code> müssen wie beim Sitzungs-Modus freigegeben sein. Steht die App bei Google auf „Testen“, läuft die Freigabe nach 7 Tagen ab – unter <b>Zielgruppe → App veröffentlichen</b> bleibt sie dauerhaft.</p>` +
+    `</details>`;
+  }
+
+  const svPrivacy = () => `<p class="gm-privacy">🔒 Nur Lesen. Das Google-Token liegt <b>verschlüsselt auf deinem eigenen Server</b>; gespeichert werden nur erkannte Abo-Daten, keine Mails. Widerrufen jederzeit mit „Trennen“ oder unter <a href="https://myaccount.google.com/permissions" target="_blank" rel="noopener">myaccount.google.com/permissions</a>.</p>`;
+  const svDis = (id) => (SV.busy ? ` disabled${SV.busy === id ? ' aria-busy="true"' : ""}` : "");
+
+  function listHTML(acts, noneText) {
+    if (acts.length) return `<ul class="gm-list" aria-label="Erkannte Abos">${acts.map(actRow).join("")}</ul>`;
+    return noneText ? `<p class="gm-none">${icon("check", 16)} ${esc(noneText)}</p>` : "";
+  }
+
+  function head(sub) {
+    return `<div class="gm-head">` +
+      `<span class="gm-ic" aria-hidden="true">${icon("mail", 22)}</span>` +
+      `<div><h3 class="mn-h" id="gm-h">Abos aus Gmail erkennen</h3><small class="gm-last">${sub}</small></div>` +
+    `</div>`;
+  }
+
+  /** Karte im verbundenen Server-Modus. */
+  function serverCardHTML(st) {
+    const acts = actions();
+    const since = st.connectedAt ? M.fmtDate(M.keyOf(new Date(Number(st.connectedAt)))) : "";
+    const sub = `${st.needsReconnect ? "Freigabe abgelaufen" : `Dauerhaft verbunden${since ? ` seit ${esc(since)}` : ""}`} · ${st.lastScan ? `zuletzt geprüft ${esc(fmtWhen(st.lastScan))}` : "noch nicht geprüft"}`;
+    const lr = st.lastResult || {};
+    let body = "";
+    if (st.needsReconnect) {
+      body += `<p class="gm-err" role="alert">Die dauerhafte Freigabe ist abgelaufen oder wurde bei Google widerrufen. Bitte einmal neu verbinden.</p>`;
+    } else if (st.lastError && st.lastError.msg && !SV.err) {
+      body += `<p class="gm-warn" role="status">${esc(st.lastError.msg)}</p>`;
+    }
+    if (SV.err) body += `<p class="gm-err" role="alert">${esc(SV.err)}</p>`;
+    const none = R.dets ? `Nichts Neues – ${R.scanned} Mails geprüft, alles schon eingetragen.`
+      : st.lastScan && !st.needsReconnect ? `Nichts Neues${lr.mails != null ? ` – zuletzt ${lr.mails} Mails geprüft` : ""}. Neue Abo-Mails werden jeden Morgen automatisch geprüft.` : "";
+    body += listHTML(acts, none);
+    return `<section class="card gm-card gm-server" aria-labelledby="gm-h">` +
+      head(sub) +
+      `<div class="gm-actions">` +
+        (st.needsReconnect
+          ? `<button type="button" class="btn primary sm gm-scan" data-gm="sv-connect"${svDis("connect")}>${SV.busy === "connect" ? "Öffne Google …" : "Gmail neu verbinden"}</button>`
+          : `<button type="button" class="btn primary sm gm-scan" data-gm="sv-scan"${svDis("scan")}>${SV.busy === "scan" ? "Prüfe Mails …" : "Jetzt prüfen"}</button>`) +
+        `<button type="button" class="btn ghost sm gm-unlink${SV.armed ? " armed" : ""}" data-gm="sv-disconnect"${svDis("disconnect")}>${SV.busy === "disconnect" ? "Trenne …" : SV.armed ? "Wirklich trennen?" : "Trennen"}</button>` +
+      `</div>` +
+      body + svPrivacy() +
+    `</section>`;
+  }
+
   function cardHTML() {
     const m = meta();
+    const server = serverOn();
+    if (server && !SV.loaded && !SV.loading) queueMicrotask(() => svRefresh(true));
+    else if (server && SV.loaded && !SV.loading) queueMicrotask(() => svRefresh(false));
+    if (svConnected()) return serverCardHTML(SV.status);
+
     const acts = actions();
     const connected = !!m.connected;
     const offline = typeof navigator !== "undefined" && navigator.onLine === false;
@@ -212,30 +419,40 @@ export function createGmail(opts) {
     } else if (offline && !R.busy) {
       body += `<p class="gm-warn">Du bist offline – zum Prüfen wird Internet gebraucht.</p>`;
     }
-    if (R.dets) {
-      body += acts.length
-        ? `<ul class="gm-list" aria-label="Erkannte Abos">${acts.map(actRow).join("")}</ul>`
-        : `<p class="gm-none">${icon("check", 16)} Nichts Neues – ${R.scanned} Mails geprüft, alles schon eingetragen.</p>`;
-    }
-    return `<section class="card gm-card" aria-labelledby="gm-h">` +
-      `<div class="gm-head">` +
-        `<span class="gm-ic" aria-hidden="true">${icon("mail", 22)}</span>` +
-        `<div><h3 class="mn-h" id="gm-h">Abos aus Gmail erkennen</h3><small class="gm-last">${esc(lastTxt)}</small></div>` +
-      `</div>` +
-      `<div class="gm-actions">` +
-        `<button type="button" class="btn primary sm gm-scan" data-gm="scan"${R.busy ? " disabled aria-busy=\"true\"" : ""}>${esc(btnLabel)}</button>` +
+    if (allDets()) body += listHTML(acts, R.dets ? `Nichts Neues – ${R.scanned} Mails geprüft, alles schon eingetragen.` : "");
+
+    const sessionActions = `<div class="gm-actions">` +
+        `<button type="button" class="btn ${server ? "ghost" : "primary"} sm gm-scan" data-gm="scan"${R.busy ? " disabled aria-busy=\"true\"" : ""}>${esc(btnLabel)}</button>` +
         (connected && !R.busy ? `<button type="button" class="btn ghost sm" data-gm="disconnect">Trennen</button>` : "") +
+      `</div>`;
+    const sessionPrivacy = `<p class="gm-privacy">🔒 Mails werden nur auf deinem Gerät gelesen und nicht gespeichert.</p>`;
+
+    if (!server) {
+      return `<section class="card gm-card" aria-labelledby="gm-h">` + head(esc(lastTxt)) + sessionActions + body + sessionPrivacy + helpHTML() + `</section>`;
+    }
+    const svErr = SV.err ? `<p class="gm-err" role="alert">${esc(SV.err)}</p>` : "";
+    const lastErr = !SV.err && SV.status && SV.status.lastError && SV.status.lastError.msg ? `<p class="gm-warn" role="status">${esc(SV.status.lastError.msg)}</p>` : "";
+    return `<section class="card gm-card" aria-labelledby="gm-h">` +
+      head(esc(connected || last ? lastTxt : "Noch nicht verbunden")) +
+      `<div class="gm-mode gm-mode-server">` +
+        `<p class="gm-mode-h"><b>Dauerhaft verbinden (Server)</b> <span class="gm-tag">empfohlen</span></p>` +
+        `<p class="gm-mode-t">Einmal freigeben – danach prüft dein Server jeden Morgen selbst nach neuen Abos, Preisänderungen und Testzeiträumen. Auch der Assistent kann dann auf Nachfrage Mails suchen.</p>` +
+        `<button type="button" class="btn primary gm-main" data-gm="sv-connect"${svDis("connect")}>${SV.busy === "connect" ? "Öffne Google …" : "Gmail dauerhaft verbinden"}</button>` +
+        svErr + lastErr + svPrivacy() +
       `</div>` +
       body +
-      `<p class="gm-privacy">🔒 Mails werden nur auf deinem Gerät gelesen und nicht gespeichert.</p>` +
-      helpHTML() +
+      `<div class="gm-mode gm-mode-session">` +
+        `<p class="gm-mode-h"><b>Nur diese Sitzung</b></p>` +
+        sessionActions + sessionPrivacy +
+      `</div>` +
+      setupHTML() + helpHTML() +
     `</section>`;
   }
 
   /** Kleiner Hinweis (Übersicht): verbunden, kein Token, ≥ 1 Woche nicht geprüft – höchstens 1× pro Woche. */
   function hintHTML() {
     const m = meta();
-    if (!m.connected || R.busy || R.hintClosed || G.hasToken()) return "";
+    if (!m.connected || R.busy || R.hintClosed || G.hasToken() || svConnected()) return "";
     if (m.lastScan && Date.now() - m.lastScan < WEEK) return "";
     if (!R.hintShown) {
       const lastHint = Number(lsGet(HINT_KEY)) || 0;
@@ -258,6 +475,10 @@ export function createGmail(opts) {
       case "hintclose": R.hintClosed = true; render(); break;
       case "disconnect": disconnect(); break;
       case "help": R.helpOpen = true; render(); { const d = document.querySelector(".gm-help"); if (d) { d.open = true; d.scrollIntoView({ block: "nearest", behavior: "smooth" }); } } break;
+      case "sv-connect": svConnect(); break;
+      case "sv-scan": svScan(); break;
+      case "sv-disconnect": svDisconnect(); break;
+      case "sv-retry": svRefresh(true); break;
       case "ok": onAction("ok", t.dataset.k); break;
       case "ignore": onAction("ignore", t.dataset.k); break;
       default: return false;
@@ -269,5 +490,8 @@ export function createGmail(opts) {
   // (nur angemeldet – im lokalen Modus wird das SDK erst beim Tippen geladen)
   try { if (store.get().user && !(typeof window !== "undefined" && window.__gmailTestToken)) G.prepare(); } catch { /* egal */ }
 
-  return { cardHTML, hintHTML, onClick, onToggleHelp: (open) => { R.helpOpen = open; } };
+  return {
+    cardHTML, hintHTML, onClick, refresh: svRefresh,
+    onToggleHelp: (open, el) => { if (el && el.classList.contains("gm-setup")) SV.setupOpen = open; else R.helpOpen = open; },
+  };
 }

@@ -415,3 +415,44 @@ test("material_status: Status setzen, verbaut zählt heute", async () => {
   const m = t.g.get(`${t.base}/a_material_items/m1`);
   assert.deepEqual([m.status, m.dayKey], ["verbaut", "2026-11-04"]);
 });
+
+test("Update 9 – Sparziele: geld_lesen mit echtem Konto, Spar-Erinnerung, Aufrunden; geld_eintragen erinnerung", async () => {
+  const t = await seeded();
+  const b = t.base;
+  t.g.set(`${b}/meta/bank`, {
+    linked: true, session_id: "SESSION-GEHEIM-42", aspsp: "BAWAG", valid_until: "2027-03-01T00:00:00Z",
+    accounts: [{ uid: "acc-uid-geheim", iban_last4: "4711", name: "Giro", currency: "EUR" }, { uid: "acc-spar-geheim", iban_last4: "8901", name: "Online Sparen", currency: "EUR", hash: "hs" }],
+    balance: { amount: 1234.56, currency: "EUR", at: NOW - 3600000 }, mainUid: "acc-uid-geheim",
+    balances: { "acc-uid-geheim": { amount: 1234.56, currency: "EUR", at: NOW - 3600000 }, "acc-spar-geheim": { amount: 600, currency: "EUR", at: NOW - 3600000 } },
+    balanceHistory: { "acc-spar-geheim": [{ d: "2026-08-04", a: 300 }, { d: "2026-11-04", a: 600 }] },
+    lastSync: NOW - 3600000,
+  });
+  t.g.set(`${b}/a_money_goals/real`, { id: "real", name: "Auto", emoji: "🚗", target: 1500, saved: 0, created: 5, bank: { uid: "alte-uid", hash: "hs", last4: "8901", name: "Online Sparen", mode: "all" } });
+  t.g.set(`${b}/a_money_tx/sal`, { id: "sal", date: "2026-11-03", amount: 873.4, type: "in", category: "einkommen", note: "Lehrlingsentschädigung" });
+  t.g.set(`${b}/a_money_tx/x1`, { id: "x1", date: "2026-11-02", amount: 12.4, type: "out", category: "essen", note: "Billa" });
+  t.g.set(`${b}/a_money_tx/x2`, { id: "x2", date: "2026-11-04", amount: 3.7, type: "out", category: "essen", note: "Spar" });
+  t.g.set(`${b}/meta/settings`, { ...t.g.get(`${b}/meta/settings`), money: { roundup: { on: true, step: 1, push: true, goalId: "g1" } } });
+
+  let r = await t.tool("geld_eintragen", { aktion: "erinnerung", name: "moped", betrag: 50 });
+  assert.equal(r.isError, false, r.text);
+  assert.match(r.text, /Spar-Erinnerung für „Moped“: 50,00 € pro Monat, am Zahltag/);
+  assert.deepEqual(t.g.get(`${b}/a_money_goals/g1`).reminder, { on: true, amount: 50, mode: "payday", day: null });
+  r = await t.tool("geld_eintragen", { aktion: "erinnerung", name: "auto", betrag: "30", modus: "tag", tag: 15 });
+  assert.match(r.text, /am 15\. um 09:00 .*BAWAG-App/);
+  r = await t.tool("geld_eintragen", { aktion: "erinnerung", name: "auto", modus: "tag" });
+  assert.equal(r.isError, false, "Tag bleibt erhalten");
+  r = await t.tool("geld_eintragen", { aktion: "einzahlung", name: "auto", betrag: 10 });
+  assert.equal(r.isError, true);
+  assert.match(r.text, /echten Bankkonto/);
+
+  r = await t.tool("geld_lesen", {});
+  assert.equal(r.isError, false, r.text);
+  assert.match(r.text, /Moped: 500,00 € von 2\.000,00 €.* · 🔔 Erinnerung 50,00 € am Zahltag \(fällig seit 03\.11\.2026\)/);
+  assert.match(r.text, /Auto: 600,00 € von 1\.500,00 € \(40 %\).* · 🏦 echter Kontostand Online Sparen ••8901.*Ø 99,26 € Zuwachs pro Monat \(3 Monate\) → ca\. 10 Monate bis zum Ziel/);
+  assert.match(r.text, /🔔 Erinnerung 30,00 € am 15\. jedes Monats/);
+  assert.match(r.text, /Aufrunden \(auf 1 €\): Diese Woche \(seit 02\.11\.2026\) hättest du durch Aufrunden 0,90 € sparen können \(2 Ausgaben\) – Ziel „Moped“ · Push sonntags 18:00\./);
+  assert.match(r.text, /Konten: Giro ••4711: 1\.234,56 € · Online Sparen ••8901: 600,00 €/);
+  assert.ok(!/SESSION-GEHEIM|acc-uid-geheim|acc-spar-geheim/.test(r.text));
+  r = await t.tool("geld_eintragen", { aktion: "erinnerung", name: "moped", aus: true });
+  assert.equal(t.g.get(`${b}/a_money_goals/g1`).reminder.on, false);
+});

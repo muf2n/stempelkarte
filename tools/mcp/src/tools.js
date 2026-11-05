@@ -20,15 +20,16 @@ import { vienna } from "./time.js";
 import { DEFAULT_CATS, suggestCategory, parseAmount, budgetLevel, upcoming, monthlyCost, round2, INTERVALS } from "./money.js";
 import * as AB from "./subs.js"; // Update 9 – Abos: „Wie lange noch“, Fristen, Katalog (gemeinsam mit der Web-App)
 import * as MC from "./moneycore.js";
-import { READ_TOOLS, schoolSection, moneyExtra } from "./read.js"; // Update 9 – Claude sieht (fast) alles
+import { READ_TOOLS, schoolSection, moneyExtra, savingsSection } from "./read.js"; // Update 9 – Claude sieht (fast) alles
 import { WRITE_TOOLS } from "./write.js"; // Update 9 – Claude darf (fast) alles ändern
 import { SETTINGS_TOOLS } from "./settings.js"; // Update 9 – Einstellungen nur mit Bestätigung
+import { GMAIL_TOOLS } from "./gmail.js"; // Gmail dauerhaft (nur lesen): mails_suchen, mail_lesen
 
 const ABS_KINDS = ["urlaub", "krank", "zeitausgleich", "schule", "feiertag"];
 const GRADE_NAMES = { 1: "Sehr gut", 2: "Gut", 3: "Befriedigend", 4: "Genügend", 5: "Nicht genügend" };
 const EXAM_KINDS = ["Schularbeit", "Test", "Prüfung", "Mündlich", "Referat", "Lehrabschlussprüfung"];
 
-import { SRC, RO, WR, s, pad2, need, dateArg, timeArg, boolArg, placeName, matchPlace, resolvePlace, countdown } from "./util.js";
+import { SRC, RO, WR, s, pad2, need, dateArg, timeArg, boolArg, placeName, matchPlace, resolvePlace, countdown, txNote, idArg } from "./util.js";
 
 function lastSeg(r) { const sg = segmentsOf(r); return sg[sg.length - 1] || null; }
 
@@ -1060,7 +1061,7 @@ export const catName = (map, id) => { const c = map.get(id); return c ? `${c.emo
 tool({
   name: "geld_lesen",
   title: "Geld-Übersicht",
-  description: "Geld-Bereich der App (Alltag → Geld): Einnahmen, Ausgaben und Saldo eines Monats, Ausgaben je Kategorie, Budget-Stand (Warnung ab 80 %), kommende Abo-Zahlungen, Sparziele (mit „pro Monat nötig“), Teilen-Gruppen mit Salden („Max schuldet dir …“) und – falls verbunden – Kontostand der Bank. Mit buchungen: true auch die einzelnen Buchungen. Ohne Angabe: aktueller Monat.",
+  description: "Geld-Bereich der App (Alltag → Geld): Einnahmen, Ausgaben und Saldo eines Monats, Ausgaben je Kategorie, Budget-Stand (Warnung ab 80 %), kommende Abo-Zahlungen, Sparziele (mit „pro Monat nötig“; mit echtem Bankkonto verbundene Ziele mit Kontostand und Prognose; Spar-Erinnerungen), Aufrunden dieser Woche, Teilen-Gruppen mit Salden („Max schuldet dir …“) und – falls verbunden – Kontostand der Bank. Mit buchungen: true auch die einzelnen Buchungen. Ohne Angabe: aktueller Monat.",
   inputSchema: {
     type: "object",
     properties: {
@@ -1111,18 +1112,11 @@ tool({
       if (up.length) out.push("Nächste Zahlungen (31 Tage):", ...up.slice(0, 12).map((u) => `- ${fmtKeyWd(u.date)}: ${u.sub.name || "Abo"} ${eur(u.sub.amount)} (${INTERVALS[u.sub.interval] || "monatlich"})`));
       out.push("(Laufzeiten, Kündigungsfristen und Kündigungslinks: abos_lesen)");
     }
-    if (goals.length) {
-      out.push("", "Sparziele:");
-      for (const g of goals) {
-        const tg = Number(g.target) || 0, sv = Number(g.saved) || 0;
-        const pm = MC.goalPerMonth(g, today);
-        out.push(`- ${g.emoji ? g.emoji + " " : ""}${g.name || "Ziel"}: ${eur(sv)} von ${eur(tg)}${tg > 0 ? ` (${Math.min(100, Math.round(sv / tg * 100))} %)` : ""}${isKey(g.date) ? ` bis ${fmtKey(g.date)}` : ""}${pm.done ? " – erreicht 🎉" : pm.perMonth ? ` – noch ${eur(pm.perMonth)} pro Monat nötig` : ""}`);
-      }
-    }
+    out.push(...(await savingsSection(d, goals, txs, today))); // Update 9 – Sparziele (echtes Konto, Erinnerung, Aufrunden)
     out.push(...extra);
     if (args.buchungen === true && list.length) {
       out.push("", "Buchungen:");
-      for (const x of [...list].sort((a, b) => (a.date < b.date ? 1 : -1)).slice(0, 60)) out.push(`- ${fmtKey(x.date)} ${x.type === "in" ? "+" : "−"}${eur(Number(x.amount) || 0)} · ${catName(cats, x.category)}${s(x.note) ? ` · „${s(x.note).slice(0, 60)}“` : ""}${x.src === "bank" ? " · Bank" : ""} (ID ${x.id})`);
+      for (const x of [...list].sort((a, b) => (a.date < b.date ? 1 : -1)).slice(0, 60)) out.push(`- ${fmtKey(x.date)} ${x.type === "in" ? "+" : "−"}${eur(Number(x.amount) || 0)} · ${catName(cats, x.category)}${s(x.note) ? ` · ${txNote(x, 60)}` : ""}${x.src === "bank" ? " · Bank" : ""} (ID ${x.id})`);
       if (list.length > 60) out.push(`… und ${list.length - 60} weitere`);
     }
     return out.join("\n");
@@ -1173,6 +1167,48 @@ tool({
     const data = { date, amount: round2(amount), type, category: cat, note, id, updated: d.now, created: d.now, src: SRC };
     await d.commit([d.fs.setWrite(d.p(`a_money_tx/${id}`), data)]);
     return `${type === "in" ? "Einnahme" : "Ausgabe"} gebucht: ${eur(amount)} am ${fmtKey(date)} · ${catName(cats, cat)}${how}${note ? ` · „${note}“` : ""}.`;
+  },
+});
+
+/* ===== Update 9 – „Kann ich mir das leisten?“ ===== */
+
+tool({
+  name: "leisten_pruefen",
+  title: "Kann ich mir das leisten?",
+  description: "Prüft VOR einem Kauf, ob er sich ausgeht: Monatsbudget der Kategorie und Gesamtbudget (Geld › Budget), noch fällige Abos bis Monatsende, Kontostand der Bank (falls verbunden) und Sparziele. Antwort auf Deutsch mit klarem Urteil „✅ Ja“, „⚠️ Knapp“ oder „🛑 Nein“ und Gründen. Ohne Kategorie wird sie aus der Notiz erraten (z. B. „Pizza“ → Essen gehen, „Handy“ → Handy & Internet). Trägt nichts ein.",
+  inputSchema: {
+    type: "object",
+    properties: {
+      betrag: { type: ["number", "string"], description: "Preis in Euro, z. B. 300 oder \"12,50\"" },
+      kategorie: { type: "string", description: "Kategorie-Name oder -ID (optional), z. B. \"Essen gehen\"" },
+      notiz: { type: "string", description: "Was gekauft werden soll, z. B. \"Handy\", \"Pizza\"" },
+    },
+    required: ["betrag"],
+    additionalProperties: false,
+  },
+  annotations: RO,
+  async run(args, d) {
+    const today = dayKey(d.now);
+    let amount = parseAmount(args.betrag);
+    if (!(amount > 0) && s(args.notiz)) amount = MC.splitNoteAmount(args.notiz).amount;
+    if (!(amount > 0)) throw new UserError("Bitte einen positiven Betrag angeben (z. B. 300 oder 12,50).");
+    const [txs, budgets, subs, goals, cats, rules, bank] = await Promise.all([
+      d.alltag("money_tx"), d.alltag("money_budget"), d.alltag("money_subs"), d.alltag("money_goals"), moneyCats(d),
+      d.alltag("money_rules").catch(() => []), d.doc("meta/bank").catch(() => null),
+    ]);
+    const pool = [...cats.values()].filter((c) => c.type !== "in");
+    let cat = null, unknown = "";
+    if (s(args.kategorie)) {
+      const byId = pool.find((c) => c.id === s(args.kategorie).toLowerCase());
+      const m = byId ? { item: byId } : best(args.kategorie, pool, (c) => c.name, 55);
+      if (m) cat = m.item.id; else unknown = `(Kategorie „${s(args.kategorie)}“ gibt es nicht – aus der Notiz geschätzt.)`;
+    }
+    const r = MC.affordCheck({
+      amount, cat, note: s(args.notiz), today, txs, budgets, cats: pool, rules, subs: subs.filter((x) => x && !x.deleted), goals,
+      bank: bank && bank.linked ? bank : null,
+    });
+    const out = MC.affordText(r).replace(/\u00a0/g, " ");
+    return [out, ...(unknown ? [unknown] : []), "", "(Nur eine Rechnung – eingetragen wurde nichts. Kaufen und buchen: ausgabe_eintragen.)"].join("\n");
   },
 });
 
@@ -1648,13 +1684,25 @@ tool({
 /* ===== Update 9: weitere Lese-/Schreib-Werkzeuge, Einstellungen (zweistufig) ===== */
 for (const t of [...READ_TOOLS, ...WRITE_TOOLS, ...SETTINGS_TOOLS]) tool(t);
 
+/* ===== Gmail (nur lesen, nur auf Nachfrage) ===== */
+for (const t of GMAIL_TOOLS) tool(t);
+
 /* ===== Sicheres Löschen (Vorschlag → Bestätigung → Papierkorb) ===== */
 for (const t of DELETE_TOOLS) tool(t);
 
+/** Werkzeuge, die /mcp anbietet: ohne die mit mcp:false (Gmail – nur im In-App-Chat, H1b). */
+export const MCP_TOOLS = () => TOOLS.filter((t) => t.mcp !== false);
+
 export function toolList() {
-  return TOOLS.map(({ name, title, description, inputSchema, annotations }) => ({ name, title, description, inputSchema, annotations }));
+  return MCP_TOOLS().map(({ name, title, description, inputSchema, annotations }) => ({ name, title, description, inputSchema, annotations }));
 }
 
+/** Alle Werkzeuge (In-App-Chat). */
 export function findTool(name) { return TOOLS.find((t) => t.name === name) || null; }
+/** Nur Werkzeuge, die /mcp anbietet. */
+export function findMcpTool(name) { return MCP_TOOLS().find((t) => t.name === name) || null; }
+
+/** Schreib-/Lösch-Werkzeuge: aus den Annotationen abgeleitet (readOnlyHint false). */
+export const WRITE_TOOL_NAMES = () => new Set(TOOLS.filter((t) => !(t.annotations && t.annotations.readOnlyHint === true)).map((t) => t.name));
 
 export { UserError, score, WD, parseKey, wdOf, shiftMonth };

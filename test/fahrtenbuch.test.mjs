@@ -11,10 +11,10 @@ const dayKey = (ts) => { const d = new Date(ts); return `${d.getFullYear()}-${pa
 const WD = ["So", "Mo", "Di", "Mi", "Do", "Fr", "Sa"];
 const at = (d, h, m) => new Date(2026, 10, d, h, m).getTime();
 
-const BUERO = { lat: 47.0920, lng: 15.4040, addr: "Puchstraße 41, 8020 Graz" };
-const WIENER = { lat: 47.1060, lng: 15.4120, addr: "Wiener Straße 286, 8051 Graz" };
-const KLEINOSCHEG = { lat: 47.1000, lng: 15.4300, addr: "Anton-Kleinoscheg-Straße, 8051 Graz" };
-const FELD = { lat: 47.0170, lng: 15.4190, addr: "Feldkirchner Straße 11, 8054 Seiersberg-Pirka" };
+const BUERO = { lat: 47.0920, lng: 15.4040, addr: "Musterstraße 41, 8020 Musterstadt" };
+const ERFUNDENE = { lat: 47.1060, lng: 15.4120, addr: "Erfundene Straße 286, 8051 Musterstadt" };
+const MUSTERMANN = { lat: 47.1000, lng: 15.4300, addr: "Max-Mustermann-Straße, 8051 Musterstadt" };
+const FELD = { lat: 47.0170, lng: 15.4190, addr: "Beispielfelder Straße 11, 8054 Testheim-Au" };
 
 function drive(start, end, loc, endLoc, extra = {}) {
   return { start, end, activity: "Autofahren", placeId: null, place: "", loc, endLoc, endPlace: endLoc ? endLoc.addr : "", ...extra };
@@ -22,11 +22,11 @@ function drive(start, end, loc, endLoc, extra = {}) {
 
 test("km-Vorrang: manuell > Straße > Luftlinie", () => {
   const s = { allowance: { kmFactor: 1.3 } };
-  const base = drive(0, 1, BUERO, WIENER);
+  const base = drive(0, 1, BUERO, ERFUNDENE);
   const est = T.segmentKm(base, s);
   assert.equal(est.source, "est");
   assert.ok(est.est && !est.manual && !est.road);
-  const ck = T.coordKey(BUERO, WIENER);
+  const ck = T.coordKey(BUERO, ERFUNDENE);
   const road = T.segmentKm({ ...base, kmRoad: 3.2, kmRoadFor: ck }, s);
   assert.deepEqual([road.source, road.km, road.est], ["road", 3.2, false]);
   const man = T.segmentKm({ ...base, kmRoad: 3.2, kmRoadFor: ck, km: 5 }, s);
@@ -42,11 +42,11 @@ test("km-Vorrang: manuell > Straße > Luftlinie", () => {
 });
 
 test("Summen nutzen überall denselben Vorrang (entryKm, kmBetween, tripsBetween)", () => {
-  const ck = T.coordKey(BUERO, WIENER);
+  const ck = T.coordKey(BUERO, ERFUNDENE);
   const e = { id: "e1", start: at(2, 6, 50), end: at(2, 15, 0), segments: [
-    drive(at(2, 6, 59), at(2, 7, 18), BUERO, WIENER, { kmRoad: 3.4, kmRoadFor: ck }),
-    { start: at(2, 7, 18), end: at(2, 12, 10), activity: "Arbeiten", place: "", loc: WIENER },
-    drive(at(2, 12, 10), at(2, 12, 28), KLEINOSCHEG, BUERO, { km: 6, endPlace: "Büro" }),
+    drive(at(2, 6, 59), at(2, 7, 18), BUERO, ERFUNDENE, { kmRoad: 3.4, kmRoadFor: ck }),
+    { start: at(2, 7, 18), end: at(2, 12, 10), activity: "Arbeiten", place: "", loc: ERFUNDENE },
+    drive(at(2, 12, 10), at(2, 12, 28), MUSTERMANN, BUERO, { km: 6, endPlace: "Büro" }),
   ] };
   assert.equal(T.entryKm(e, {}), 9.4);
   assert.equal(T.kmBetween([e], at(1, 0, 0), at(30, 0, 0), {}), 9.4);
@@ -62,26 +62,26 @@ test("Summen nutzen überall denselben Vorrang (entryKm, kmBetween, tripsBetween
 });
 
 test("Kurzadresse: Straße + Nummer, darunter PLZ/Ort", () => {
-  assert.deepEqual(F.shortAddr("Wiener Straße 286, 8051 Graz"), { main: "Wiener Straße 286", sub: "8051 Graz" });
-  assert.deepEqual(F.shortAddr("Feldkirchner Straße 11, 8054 Seiersberg-Pirka"), { main: "Feldkirchner Straße 11", sub: "8054 Seiersberg-Pirka" });
-  assert.deepEqual(F.shortAddr("Anton-Kleinoscheg-Straße, 8051 Graz"), { main: "Anton-Kleinoscheg-Straße", sub: "8051 Graz" });
-  assert.deepEqual(F.shortAddr("Weinholdstraße 13, 8010 Graz, Österreich"), { main: "Weinholdstraße 13", sub: "8010 Graz" });
-  assert.deepEqual(F.shortAddr("Hauptplatz 1, Innere Stadt, 8010 Graz"), { main: "Hauptplatz 1, Innere Stadt", sub: "8010 Graz" });
-  assert.deepEqual(F.shortAddr("Wiener Straße 286 8051 Graz"), { main: "Wiener Straße 286", sub: "8051 Graz" });
-  assert.deepEqual(F.shortAddr("Graz"), { main: "Graz", sub: "" });
+  assert.deepEqual(F.shortAddr("Erfundene Straße 286, 8051 Musterstadt"), { main: "Erfundene Straße 286", sub: "8051 Musterstadt" });
+  assert.deepEqual(F.shortAddr("Beispielfelder Straße 11, 8054 Testheim-Au"), { main: "Beispielfelder Straße 11", sub: "8054 Testheim-Au" });
+  assert.deepEqual(F.shortAddr("Max-Mustermann-Straße, 8051 Musterstadt"), { main: "Max-Mustermann-Straße", sub: "8051 Musterstadt" });
+  assert.deepEqual(F.shortAddr("Probestraße 13, 8010 Musterstadt, Österreich"), { main: "Probestraße 13", sub: "8010 Musterstadt" });
+  assert.deepEqual(F.shortAddr("Hauptplatz 1, Innere Stadt, 8010 Musterstadt"), { main: "Hauptplatz 1, Innere Stadt", sub: "8010 Musterstadt" });
+  assert.deepEqual(F.shortAddr("Erfundene Straße 286 8051 Musterstadt"), { main: "Erfundene Straße 286", sub: "8051 Musterstadt" });
+  assert.deepEqual(F.shortAddr("Musterstadt"), { main: "Musterstadt", sub: "" });
   assert.deepEqual(F.shortAddr(""), { main: "", sub: "" });
   // gespeicherter Name bevorzugt, Ort klein darunter
-  assert.deepEqual(F.placeLabel("Büro", "Puchstraße 41, 8020 Graz", true), { main: "Büro", sub: "8020 Graz", full: "Büro · Puchstraße 41, 8020 Graz" });
-  assert.equal(F.placeLabel("", "Wiener Straße 286, 8051 Graz", false).main, "Wiener Straße 286");
+  assert.deepEqual(F.placeLabel("Büro", "Musterstraße 41, 8020 Musterstadt", true), { main: "Büro", sub: "8020 Musterstadt", full: "Büro · Musterstraße 41, 8020 Musterstadt" });
+  assert.equal(F.placeLabel("", "Erfundene Straße 286, 8051 Musterstadt", false).main, "Erfundene Straße 286");
 });
 
 test("Gruppierung nach Tag + Tageskopf, Rückfahrten", () => {
   const trips = [
-    { start: at(2, 6, 59), end: at(2, 7, 18), km: 11.2, from: "Büro", to: "Wiener Straße 286", fromLoc: BUERO, toLoc: WIENER, source: "road" },
-    { start: at(2, 12, 10), end: at(2, 12, 28), km: 10, from: "Wiener Straße 286", to: "Büro", fromLoc: WIENER, toLoc: BUERO, source: "road" },
-    { start: at(2, 12, 46), end: at(2, 12, 55), km: 3.2, from: "Büro", to: "Feldkirchner", fromLoc: BUERO, toLoc: FELD, source: "est", est: true },
-    { start: at(2, 13, 10), end: at(2, 13, 15), km: 4, from: "Feldkirchner", to: "Büro", fromLoc: FELD, toLoc: BUERO, source: "manual" },
-    { start: at(3, 6, 58), end: at(3, 7, 16), km: 5.1, from: "Büro", to: "Weinholdstraße 13", fromLoc: BUERO, toLoc: null, source: "road" },
+    { start: at(2, 6, 59), end: at(2, 7, 18), km: 11.2, from: "Büro", to: "Erfundene Straße 286", fromLoc: BUERO, toLoc: ERFUNDENE, source: "road" },
+    { start: at(2, 12, 10), end: at(2, 12, 28), km: 10, from: "Erfundene Straße 286", to: "Büro", fromLoc: ERFUNDENE, toLoc: BUERO, source: "road" },
+    { start: at(2, 12, 46), end: at(2, 12, 55), km: 3.2, from: "Büro", to: "Beispielfelder", fromLoc: BUERO, toLoc: FELD, source: "est", est: true },
+    { start: at(2, 13, 10), end: at(2, 13, 15), km: 4, from: "Beispielfelder", to: "Büro", fromLoc: FELD, toLoc: BUERO, source: "manual" },
+    { start: at(3, 6, 58), end: at(3, 7, 16), km: 5.1, from: "Büro", to: "Probestraße 13", fromLoc: BUERO, toLoc: null, source: "road" },
   ];
   const g = F.groupByDay(trips, dayKey);
   assert.equal(g.length, 2);
@@ -148,20 +148,20 @@ test("Summen: beruflich/privat, Kilometergeld nur beruflich mit Privatauto", () 
 test("Filter und Export-Zeilen", () => {
   const settings = { vehicles: [{ id: "v1", name: "Caddy", plate: "G-123AB", type: "firma" }] };
   const trips = [
-    { key: "a", start: at(2, 6, 59), end: at(2, 7, 18), km: 11.24, source: "road", from: "Büro", fromAddr: "Puchstraße 41, 8020 Graz", fromSaved: true,
-      to: "Wiener Straße 286, 8051 Graz", toAddr: "Wiener Straße 286, 8051 Graz", toSaved: false, purpose: "Baustelle" },
-    { key: "b", start: at(2, 18, 0), end: at(2, 18, 30), km: 4, source: "manual", from: "Büro", to: "Seiersberg", purpose: "Privat", private: true },
+    { key: "a", start: at(2, 6, 59), end: at(2, 7, 18), km: 11.24, source: "road", from: "Büro", fromAddr: "Musterstraße 41, 8020 Musterstadt", fromSaved: true,
+      to: "Erfundene Straße 286, 8051 Musterstadt", toAddr: "Erfundene Straße 286, 8051 Musterstadt", toSaved: false, purpose: "Baustelle" },
+    { key: "b", start: at(2, 18, 0), end: at(2, 18, 30), km: 4, source: "manual", from: "Büro", to: "Testheim", purpose: "Privat", private: true },
   ];
-  assert.equal(F.filterTrips(trips, "wiener strasse").length, 1);
+  assert.equal(F.filterTrips(trips, "erfundene strasse").length, 1);
   assert.equal(F.filterTrips(trips, "privat").length, 1);
   assert.equal(F.filterTrips(trips, "caddy", settings).length, 2);
   assert.equal(F.filterTrips(trips, "").length, 2);
   const rows = F.logRows(trips, settings, new Map([["a", { begin: 45210, end: 45221 }]]));
   assert.equal(F.LOG_HEAD.length, rows[0].length);
-  assert.deepEqual(rows[0], ["02.11.2026", "06:59", "07:18", "Büro (Puchstraße 41, 8020 Graz)", "Wiener Straße 286, 8051 Graz",
+  assert.deepEqual(rows[0], ["02.11.2026", "06:59", "07:18", "Büro (Musterstraße 41, 8020 Musterstadt)", "Erfundene Straße 286, 8051 Musterstadt",
     "Baustelle", "11,2", "45210", "45221", "Caddy", "G-123AB", "beruflich", "Straße"]);
   assert.equal(rows[1][11], "privat");
-  assert.equal(F.mapsDirUrl({ fromLoc: BUERO, toLoc: WIENER }),
+  assert.equal(F.mapsDirUrl({ fromLoc: BUERO, toLoc: ERFUNDENE }),
     "https://www.google.com/maps/dir/?api=1&origin=47.092,15.404&destination=47.106,15.412&travelmode=driving");
 });
 

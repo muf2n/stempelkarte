@@ -28,8 +28,8 @@ export function feedUrlOk(raw) {
   return /\.ics$/i.test(u.pathname);
 }
 
-function icsCors(origin) {
-  const h = corsHeaders(origin);
+function icsCors(origin, env) {
+  const h = corsHeaders(origin, env);
   if (h["access-control-allow-origin"]) {
     h["access-control-allow-methods"] = "GET, OPTIONS";
     h["access-control-expose-headers"] = "x-ics-fetched-at, x-ics-cache";
@@ -106,11 +106,11 @@ function cacheApi() {
 export async function handleIcs(request, env, { fetchImpl = (...a) => fetch(...a), now = Date.now() } = {}) {
   const url = new URL(request.url);
   const origin = request.headers.get("origin");
-  const cors = icsCors(origin);
+  const cors = icsCors(origin, env);
   const json = (status, body) => new Response(JSON.stringify(body), { status, headers: { "content-type": "application/json; charset=utf-8", "cache-control": "no-store", ...cors } });
-  if (request.method === "OPTIONS") return new Response(null, { status: allowedOrigin(origin) ? 204 : 403, headers: cors });
+  if (request.method === "OPTIONS") return new Response(null, { status: allowedOrigin(origin, env) ? 204 : 403, headers: cors });
   if (request.method !== "GET") return json(405, { error: "Nur GET ist erlaubt." });
-  if (origin && !allowedOrigin(origin)) return json(403, { error: "Herkunft nicht erlaubt." });
+  if (origin && !allowedOrigin(origin, env)) return json(403, { error: "Herkunft nicht erlaubt." });
   const id = String(url.searchParams.get("id") || "");
   if (!/^[A-Za-z0-9_-]{1,40}$/.test(id)) return json(400, { error: "id fehlt oder ist ungültig." });
 

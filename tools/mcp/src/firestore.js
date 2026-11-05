@@ -64,6 +64,29 @@ export class FirestoreError extends Error {
   }
 }
 
+/* ---------- Pfade prüfen (L13) ---------- */
+
+/** Ein Pfad-Segment ist ungültig, wenn es leer, „.“ oder „..“ ist, zu lang ist oder Zeichen enthält, die
+ *  in der REST-URL etwas anderes bedeuten (/ \ ? # %) bzw. Steuerzeichen. So kann eine von Claude gelieferte
+ *  ID (z. B. „../../meta/settings“) nie auf ein anderes Dokument zeigen. */
+export function badSegment(seg) {
+  return typeof seg !== "string" || !seg || seg === "." || seg === ".." || seg.length > 1500 || /[\/\\?#%\u0000-\u001f\u007f]/.test(seg);
+}
+
+export class PathError extends Error {
+  constructor(msg) { super(msg); this.expose = true; }
+}
+
+/** Pfad (relativ zu …/documents) prüfen. kind: "doc" (gerade Anzahl Segmente) | "coll" (ungerade) | "any". → Segmente */
+export function checkPath(path, kind = "any") {
+  const segs = String(path ?? "").split("/");
+  if (segs.some(badSegment)) throw new PathError("Ungültige ID bzw. ungültiger Pfad – bitte die ID genau so angeben, wie sie ein Lese-Werkzeug geliefert hat.");
+  if (kind === "doc" && segs.length % 2 !== 0) throw new PathError("Ungültiger Dokumentpfad (ID darf keinen „/“ enthalten).");
+  if (kind === "coll" && segs.length % 2 !== 1) throw new PathError("Ungültiger Sammlungspfad (ID darf keinen „/“ enthalten).");
+  return segs;
+}
+const urlPath = (path, kind) => checkPath(path, kind).map(encodeURIComponent).join("/");
+
 export class Firestore {
   constructor({ projectId, getToken, fetchImpl }) {
     this.projectId = projectId;
@@ -73,7 +96,7 @@ export class Firestore {
     this.base = `https://firestore.googleapis.com/v1/${this.root}`;
   }
 
-  name(path) { return `${this.root}/${path}`; }
+  name(path) { checkPath(path, "doc"); return `${this.root}/${path}`; }
 
   async req(method, url, body) {
     const token = await this.getToken();
@@ -100,7 +123,7 @@ export class Firestore {
 
   /** Dokument lesen; null, wenn es nicht existiert. */
   async get(path, { transaction } = {}) {
-    let url = `${this.base}/${path}`;
+    let url = `${this.base}/${urlPath(path, "doc")}`;
     if (transaction) url += `?transaction=${encodeURIComponent(transaction)}`;
     try {
       return Firestore.toDoc(await this.req("GET", url));
@@ -121,7 +144,7 @@ export class Firestore {
       if (mask) for (const f of mask) q.append("mask.fieldPaths", f);
       let data;
       try {
-        data = await this.req("GET", `${this.base}/${collPath}?${q}`);
+        data = await this.req("GET", `${this.base}/${urlPath(collPath, "coll")}?${q}`);
       } catch (e) {
         if (e instanceof FirestoreError && e.status === 404) return out;
         throw e;
@@ -137,7 +160,7 @@ export class Firestore {
   async runQuery(parentPath, structuredQuery, { transaction } = {}) {
     const body = { structuredQuery };
     if (transaction) body.transaction = transaction;
-    const data = await this.req("POST", `${this.base}/${parentPath}:runQuery`, body);
+    const data = await this.req("POST", `${this.base}/${urlPath(parentPath, "doc")}:runQuery`, body);
     return (Array.isArray(data) ? data : []).filter((r) => r && r.document).map((r) => Firestore.toDoc(r.document));
   }
 

@@ -221,7 +221,8 @@ export function createBank(opts) {
     const expired = !!st.expired || (left != null && left < 0);
     const lvl = expired || (left != null && left < 7) ? "bad" : left != null && left < 21 ? "warn" : "ok";
     const pill = expired ? "Abgelaufen" : left == null ? "" : left === 0 ? "läuft heute ab" : left === 1 ? "noch 1 Tag" : `noch ${left} Tage`;
-    const acc = (st.accounts || [])[0];
+    const accs = st.accounts || [];
+    const acc = accs.find((a) => a.main) || accs[0];
     const accTxt = acc ? `${esc(acc.name || "Konto")}${acc.iban_last4 ? ` ·· ${esc(acc.iban_last4)}` : ""}` : "";
     const bal = st.balance;
     const sub = st.lastSync ? `Aktualisiert ${esc(fmtTime(st.lastSync))}` : "Noch nicht abgeglichen";
@@ -233,6 +234,7 @@ export function createBank(opts) {
         `<b class="${bal && bal.amount < 0 ? "neg" : ""}">${bal ? esc(M.eur(bal.amount)) : "–"}</b>` +
         (accTxt ? `<span class="bk-acc">${accTxt}</span>` : "") +
       `</div>` +
+      accountsList(st, acc) +
       (expired ? `<p class="bk-err" role="alert">Die Freigabe ist abgelaufen – bitte einmal neu mit BAWAG verbinden.</p>` : left != null && left < 7 ? `<p class="bk-warn">Die Freigabe läuft bald ab – jetzt erneuern, dann geht's 180 Tage weiter.</p>` : "") +
       errBox() + lastErr +
       `<div class="bk-actions">` +
@@ -240,6 +242,7 @@ export function createBank(opts) {
           ? `<button type="button" class="btn primary sm bk-main" data-bk="connect"${dis("connect")}>${btnLbl("connect", expired ? "Neu verbinden" : "Verbindung erneuern", "Öffne BAWAG …")}</button>`
           : "") +
         (expired ? "" : `<button type="button" class="btn ${left != null && left < 21 ? "ghost" : "primary"} sm bk-main" data-bk="sync"${dis("sync")}>${btnLbl("sync", "Jetzt aktualisieren", "Hole Buchungen …")}</button>`) +
+        (expired ? "" : `<button type="button" class="btn ghost sm" data-bk="addacc"${dis("connect")}>${btnLbl("connect", "+ Sparkonto freigeben", "Öffne BAWAG …")}</button>`) +
         `<button type="button" class="btn ghost sm bk-unlink${R.armed ? " armed" : ""}" data-bk="unlink"${dis("unlink")}>${R.busy === "unlink" ? "Trenne …" : R.armed ? "Wirklich trennen?" : "Verbindung trennen"}</button>` +
       `</div>` +
       `<p class="bk-foot">🏦 Bank-Buchungen sind in der Liste markiert. Was du daran änderst, bleibt so.</p>` +
@@ -250,6 +253,7 @@ export function createBank(opts) {
     const a = t.dataset.bk;
     if (!a) return false;
     if (a === "connect") connect();
+    else if (a === "addacc") { ui.toast("Bei BAWAG alle Konten anhaken, die die App sehen soll (z. B. Girokonto + Sparkonto).", 4200); connect(); }
     else if (a === "sync") sync();
     else if (a === "retry") refresh(true);
     else if (a === "unlink") {
@@ -278,7 +282,22 @@ export function createBank(opts) {
   }
   refresh(true);
 
-  return { cardHTML, onClick, refresh, linked: () => !!(R.status && R.status.linked) };
+  return { cardHTML, onClick, refresh, linked: () => !!(R.status && R.status.linked), status: () => R.status };
+}
+
+/* Update 9 – Sparziele: weitere Konten (z. B. Sparkonto) unter dem Hauptkonto */
+function accountsList(st, main) {
+  const others = (st.accounts || []).filter((a) => a !== main);
+  if (!others.length) {
+    return `<details class="bk-more"><summary>Sparkonto dazunehmen?</summary>` +
+      `<p>Dann kann ein Sparziel den echten Kontostand zeigen. Tippe auf „+ Sparkonto freigeben“ und hake bei BAWAG beide Konten an. ` +
+      `Fehlt das Sparkonto dort, muss es zuerst im Enable-Banking-Control-Panel bei der App verknüpft werden.</p></details>`;
+  }
+  return `<ul class="bk-accs">` + others.map((a) => {
+    const b = (st.balances && st.balances[a.uid]) || a.balance;
+    return `<li><span>${esc(a.name || "Konto")}${a.iban_last4 ? ` <small>••${esc(a.iban_last4)}</small>` : ""}</span>` +
+      `<b>${b && Number.isFinite(Number(b.amount)) ? esc(M.eur(b.amount)) : "–"}</b></li>`;
+  }).join("") + `</ul>`;
 }
 
 /** Markierung für Bank-Buchungen in Listen. */

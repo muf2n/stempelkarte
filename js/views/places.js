@@ -6,6 +6,9 @@ import * as galleryAlbums from "../gallery-albums.js"; // Update 9 (Agent U) –
 
 const LEAFLET_CSS = "https://unpkg.com/leaflet@1.9.4/dist/leaflet.css";
 const LEAFLET_JS = "https://unpkg.com/leaflet@1.9.4/dist/leaflet.js";
+// M3: Subresource Integrity (sha384 aus npm pack leaflet@1.9.4, dist/leaflet.js bzw. .css) – bei Versionswechsel neu berechnen.
+export const LEAFLET_JS_SRI = "sha384-cxOPjt7s7Iz04uaHJceBmS+qpjv2JkIHNVcuOrM+YHwZOmJGBXI00mdUXEq65HTH";
+export const LEAFLET_CSS_SRI = "sha384-sHL9NAb7lN7rfvG5lfHpm643Xkcjzp4jFvuavGOndn6pjVqS6ny56CAt3nsEVT4H";
 const AT_CENTER = [47.6, 13.8];
 const AT_ZOOM = 7;
 const SHORT_HINT = "Für die automatische Erkennung bitte ‚Meinen Standort übernehmen‘ tippen, während du dort bist.";
@@ -91,11 +94,15 @@ function loadLeaflet() {
       const link = document.createElement("link");
       link.rel = "stylesheet";
       link.href = LEAFLET_CSS;
+      link.integrity = LEAFLET_CSS_SRI;
+      link.crossOrigin = "anonymous";
       link.dataset.leaflet = "1";
       document.head.appendChild(link);
     }
     const sc = document.createElement("script");
     sc.src = LEAFLET_JS;
+    sc.integrity = LEAFLET_JS_SRI;
+    sc.crossOrigin = "anonymous";
     sc.async = true;
     sc.dataset.leaflet = "1";
     sc.onload = () => (window.L ? resolve(window.L) : reject(new Error("Leaflet fehlt")));
