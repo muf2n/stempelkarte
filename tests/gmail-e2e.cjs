@@ -111,6 +111,7 @@ const gmailHits = [];
   await page.waitForFunction(() => JSON.parse(localStorage.getItem("sk-a-money_subs") || "[]").some((s) => s.name === "Spotify"));
   const sp = await page.evaluate(() => JSON.parse(localStorage.getItem("sk-a-money_subs")).filter((s) => s.name === "Spotify"));
   ok(sp.length === 1 && sp[0].amount === 10.99 && sp[0].interval === "month" && sp[0].source === "gmail", "Übernehmen legt money_subs-Eintrag an");
+  ok(/spotify\.com/.test(sp[0].cancelUrl || "") && sp[0].catalogKey === "spotify" && !!sp[0].cancelHow, "Gmail-Abo bekommt Kündigungslink + Anleitung aus dem Katalog");
   await page.waitForTimeout(300);
   ok(await page.isVisible('.mn-subs >> text=Spotify'), "Spotify in der Abos-Liste");
   ok(!(await page.$('.gm-item[data-key="spotify"]')), "Spotify-Vorschlag verschwindet");
@@ -125,7 +126,7 @@ const gmailHits = [];
   await page.waitForTimeout(300);
   const nf = await page.evaluate(() => JSON.parse(localStorage.getItem("sk-a-money_subs")).find((s) => s.id === "s_nf"));
   ok(nf.paused === true && !!nf.ended, "Netflix beendet (paused + ended)");
-  ok(await page.isVisible('.mn-subs >> text=/beendet/'), "Liste zeigt „beendet“");
+  ok(await page.isVisible('.mn-subs >> text=/gekündigt am|beendet/'), "Liste zeigt „gekündigt am … / beendet“");
 
   // Preis aktualisieren
   await page.click('.gm-item[data-key="fitinn"] [data-gm="ok"]');

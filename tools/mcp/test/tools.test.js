@@ -321,6 +321,67 @@ test("Geld: leer, Buchungen mit Auto-Kategorie, Budget, Abos, Sparziel", async (
   assert.match(r.text, /Essen gehen/);
 });
 
+test("Abos: abos_lesen mit Laufzeit, Fristen, Kündigungslink; abo_bearbeiten sicher", async () => {
+  const t = await seeded();
+  let r = await t.tool("abos_lesen");
+  assert.match(r.text, /noch keine Abos/);
+  const b = t.base;
+  t.g.set(`${b}/a_money_subs/n1`, { id: "n1", name: "Netflix", amount: 13.99, interval: "month", next: "2026-11-15", day: 15, category: "abos" });
+  t.g.set(`${b}/a_money_subs/a1`, { id: "a1", name: "A1 Handy", amount: 25, interval: "month", next: "2026-11-20", day: 20, category: "handy", contractType: "Mindestlaufzeit", minTermEnd: "2026-12-31", noticeText: "1 Monat zum Monatsende", autoRenew: true, cancelUrl: "https://www.a1.net/kuendigen", account: "flo@example.com" });
+  t.g.set(`${b}/a_money_subs/d1`, { id: "d1", name: "Disney+", amount: 9.99, interval: "month", next: "2026-11-11", contractType: "Testzeitraum", trialEnd: "2026-11-10" });
+  t.g.set(`${b}/a_money_subs/x1`, { id: "x1", name: "Alt-Abo", amount: 5, interval: "month", next: "2026-09-01", cancelledOn: "2026-08-01", ended: "2026-08-31" });
+  r = await t.tool("abos_lesen");
+  assert.ok(!r.isError, r.text);
+  assert.match(r.text, /Abos – Stand 04\.11\.2026/);
+  assert.match(r.text, /2 aktiv · zusammen 38,99\s€ pro Monat/);
+  assert.match(r.text, /Kündigungsfristen bald:\n- A1 Handy: spätestens bis Mo, 30\.11\.2026 kündigen \(Vertrag bis 31\.12\.2026\)/);
+  assert.match(r.text, /Testzeiträume:\n- Disney\+: endet Di, 10\.11\.2026 – in 6 Tagen/);
+  assert.match(r.text, /Wie lange noch: Vertrag bis 31\.12\.2026 \(noch 1 Monat\) · spätestens kündigen bis 30\.11\.2026/);
+  assert.match(r.text, /Kündigungslink: https:\/\/www\.a1\.net\/kuendigen/);
+  assert.match(r.text, /Konto\/Login: flo@example\.com/);
+  // Netflix ohne Link → Vorschlag aus dem Katalog
+  assert.match(r.text, /Netflix[\s\S]*Kündigungslink \(Vorschlag aus dem Katalog, noch nicht eingetragen\): https:\/\/www\.netflix\.com\/cancelplan/);
+  assert.doesNotMatch(r.text, /Alt-Abo/);
+  assert.match(r.text, /1 beendetes Abo ausgeblendet/);
+  r = await t.tool("abos_lesen", { name: "netflx" });
+  assert.match(r.text, /^Abo – Stand/);
+  assert.match(r.text, /läuft monatlich, nächste Abbuchung am 15\.11\.2026 – jederzeit kündbar bis 14\.11\.2026/);
+
+  // Bearbeiten
+  r = await t.tool("abo_bearbeiten", { name: "Netflix", felder: { cancelUrl: "https://www.netflix.com/cancelplan", so_kuendigen: "1. cancelplan öffnen\n2. Kündigen", was: "Streaming Standard" } });
+  assert.match(r.text, /Abo „Netflix“ geändert: cancelUrl → https:\/\/www\.netflix\.com\/cancelplan; Anleitung „So kündigst du“ aktualisiert; what → Streaming Standard/);
+  let n1 = t.g.get(`${b}/a_money_subs/n1`);
+  assert.equal(n1.cancelUrl, "https://www.netflix.com/cancelplan");
+  assert.equal(n1.cancelHow, "1. cancelplan öffnen\n2. Kündigen");
+  assert.equal(n1.amount, 13.99, "andere Felder bleiben");
+  // gekündigt ohne Ende → Ende berechnet (Tag vor der nächsten Abbuchung)
+  r = await t.tool("abo_bearbeiten", { name: "Netflix", felder: { gekuendigt_am: "04.11.2026" } });
+  assert.match(r.text, /Jetzt: gekündigt am 04\.11\.2026, läuft aus am 14\.11\.2026/);
+  n1 = t.g.get(`${b}/a_money_subs/n1`);
+  assert.equal(n1.ended, "2026-11-14");
+  // Fehler: unbekanntes Feld, Passwort, kaputter Link, unbekanntes Abo
+  r = await t.tool("abo_bearbeiten", { name: "Netflix", felder: { loeschen: true } });
+  assert.ok(r.isError); assert.match(r.text, /gibt es nicht/);
+  r = await t.tool("abo_bearbeiten", { name: "Netflix", felder: { passwort: "geheim" } });
+  assert.ok(r.isError); assert.match(r.text, /Passwort-Tresor/);
+  r = await t.tool("abo_bearbeiten", { name: "Netflix", felder: { account: "flo / Passwort: 1234" } });
+  assert.ok(r.isError);
+  r = await t.tool("abo_bearbeiten", { name: "Netflix", felder: { cancelUrl: "netflix.com" } });
+  assert.ok(r.isError); assert.match(r.text, /https:\/\//);
+  r = await t.tool("abo_bearbeiten", { name: "Spotify", felder: { what: "x" } });
+  assert.ok(r.isError); assert.match(r.text, /Kein Abo passt/);
+  r = await t.tool("abo_bearbeiten", { name: "A1", felder: { vertragsart: "monatlich", kuendigungsfrist_tage: 30, betrag: "27,50", intervall: "jährlich" } });
+  const a1 = t.g.get(`${b}/a_money_subs/a1`);
+  assert.equal(a1.contractType, "monatlich kündbar");
+  assert.equal(a1.noticeDays, 30);
+  assert.equal(a1.amount, 27.5);
+  assert.equal(a1.interval, "year");
+  assert.equal(t.g.list(`${b}/a_money_subs`).length, 4, "nichts gelöscht");
+  // geld_lesen verweist auf abos_lesen und zählt Ausgelaufenes nicht
+  r = await t.tool("geld_lesen");
+  assert.match(r.text, /abos_lesen/);
+});
+
 test("Schule: leer, Hausaufgabe/Prüfung anlegen, Noten-Schnitt", async () => {
   const t = await seeded();
   let r = await t.tool("schule_lesen");

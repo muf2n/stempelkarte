@@ -3,6 +3,7 @@
 import * as G from "./gmail.js";
 import * as D from "./subs-detect.js";
 import * as M from "./money-core.js";
+import * as K from "./subs-catalog.js"; // Update 9 – Abos: Katalog (Beschreibung, Kündigungslink, Anleitung)
 import * as store from "../store.js";
 import { esc } from "../util.js";
 import { icon } from "../icons.js";
@@ -104,7 +105,9 @@ export function createGmail(opts) {
         return;
       }
       if (act.type === "new") {
-        const preset = D.subFromDet(d, M.todayKey());
+        const base = D.subFromDet(d, M.todayKey());
+        const hit = K.matchCatalog(d.service);
+        const preset = { ...base, ...K.catalogFill(base, hit && hit.entry) };
         if (!(d.amount > 0) || (d.currency && d.currency !== "EUR")) {
           // Betrag fehlt oder ist keine Euro-Angabe → Blatt zum Prüfen öffnen
           opts.openSub(null, { ...preset, amount: d.amount || "" }, () => markHandled(d, "accepted"));
@@ -122,7 +125,7 @@ export function createGmail(opts) {
         ui.toast(`Preis von ${s.name} auf ${M.eur(d.amount)} geändert ✓`);
       } else if (act.type === "cancel") {
         const s = act.sub;
-        await col.subs.patch(s.id, { paused: true, ended: d.nextDate || d.mailDate, endedAt: Date.now() });
+        await col.subs.patch(s.id, { paused: true, ended: d.nextDate || d.mailDate, endedAt: Date.now(), cancelledOn: s.cancelledOn || d.mailDate });
         await markHandled(d, "accepted");
         ui.toast(`${s.name} beendet – bisherige Buchungen bleiben`);
       } else if (act.type === "trial") {
@@ -132,6 +135,10 @@ export function createGmail(opts) {
           kind: "todo", date, time: "09:00", remind: true, remindMin: 0, done: false,
           note: `Aus Gmail erkannt${d.amount ? ` – danach ${money(d.amount, d.currency)}/${IV_SHORT[d.interval] || "Monat"}` : ""}.`,
         });
+        // Passendes Abo kennt jetzt das Testende (Status „Testzeitraum endet in N Tagen“); keine zweite Erinnerung
+        if (act.sub && M.isKey(d.nextDate)) {
+          await col.subs.patch(act.sub.id, { contractType: "Testzeitraum", trialEnd: d.nextDate, remindedFor: M.addDays(d.nextDate, -1) }).catch((e) => console.warn(e));
+        }
         await markHandled(d, "accepted");
         ui.toast(`Erinnerung am ${M.fmtDate(date)} angelegt ✓`, 3000);
       }

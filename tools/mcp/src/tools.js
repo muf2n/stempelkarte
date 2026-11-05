@@ -15,6 +15,7 @@ import { best, norm, score } from "./match.js";
 import { expandTodo, nextInstance, describeRule, parseRRule, formatRRule, normCalendars, finalizeEvent } from "./cal.js"; // Update 9 – Kalender
 import * as MAT from "./material.js";
 import { DEFAULT_CATS, suggestCategory, parseAmount, budgetLevel, upcoming, monthlyCost, round2, INTERVALS } from "./money.js";
+import * as AB from "./subs.js"; // Update 9 – Abos: „Wie lange noch“, Fristen, Katalog (gemeinsam mit der Web-App)
 
 const SRC = "claude";
 const ABS_KINDS = ["urlaub", "krank", "zeitausgleich", "schule", "feiertag"];
@@ -1002,12 +1003,13 @@ tool({
         out.push(`- ${n}: ${eur(sp)} von ${eur(lim)} (${Math.round(lv.ratio * 100)} %, übrig ${eur(Math.max(0, lim - sp))})${flag}`);
       }
     }
-    const act = subs.filter((x) => x && !x.paused);
+    const act = subs.filter((x) => x && !x.paused && !(isKey(x.ended) && x.ended < today));
     if (act.length) {
       const up = upcoming(act, today, 31);
       const monthly = act.reduce((a, x) => a + monthlyCost(x), 0);
       out.push("", `Abos & Fixkosten: ${act.length} aktiv, zusammen ca. ${eur(monthly)} pro Monat (${eur(monthly * 12)} pro Jahr).`);
       if (up.length) out.push("Nächste Zahlungen (31 Tage):", ...up.slice(0, 12).map((u) => `- ${fmtKeyWd(u.date)}: ${u.sub.name || "Abo"} ${eur(u.sub.amount)} (${INTERVALS[u.sub.interval] || "monatlich"})`));
+      out.push("(Laufzeiten, Kündigungsfristen und Kündigungslinks: abos_lesen)");
     }
     if (goals.length) {
       out.push("", "Sparziele:");
@@ -1064,6 +1066,201 @@ tool({
     const data = { date, amount: round2(amount), type, category: cat, note, id, updated: d.now, created: d.now, src: SRC };
     await d.commit([d.fs.setWrite(d.p(`a_money_tx/${id}`), data)]);
     return `${type === "in" ? "Einnahme" : "Ausgabe"} gebucht: ${eur(amount)} am ${fmtKey(date)} · ${catName(cats, cat)}${how}${note ? ` · „${note}“` : ""}.`;
+  },
+});
+
+/* ===== Abos (Update 9) ===== */
+
+const IV_ALIASES = { week: "week", woche: "week", wöchentlich: "week", woechentlich: "week", month: "month", monat: "month", monatlich: "month", quarter: "quarter", quartal: "quarter", vierteljährlich: "quarter", vierteljaehrlich: "quarter", year: "year", jahr: "year", jährlich: "year", jaehrlich: "year" };
+// deutsche Feldnamen → Feld in money_subs
+const AB_ALIASES = {
+  was: "what", beschreibung: "what", betrag: "amount", preis: "amount", intervall: "interval", naechste_abbuchung: "next", "nächste_abbuchung": "next", naechste: "next",
+  seit: "startDate", start: "startDate", vertragsart: "contractType", mindestlaufzeit_bis: "minTermEnd", vertragsende: "contractEnd", bezahlt_bis: "contractEnd",
+  kuendigungsfrist: "noticeText", "kündigungsfrist": "noticeText", kuendigungsfrist_tage: "noticeDays", verlaengert_automatisch: "autoRenew", "verlängert_automatisch": "autoRenew",
+  testzeitraum_bis: "trialEnd", kuendigungslink: "cancelUrl", "kündigungslink": "cancelUrl", verwalten_link: "manageUrl", so_kuendigen: "cancelHow", "so_kündigen": "cancelHow",
+  gekuendigt_am: "cancelledOn", "gekündigt_am": "cancelledOn", laeuft_aus_am: "ended", "läuft_aus_am": "ended", konto: "account", login: "account",
+  erinnerung: "remind", pausiert: "paused", kategorie: "category",
+};
+const AB_DATES = new Set(["next", "startDate", "minTermEnd", "contractEnd", "trialEnd", "cancelledOn", "ended"]);
+const AB_BOOLS = new Set(["autoRenew", "remind", "paused"]);
+const AB_URLS = new Set(["cancelUrl", "manageUrl"]);
+const AB_TEXT = { name: 40, what: 120, noticeText: 80, cancelHow: 2000, account: 120 };
+
+function boolArg(v, label) {
+  if (typeof v === "boolean") return v;
+  const t = s(v).toLowerCase();
+  if (["ja", "true", "an", "1", "yes", "ein"].includes(t)) return true;
+  if (["nein", "false", "aus", "0", "no"].includes(t)) return false;
+  throw new UserError(`${label}: bitte ja oder nein angeben.`);
+}
+
+async function findSub(d, name) {
+  const subs = (await d.alltag("money_subs")).filter((x) => x && x.id && !x.deleted);
+  if (!subs.length) throw new UserError("Es sind noch keine Abos eingetragen (App → Alltag → Geld → Abos).");
+  const m = best(name, subs, (x) => x.name || "", 55);
+  if (!m) throw new UserError(`Kein Abo passt zu „${s(name)}“. Vorhanden: ${subs.map((x) => x.name).join(", ")}.`);
+  if (m.ambiguous && m.score < 98) throw new UserError(`„${s(name)}“ ist nicht eindeutig: ${m.item.name} oder ${m.second.name}? Bitte genauer angeben.`);
+  return { sub: m.item, subs };
+}
+
+tool({
+  name: "abos_lesen",
+  title: "Abos & Kündigungen",
+  description: "Alle Abos und Fixkosten aus Alltag → Geld → Abos mit Details: was es ist, Preis (pro Monat/Jahr), Vertragsart, wie lange es noch läuft („Wie lange noch“), bis wann spätestens gekündigt werden muss, Testzeiträume, Kündigungslink, Verwalten-Link, Schritt-für-Schritt-Anleitung „So kündigst du“ und Login (nie Passwörter). Mit name nur ein Abo.",
+  inputSchema: {
+    type: "object",
+    properties: {
+      name: { type: "string", description: "Optional: nur dieses Abo, z. B. \"Netflix\"" },
+      alle: { type: "boolean", description: "Auch beendete/ausgelaufene Abos zeigen (Standard nein)" },
+    },
+    additionalProperties: false,
+  },
+  annotations: RO,
+  async run(args, d) {
+    const today = dayKey(d.now);
+    let subs = (await d.alltag("money_subs")).filter((x) => x && x.id && !x.deleted);
+    if (!subs.length) return "Es sind noch keine Abos eingetragen. In der App: Alltag → Geld → Abos → +.";
+    const one = s(args.name) ? (await findSub(d, args.name)).sub : null;
+    const out = [];
+    const withCat = (x) => {
+      const lines = AB.describeSub(x, today);
+      if (!x.cancelUrl) {
+        const m = AB.matchCatalog(x.name);
+        if (m) lines.push(`  Kündigungslink (Vorschlag aus dem Katalog, noch nicht eingetragen): ${m.entry.cancelUrl}`, `  So kündigst du (Katalog): ${m.entry.cancelHow.replace(/\s*\n\s*/g, " / ")}`);
+      }
+      return lines;
+    };
+    if (one) {
+      out.push(`Abo – Stand ${fmtKey(today)}`, "", ...withCat(one));
+      return out.join("\n");
+    }
+    const sum = AB.subsSummary(subs, today);
+    out.push(`Abos – Stand ${fmtKey(today)}`, `${sum.active.length} aktiv · zusammen ${eur(sum.perMonth)} pro Monat (${eur(sum.perYear)} pro Jahr)`);
+    if (sum.deadlines.length) out.push("", "Kündigungsfristen bald:", ...sum.deadlines.map((x) => `- ${x.sub.name}: spätestens bis ${fmtKeyWd(x.date)} kündigen (Vertrag bis ${fmtKey(x.end)})`));
+    if (sum.trials.length) out.push("", "Testzeiträume:", ...sum.trials.map((x) => `- ${x.sub.name}: endet ${fmtKeyWd(x.date)} – ${x.days === 0 ? "heute" : x.days === 1 ? "morgen" : `in ${x.days} Tagen`}`));
+    const rank = (x) => { const k = AB.subStatus(x, today).kind; return k === "ended" ? 2 : k === "paused" || k === "cancelled" ? 1 : 0; };
+    const shown = subs.filter((x) => args.alle || AB.subStatus(x, today).kind !== "ended").sort((a, b) => rank(a) - rank(b) || String(a.name).localeCompare(String(b.name), "de"));
+    for (const x of shown) out.push("", ...withCat(x));
+    const hidden = subs.length - shown.length;
+    if (hidden) out.push("", `(${hidden} beendete${hidden === 1 ? "s Abo" : " Abos"} ausgeblendet – mit alle: true anzeigen)`);
+    return out.join("\n");
+  },
+});
+
+tool({
+  name: "abo_bearbeiten",
+  title: "Abo-Details ändern",
+  description: "Ändert einzelne Felder eines vorhandenen Abos (Alltag → Geld → Abos) – z. B. Kündigungslink, Anleitung „So kündigst du“, Vertragsart, Mindestlaufzeit, Kündigungsfrist, Testzeitraum-Ende, Login oder „gekündigt am“. Löscht nie ein Abo. Felder leer lassen bzw. null = Wert entfernen. Passwörter werden nicht gespeichert (dafür gibt es den Passwort-Tresor).",
+  inputSchema: {
+    type: "object",
+    properties: {
+      name: { type: "string", description: "Name des Abos, z. B. \"Netflix\" (unscharf)" },
+      felder: {
+        type: "object",
+        description: "Zu ändernde Felder (deutsche Namen wie kuendigungslink, so_kuendigen, gekuendigt_am gehen auch)",
+        properties: {
+          name: { type: "string", description: "Neuer Name" },
+          what: { type: "string", description: "Was ist es, z. B. \"Musik-Streaming Premium Individual\"" },
+          amount: { type: ["number", "string"], description: "Betrag in Euro pro Intervall" },
+          interval: { type: "string", description: "monatlich | jährlich | vierteljährlich | wöchentlich" },
+          next: { type: "string", description: "Nächste Abbuchung (TT.MM.JJJJ)" },
+          startDate: { type: "string", description: "Seit wann (TT.MM.JJJJ)" },
+          contractType: { type: "string", enum: AB.CONTRACT_TYPES, description: "Vertragsart" },
+          minTermEnd: { type: ["string", "null"], description: "Ende der Mindestlaufzeit (TT.MM.JJJJ)" },
+          contractEnd: { type: ["string", "null"], description: "Vertragsende / Prepaid bezahlt bis (TT.MM.JJJJ)" },
+          noticeText: { type: "string", description: "Kündigungsfrist als Text, z. B. \"1 Monat zum Monatsende\"" },
+          noticeDays: { type: ["number", "null"], description: "Kündigungsfrist in Tagen (hat Vorrang vor dem Text)" },
+          autoRenew: { type: ["boolean", "string"], description: "Verlängert sich automatisch (ja/nein)" },
+          trialEnd: { type: ["string", "null"], description: "Testzeitraum endet am (TT.MM.JJJJ)" },
+          cancelUrl: { type: "string", description: "Offizieller Kündigungslink (https://…)" },
+          manageUrl: { type: "string", description: "Link zur Abo-Verwaltung (https://…)" },
+          cancelHow: { type: "string", description: "Schritt-für-Schritt-Anleitung zum Kündigen" },
+          cancelledOn: { type: ["string", "null"], description: "Gekündigt am (TT.MM.JJJJ); ohne ended wird das Ende aus Frist/Vertrag berechnet" },
+          ended: { type: ["string", "null"], description: "Läuft aus am = letzter Tag (danach keine automatische Buchung)" },
+          account: { type: "string", description: "Login/E-Mail für das Abo (kein Passwort!)" },
+          remind: { type: ["boolean", "string"], description: "Erinnerung im Planer vor Kündigungsfrist/Testende" },
+          paused: { type: ["boolean", "string"], description: "Pausiert (wird nicht gebucht)" },
+          category: { type: "string", description: "Kategorie, z. B. \"Abos\", \"Handy & Internet\"" },
+        },
+        additionalProperties: true,
+      },
+    },
+    required: ["name", "felder"],
+    additionalProperties: false,
+  },
+  annotations: WR,
+  async run(args, d) {
+    const today = dayKey(d.now);
+    need(args.name, "Welches Abo? Bitte name angeben (z. B. \"Netflix\").");
+    const f = args.felder && typeof args.felder === "object" && !Array.isArray(args.felder) ? args.felder : null;
+    if (!f || !Object.keys(f).length) throw new UserError("Bitte in felder angeben, was geändert werden soll (z. B. {\"cancelUrl\": \"https://…\"}).");
+    const { sub } = await findSub(d, args.name);
+    const ch = {};
+    for (const [k0, v] of Object.entries(f)) {
+      const k = AB.EDIT_FIELDS.includes(k0) ? k0 : AB_ALIASES[String(k0).toLowerCase()];
+      if (/pass|kennwort|pin\b|pwd/i.test(k0)) throw new UserError("Passwörter speichere ich hier nicht – dafür gibt es den Passwort-Tresor in der App (Alltag → Passwort-Tresor).");
+      if (!k) throw new UserError(`Feld „${k0}“ gibt es nicht. Erlaubt: ${AB.EDIT_FIELDS.join(", ")}.`);
+      const empty = v == null || s(v) === "";
+      if (AB_DATES.has(k)) {
+        if (empty) { if (k === "next") throw new UserError("Die nächste Abbuchung kann nicht leer sein."); ch[k] = null; }
+        else ch[k] = dateArg(v, today, k);
+        if (k === "next" && ch.next) ch.day = ch.next.slice(8, 10) * 1;
+      } else if (AB_BOOLS.has(k)) {
+        ch[k] = empty ? (k === "autoRenew" ? null : false) : boolArg(v, k);
+      } else if (AB_URLS.has(k)) {
+        if (!empty && !/^https?:\/\/[^\s]+\.[^\s]+$/i.test(s(v))) throw new UserError(`${k}: bitte einen vollständigen Link mit https:// angeben.`);
+        ch[k] = empty ? "" : s(v);
+      } else if (k === "amount") {
+        const a = parseAmount(v);
+        if (!(a > 0) || a > 100000) throw new UserError("Bitte einen positiven Betrag angeben (z. B. 9,99).");
+        ch.amount = round2(a);
+      } else if (k === "interval") {
+        const iv = IV_ALIASES[s(v).toLowerCase()];
+        if (!iv) throw new UserError("Intervall: monatlich, jährlich, vierteljährlich oder wöchentlich.");
+        ch.interval = iv;
+      } else if (k === "contractType") {
+        const m = best(v, AB.CONTRACT_TYPES, (x) => x, 50);
+        if (!m) throw new UserError(`Vertragsart: ${AB.CONTRACT_TYPES.join(", ")}.`);
+        ch.contractType = m.item;
+      } else if (k === "noticeDays") {
+        if (empty) ch.noticeDays = null;
+        else { const n = Number(v); if (!Number.isFinite(n) || n < 0 || n > 400) throw new UserError("noticeDays: Anzahl Tage zwischen 0 und 400."); ch.noticeDays = Math.round(n); }
+      } else if (k === "category") {
+        const cats = [...(await moneyCats(d)).values()].filter((c) => c.type !== "in");
+        const m = cats.find((c) => c.id === s(v).toLowerCase()) ? { item: cats.find((c) => c.id === s(v).toLowerCase()) } : best(v, cats, (c) => c.name, 55);
+        if (!m) throw new UserError(`Kategorie „${s(v)}“ gibt es nicht.`);
+        ch.category = m.item.id;
+      } else {
+        const t = empty ? "" : String(v).trim();
+        if (k === "name" && !t) throw new UserError("Der Name darf nicht leer sein.");
+        if (t.length > (AB_TEXT[k] || 200)) throw new UserError(`${k} ist zu lang (höchstens ${AB_TEXT[k] || 200} Zeichen).`);
+        if (k === "account" && /passw|kennwort|pw\s*[:=]/i.test(t)) throw new UserError("Bitte nur den Login (z. B. E-Mail) eintragen – Passwörter gehören in den Passwort-Tresor.");
+        ch[k] = t;
+        if (k === "noticeText" && !("noticeDays" in f)) ch.noticeDays = null; // Text gilt
+      }
+    }
+    // „gekündigt am“ ohne Ende → Ende aus Vertrag/Frist berechnen, Buchungen laufen bis dahin weiter
+    if (ch.cancelledOn && !("ended" in ch)) {
+      ch.ended = AB.cancelEndDate({ ...sub, ...ch }, ch.cancelledOn);
+      if (sub.paused && !("paused" in ch)) ch.paused = false;
+    }
+    if ("cancelledOn" in ch && ch.cancelledOn === null && !("ended" in ch)) ch.ended = null;
+    if (ch.ended && ch.cancelledOn && ch.ended < ch.cancelledOn) throw new UserError("Das Ende liegt vor dem Kündigungsdatum.");
+    const keys = Object.keys(ch).filter((k) => k !== "day");
+    const data = { ...ch, updated: d.now };
+    await d.commit([d.fs.patchWrite(d.p(`a_money_subs/${sub.id}`), data, { exists: true })]);
+    const merged = { ...sub, ...ch };
+    const show = (k) => {
+      const v = ch[k];
+      if (v == null || v === "") return `${k} entfernt`;
+      if (AB_DATES.has(k)) return `${k} → ${fmtKey(v)}`;
+      if (AB_BOOLS.has(k)) return `${k} → ${v ? "ja" : "nein"}`;
+      if (k === "amount") return `Betrag → ${eur(v)}`;
+      if (k === "interval") return `Intervall → ${INTERVALS[v]}`;
+      if (k === "cancelHow") return "Anleitung „So kündigst du“ aktualisiert";
+      return `${k} → ${String(v).slice(0, 80)}`;
+    };
+    return `Abo „${merged.name}“ geändert: ${keys.map(show).join("; ")}.\nJetzt: ${AB.subStatus(merged, today).line}`;
   },
 });
 

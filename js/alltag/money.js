@@ -8,6 +8,7 @@ import { esc } from "../util.js";
 import * as ui from "../ui.js";
 import { createGmail } from "./money-gmail.js";
 import { createBank, bankMark } from "./money-bank.js";
+import { createSubs } from "./money-subs.js"; // Update 9 – Abos: Kündigen, Fristen, Katalog
 
 const TABS = [
   ["uebersicht", "Übersicht", "pie"],
@@ -67,6 +68,7 @@ export function mount(el, ctx) {
     goSubs: () => { S.tab = "abos"; lsSet(TAB_KEY, S.tab); render(); window.scrollTo({ top: 0 }); },
   });
   const bk = createBank({ ui, render: () => queue() });
+  const ab = createSubs({ col, ui, render: () => queue(), catOf: (id) => catOf(id), cats: () => cats(), safeWrite: (p, m) => safeWrite(p, m), gmCardHTML: () => gm.cardHTML() });
 
   /* ---------- Daten-Hilfen ---------- */
 
@@ -112,6 +114,7 @@ export function mount(el, ctx) {
     } finally {
       catching = false;
     }
+    ab.catchUpReminders(); // Planer-Erinnerung vor Kündigungsfrist/Testende (einmal pro Frist)
   }
 
   /* ---------- Rendern ---------- */
@@ -395,28 +398,7 @@ export function mount(el, ctx) {
   /* ---------- Abos ---------- */
 
   function pageSubs() {
-    const map = catMap();
-    const subs = col.subs.all().sort((a, b) => (!!a.ended - !!b.ended) || String(a.next || "9").localeCompare(String(b.next || "9")));
-    if (!subs.length) return gm.cardHTML() + emptyBox("Noch keine Abos", "Netflix, Spotify, Handyvertrag, Fitnessstudio … – trag sie ein, sie werden am Fälligkeitstag automatisch gebucht.", "newsub");
-    const active = subs.filter((s) => !s.paused);
-    const perMonth = active.reduce((s, x) => s + M.monthlyCost(x), 0);
-    const perYear = active.reduce((s, x) => s + M.yearlyCost(x), 0);
-    const up = M.upcoming(active, M.todayKey(), 31);
-    return gm.cardHTML() + `<div class="mn-sub-sum">` +
-        `<div class="card"><small>pro Monat</small><b>${amt(perMonth)}</b></div>` +
-        `<div class="card"><small>pro Jahr</small><b>${amt(perYear)}</b></div>` +
-      `</div>` +
-      (up.length ? `<section class="card mn-card"><h3 class="mn-h">Nächste Zahlungen (31 Tage)</h3><ul class="mn-mini">${up.slice(0, 8).map((u) => `<li><span>${esc(dueLabel(u.date))}</span><b>${esc(u.sub.name)}</b><em>${amt(u.sub.amount)}</em></li>`).join("")}</ul></section>` : "") +
-      `<h3 class="mn-h mn-h-out">Alle Abos &amp; Fixkosten</h3>` +
-      `<ul class="mn-subs">` + subs.map((s) => {
-        const c = catOf(s.category || "abos", map);
-        return `<li><button type="button" class="mn-tx${s.paused ? " paused" : ""}" data-mn="editsub" data-id="${esc(s.id)}">` +
-          catBubble(c) +
-          `<span class="mn-tx-main"><b>${esc(s.name)}</b><small>${esc(M.INTERVALS[s.interval] || "monatlich")} · ${s.ended ? "beendet " + esc(M.fmtDate(s.ended)) : s.paused ? "pausiert" : esc(M.fmtDate(s.next))}${s.source === "gmail" ? " · aus Gmail" : ""}</small></span>` +
-          `<span class="mn-tx-amt out">${amt(s.amount)}<small>${s.interval !== "month" ? "≈ " + amt(M.monthlyCost(s)) + "/Mon." : ""}</small></span>` +
-        `</button></li>`;
-      }).join("") + `</ul>` +
-      `<p class="note">Fällige Zahlungen werden beim Öffnen automatisch als Buchung eingetragen (jede nur einmal).</p>`;
+    return ab.pageHTML(emptyBox); // js/alltag/money-subs.js
   }
 
   /* ---------- Teilen ---------- */
@@ -794,50 +776,7 @@ export function mount(el, ctx) {
   }
 
   function openSub(sub = null, preset = null, onSaved = null) {
-    const isNew = !sub;
-    const s = sub || { name: "", amount: "", interval: "month", next: M.todayKey(), category: "abos", paused: false, ...(preset || {}) };
-    const outCats = cats().filter((c) => c.type !== "in");
-    ui.openSheet({
-      title: isNew ? "Neues Abo / Fixkosten" : "Abo bearbeiten",
-      bodyHTML: `<div class="fields">` +
-          `<label>Name<input id="mn-s-name" type="text" maxlength="40" placeholder="z. B. Spotify, Handy, Fitnessstudio" value="${esc(s.name)}"></label>` +
-          `<div class="row"><label>Betrag (€)<input id="mn-s-amt" inputmode="decimal" placeholder="9,99" value="${s.amount ? esc(String(s.amount).replace(".", ",")) : ""}"></label>` +
-          `<label>Intervall<select id="mn-s-int">${Object.entries(M.INTERVALS).map(([k, v]) => `<option value="${k}"${k === s.interval ? " selected" : ""}>${v}</option>`).join("")}</select></label></div>` +
-          `<div class="row"><label>Nächster Termin<input id="mn-s-next" type="date" value="${esc(s.next || M.todayKey())}"></label>` +
-          `<label>Kategorie<select id="mn-s-cat">${outCats.map((c) => `<option value="${esc(c.id)}"${c.id === s.category ? " selected" : ""}>${esc(c.emoji)} ${esc(c.name)}</option>`).join("")}</select></label></div>` +
-          `<label class="mn-check"><input type="checkbox" id="mn-s-pause"${s.paused ? " checked" : ""}> Pausiert (wird nicht gebucht)</label>` +
-          (s.ended ? `<p class="note">Beendet am ${esc(M.fmtDate(s.ended))} (Kündigung). Häkchen weg = wieder aktiv.</p>` : "") +
-          `<p class="note">Liegt der Termin heute oder in der Vergangenheit, wird die Zahlung sofort gebucht.</p>` +
-        `</div>` +
-        `<div class="row">${isNew ? "" : `<button type="button" class="btn danger sm" data-del>Löschen</button>`}<button type="button" class="btn primary" data-save>Speichern</button></div>`,
-      onMount(sheet, close) {
-        const name = sheet.querySelector("#mn-s-name"), catSel = sheet.querySelector("#mn-s-cat");
-        let catTouched = !isNew;
-        catSel.addEventListener("change", () => { catTouched = true; });
-        name.addEventListener("input", () => {
-          if (catTouched) return;
-          const sg = M.suggestCategory(name.value, col.rules.all(), new Set(outCats.map((c) => c.id)));
-          if (sg) catSel.value = sg.cat;
-        });
-        sheet.querySelector("[data-save]").addEventListener("click", async () => {
-          const n = name.value.trim();
-          const a = M.parseAmount(sheet.querySelector("#mn-s-amt").value);
-          const next = sheet.querySelector("#mn-s-next").value;
-          if (!n) { ui.toast("Bitte einen Namen eingeben."); return; }
-          if (!(a > 0)) { ui.toast("Bitte einen Betrag eingeben."); return; }
-          if (!M.isKey(next)) { ui.toast("Bitte den nächsten Termin wählen."); return; }
-          const interval = sheet.querySelector("#mn-s-int").value;
-          const day = interval === "week" ? null : M.dateOf(next).getDate();
-          close();
-          const paused = sheet.querySelector("#mn-s-pause").checked;
-          const extra = isNew && preset ? { source: preset.source, gmail: preset.gmail } : {};
-          const ok = await safeWrite(col.subs.put({ ...(sub || {}), ...extra, name: n, amount: a, interval, next, day, category: catSel.value, paused, ...(paused ? {} : { ended: null }) }), "Gespeichert ✓");
-          if (ok && onSaved) onSaved();
-        });
-        const del = sheet.querySelector("[data-del]");
-        if (del) ui.confirmButton(del, "Wirklich löschen?", async () => { close(); await safeWrite(col.subs.remove(sub.id), "Abo gelöscht – bisherige Buchungen bleiben"); });
-      },
-    });
+    ab.openSub(sub, preset, onSaved); // Formular mit Katalog-Vorschlag: js/alltag/money-subs.js
   }
 
   function openGroup(group = null) {
@@ -977,6 +916,8 @@ export function mount(el, ctx) {
     if (g && el.contains(g) && gm.onClick(g)) return;
     const b = ev.target.closest("[data-bk]");
     if (b && el.contains(b) && bk.onClick(b)) return;
+    const abT = ev.target.closest("[data-ab]");
+    if (abT && el.contains(abT) && ab.onClick(abT)) return;
     const t = ev.target.closest("[data-tab], [data-mn]");
     if (!t || !el.contains(t)) return;
     if (t.classList.contains("mn-tab")) {
@@ -1008,7 +949,7 @@ export function mount(el, ctx) {
       case "deposit": openDeposit(col.goals.get(id), 1); break;
       case "withdraw": openDeposit(col.goals.get(id), -1); break;
       case "newsub": openSub(); break;
-      case "editsub": openSub(col.subs.get(id)); break;
+      case "editsub": ab.openDetail(col.subs.get(id)); break;
       case "newgroup": openGroup(); break;
       case "opengroup": S.group = id; render(); window.scrollTo({ top: 0 }); break;
       case "closegroup": S.group = null; render(); break;

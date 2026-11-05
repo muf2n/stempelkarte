@@ -17,6 +17,9 @@ on:
       - "tools/mcp/**"
       - "js/cal-core.js"
       - "js/alltag/material-core.js"
+      - "js/alltag/subs-core.js"
+      - "js/alltag/subs-catalog.js"
+      - "js/alltag/money-core.js"
       - ".github/workflows/mcp-deploy.yml"
   workflow_dispatch:
 

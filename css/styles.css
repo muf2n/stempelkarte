@@ -4828,3 +4828,80 @@ div.entry.ek-schcard:hover { border-color: var(--sch-line); }
 }
 .ph-strip-gal:focus-visible { outline: none; box-shadow: var(--ring); }
 .ph-v-extra[hidden] { display: none; }
+
+/* Update 9 – Abos (Kündigen, Fristen, Katalog) – js/alltag/money-subs.js */
+.ab-top { display: grid; grid-template-columns: 1fr; gap: 12px; }
+.ab-top { grid-template-columns: minmax(0, 1fr); }
+@media (min-width: 900px) { .ab-top { grid-template-columns: repeat(2, minmax(0, 1fr)); } .ab-top .ab-hero { grid-column: 1 / -1; } }
+.ab-hero { display: grid; grid-template-columns: 1fr 1fr; gap: 4px 12px; padding: 16px 18px;
+  background: linear-gradient(135deg, color-mix(in srgb, #8b5cf6 14%, var(--card)) 0%, var(--card) 75%); border-color: color-mix(in srgb, #8b5cf6 28%, var(--line)); }
+.ab-hero > div { display: flex; flex-direction: column; gap: 2px; }
+.ab-hero small { color: var(--muted); font-weight: 600; font-size: .82rem; }
+.ab-hero b { font-family: var(--f-mono); font-size: 1.45rem; font-variant-numeric: tabular-nums; letter-spacing: -.01em; }
+.ab-hero-n { grid-column: 1 / -1; margin: 4px 0 0; color: var(--muted); font-size: .86rem; }
+.ab-mini.warn { border-color: color-mix(in srgb, var(--pause) 45%, var(--line)); }
+.ab-mini.trial { border-color: color-mix(in srgb, #0ea5e9 45%, var(--line)); }
+.ab-mini.warn em { color: var(--pause); font-weight: 700; }
+.ab-mini .linkbtn { font: inherit; font-weight: 600; padding: 0; min-height: 0; color: var(--ink); text-align: left; }
+.ab-list { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: minmax(0, 1fr); gap: 10px; }
+.ab-list > li, .ab-top > * { min-width: 0; }
+@media (min-width: 900px) { .ab-list { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+.ab-card { height: 100%; display: flex; flex-direction: column; border: 1px solid var(--line); border-radius: 18px; background: var(--card); box-shadow: var(--shadow); overflow: hidden; }
+.ab-card.urgent { border-color: color-mix(in srgb, var(--pause) 60%, var(--line)); }
+.ab-card.off { opacity: .62; }
+.ab-main { width: 100%; display: flex; align-items: center; gap: 12px; padding: 12px 14px 8px; border: 0; background: none; color: var(--ink); font: inherit; text-align: left; }
+.ab-main:focus-visible { outline: none; box-shadow: inset var(--ring); border-radius: 18px; }
+.ab-ini { font-family: var(--f-display); font-weight: 800; color: var(--c); }
+.ab-txt { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 1px; }
+.ab-txt b { font-weight: 700; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ab-txt small { color: var(--muted); font-size: .84rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ab-price { flex: none; display: flex; flex-direction: column; align-items: flex-end; font-family: var(--f-mono); font-variant-numeric: tabular-nums; line-height: 1.2; }
+.ab-price b { font-weight: 700; }
+.ab-price small { font-size: .74rem; color: var(--muted); }
+.ab-price .ab-pm { color: var(--ink); opacity: .8; }
+.ab-foot { margin-top: auto; display: flex; align-items: center; gap: 10px; padding: 8px 10px 10px 14px; border-top: 1px dashed color-mix(in srgb, var(--line) 85%, transparent); }
+.ab-status { flex: 1; min-width: 0; margin: 0; font-size: .84rem; line-height: 1.35; color: var(--muted); }
+.ab-status.trial { color: #0369a1; }
+.ab-status.cancelled { color: var(--run); }
+.ab-card.urgent .ab-status { color: var(--pause); font-weight: 600; }
+.ab-cancel { flex: none; min-height: 40px; padding: 6px 14px; border-radius: 12px; font-weight: 700;
+  background: color-mix(in srgb, var(--danger) 10%, var(--card)); color: var(--danger); border: 1px solid color-mix(in srgb, var(--danger) 40%, transparent); }
+.ab-cancel.ghosty { background: transparent; color: var(--accent); border-color: var(--line); font-weight: 600; }
+.ab-cancel.btn.primary { background: var(--danger); color: #fff; border-color: transparent; }
+@media (prefers-color-scheme: dark) { .ab-status.trial { color: #7dd3fc; } .ab-cancel.btn.primary { color: #1b0b0b; } }
+/* Detail-Blatt */
+.ab-detail { display: flex; flex-direction: column; gap: 12px; }
+.ab-d-head { display: flex; align-items: center; gap: 12px; }
+.ab-d-head > div { display: flex; flex-direction: column; min-width: 0; }
+.ab-d-head b { font-family: var(--f-display); font-size: 1.25rem; }
+.ab-d-head small { color: var(--muted); }
+.ab-d-status { margin: 0; padding: 10px 12px; border-radius: 14px; background: var(--soft); font-weight: 600; font-size: .94rem; }
+.ab-d-status.urgent { background: color-mix(in srgb, var(--pause) 16%, var(--card)); color: var(--ink); }
+.ab-d-status.cancelled, .ab-d-status.ended { background: color-mix(in srgb, var(--run) 12%, var(--card)); }
+.ab-links { display: flex; flex-direction: column; gap: 8px; }
+.ab-link { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 10px; min-width: 0; }
+.ab-link .btn.primary { flex: 1 1 100%; }
+.ab-link .btn { flex: none; }
+.ab-url { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: .8rem; color: var(--muted); font-family: var(--f-mono); }
+.ab-copy { flex: none; display: grid; place-items: center; width: 38px; height: 38px; border-radius: 12px; border: 1px solid var(--line); background: var(--card); color: var(--accent); }
+.ab-copy:focus-visible { outline: none; box-shadow: var(--ring); }
+.ab-dl { margin: 0; display: flex; flex-direction: column; border: 1px solid var(--line); border-radius: 14px; overflow: hidden; }
+.ab-dl-r { display: grid; grid-template-columns: 9.5em minmax(0, 1fr); gap: 10px; align-items: center; padding: 8px 12px; border-top: 1px solid var(--line); font-size: .92rem; }
+.ab-dl-r:first-child { border-top: 0; }
+.ab-dl dt { color: var(--muted); font-size: .84rem; font-weight: 600; }
+.ab-dl dd { margin: 0; display: flex; align-items: center; gap: 8px; flex-wrap: wrap; min-width: 0; overflow-wrap: anywhere; }
+.ab-dl dd small { color: var(--muted); }
+.ab-dl dd .ab-copy { width: 32px; height: 32px; margin-left: auto; }
+.ab-dead { color: var(--pause); }
+.ab-how { padding: 12px; border-radius: 14px; background: color-mix(in srgb, #8b5cf6 8%, var(--card)); border: 1px solid color-mix(in srgb, #8b5cf6 25%, var(--line)); display: flex; flex-direction: column; gap: 8px; }
+.ab-how-h { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.ab-how h4 { margin: 0; font-size: 1rem; }
+.ab-how textarea { min-height: 110px; background: var(--card); font-size: .92rem; line-height: 1.45; }
+.ab-how-btns:empty { display: none; }
+.ab-vault { margin: 0; }
+.ab-d-btns { flex-wrap: wrap; }
+.ab-d-btns .btn { flex: 1 1 auto; }
+.ab-markc { background: var(--ink); color: var(--card); border-color: transparent; }
+.ab-form [hidden] { display: none !important; }
+.ab-types .chip { min-height: 40px; padding: 6px 12px; font-size: .88rem; }
+.ab-cat-hint { margin: -4px 0 0; color: var(--run); }
