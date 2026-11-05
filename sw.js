@@ -105,6 +105,10 @@ const SHELL = [
   "js/alltag/unterwegs-fuel.js",
   "js/alltag/unterwegs-places.js",
   "css/alltag-unterwegs.css",
+  // Update 9 – Material
+  "js/alltag/material.js",
+  "js/alltag/material-core.js",
+  "css/alltag-material.css",
   "js/app.js"
 ];
 

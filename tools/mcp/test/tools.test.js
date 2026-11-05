@@ -347,6 +347,41 @@ test("Schule: leer, Hausaufgabe/Prüfung anlegen, Noten-Schnitt", async () => {
   assert.match(r.text, /- Elektrotechnik: Ø 1,67 \(2 Noten\)/);
 });
 
+test("Material: anlegen (Katalog + Ort unscharf, eingestempelt → aktueller Ort) und lesen", async () => {
+  const t = await seeded();
+  let r = await t.tool("material_lesen");
+  assert.match(r.text, /noch nichts eingetragen/);
+  r = await t.tool("material_anlegen", { name: "nym 3x1,5", menge: "25", status: "verbaut" });
+  assert.match(r.text, /Als verbaut eingetragen: 25 m NYM-J 3×1,5 \(Katalog: „NYM-J 3×1,5“ zu „nym 3x1,5“\) · Baustelle: Baustelle Huber \(aktueller Arbeitsort\) · 04\.11\.2026/);
+  r = await t.tool("material_anlegen", { name: "Schuko", menge: 2, status: "verbaut" });
+  assert.match(r.text, /2× Schuko-Steckdose/);
+  r = await t.tool("material_anlegen", { name: "Wago 413", menge: 1, einheit: "Pkg", ort: "Firma" });
+  assert.match(r.text, /Auf die Einkaufsliste gesetzt: 1 Pkg Wago 221-413 \(Katalog: „Wago 221-413“ zu „Wago 413“\) · Baustelle: Firma Elektro Maier \(gespeicherter Ort/);
+  r = await t.tool("material_anlegen", { name: "Spezialdübel XY", ort: "Teststraße 15" });
+  assert.match(r.text, /1× Spezialdübel XY \(nicht im Katalog – als eigener Name übernommen\) · Baustelle: Teststraße 15 \(kein gespeicherter Ort/);
+  r = await t.tool("material_anlegen", { name: "Schuko", menge: 0 });
+  assert.ok(r.isError);
+  r = await t.tool("material_anlegen", { name: "Schuko", einheit: "Fass" });
+  assert.ok(r.isError);
+  const items = t.g.list(`${t.base}/a_material_items`);
+  assert.equal(items.length, 4);
+  const nym = items.find((x) => x.name === "NYM-J 3×1,5");
+  assert.deepEqual({ qty: nym.qty, unit: nym.unit, status: nym.status, placeId: nym.placeId, place: nym.place, dayKey: nym.dayKey, catalogId: nym.catalogId, photoId: nym.photoId, entryId: nym.entryId },
+    { qty: 25, unit: "m", status: "verbaut", placeId: "p1", place: "Baustelle Huber", dayKey: "2026-11-04", catalogId: "nym-j-3x1-5", photoId: null, entryId: null });
+  assert.ok(nym.doneAt && nym.created && nym.updated && nym.id);
+  assert.equal(t.g.get(`${t.base}/a_material_catalog/b_nym-j-3x1-5`).count, 1);
+  // zweites Mal verbaut am selben Tag → Summe
+  await t.tool("material_anlegen", { name: "NYM-J 3×1,5", menge: 10, status: "verbaut", ort: "huber" });
+  r = await t.tool("material_lesen", {});
+  assert.match(r.text, /Noch zu besorgen \(2\):\n- Firma Elektro Maier: 1 Pkg Wago 221-413\n- Teststraße 15: 1× Spezialdübel XY/);
+  assert.match(r.text, /- Mi, 04\.11\.2026 · Baustelle Huber: 35 m NYM-J 3×1,5, 2× Schuko-Steckdose/);
+  r = await t.tool("material_lesen", { status: "verbaut", ort: "Huber", von: "01.11.2026", bis: "heute" });
+  assert.match(r.text, /Verbaut \(01\.11\.2026 – 04\.11\.2026\)/);
+  assert.doesNotMatch(r.text, /Wago/);
+  r = await t.tool("material_lesen", { status: "verbaut", von: "01.10.2026", bis: "05.10.2026" });
+  assert.match(r.text, /nichts eingetragen/);
+});
+
 test("Formatierung: Euro, Datum, Zeiten", () => {
   assert.equal(T.eur(1234.56), "1.234,56 €");
   assert.equal(T.eur(-5), "−5,00 €");

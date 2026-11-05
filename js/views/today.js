@@ -9,6 +9,7 @@ import * as motion from "../motion.js";
 import * as myday from "./day.js";
 import { peoplePicker, cleanPeople, peopleText, rememberPeople } from "./entries.js";
 import { mountPhotoBar } from "./gallery.js"; // Update 9 – Fotos
+import { mountTodayButton as mountMaterialBtn } from "../alltag/material.js"; // Update 9 – Material
 
 // Einsatzplan-Helfer (js/einsatz.js, Agent T) – dynamisch, mit Fallback (null)
 let einsatzForFn = null;
@@ -316,6 +317,7 @@ export function mount(el, c) {
 
   try { myday.mount($("myday"), ctx); } catch (e) { console.error(e); }
   try { photoBar = mountPhotoBar($("photo"), ctx); } catch (e) { console.error(e); }
+  try { mountMaterialBtn($("photo")); } catch (e) { console.error(e); } // Update 9 – Material neben dem Foto-Knopf
   $("btns").addEventListener("click", onButton);
   $("chips").addEventListener("click", onChip);
   $("acts").addEventListener("click", onActChip);

@@ -4357,3 +4357,7 @@ span.pl-sched-m { cursor: default; }
 .ag[data-pmode="tag"] .pl-cd-d, .ag[data-pmode="woche"] .pl-cd-d, .ag[data-pmode="monat"] .pl-cd-d { display: none; }
 .pl-blk.tiny .pl-chk { width: 26px; height: 26px; max-height: none; margin: 0; align-self: center; }
 .pl-blk.tiny .pl-chk::before { inset: 5px; border-radius: 5px; }
+
+/* Update 9 – Material (Berichtsheft-Zeile „Material: …“) */
+.rp-mat { margin-top: 3px; font-size: .86em; color: var(--muted); }
+.rp-mat b { font-weight: 700; color: var(--ink); }

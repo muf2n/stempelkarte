@@ -15,6 +15,7 @@ on:
     branches: [main]
     paths:
       - "tools/mcp/**"
+      - "js/alltag/material-core.js"
       - ".github/workflows/mcp-deploy.yml"
   workflow_dispatch:
 

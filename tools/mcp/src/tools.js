@@ -12,6 +12,7 @@ import {
   defaultCreditMin, absenceRangeDays, creditByDay,
 } from "./logic.js";
 import { best, norm, score } from "./match.js";
+import * as MAT from "./material.js";
 import { DEFAULT_CATS, suggestCategory, parseAmount, budgetLevel, upcoming, monthlyCost, round2, INTERVALS } from "./money.js";
 
 const SRC = "claude";
@@ -1097,6 +1098,131 @@ tool({
     const data = { progress: 0, subject, kind, date, time, topics, id, updated: d.now, created: d.now, src: SRC };
     await d.commit([d.fs.setWrite(d.p(`a_school_exams/${id}`), data)]);
     return `${kind} eingetragen: ${subject} am ${fmtKeyWd(date)}${time ? ` um ${time}` : ""} (${countdown(today, date)})${topics ? `\nStoff: ${topics.split("\n").join("; ")}` : ""}.\nTipp: In der App kannst du daraus einen Lernplan erstellen lassen.`;
+  },
+});
+
+/* ===== Material (Alltag › Material) ===== */
+
+const MAT_STATUS = { brauche: "brauche", brauch: "brauche", kaufen: "brauche", besorgen: "brauche", offen: "brauche", besorgt: "besorgt", gekauft: "besorgt", verbaut: "verbaut", eingebaut: "verbaut", montiert: "verbaut" };
+function matStatus(v, fallback) {
+  const k = norm(v).replace(/ /g, "");
+  if (!k) return fallback;
+  if (MAT_STATUS[k]) return MAT_STATUS[k];
+  throw new UserError(`Status „${s(v)}“ gibt es nicht – bitte „brauche“, „besorgt“ oder „verbaut“.`);
+}
+function matUnit(v) {
+  const t = s(v).toLowerCase().replace(/\.$/, "");
+  if (!t) return null;
+  const map = { stk: "Stk", stück: "Stk", stueck: "Stk", st: "Stk", m: "m", meter: "m", pkg: "Pkg", packung: "Pkg", pack: "Pkg", pck: "Pkg", rolle: "Rolle", rollen: "Rolle", kg: "kg", l: "l", liter: "l", satz: "Satz", set: "Satz" };
+  if (map[t]) return map[t];
+  throw new UserError(`Einheit „${s(v)}“ kenne ich nicht – möglich: ${MAT.UNITS.join(", ")}.`);
+}
+
+tool({
+  name: "material_anlegen",
+  title: "Material eintragen",
+  description: "Trägt Material im Bereich „Material“ ein – entweder auf die Einkaufsliste (status \"brauche\", Standard) oder als heute verbaut (status \"verbaut\"). Der Name wird mit dem Elektriker-Katalog abgeglichen (z. B. \"3x1,5\" → NYM-J 3×1,5, \"Schuko\" → Schuko-Steckdose), die Einheit kommt dann aus dem Katalog. Ohne Ort: eingestempelt → aktueller Arbeitsort.",
+  inputSchema: {
+    type: "object",
+    properties: {
+      name: { type: "string", description: "Material, z. B. \"NYM 3x1,5\", \"Wago 221-413\", \"Schuko-Steckdose\"" },
+      menge: { type: ["number", "string"], description: "Menge, Standard 1" },
+      einheit: { type: "string", description: "Stk, m, Pkg, Rolle, kg, l, Satz (Standard aus dem Katalog)" },
+      status: { type: "string", enum: ["brauche", "verbaut"], description: "Standard brauche (Einkaufsliste)" },
+      ort: { type: "string", description: "Baustelle/Ort, z. B. \"Huber\" (gespeicherte Orte werden unscharf gefunden)" },
+      notiz: { type: "string" },
+    },
+    required: ["name"],
+    additionalProperties: false,
+  },
+  annotations: WR,
+  async run(args, d) {
+    const today = dayKey(d.now);
+    const raw = need(args.name, "Bitte angeben, welches Material.");
+    const qty = args.menge == null || s(args.menge) === "" ? 1 : MAT.cleanQty(args.menge);
+    if (!qty) throw new UserError("Bitte eine Menge größer 0 angeben.");
+    if (qty > 100000) throw new UserError("Die Menge ist unrealistisch hoch.");
+    const status = matStatus(args.status, "brauche");
+    const [places, st, userCat] = await Promise.all([d.places(), d.state(), d.alltag("material_catalog").catch(() => [])]);
+    const cat = MAT.mergeCatalog(userCat);
+    const m = MAT.bestCatalogMatch(raw, cat, 70);
+    const name = m ? m.item.name : raw;
+    const unit = matUnit(args.einheit) || (m ? m.item.unit : "Stk");
+    let where;
+    if (s(args.ort)) where = resolvePlace(args.ort, places);
+    else if (st.running) {
+      const sg = lastSeg(st.running) || {};
+      const pid = sg.placeId || st.running.placeId || null;
+      const p = pid ? places.find((x) => x.id === pid) : null;
+      where = { placeId: p ? p.id : null, place: (p && p.name) || placeName(sg) || placeName(st.running), info: " (aktueller Arbeitsort)" };
+    } else where = { placeId: null, place: "", info: "" };
+    const id = alltagId(d.now);
+    const doc = MAT.normItem({ id, name, qty, unit, status, placeId: where.placeId, place: where.place, dayKey: today, entryId: null, note: s(args.notiz), photoId: null, catalogId: m ? m.item.id : null, doneAt: status === "verbaut" ? d.now : null }, d.now);
+    const data = { ...doc, created: d.now, updated: d.now, src: SRC };
+    const writes = [d.fs.setWrite(d.p(`a_material_items/${id}`), data)];
+    if (m) {
+      const cur = userCat.find((x) => x.id === m.item.docId) || {};
+      writes.push(d.fs.setWrite(d.p(`a_material_catalog/${m.item.docId}`), { ...cur, id: m.item.docId, own: !!m.item.own, ...(m.item.own ? { name: m.item.name, unit: m.item.unit, group: MAT.OWN_GROUP } : {}), fav: !!cur.fav, count: (Number(cur.count) || 0) + 1, lastUsed: d.now, created: cur.created || d.now, updated: d.now }));
+    }
+    await d.commit(writes);
+    const hint = m && MAT.norm(m.item.name) !== MAT.norm(raw) ? ` (Katalog: „${m.item.name}“ zu „${raw}“)` : m ? "" : " (nicht im Katalog – als eigener Name übernommen)";
+    return `${status === "verbaut" ? "Als verbaut eingetragen" : "Auf die Einkaufsliste gesetzt"}: ${MAT.lineText(doc)}${hint}${doc.place ? ` · Baustelle: ${doc.place}${where.info}` : " · ohne Baustelle"} · ${fmtKey(today)}.`;
+  },
+});
+
+tool({
+  name: "material_lesen",
+  title: "Material lesen",
+  description: "Zeigt Material aus dem Bereich „Material“: Einkaufsliste (brauche/besorgt) und verbautes Material, gruppiert nach Baustelle mit Summen pro Material. Filter: status (brauche, besorgt, verbaut, offen = brauche+besorgt), ort, Zeitraum von/bis (für verbaut).",
+  inputSchema: {
+    type: "object",
+    properties: {
+      status: { type: "string", enum: ["brauche", "besorgt", "verbaut", "offen", "alle"], description: "Standard: offen + verbaut der letzten 30 Tage" },
+      ort: { type: "string" },
+      von: { type: "string", description: "Datum TT.MM.JJJJ / heute / gestern" },
+      bis: { type: "string" },
+    },
+    additionalProperties: false,
+  },
+  annotations: RO,
+  async run(args, d) {
+    const today = dayKey(d.now);
+    const [all, places] = await Promise.all([d.alltag("material_items"), d.places()]);
+    const items = all.filter((x) => x && s(x.name));
+    const stv = s(args.status).toLowerCase();
+    const from = dateArg(args.von, today, "von"), to = dateArg(args.bis, today, "bis");
+    if (from && to && from > to) throw new UserError("„von“ liegt nach „bis“.");
+    let list = items;
+    if (s(args.ort)) {
+      const m = matchPlace(args.ort, places);
+      if (m) list = list.filter((x) => x.placeId === m.item.id || (!x.placeId && norm(x.place) === norm(m.item.name)));
+      else list = list.filter((x) => score(args.ort, MAT.placeLabel(x, places)) >= 60);
+    }
+    const inRange = (x) => (!from || x.dayKey >= from) && (!to || x.dayKey <= to);
+    const lo = from || (stv === "verbaut" || stv === "alle" ? null : addDays(today, -30));
+    const verbaut = list.filter((x) => x.status === "verbaut" && (from || to ? inRange(x) : (!lo || x.dayKey >= lo)));
+    const brauche = list.filter((x) => x.status === "brauche");
+    const besorgt = list.filter((x) => x.status === "besorgt");
+    const want = (k) => !stv || stv === "alle" || stv === k || (stv === "offen" && (k === "brauche" || k === "besorgt"));
+    const out = [];
+    const section = (title, arr) => {
+      if (!arr.length) return;
+      out.push(`${title}:`);
+      for (const g of MAT.byPlace(arr, places)) out.push(`- ${g.place}: ${MAT.totals(g.items).map(MAT.lineText).join(", ")}`);
+    };
+    if (want("brauche")) section(`Noch zu besorgen (${brauche.length})`, brauche);
+    if (want("besorgt")) section(`Besorgt, noch nicht verbaut (${besorgt.length})`, besorgt);
+    if (want("verbaut")) {
+      const range = from || to ? `${from ? fmtKey(from) : "Anfang"} – ${to ? fmtKey(to) : "heute"}` : lo ? `seit ${fmtKey(lo)}` : "gesamt";
+      if (verbaut.length) {
+        out.push(`Verbaut (${range}):`);
+        const days = [...new Set(verbaut.map((x) => x.dayKey))].sort().reverse().slice(0, 31);
+        for (const k of days) for (const g of MAT.byPlace(verbaut.filter((x) => x.dayKey === k), places)) out.push(`- ${fmtKeyWd(k)} · ${g.place}: ${MAT.totals(g.items).map(MAT.lineText).join(", ")}`);
+        out.push(`Summe verbaut: ${MAT.totals(verbaut).map(MAT.lineText).join(", ")}`);
+      } else if (stv === "verbaut") out.push(`Verbaut (${range}): nichts eingetragen.`);
+    }
+    if (!out.length) return items.length ? "Für diese Auswahl gibt es kein Material." : "Im Bereich „Material“ ist noch nichts eingetragen.";
+    return out.join("\n");
   },
 });
 
