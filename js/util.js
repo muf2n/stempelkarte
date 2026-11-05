@@ -267,7 +267,9 @@ export function schoolLabel(ts, settings) {
   if (s.holidays !== false && holidayName(d)) return null;
   const k = dayKey(d);
   const workDays = Array.isArray(s.workDays) ? s.workDays : [1, 2, 3, 4, 5];
-  if (workDays.includes(d.getDay())) {
+  // Blockschule: Mo–Fr ist Schule, auch wenn ein Wochentag kein eigener Arbeitstag ist (z. B. 4-Tage-Woche)
+  const wd = d.getDay();
+  if (workDays.includes(wd) || (wd >= 1 && wd <= 5)) {
     const b = sc.blocks.find((x) => x.from <= k && k <= x.to);
     if (b) return String(b.label || "").trim() || "Blockschule";
   }

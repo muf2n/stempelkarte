@@ -174,7 +174,7 @@ export function schoolLabel(k, settings) {
   const s = settings || {};
   if (s.holidays !== false && holidayName(k)) return null;
   const wd = wdOf(k);
-  if (workDaysOf(s).includes(wd)) {
+  if (workDaysOf(s).includes(wd) || (wd >= 1 && wd <= 5)) { // Blockschule: Mo–Fr immer Schule
     const b = sc.blocks.find((x) => x.from <= k && k <= x.to);
     if (b) return String(b.label || "").trim() || "Blockschule";
   }

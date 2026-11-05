@@ -99,7 +99,7 @@ export function isSchoolDayVienna(settings, v) {
   const days = Array.isArray(sc.days) ? sc.days.map(Number) : [];
   if (days.includes(v.wd)) return true;
   const workDays = Array.isArray(s.workDays) ? s.workDays.map(Number) : [1, 2, 3, 4, 5];
-  if (!workDays.includes(v.wd)) return false;
+  if (!workDays.includes(v.wd) && !(v.wd >= 1 && v.wd <= 5)) return false; // Blockschule: Mo–Fr immer
   const re = /^\d{4}-\d{2}-\d{2}$/;
   return (Array.isArray(sc.blocks) ? sc.blocks : []).some((b) =>
     b && re.test(String(b.from || "")) && re.test(String(b.to || "")) && b.from <= v.key && v.key <= b.to);
