@@ -25,7 +25,7 @@ Insgesamt 49 Werkzeuge (verwandte Lese-Bereiche sind über `bereich`/`aktion` zu
 | `geld_lesen` | Monat (Einnahmen/Ausgaben/Kategorien, optional alle `buchungen`), Budget, Abos, Sparziele („pro Monat nötig“), Teilen-Gruppen mit Salden, Kontostand der Bank |
 | `leisten_pruefen` | „Kann ich mir das leisten?“ – `betrag`, optional `kategorie`/`notiz`: ✅ Ja / ⚠️ Knapp / 🛑 Nein mit Gründen (Budget der Kategorie und gesamt, Abos bis Monatsende, Kontostand, Sparziele); trägt nichts ein |
 | `abos_lesen` | Abos mit Laufzeit, Fristen, Kündigungslinks |
-| `mails_suchen`, `mail_lesen` | Gmail **nur lesen** (wenn „Gmail dauerhaft verbunden“ ist, siehe unten): Suche wie in Gmail (`von:Netflix`, Zeitraum `von`/`bis`) → Datum, Absender, Betreff, Auszug; einzelne Mail als Text (HTML entfernt, ≈ 6000 Zeichen). Senden/Weiterleiten/Löschen gibt es nicht; Mail-Inhalte gelten als Daten, nicht als Anweisungen |
+| `mails_suchen`, `mail_lesen` | Gmail **nur lesen** (wenn „Gmail dauerhaft verbunden“ ist, siehe unten): Suche wie in Gmail (`von:Netflix`, Zeitraum `von`/`bis`) → Datum, Absender, Betreff, Auszug; einzelne Mail als Text (HTML entfernt, ≈ 6000 Zeichen). Senden/Weiterleiten/Löschen gibt es nicht; Mail-Inhalte gelten als Daten, nicht als Anweisungen. **Nur im In-App-Assistenten (`/chat`), nicht über `/mcp`** (claude.ai hat einen eigenen Gmail-Connector mit Senden – zusammen wäre das ein Weg, Daten abfließen zu lassen) |
 | `schule_lesen` | `bereich`: uebersicht, stundenplan, noten, projekte, dokumente (nur Titel), lernplan |
 | `material_lesen` | Einkaufsliste, auf der Baustelle, verbaut |
 | `galerie_lesen` | Kategorien, Alben (Anzahl, Adresse, ID), aktive Kategorie, neueste Fotos mit Datum/Adresse/Notiz – **nur Text**: der Foto-Index wird mit Feldmaske **ohne** `thumb` gelesen, `photos/…` nie |
@@ -202,7 +202,9 @@ Für einen Chat direkt in der Web-App. Anmeldung mit dem Firebase-ID-Token der A
 - **URL:** `https://stempelkarte-mcp.<subdomain>.workers.dev/chat`
 - **Header:** `Authorization: Bearer <Firebase-ID-Token>` (`await auth.currentUser.getIdToken()`),
   `Content-Type: application/json`
-- **Erlaubte Herkunft (CORS):** `https://muf2n.github.io`, `http://localhost:<port>`, `http://127.0.0.1:<port>`
+- **Erlaubte Herkunft (CORS):** `https://muf2n.github.io`; `http://localhost:<port>`/`http://127.0.0.1:<port>` nur, wenn die Variable `ALLOW_LOCALHOST_CORS = "1"` gesetzt ist (lokale Entwicklung, z. B. `wrangler dev --var ALLOW_LOCALHOST_CORS:1`)
+- **Inhalte von Dritten:** Mail-Texte und Bank-Verwendungszwecke/Gegenkonten kommen als `<untrusted_content source="email|bank">…</untrusted_content>` zurück. Hat der Assistent in einer `/chat`-Runde solche Inhalte gelesen, lehnt der Server in derselben Runde jedes Schreib-Werkzeug ab (der Assistent muss erst nachfragen).
+- **Ratenbegrenzung:** `/gmail/callback`, `/bank/finish` (je 10/min), `/ics` (60/min) und fehlgeschlagene `/mcp`-Anmeldungen (10/min, 20 am Stück) pro IP und Isolat → 429
 - **Body:** `{"messages":[{"role":"user","content":"Bin ich eingestempelt?"}, …]}` – ganzer Verlauf,
   abwechselnd `user`/`assistant`, nur Text, letzte Nachricht vom Nutzer, max. 40 Nachrichten / 40.000 Zeichen.
 - **Antwort 200:** `{"reply":"…","actions":["einstempeln"],"usage":{"month":"2026-11","inTok":…,"outTok":…,"usd":…,"capUsd":3}}`

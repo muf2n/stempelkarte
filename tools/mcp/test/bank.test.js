@@ -236,6 +236,8 @@ test("finish ohne ID-Token (Handy-Browser): state genügt, UID über E-Mail", as
   const r = await t.req("/bank/finish", { body: { code: "CODE-1", state: t.eb.lastAuth.state }, token: null });
   assert.equal(r.status, 200, JSON.stringify(r.data));
   assert.equal(t.g.get(`${t.base}/meta/bank`).session_id, "sess-1");
+  // L2: ohne Anmeldung keine Salden, Konten oder Verläufe in der Antwort
+  assert.deepEqual(r.data, { ok: true });
   // andere Routen brauchen weiter die Anmeldung
   assert.equal((await t.req("/bank/sync", { token: null })).status, 401);
   assert.equal((await t.req("/bank/status", { method: "GET", token: null })).status, 401);
@@ -587,4 +589,20 @@ test("Verlauf-Hilfen: addHistoryPoint, backfillHistory, mainAccountUid, matchAcc
   assert.equal(matchAccount({ uid: "x", hash: "h" }, [{ uid: "y", hash: "h" }]).uid, "y");
   assert.equal(matchAccount({ uid: "x", iban_last4: "1234" }, [{ uid: "z", iban_last4: "1234" }]).uid, "z");
   assert.equal(matchAccount({ uid: "x" }, [{ uid: "z" }]), null);
+});
+
+test("L3/M6: gleichzeitige finish mit demselben state → nur einer; kaputter state ohne Firestore-Zugriff", async () => {
+  const t = await setup();
+  await t.req("/bank/start", { body: {} });
+  const st = t.eb.lastAuth.state;
+  const [a, b] = await Promise.all([
+    t.req("/bank/finish", { body: { code: "CODE-1", state: st } }),
+    t.req("/bank/finish", { body: { code: "CODE-1", state: st } }),
+  ]);
+  assert.deepEqual([a.status, b.status].sort(), [200, 400]);
+  assert.ok(t.g.commits.some((c) => c.writes.some((w) => w.update && /bank_pending$/.test(w.update.name) && w.currentDocument && w.currentDocument.updateTime)), "Vorbedingung updateTime");
+  const n0 = t.g.requests.length;
+  const bad = await t.req("/bank/finish", { body: { code: "CODE-1", state: "x".repeat(44) }, token: null });
+  assert.equal(bad.status, 400);
+  assert.equal(t.g.requests.length, n0, "kein Firestore-/Google-Zugriff");
 });

@@ -104,8 +104,8 @@ test("„Privat bis …“: 1 h, heute Abend, morgen früh, bis ich es ausschalt
 
 /* ---------- Privatfahrten: 0 h ---------- */
 
-const BUERO = { lat: 47.0745, lng: 15.4010, addr: "Puchstraße 41, 8020 Graz" };
-const HOME = { lat: 47.1093, lng: 15.4118, addr: "Wiener Straße 286, 8051 Graz" };
+const BUERO = { lat: 47.0745, lng: 15.4010, addr: "Musterstraße 41, 8020 Musterstadt" };
+const HOME = { lat: 47.1093, lng: 15.4118, addr: "Erfundene Straße 286, 8051 Musterstadt" };
 const work = (d, h1, h2, pause = 30) => ({ id: `w${d}`, kind: "work", start: at(11, d, h1), end: at(11, d, h2), pauseMin: pause, place: "Büro", inLoc: BUERO,
   segments: [{ start: at(11, d, h1), end: at(11, d, h2), activity: "Arbeiten", place: "Büro", loc: BUERO }] });
 const ptrip = (d, h, extra = {}) => ({ id: `pt${d}`, ...P.privateTripEntry({ start: at(11, d, h), end: at(11, d, h, 40), fromLoc: BUERO, toLoc: HOME }), ...extra });

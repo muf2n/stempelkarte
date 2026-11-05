@@ -4,74 +4,74 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import * as G from "../js/gallery-core.js";
 
-const GRAMBACH = { lat: 47.01098, lng: 15.50511 };    // Thomas-Arbesser-Straße, Grambach
+const MUSTERDORF = { lat: 47.01098, lng: 15.50511 };    // Erika-Muster-Straße, Musterdorf
 const move = (p, dLatM, dLngM = 0) => ({ lat: p.lat + dLatM / 111320, lng: p.lng + dLngM / (111320 * Math.cos(p.lat * Math.PI / 180)) });
 
 test("Haversine: 2 km nach Norden ≈ 2000 m", () => {
-  const d = G.distanceM(GRAMBACH, move(GRAMBACH, 2000));
+  const d = G.distanceM(MUSTERDORF, move(MUSTERDORF, 2000));
   assert.ok(Math.abs(d - 2000) < 5, String(d));
 });
 
 test("matchLocation: Adress-Album im Radius, außerhalb → neu, nächstes gewinnt", () => {
-  const a1 = { id: "a1", kind: "address", lat: GRAMBACH.lat, lng: GRAMBACH.lng, radius: 80 };
-  const a2 = { id: "a2", kind: "address", ...move(GRAMBACH, 120), radius: 80 };
+  const a1 = { id: "a1", kind: "address", lat: MUSTERDORF.lat, lng: MUSTERDORF.lng, radius: 80 };
+  const a2 = { id: "a2", kind: "address", ...move(MUSTERDORF, 120), radius: 80 };
   const albums = [a1, a2];
-  assert.equal(G.matchLocation(move(GRAMBACH, 30), { albums }).album.id, "a1");
-  assert.equal(G.matchLocation(move(GRAMBACH, 79), { albums }).album.id, "a2", "näher an a2 (41 m) als an a1 (79 m)");
-  assert.equal(G.matchLocation(move(GRAMBACH, 2000), { albums }).type, "new");
-  assert.equal(G.matchLocation(move(GRAMBACH, -90), { albums }).type, "new", "90 m > 80 m Radius");
+  assert.equal(G.matchLocation(move(MUSTERDORF, 30), { albums }).album.id, "a1");
+  assert.equal(G.matchLocation(move(MUSTERDORF, 79), { albums }).album.id, "a2", "näher an a2 (41 m) als an a1 (79 m)");
+  assert.equal(G.matchLocation(move(MUSTERDORF, 2000), { albums }).type, "new");
+  assert.equal(G.matchLocation(move(MUSTERDORF, -90), { albums }).type, "new", "90 m > 80 m Radius");
   // Radius je Album
-  assert.equal(G.matchLocation(move(GRAMBACH, -90), { albums: [{ ...a1, radius: 150 }] }).type, "address");
+  assert.equal(G.matchLocation(move(MUSTERDORF, -90), { albums: [{ ...a1, radius: 150 }] }).type, "address");
   // eigene Alben ohne Position zählen nicht
-  assert.equal(G.matchLocation(GRAMBACH, { albums: [{ id: "c", kind: "custom", lat: GRAMBACH.lat, lng: GRAMBACH.lng }] }).type, "new");
+  assert.equal(G.matchLocation(MUSTERDORF, { albums: [{ id: "c", kind: "custom", lat: MUSTERDORF.lat, lng: MUSTERDORF.lng }] }).type, "new");
   assert.equal(G.matchLocation(null, { albums }).type, "none");
   assert.equal(G.matchLocation({ lat: NaN, lng: 1 }, { albums }).type, "none");
 });
 
 test("matchLocation: gespeicherter Ort hat Vorrang vor Adress-Album", () => {
-  const place = { id: "p1", name: "Baustelle Grambach", lat: GRAMBACH.lat, lng: GRAMBACH.lng, radius: 150 };
-  const addr = { id: "a1", kind: "address", ...move(GRAMBACH, 20), radius: 80 };
-  let m = G.matchLocation(move(GRAMBACH, 25), { places: [place], albums: [addr] });
+  const place = { id: "p1", name: "Baustelle Musterdorf", lat: MUSTERDORF.lat, lng: MUSTERDORF.lng, radius: 150 };
+  const addr = { id: "a1", kind: "address", ...move(MUSTERDORF, 20), radius: 80 };
+  let m = G.matchLocation(move(MUSTERDORF, 25), { places: [place], albums: [addr] });
   assert.equal(m.type, "place");
   assert.equal(m.place.id, "p1");
   assert.equal(m.album, null, "Ort-Album noch nicht angelegt");
-  const pa = { id: "pa", kind: "place", placeId: "p1", name: "Baustelle Grambach" };
-  m = G.matchLocation(move(GRAMBACH, 25), { places: [place], albums: [addr, pa] });
+  const pa = { id: "pa", kind: "place", placeId: "p1", name: "Baustelle Musterdorf" };
+  m = G.matchLocation(move(MUSTERDORF, 25), { places: [place], albums: [addr, pa] });
   assert.equal(m.album.id, "pa");
   // außerhalb des Ort-Radius → Adress-Album
-  m = G.matchLocation(move(GRAMBACH, 170), { places: [place], albums: [{ ...addr, ...move(GRAMBACH, 180) }] });
+  m = G.matchLocation(move(MUSTERDORF, 170), { places: [place], albums: [{ ...addr, ...move(MUSTERDORF, 180) }] });
   assert.equal(m.type, "address");
   // Ort ohne Koordinaten wird ignoriert; Standardradius 150 m
-  m = G.matchLocation(move(GRAMBACH, 140), { places: [{ id: "x", name: "Firma" }, { id: "p2", lat: GRAMBACH.lat, lng: GRAMBACH.lng }] });
+  m = G.matchLocation(move(MUSTERDORF, 140), { places: [{ id: "x", name: "Firma" }, { id: "p2", lat: MUSTERDORF.lat, lng: MUSTERDORF.lng }] });
   assert.equal(m.type, "place");
   assert.equal(m.place.id, "p2");
 });
 
 test("Album-Namen aus Nominatim (Österreich)", () => {
-  const grambach = {
-    display_name: "1, Thomas-Arbesser-Straße, Grambach, Bezirk Graz-Umgebung, Steiermark, 8074, Österreich",
-    address: { house_number: "1", road: "Thomas-Arbesser-Straße", village: "Grambach", municipality: "Grambach", county: "Bezirk Graz-Umgebung", state: "Steiermark", postcode: "8074", country: "Österreich", country_code: "at" },
+  const musterdorf = {
+    display_name: "1, Erika-Muster-Straße, Musterdorf, Bezirk Musterstadt-Umgebung, Steiermark, 8074, Österreich",
+    address: { house_number: "1", road: "Erika-Muster-Straße", village: "Musterdorf", municipality: "Musterdorf", county: "Bezirk Musterstadt-Umgebung", state: "Steiermark", postcode: "8074", country: "Österreich", country_code: "at" },
   };
-  assert.equal(G.albumNameFrom(grambach), "Thomas-Arbesser-Straße 1, Grambach");
-  assert.equal(G.fullAddrFrom(grambach), "Thomas-Arbesser-Straße 1, 8074 Grambach");
+  assert.equal(G.albumNameFrom(musterdorf), "Erika-Muster-Straße 1, Musterdorf");
+  assert.equal(G.fullAddrFrom(musterdorf), "Erika-Muster-Straße 1, 8074 Musterdorf");
 
-  const graz = { address: { house_number: "1", road: "Hauptplatz", suburb: "Innere Stadt", city_district: "Innere Stadt", city: "Graz", state: "Steiermark", postcode: "8010", country: "Österreich" } };
-  assert.equal(G.albumNameFrom(graz), "Hauptplatz 1, Graz");
+  const musterstadt = { address: { house_number: "1", road: "Hauptplatz", suburb: "Innere Stadt", city_district: "Innere Stadt", city: "Musterstadt", state: "Steiermark", postcode: "8010", country: "Österreich" } };
+  assert.equal(G.albumNameFrom(musterstadt), "Hauptplatz 1, Musterstadt");
 
-  const seiersberg = { address: { house_number: "10", road: "Am Seiersberg", town: "Seiersberg-Pirka", municipality: "Seiersberg-Pirka", postcode: "8055" } };
-  assert.equal(G.albumNameFrom(seiersberg), "Am Seiersberg 10, Seiersberg-Pirka");
+  const testheim = { address: { house_number: "10", road: "Am Testheim", town: "Testheim-Au", municipality: "Testheim-Au", postcode: "8055" } };
+  assert.equal(G.albumNameFrom(testheim), "Am Testheim 10, Testheim-Au");
 
   // ohne Hausnummer → Straße, Ort
-  const pirka = { address: { road: "Feldkirchner Straße", village: "Pirka", municipality: "Seiersberg-Pirka", postcode: "8054" } };
-  assert.equal(G.albumNameFrom(pirka), "Feldkirchner Straße, Pirka");
+  const pirka = { address: { road: "Beispielfelder Straße", village: "Pirka", municipality: "Testheim-Au", postcode: "8054" } };
+  assert.equal(G.albumNameFrom(pirka), "Beispielfelder Straße, Pirka");
   // ohne Straße → Ort (Stadtteil bei Städten)
-  assert.equal(G.albumNameFrom({ address: { village: "Grambach", postcode: "8074" } }), "Grambach");
-  assert.equal(G.albumNameFrom({ address: { suburb: "Lend", city: "Graz" } }), "Lend, Graz");
+  assert.equal(G.albumNameFrom({ address: { village: "Musterdorf", postcode: "8074" } }), "Musterdorf");
+  assert.equal(G.albumNameFrom({ address: { suburb: "Testviertel", city: "Musterstadt" } }), "Testviertel, Musterstadt");
   // nur display_name
-  assert.equal(G.albumNameFrom({ display_name: "Murradweg, Gössendorf, Bezirk Graz-Umgebung, Steiermark" }), "Murradweg, Gössendorf");
+  assert.equal(G.albumNameFrom({ display_name: "Murradweg, Gössendorf, Bezirk Musterstadt-Umgebung, Steiermark" }), "Murradweg, Gössendorf");
   assert.equal(G.albumNameFrom(null), null);
   assert.equal(G.albumNameFrom({ error: "Unable to geocode" }), null);
-  assert.match(G.coordName(GRAMBACH), /^Standort 47,0110 \/ 15,5051$/);
+  assert.match(G.coordName(MUSTERDORF), /^Standort 47,0110 \/ 15,5051$/);
 });
 
 test("EXIF: DateTimeOriginal + GPS aus winzigem JPEG", () => {
@@ -97,7 +97,7 @@ test("EXIF: DateTimeOriginal + GPS aus winzigem JPEG", () => {
 });
 
 test("Index-Dokument: ohne großes Bild, Abweichung erkennen", () => {
-  const photo = { id: "ph1", ts: 1, dayKey: "2026-11-05", data: "data:image/jpeg;base64,AAAA", thumb: "data:t", note: "Verteiler", placeId: null, place: "", albumIds: ["a1", "a1", ""], lat: 47, lng: 15, addr: "X 1, 8074 Grambach", w: 10, h: 20 };
+  const photo = { id: "ph1", ts: 1, dayKey: "2026-11-05", data: "data:image/jpeg;base64,AAAA", thumb: "data:t", note: "Verteiler", placeId: null, place: "", albumIds: ["a1", "a1", ""], lat: 47, lng: 15, addr: "X 1, 8074 Musterdorf", w: 10, h: 20 };
   const d = G.indexDoc(photo);
   assert.equal(d.data, undefined, "kein data im Index");
   assert.equal(d.thumb, "data:t");
@@ -147,23 +147,23 @@ test("albumIds ändern, Zusammenführen, Migration, Ohne Ort", () => {
 
 test("Gruppieren nach Monat/Tag, Filtern & Suche, Album-Statistik", () => {
   const items = [
-    { id: "1", ts: new Date(2026, 10, 5, 9).getTime(), dayKey: "2026-11-05", note: "Verteiler vorher", addr: "Thomas-Arbesser-Straße 1, 8074 Grambach", albumIds: ["A"] },
+    { id: "1", ts: new Date(2026, 10, 5, 9).getTime(), dayKey: "2026-11-05", note: "Verteiler vorher", addr: "Erika-Muster-Straße 1, 8074 Musterdorf", albumIds: ["A"] },
     { id: "2", ts: new Date(2026, 10, 5, 12).getTime(), dayKey: "2026-11-05", note: "", addr: "", albumIds: ["B"] },
-    { id: "3", ts: new Date(2026, 9, 30, 8).getTime(), dayKey: "2026-10-30", note: "Zählerkasten", addr: "Hauptplatz 1, 8010 Graz", albumIds: [] },
+    { id: "3", ts: new Date(2026, 9, 30, 8).getTime(), dayKey: "2026-10-30", note: "Zählerkasten", addr: "Hauptplatz 1, 8010 Musterstadt", albumIds: [] },
   ];
   const g = G.groupByMonthDay(items);
   assert.deepEqual(g.map((m) => m.label), ["November 2026", "Oktober 2026"]);
   assert.deepEqual(g[0].days[0].items.map((i) => i.id), ["2", "1"], "neueste zuerst");
-  const am = new Map([["A", { id: "A", name: "Thomas-Arbesser-Straße 1, Grambach", kind: "address" }], ["B", { id: "B", name: "Verteiler", kind: "custom" }]]);
+  const am = new Map([["A", { id: "A", name: "Erika-Muster-Straße 1, Musterdorf", kind: "address" }], ["B", { id: "B", name: "Verteiler", kind: "custom" }]]);
   const ids = (f) => G.filterItems(items, f, am).map((i) => i.id).sort();
   assert.deepEqual(ids({ albumId: "A" }), ["1"]);
   assert.deepEqual(ids({ from: "2026-11-01" }), ["1", "2"]);
   assert.deepEqual(ids({ to: "2026-10-31" }), ["3"]);
-  assert.deepEqual(ids({ q: "grambach" }), ["1"]);
+  assert.deepEqual(ids({ q: "musterdorf" }), ["1"]);
   assert.deepEqual(ids({ q: "zaehler" }), ["3"], "Umlaut-unabhängig");
   assert.deepEqual(ids({ q: "verteiler" }), ["1", "2"], "Notiz oder Album-Name");
-  assert.deepEqual(ids({ q: "arbesser str." }), ["1"], "„Str.“ = „Straße“");
-  assert.deepEqual(ids({ q: "graz verteiler" }), [], "alle Wörter müssen passen");
+  assert.deepEqual(ids({ q: "muster str." }), ["1"], "„Str.“ = „Straße“");
+  assert.deepEqual(ids({ q: "musterstadt verteiler" }), [], "alle Wörter müssen passen");
   const st = G.albumStats(items, { id: "A" }, am);
   assert.equal(st.count, 1);
   assert.equal(st.coverItem.id, "1");
@@ -171,13 +171,13 @@ test("Gruppieren nach Monat/Tag, Filtern & Suche, Album-Statistik", () => {
 });
 
 test("normAlbum + Maps-Link", () => {
-  const a = G.normAlbum({ id: "x", kind: "address", name: " Hauptplatz 1, Graz ", lat: 47.07, lng: 15.43, radius: "abc" });
-  assert.equal(a.name, "Hauptplatz 1, Graz");
+  const a = G.normAlbum({ id: "x", kind: "address", name: " Hauptplatz 1, Musterstadt ", lat: 47.07, lng: 15.43, radius: "abc" });
+  assert.equal(a.name, "Hauptplatz 1, Musterstadt");
   assert.equal(a.radius, 80);
   assert.equal(G.normAlbum({ id: "y", kind: "foo" }).kind, "custom");
   assert.equal(G.normAlbum(null), null);
   assert.equal(G.albumMapsUrl(a), "https://www.google.com/maps/search/?api=1&query=47.07,15.43");
-  assert.match(G.albumMapsUrl({ name: "Hauptplatz 1, Graz" }), /query=Hauptplatz%201%2C%20Graz$/);
+  assert.match(G.albumMapsUrl({ name: "Hauptplatz 1, Musterstadt" }), /query=Hauptplatz%201%2C%20Musterstadt$/);
 });
 
 /* ---------- Hauptkategorien (Agent T) ---------- */
@@ -195,8 +195,8 @@ test("Kategorien: normFolder + Sortierung", () => {
 });
 
 test("Kategorien: Berufsschul-Erkennung", () => {
-  for (const n of ["Landesberufsschule Graz 4", "LBS Fürstenfeld", "Berufsschule", "lbs graz"]) assert.ok(G.isSchoolName(n), n);
-  for (const n of ["Baustelle Liebenau", "Albstraße 3", "Elbsee", "Firma Elektro Maier"]) assert.ok(!G.isSchoolName(n), n);
+  for (const n of ["Landesberufsschule Musterstadt 4", "LBS Fürstenfeld", "Berufsschule", "lbs musterstadt"]) assert.ok(G.isSchoolName(n), n);
+  for (const n of ["Baustelle Probenau", "Albstraße 3", "Elbsee", "Firma Elektro Maier"]) assert.ok(!G.isSchoolName(n), n);
 });
 
 test("Kategorien: Auto-Kategorie für neue Alben", () => {
@@ -207,25 +207,25 @@ test("Kategorien: Auto-Kategorie für neue Alben", () => {
   assert.equal(G.resolveAutoFolder([], undefined), null, "ohne Baustellen → keine");
   assert.equal(G.resolveAutoFolder([{ id: "u1", name: "Meine Baustellen" }], undefined), "u1", "Baustellen per Name");
 
-  const addr = { kind: "address", name: "Hauptplatz 1, Graz" };
+  const addr = { kind: "address", name: "Hauptplatz 1, Musterstadt" };
   assert.equal(G.folderForNewAlbum(addr, { folders: FOLDERS }), G.BAU_ID);
   assert.equal(G.folderForNewAlbum(addr, { folders: FOLDERS, autoFolder: G.PRIVAT_ID }), G.PRIVAT_ID);
   assert.equal(G.folderForNewAlbum({ kind: "custom", name: "Verteiler" }, { folders: FOLDERS }), null, "eigene Alben nie automatisch");
-  assert.equal(G.folderForNewAlbum({ kind: "place", name: "LBS Graz" }, { folders: FOLDERS }), G.SCHULE_ID, "Berufsschul-Ort → Berufsschule");
+  assert.equal(G.folderForNewAlbum({ kind: "place", name: "LBS Musterstadt" }, { folders: FOLDERS }), G.SCHULE_ID, "Berufsschul-Ort → Berufsschule");
   assert.equal(G.folderForNewAlbum({ kind: "place", name: "Schulort" }, { folders: FOLDERS, place: { name: "Landesberufsschule" } }), G.SCHULE_ID);
-  assert.equal(G.folderForNewAlbum({ kind: "place", name: "LBS Graz" }, { folders: [FOLDERS[0]] }), G.BAU_ID, "ohne Berufsschul-Kategorie → Auto");
+  assert.equal(G.folderForNewAlbum({ kind: "place", name: "LBS Musterstadt" }, { folders: [FOLDERS[0]] }), G.BAU_ID, "ohne Berufsschul-Kategorie → Auto");
   assert.equal(G.folderForNewAlbum({ kind: "place", name: "Firma" }, { folders: FOLDERS, autoFolder: "" }), null);
 });
 
 test("Kategorien: erster Start (Migration) nur einmal", () => {
   const albums = [
-    { id: "a1", kind: "address", name: "Hauptplatz 1, Graz" },
+    { id: "a1", kind: "address", name: "Hauptplatz 1, Musterstadt" },
     { id: "a2", kind: "place", placeId: "pS", name: "Schule" },
     { id: "a3", kind: "place", placeId: "pF", name: "Firma" },
     { id: "a4", kind: "custom", name: "Verteiler" },
     { id: "a5", kind: "address", name: "Schon sortiert", folderId: G.PRIVAT_ID },
   ];
-  const places = [{ id: "pS", name: "Landesberufsschule Graz" }, { id: "pF", name: "Firma Elektro Maier" }];
+  const places = [{ id: "pS", name: "Landesberufsschule Musterstadt" }, { id: "pF", name: "Firma Elektro Maier" }];
   const plan = G.folderMigration({ folders: [], albums, places });
   assert.deepEqual(plan.create.map((f) => f.id), [G.BAU_ID, G.SCHULE_ID, G.PRIVAT_ID], "Standard-Kategorien");
   assert.deepEqual(plan.create.map((f) => f.emoji + " " + f.name), ["🏗️ Baustellen", "🏫 Berufsschule", "🏠 Privat"]);
@@ -325,20 +325,20 @@ test("Aktive Kategorie: Ort mit Foto-Kategorie überschreibt, solange eingestemp
 });
 
 test("Regel: neues Adress-Album → aktive Kategorie; Ort-Album → Foto-Kategorie des Orts vor Schule", () => {
-  const addr = { kind: "address", name: "Musterstraße 5, Graz" };
+  const addr = { kind: "address", name: "Musterstraße 5, Musterstadt" };
   assert.equal(G.folderForNewAlbum(addr, { folders: FS, activeFolderId: "fW" }), "fW");
   assert.equal(G.folderForNewAlbum(addr, { folders: FS, activeFolderId: null }), null, "aktiv = keine");
   assert.equal(G.folderForNewAlbum(addr, { folders: FS, activeFolderId: "weg" }), null);
   assert.equal(G.folderForNewAlbum(addr, { folders: FS, autoFolder: undefined }), G.BAU_ID, "ohne activeFolderId: alte Logik");
   assert.equal(G.folderForNewAlbum({ kind: "custom", name: "x" }, { folders: FS, activeFolderId: "fW" }), null, "eigene Alben nie");
-  const lbs = { kind: "place", name: "LBS Graz" };
-  assert.equal(G.folderForNewAlbum(lbs, { folders: FS, activeFolderId: "fW", place: { name: "LBS Graz" } }), G.SCHULE_ID, "Schule bleibt Schule");
-  assert.equal(G.folderForNewAlbum(lbs, { folders: FS, activeFolderId: "fW", place: { name: "LBS Graz", photoFolderId: "fW" } }), "fW", "Foto-Kategorie des Orts gewinnt");
+  const lbs = { kind: "place", name: "LBS Musterstadt" };
+  assert.equal(G.folderForNewAlbum(lbs, { folders: FS, activeFolderId: "fW", place: { name: "LBS Musterstadt" } }), G.SCHULE_ID, "Schule bleibt Schule");
+  assert.equal(G.folderForNewAlbum(lbs, { folders: FS, activeFolderId: "fW", place: { name: "LBS Musterstadt", photoFolderId: "fW" } }), "fW", "Foto-Kategorie des Orts gewinnt");
   assert.equal(G.folderForNewAlbum({ kind: "place", name: "Firma" }, { folders: FS, activeFolderId: G.BAU_ID, place: { name: "Firma" } }), G.BAU_ID);
 });
 
 test("Regel im Ablauf: drei neue Adressen → Wohnungen, bekannte Adresse bleibt, Umschalten wirkt ab dem nächsten", () => {
-  const P = (dLat) => move(GRAMBACH, dLat);
+  const P = (dLat) => move(MUSTERDORF, dLat);
   const albums = [{ id: "alt", kind: "address", ...P(0), radius: 80, folderId: G.BAU_ID }];
   let active = "fW";
   const take = (pos) => {
@@ -360,9 +360,9 @@ test("Regel im Ablauf: drei neue Adressen → Wohnungen, bekannte Adresse bleibt
 });
 
 test("Einsatz-Titel → Kategorie-Vorschlag", () => {
-  assert.equal(G.einsatzFolderSuggestion("Wohnungen Gries", FS).id, "fW");
-  assert.equal(G.einsatzFolderSuggestion("wohnungen gries", FS).id, "fW", "Groß/Klein egal");
-  assert.equal(G.einsatzFolderSuggestion("Großbaustelle Liebenau", FS), null, "nur am Wortanfang");
+  assert.equal(G.einsatzFolderSuggestion("Wohnungen Musterviertel", FS).id, "fW");
+  assert.equal(G.einsatzFolderSuggestion("wohnungen musterviertel", FS).id, "fW", "Groß/Klein egal");
+  assert.equal(G.einsatzFolderSuggestion("Großbaustelle Probenau", FS), null, "nur am Wortanfang");
   assert.equal(G.einsatzFolderSuggestion("Baustellen-Runde", FS).id, G.BAU_ID);
   assert.equal(G.einsatzFolderSuggestion("Kundendienst", FS), null);
   assert.equal(G.einsatzFolderSuggestion("", FS), null);
@@ -371,8 +371,8 @@ test("Einsatz-Titel → Kategorie-Vorschlag", () => {
 });
 
 test("Zielname + Alben der letzten 14 Tage aus anderen Kategorien", () => {
-  assert.equal(G.destLabel({ name: "Musterstraße 5, Graz" }, { name: "Wohnungen" }), "Wohnungen › Musterstraße 5, Graz");
-  assert.equal(G.destLabel({ name: "Musterstraße 5, Graz" }, null), "Musterstraße 5, Graz");
+  assert.equal(G.destLabel({ name: "Musterstraße 5, Musterstadt" }, { name: "Wohnungen" }), "Wohnungen › Musterstraße 5, Musterstadt");
+  assert.equal(G.destLabel({ name: "Musterstraße 5, Musterstadt" }, null), "Musterstraße 5, Musterstadt");
   const now = Date.UTC(2026, 10, 5);
   const D = 86400000;
   const ids = new Set(FS.map((f) => f.id));

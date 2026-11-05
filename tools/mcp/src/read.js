@@ -10,7 +10,7 @@ import {
   UserError, creditMin, dailyTargetMin, schoolCreditMin, readSchool, readApprentice, apprenticeYear, activitiesOf, kindLabel,
   balanceNumbers, holidayName,
 } from "./logic.js";
-import { RO, s, pad2, short, paged, countdown, dateArg } from "./util.js";
+import { RO, s, pad2, short, paged, countdown, dateArg, txNote } from "./util.js";
 import { best, norm, score } from "./match.js";
 import * as TR from "./trip.js";
 import * as UW from "./unterwegs.js";
@@ -732,7 +732,7 @@ const TOOL_SUCHE = {
       `${t.kind === "termin" ? "Termin" : t.kind === "einsatz" ? "Einsatz" : t.kind === "geburtstag" ? "Geburtstag" : "Aufgabe"} „${s(t.title) || s(t.place)}“${t.date ? ` · ${fmtKey(t.date)}${t.time ? " " + t.time : ""}` : ""}${t.done ? " · erledigt" : ""}`, t.id);
     for (const p of places) add("Orte", hitOf(q, [p.name, p.addr]), "", `${s(p.name)}${s(p.addr) ? " · " + s(p.addr) : ""}`, p.id);
     for (const m of mat) add("Material", hitOf(q, [m.name, m.note, m.place]), m.dayKey || "", `${s(m.qty) || 1} ${s(m.unit)} ${s(m.name)} · ${s(m.status)}${s(m.place) ? " · " + s(m.place) : ""}${isKey(m.dayKey) ? " · " + fmtKey(m.dayKey) : ""}`, m.id);
-    for (const x of tx) add("Geld", hitOf(q, [x.note, x.counterparty]), x.date || "", `${x.type === "in" ? "Einnahme" : "Ausgabe"} ${eur(Number(x.amount) || 0)} · ${isKey(x.date) ? fmtKey(x.date) : ""}${s(x.note) ? ` · „${short(x.note, 60)}“` : ""}`, x.id);
+    for (const x of tx) add("Geld", hitOf(q, [x.note, x.counterparty]), x.date || "", `${x.type === "in" ? "Einnahme" : "Ausgabe"} ${eur(Number(x.amount) || 0)} · ${isKey(x.date) ? fmtKey(x.date) : ""}${s(x.note) ? ` · ${txNote(x, 60)}` : ""}`, x.id);
     for (const x of subs) add("Abos", hitOf(q, [x.name, x.what]), "", `${s(x.name)} ${eur(Number(x.amount) || 0)}`, x.id);
     for (const x of tasks) add("Schule", hitOf(q, [x.title, x.subject, x.note]), x.due || "", `Hausaufgabe ${s(x.subject) ? s(x.subject) + ": " : ""}„${s(x.title)}“${isKey(x.due) ? " · fällig " + fmtKey(x.due) : ""}${x.done ? " · erledigt" : ""}`, x.id);
     for (const x of exams) add("Schule", hitOf(q, [x.subject, x.kind, x.topics]), x.date || "", `${s(x.kind) || "Prüfung"} ${s(x.subject)}${isKey(x.date) ? " · " + fmtKey(x.date) : ""}`, x.id);

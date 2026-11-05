@@ -113,6 +113,8 @@ const SHELL = [
   "js/alltag/money-bank.js",
   "js/alltag/money-savings.js",
   "bank-callback.html",
+  "js/bank-callback.js",
+  "js/appbar-settings.js",
   // Update 9 – Passwort-Tresor
   "js/alltag/vault.js",
   "js/alltag/vault-crypto.js",

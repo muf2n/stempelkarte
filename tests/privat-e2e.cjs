@@ -7,7 +7,7 @@ const path = require("path");
 const BASE = "http://localhost:8863/";
 const OUT = process.argv[2] || require("os").tmpdir();
 
-const BUERO = { lat: 47.0745, lng: 15.4010, addr: "Puchstraße 41, 8020 Graz" };
+const BUERO = { lat: 47.0745, lng: 15.4010, addr: "Musterstraße 41, 8020 Musterstadt" };
 const HOME = { lat: 47.1093, lng: 15.4118 };
 const T = (m, d, h, mi = 0) => new Date(2026, m - 1, d, h, mi).getTime();
 
@@ -132,7 +132,7 @@ function seedData(extraSettings = {}) {
   ok(!d.running && d.entries.length === 3 && d.settings.mode.privat === true, "Ausstempeln jetzt → Eintrag gespeichert, Privat an");
   const saldo1 = await saldo(page);
 
-  // Simulierte Fahrt im Privat-Modus: Büro → Wiener Straße (≈ 4 km, ~50 km/h), dann Stillstand
+  // Simulierte Fahrt im Privat-Modus: Büro → Erfundene Straße (≈ 4 km, ~50 km/h), dann Stillstand
   await page.evaluate(({ lat, lng }) => window.__geoSet(lat, lng), BUERO);
   await page.clock.runFor(3000);
   let watchers = await page.evaluate(() => window.__geo.cbs.size);

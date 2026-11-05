@@ -2258,6 +2258,31 @@ export async function handleEndPlan({ planId, end } = {}) {
 /* ---------------- App-Schnellstart (Update 7, manifest shortcuts ?action=) ---------------- */
 
 /** Aktion vom Startbildschirm-Symbol: "in" | "pause" | "seg" | "add". Wartet kurz auf die Daten. */
+/** L6: Rückfrage für Schnellstart-Links (?action=…). → Promise<boolean> (true = bestätigt). */
+function confirmLinkAction(question, yesLabel) {
+  const { ui, util } = ctx;
+  return new Promise((resolve) => {
+    let done = false;
+    const finish = (v) => { if (!done) { done = true; resolve(v); } };
+    const sh = ui.openSheet({
+      title: question,
+      bodyHTML:
+        `<div class="fields" data-f="link-confirm">` +
+        `<p class="note">Diese Aktion wurde über einen Link oder eine Verknüpfung ausgelöst. Bitte bestätige sie, damit nichts versehentlich gestempelt wird.</p>` +
+        `<button type="button" class="btn primary" data-f="yes">${util.esc(yesLabel)}</button>` +
+        `<button type="button" class="btn ghost" data-f="no">Abbrechen</button>` +
+        `</div>`,
+      onMount(el, close) {
+        el.querySelector('[data-f="yes"]').addEventListener("click", () => { finish(true); close(); });
+        el.querySelector('[data-f="no"]').addEventListener("click", () => { finish(false); close(); });
+      },
+    });
+    // Schließen über ✕/Hintergrund/Escape = Abbrechen
+    const obs = new MutationObserver(() => { if (!document.contains(sh.el)) { obs.disconnect(); finish(false); } });
+    obs.observe(document.body, { childList: true, subtree: true });
+  });
+}
+
 export async function handleAction(name, c = ctx) {
   if (c && !ctx) ctx = c;
   if (!ctx) return;
@@ -2274,10 +2299,15 @@ export async function handleAction(name, c = ctx) {
   const btnOf = (act) => $("btns").querySelector(`button[data-act="${act}"]`);
   if (a === "in") {
     if (r) { ctx.ui.toast(r.pauseStart ? "Du bist schon eingestempelt (Pause)." : "Du bist schon eingestempelt."); return; }
+    // L6: Ein Link (?action=in) kann von überall kommen (Chat, Mail …) → nie ohne Rückfrage die Arbeitszeit ändern.
+    if (!(await confirmLinkAction("Jetzt einstempeln?", "Einstempeln"))) return;
+    if (snap && snap.running) return;
     forceButtons();
     doClockIn(btnOf("in"));
   } else if (a === "pause") {
     if (!r) { ctx.ui.toast("Du bist nicht eingestempelt."); return; }
+    if (!(await confirmLinkAction(r.pauseStart ? "Pause jetzt beenden?" : "Jetzt Pause starten?", r.pauseStart ? "Pause beenden" : "Pause starten"))) return;
+    if (!(snap && snap.running)) return;
     doPause();
   } else if (a === "seg") {
     if (!r) { ctx.ui.toast("Du bist nicht eingestempelt."); return; }

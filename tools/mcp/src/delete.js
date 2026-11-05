@@ -6,6 +6,7 @@ import {
 } from "./time.js";
 import { UserError, kindLabel, readSchool, alltagId } from "./logic.js";
 import { score } from "./match.js";
+import { untrusted } from "./util.js"; // H1: Bank-Texte abgrenzen
 import { expandTodo, parseRRule, applyDelete } from "./cal.js";
 import { DELETABLE, splitPath, isExpired, restoreDoc, groupBatches, typeLabel } from "./trash.js";
 
@@ -187,7 +188,7 @@ async function findTodos(d, args, r, type) {
 
 const ALLTAG = {
   material: { coll: "material_items", date: (x) => x.dayKey, fields: (x) => [x.name, x.note, x.place], label: (x) => `Material · ${s(x.qty) || 1} ${s(x.unit)} ${s(x.name)}`.replace(/\s+/g, " ") + (s(x.place) ? ` · ${s(x.place)}` : "") },
-  ausgabe: { coll: "money_tx", date: (x) => x.date, fields: (x) => [x.note, x.category], label: (x) => `${x.type === "in" ? "Einnahme" : "Ausgabe"} ${eur(Number(x.amount) || 0)}${s(x.category) ? " · " + s(x.category) : ""}${q(x.note)}` },
+  ausgabe: { coll: "money_tx", date: (x) => x.date, fields: (x) => [x.note, x.category], label: (x) => `${x.type === "in" ? "Einnahme" : "Ausgabe"} ${eur(Number(x.amount) || 0)}${s(x.category) ? " · " + s(x.category) : ""}${x.src === "bank" || x.bankRef ? (s(x.note) ? " · " + untrusted("bank", s(x.note).split("\n")[0].slice(0, 80)) : "") : q(x.note)}` },
   hausaufgabe: { coll: "school_tasks", date: (x) => x.due, fields: (x) => [x.title, x.subject, x.note], label: (x) => `Hausaufgabe · ${s(x.subject) ? s(x.subject) + ": " : ""}„${s(x.title)}“` },
   pruefung: { coll: "school_exams", date: (x) => x.date, fields: (x) => [x.subject, x.kind, x.topics], label: (x) => `${s(x.kind) || "Prüfung"} · ${s(x.subject)}` },
   note: { coll: "school_grades", date: (x) => x.date, fields: (x) => [x.subject, x.kind, x.note], label: (x) => `Note ${s(x.grade)} · ${s(x.subject)}${s(x.kind) ? " (" + s(x.kind) + ")" : ""}` },

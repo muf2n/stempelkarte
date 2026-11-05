@@ -29,7 +29,7 @@ const ABS_KINDS = ["urlaub", "krank", "zeitausgleich", "schule", "feiertag"];
 const GRADE_NAMES = { 1: "Sehr gut", 2: "Gut", 3: "Befriedigend", 4: "Genügend", 5: "Nicht genügend" };
 const EXAM_KINDS = ["Schularbeit", "Test", "Prüfung", "Mündlich", "Referat", "Lehrabschlussprüfung"];
 
-import { SRC, RO, WR, s, pad2, need, dateArg, timeArg, boolArg, placeName, matchPlace, resolvePlace, countdown } from "./util.js";
+import { SRC, RO, WR, s, pad2, need, dateArg, timeArg, boolArg, placeName, matchPlace, resolvePlace, countdown, txNote, idArg } from "./util.js";
 
 function lastSeg(r) { const sg = segmentsOf(r); return sg[sg.length - 1] || null; }
 
@@ -1116,7 +1116,7 @@ tool({
     out.push(...extra);
     if (args.buchungen === true && list.length) {
       out.push("", "Buchungen:");
-      for (const x of [...list].sort((a, b) => (a.date < b.date ? 1 : -1)).slice(0, 60)) out.push(`- ${fmtKey(x.date)} ${x.type === "in" ? "+" : "−"}${eur(Number(x.amount) || 0)} · ${catName(cats, x.category)}${s(x.note) ? ` · „${s(x.note).slice(0, 60)}“` : ""}${x.src === "bank" ? " · Bank" : ""} (ID ${x.id})`);
+      for (const x of [...list].sort((a, b) => (a.date < b.date ? 1 : -1)).slice(0, 60)) out.push(`- ${fmtKey(x.date)} ${x.type === "in" ? "+" : "−"}${eur(Number(x.amount) || 0)} · ${catName(cats, x.category)}${s(x.note) ? ` · ${txNote(x, 60)}` : ""}${x.src === "bank" ? " · Bank" : ""} (ID ${x.id})`);
       if (list.length > 60) out.push(`… und ${list.length - 60} weitere`);
     }
     return out.join("\n");
@@ -1690,10 +1690,19 @@ for (const t of GMAIL_TOOLS) tool(t);
 /* ===== Sicheres Löschen (Vorschlag → Bestätigung → Papierkorb) ===== */
 for (const t of DELETE_TOOLS) tool(t);
 
+/** Werkzeuge, die /mcp anbietet: ohne die mit mcp:false (Gmail – nur im In-App-Chat, H1b). */
+export const MCP_TOOLS = () => TOOLS.filter((t) => t.mcp !== false);
+
 export function toolList() {
-  return TOOLS.map(({ name, title, description, inputSchema, annotations }) => ({ name, title, description, inputSchema, annotations }));
+  return MCP_TOOLS().map(({ name, title, description, inputSchema, annotations }) => ({ name, title, description, inputSchema, annotations }));
 }
 
+/** Alle Werkzeuge (In-App-Chat). */
 export function findTool(name) { return TOOLS.find((t) => t.name === name) || null; }
+/** Nur Werkzeuge, die /mcp anbietet. */
+export function findMcpTool(name) { return MCP_TOOLS().find((t) => t.name === name) || null; }
+
+/** Schreib-/Lösch-Werkzeuge: aus den Annotationen abgeleitet (readOnlyHint false). */
+export const WRITE_TOOL_NAMES = () => new Set(TOOLS.filter((t) => !(t.annotations && t.annotations.readOnlyHint === true)).map((t) => t.name));
 
 export { UserError, score, WD, parseKey, wdOf, shiftMonth };

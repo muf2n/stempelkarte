@@ -10,22 +10,22 @@ const pad = (n) => String(n).padStart(2, "0");
 const key = (d) => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
 const TODAY = key(new Date());
 
-const GRAMBACH = { latitude: 47.01098, longitude: 15.50511 };
-const LIEBENAU = { latitude: 47.01098 + 2000 / 111320, longitude: 15.50511 };     // 2 km nördlich
+const MUSTERDORF = { latitude: 47.01098, longitude: 15.50511 };
+const PROBENAU = { latitude: 47.01098 + 2000 / 111320, longitude: 15.50511 };     // 2 km nördlich
 const FIRMA = { latitude: 47.0402, longitude: 15.4089 };                            // gespeicherter Ort
-const SEIERSBERG = { lat: 47.0062, lng: 15.4028 };                                  // EXIF-GPS
+const TESTHEIM = { lat: 47.0062, lng: 15.4028 };                                  // EXIF-GPS
 const LBS = { latitude: 47.0905, longitude: 15.4040 };                              // gespeicherter Ort Berufsschule
 
 // Update 9 (Agent U) – wechselnde Wohnungen (je ≈ 550 m auseinander)
 const W = [0, 1, 2, 3, 4, 5].map((i) => ({ latitude: 47.0600 + i * 0.005, longitude: 15.4500 }));
-const WSTR = ["Musterstraße 5", "Griesgasse 12", "Lendplatz 3", "Annenstraße 40", "Keplerstraße 8", "Mariahilferstraße 2"];
+const WSTR = ["Musterstraße 5", "Mustergasse 12", "Testplatz 3", "Testerstraße 40", "Fiktivstraße 8", "Beispielhofstraße 2"];
 
 function nominatimFor(lat, lng) {
   const near = (p, m) => Math.hypot((lat - p.latitude) * 111320, (lng - p.longitude) * 75900) < m;
-  for (let i = 0; i < W.length; i++) if (near(W[i], 200)) { const [road, hn] = WSTR[i].split(/ (?=\d)/); return { address: { road, house_number: hn, city: "Graz", postcode: "8020" } }; }
-  if (near(GRAMBACH, 300)) return { display_name: "1, Thomas-Arbesser-Straße, Grambach, Bezirk Graz-Umgebung, Steiermark, 8074, Österreich", address: { house_number: "1", road: "Thomas-Arbesser-Straße", village: "Grambach", municipality: "Grambach", postcode: "8074", state: "Steiermark", country: "Österreich" } };
-  if (near(LIEBENAU, 300)) return { address: { house_number: "24", road: "Liebenauer Hauptstraße", suburb: "Liebenau", city: "Graz", postcode: "8041" } };
-  if (Math.hypot((lat - SEIERSBERG.lat) * 111320, (lng - SEIERSBERG.lng) * 75900) < 300) return { address: { house_number: "10", road: "Am Seiersberg", town: "Seiersberg-Pirka", postcode: "8055" } };
+  for (let i = 0; i < W.length; i++) if (near(W[i], 200)) { const [road, hn] = WSTR[i].split(/ (?=\d)/); return { address: { road, house_number: hn, city: "Musterstadt", postcode: "8020" } }; }
+  if (near(MUSTERDORF, 300)) return { display_name: "1, Erika-Muster-Straße, Musterdorf, Bezirk Musterstadt-Umgebung, Steiermark, 8074, Österreich", address: { house_number: "1", road: "Erika-Muster-Straße", village: "Musterdorf", municipality: "Musterdorf", postcode: "8074", state: "Steiermark", country: "Österreich" } };
+  if (near(PROBENAU, 300)) return { address: { house_number: "24", road: "Probenauer Hauptstraße", suburb: "Probenau", city: "Musterstadt", postcode: "8041" } };
+  if (Math.hypot((lat - TESTHEIM.lat) * 111320, (lng - TESTHEIM.lng) * 75900) < 300) return { address: { house_number: "10", road: "Am Testheim", town: "Testheim-Au", postcode: "8055" } };
   return { address: { village: "Irgendwo" } };
 }
 
@@ -36,7 +36,7 @@ function nominatimFor(lat, lng) {
   const nomi = [];
   const ctx = await browser.newContext({
     viewport: { width: 390, height: 844 }, colorScheme: "light", acceptDownloads: true,
-    permissions: ["geolocation"], geolocation: GRAMBACH,
+    permissions: ["geolocation"], geolocation: MUSTERDORF,
   });
   await ctx.route("**/*", (route) => {
     const u = new URL(route.request().url());
@@ -81,7 +81,7 @@ function nominatimFor(lat, lng) {
     return cv.toDataURL("image/jpeg", 0.8);
   }, [color, label])).split(",")[1], "base64");
   const IMG = { p1: await jpeg("#0369a1", "Foto 1"), p2: await jpeg("#047857", "Foto 2"), p3: await jpeg("#b45309", "Foto 3"), p4: await jpeg("#7c3aed", "Firma"), p5: await jpeg("#be123c", "Ohne GPS") };
-  const exifBuf = Buffer.from(G.injectExif(await jpeg("#334155", "EXIF"), G.buildExifSegment({ date: "2026:10:14 09:41:07", lat: SEIERSBERG.lat, lng: SEIERSBERG.lng })));
+  const exifBuf = Buffer.from(G.injectExif(await jpeg("#334155", "EXIF"), G.buildExifSegment({ date: "2026:10:14 09:41:07", lat: TESTHEIM.lat, lng: TESTHEIM.lng })));
   const plainBuf = await jpeg("#a16207", "Import");
 
   // Startdaten: laufende Schicht (ohne Ort), gespeicherter Ort „Firma“, ein altes Foto (ohne Index) mit placeId
@@ -91,15 +91,15 @@ function nominatimFor(lat, lng) {
     localStorage.clear();
     localStorage.setItem("stempelkarte.local.v1", JSON.stringify({
       entries: [], todos: [], days: {},
-      places: [{ id: "pF", name: "Firma Elektro Maier", addr: "Wiener Straße 5, 8020 Graz", lat: firma.latitude, lng: firma.longitude, radius: 150 },
-        { id: "pS", name: "Landesberufsschule Graz 4", addr: "Hans-Brandstetter-Gasse 6, 8010 Graz", lat: lbs.latitude, lng: lbs.longitude, radius: 150 }],
+      places: [{ id: "pF", name: "Firma Elektro Maier", addr: "Erfundene Straße 5, 8020 Musterstadt", lat: firma.latitude, lng: firma.longitude, radius: 150 },
+        { id: "pS", name: "Landesberufsschule Musterstadt 4", addr: "Hans-Muster-Gasse 6, 8010 Musterstadt", lat: lbs.latitude, lng: lbs.longitude, radius: 150 }],
       running: { start: s, segments: [{ start: s, activity: "Arbeiten", placeId: null, place: "", loc: null }], placeId: null, place: "", note: "", people: [], pauseStart: null, pauseMs: 0, inLoc: null },
       rev: Date.now(), settings: { weeklyTarget: 38.5 },
     }));
     // Alben aus der Zeit vor den Hauptkategorien (Adresse, Berufsschul-Ort, eigenes)
     localStorage.setItem("sk-a-photo_albums", JSON.stringify([
-      { id: "alOld", kind: "address", name: "Annenstraße 3, Graz", lat: 47.0712, lng: 15.4300, radius: 80, addr: "Annenstraße 3, 8020 Graz", created: 1 },
-      { id: "alLbs", kind: "place", placeId: "pS", name: "Landesberufsschule Graz 4", lat: lbs.latitude, lng: lbs.longitude, radius: 150, created: 2 },
+      { id: "alOld", kind: "address", name: "Testerstraße 3, Musterstadt", lat: 47.0712, lng: 15.4300, radius: 80, addr: "Testerstraße 3, 8020 Musterstadt", created: 1 },
+      { id: "alLbs", kind: "place", placeId: "pS", name: "Landesberufsschule Musterstadt 4", lat: lbs.latitude, lng: lbs.longitude, radius: 150, created: 2 },
       { id: "alCust", kind: "custom", name: "Ideen", emoji: "💡", radius: 80, created: 3 },
     ]));
     await new Promise((res) => { const r = indexedDB.deleteDatabase("stempelkarte-photos"); r.onsuccess = r.onerror = r.onblocked = () => res(); });
@@ -122,7 +122,7 @@ function nominatimFor(lat, lng) {
   await page.click("#btn-local");
   await page.waitForTimeout(600);
 
-  /* ---------- Heute: Foto 1 + 2 in Grambach, Foto 3 nach 2 km ---------- */
+  /* ---------- Heute: Foto 1 + 2 in Musterdorf, Foto 3 nach 2 km ---------- */
   await page.waitForSelector("[data-r=photo] .ph-cam", { state: "visible" });
   const takeHeute = async (buf, name, note) => {
     await page.setInputFiles("[data-r=photo] label[data-ph-cam] input.ph-file", { name, mimeType: "image/jpeg", buffer: buf });
@@ -132,8 +132,8 @@ function nominatimFor(lat, lng) {
     await page.waitForSelector(".sheet", { state: "detached" });
   };
   await takeHeute(IMG.p1, "p1.jpg", "Verteiler vorher");
-  const a1 = await until(() => albumByName(/Grambach/), "Album für Grambach angelegt");
-  ok(a1.name === "Thomas-Arbesser-Straße 1, Grambach" && a1.kind === "address" && a1.radius === 80, "Foto 1 in Grambach → Album „Thomas-Arbesser-Straße 1, Grambach“ (Adresse, 80 m)");
+  const a1 = await until(() => albumByName(/Musterdorf/), "Album für Musterdorf angelegt");
+  ok(a1.name === "Erika-Muster-Straße 1, Musterdorf" && a1.kind === "address" && a1.radius === 80, "Foto 1 in Musterdorf → Album „Erika-Muster-Straße 1, Musterdorf“ (Adresse, 80 m)");
   /* Hauptkategorien: erster Start */
   let fl = await folders();
   ok(fl.map((f) => f.id).sort().join() === "f_bau,f_privat,f_schule", "Erster Start: Standard-Kategorien 🏗️ Baustellen, 🏫 Berufsschule, 🏠 Privat angelegt");
@@ -145,17 +145,17 @@ function nominatimFor(lat, lng) {
   ok(!(await albumOf("alCust")).folderId, "Eigenes Album bleibt ohne Kategorie");
   let list = await until(async () => { const l = await idx(); return l.length && l.find((x) => x.note === "Verteiler vorher" && x.albumIds.includes(a1.id)) ? l : null; }, "Foto 1 im Album");
   const ph1 = list.find((x) => x.note === "Verteiler vorher");
-  ok(Math.abs(ph1.lat - GRAMBACH.latitude) < 1e-6 && ph1.addr === "Thomas-Arbesser-Straße 1, 8074 Grambach", "Position + Adresse am Foto gespeichert");
+  ok(Math.abs(ph1.lat - MUSTERDORF.latitude) < 1e-6 && ph1.addr === "Erika-Muster-Straße 1, 8074 Musterdorf", "Position + Adresse am Foto gespeichert");
   ok(!("data" in ph1) && ph1.thumb.startsWith("data:image/jpeg"), "Index enthält nur das Vorschaubild");
   await page.waitForTimeout(300);
-  await ctx.setGeolocation({ latitude: GRAMBACH.latitude + 0.0002, longitude: GRAMBACH.longitude }); // ≈ 22 m daneben
+  await ctx.setGeolocation({ latitude: MUSTERDORF.latitude + 0.0002, longitude: MUSTERDORF.longitude }); // ≈ 22 m daneben
   await takeHeute(IMG.p2, "p2.jpg", "");
   await until(async () => (await idx()).filter((x) => x.albumIds.includes(a1.id)).length === 2, "Foto 2 im selben Album");
   ok((await albums()).length === 4, "Foto 2 an derselben Adresse → kein neues Album (3 alte + 1)");
-  await ctx.setGeolocation(LIEBENAU);
+  await ctx.setGeolocation(PROBENAU);
   await takeHeute(IMG.p3, "p3.jpg", "Zählerkasten");
-  const a3 = await until(() => albumByName(/Liebenauer/), "neues Album nach 2 km");
-  ok(a3.name === "Liebenauer Hauptstraße 24, Graz", "Foto 3 nach 2 km → neues Album „Liebenauer Hauptstraße 24, Graz“");
+  const a3 = await until(() => albumByName(/Probenauer/), "neues Album nach 2 km");
+  ok(a3.name === "Probenauer Hauptstraße 24, Musterstadt", "Foto 3 nach 2 km → neues Album „Probenauer Hauptstraße 24, Musterstadt“");
   await until(async () => (await idx()).filter((x) => x.albumIds.includes(a3.id)).length === 1, "Foto 3 im neuen Album");
   // Ort hat Vorrang
   await ctx.setGeolocation({ latitude: FIRMA.latitude + 0.0005, longitude: FIRMA.longitude });
@@ -192,7 +192,7 @@ function nominatimFor(lat, lng) {
   ok(page.url().endsWith("#alltag/galerie/k/f_bau") && (await txt('[data-g="fname"]')) === "Baustellen", "Tippen öffnet die Kategorie (eigener Hash)");
   const cards = await page.$$eval(".gl-acard[data-album]", (b) => b.map((x) => x.textContent.replace(/\s+/g, " ").trim()));
   ok(cards.length === 4, "4 Album-Karten in Baustellen: " + cards.join(" | "));
-  ok(cards.some((c) => c.includes("Thomas-Arbesser-Straße 1, Grambach") && c.includes("2 Fotos")), "Karte Grambach: 2 Fotos");
+  ok(cards.some((c) => c.includes("Erika-Muster-Straße 1, Musterdorf") && c.includes("2 Fotos")), "Karte Musterdorf: 2 Fotos");
   ok(cards.some((c) => c.includes("Firma Elektro Maier") && c.includes("2 Fotos")), "Karte Firma: 2 Fotos (neu + migriert)");
   ok((await page.$$(".gl-acard .gl-acov img")).length === 3, "Titelbilder als Vorschaubilder");
   await shot("gl-alben-390.png");
@@ -206,12 +206,12 @@ function nominatimFor(lat, lng) {
   ok((await txt(".gl-ahead")).includes("Umkreis 80 m"), "Album zeigt Art + Umkreis");
   ok((await page.getAttribute('[data-g="maps"]', "href")).startsWith("https://www.google.com/maps/search/?api=1&query=47.0"), "„In Google Maps öffnen“-Link");
   await page.click('[data-g="amenu"]');
-  await page.fill('.sheet [data-m="name"]', "Baustelle Liebenau");
+  await page.fill('.sheet [data-m="name"]', "Baustelle Probenau");
   await page.click('.sheet [data-emoji="🏗️"]');
   await page.click('.sheet [data-rad="150"]');
   await page.click('.sheet [data-m="save"]');
   await page.waitForTimeout(250);
-  ok((await txt('[data-g="aname"]')) === "Baustelle Liebenau", "Album umbenannt");
+  ok((await txt('[data-g="aname"]')) === "Baustelle Probenau", "Album umbenannt");
   let al3 = (await albums()).find((a) => a.id === a3.id);
   ok(al3.emoji === "🏗️" && al3.radius === 150, "Symbol 🏗️ und Umkreis 150 m gespeichert");
   await page.click('[data-g="amenu"]');
@@ -222,8 +222,8 @@ function nominatimFor(lat, lng) {
   await page.click('.sheet [data-c="ok"]');
   await page.waitForSelector(".sheet", { state: "detached" });
   await page.waitForTimeout(300);
-  ok(!(await albums()).some((a) => a.id === a1.id), "Grambach-Album nach dem Zusammenführen entfernt");
-  ok((await page.$$(".gl-th")).length === 3, "Album „Baustelle Liebenau“ hat jetzt 3 Fotos");
+  ok(!(await albums()).some((a) => a.id === a1.id), "Musterdorf-Album nach dem Zusammenführen entfernt");
+  ok((await page.$$(".gl-th")).length === 3, "Album „Baustelle Probenau“ hat jetzt 3 Fotos");
   ok((await page.$$(".gl-day")).length >= 1 && (await txt(".gl-dh")).includes("Heute"), "Gitter nach Tagen gruppiert");
   await shot("gl-album-390.png");
 
@@ -233,7 +233,7 @@ function nominatimFor(lat, lng) {
   ok((await txt(".ph-v-n")) === "1 / 3", "Vollbild 1 / 3");
   await until(() => page.evaluate(() => { const v = document.querySelector(".ph-v-stage img").src || ""; const t = document.querySelector(".gl-th img").src; return v.length > t.length * 1.5; }), "großes Bild nachgeladen");
   ok(true, "Großes Bild wird erst im Vollbild geladen");
-  ok((await txt(".ph-v-meta")).includes("Liebenauer Hauptstraße 24, 8041 Graz"), "Vollbild zeigt Datum, Uhrzeit und Adresse");
+  ok((await txt(".ph-v-meta")).includes("Probenauer Hauptstraße 24, 8041 Musterstadt"), "Vollbild zeigt Datum, Uhrzeit und Adresse");
   const swipe = (dx) => page.evaluate((dx) => {
     const st = document.querySelector(".ph-v-stage");
     const mk = (x) => new Touch({ identifier: 1, target: st, clientX: x, clientY: 400 });
@@ -248,14 +248,14 @@ function nominatimFor(lat, lng) {
   await page.click('[data-v="save"]');
   await page.waitForTimeout(250);
   ok((await idx()).some((x) => x.note === "Zählerkasten offen"), "Notiz im Vollbild geändert (Foto + Index)");
-  ok((await page.$$(".gl-vchip-go")).length === 1 && (await txt(".gl-vchip-go")) === "Baustelle Liebenau", "Album als Chip im Vollbild");
+  ok((await page.$$(".gl-vchip-go")).length === 1 && (await txt(".gl-vchip-go")) === "Baustelle Probenau", "Album als Chip im Vollbild");
   await page.click("[data-vadd]");
   await page.waitForSelector(".sheet .gl-pick");
   ok(await page.evaluate(() => getComputedStyle(document.querySelector(".sheet:last-child")).zIndex === "57"), "Album-Auswahl liegt über dem Vollbild");
   await page.fill('.sheet [data-p="name"]', "Verteiler");
   await page.click('.sheet [data-p="create"]');
   await page.waitForTimeout(300);
-  ok((await page.$$eval(".gl-vchip-go", (b) => b.map((x) => x.textContent))).join() === "Baustelle Liebenau,Verteiler", "Neues Album „Verteiler“ aus dem Vollbild angelegt + Chip");
+  ok((await page.$$eval(".gl-vchip-go", (b) => b.map((x) => x.textContent))).join() === "Baustelle Probenau,Verteiler", "Neues Album „Verteiler“ aus dem Vollbild angelegt + Chip");
   await shot("gl-viewer-390.png", false);
   await page.click(".gl-vchip-x >> nth=1");
   await page.waitForTimeout(250);
@@ -290,11 +290,11 @@ function nominatimFor(lat, lng) {
   await page.click('[data-s="share"]');
   await until(() => page.evaluate(() => window.__shared.length), "geteilt");
   ok((await page.evaluate(() => window.__shared[0].n)) === 2, "2 Fotos auf einmal geteilt (navigator.share mit Dateien)");
-  // Verschieben: Foto 3 (nth=2) von Liebenau nach Verteiler
+  // Verschieben: Foto 3 (nth=2) von Probenau nach Verteiler
   await page.click('[data-s="move"]');
   await page.click(`.sheet [data-pick="${verteiler.id}"]`);
   await page.waitForTimeout(300);
-  ok((await page.$$(".gl-th")).length === 1, "Verschieben: 2 Fotos weg aus „Baustelle Liebenau“");
+  ok((await page.$$(".gl-th")).length === 1, "Verschieben: 2 Fotos weg aus „Baustelle Probenau“");
   // Löschen mit Bestätigung
   await page.click('[data-g="select"]');
   await page.click(".gl-th >> nth=0");
@@ -318,8 +318,8 @@ function nominatimFor(lat, lng) {
 
   /* ---------- Import mit EXIF ---------- */
   await page.setInputFiles('.gl-head input[data-in="imp"]', [{ name: "IMG_20261014.jpg", mimeType: "image/jpeg", buffer: exifBuf }]);
-  const aS = await until(() => albumByName(/Seiersberg/), "Album aus EXIF-GPS");
-  ok(aS.name === "Am Seiersberg 10, Seiersberg-Pirka", "Import mit EXIF-GPS → Album „Am Seiersberg 10, Seiersberg-Pirka“");
+  const aS = await until(() => albumByName(/Testheim/), "Album aus EXIF-GPS");
+  ok(aS.name === "Am Testheim 10, Testheim-Au", "Import mit EXIF-GPS → Album „Am Testheim 10, Testheim-Au“");
   ok(aS.folderId === "f_bau", "Neues Adress-Album aus Import → Baustellen");
   const imp = await until(async () => (await idx()).find((x) => x.albumIds.includes(aS.id)), "importiertes Foto");
   ok(imp.dayKey === "2026-10-14" && new Date(imp.ts).getHours() === 9, "EXIF-Aufnahmezeit übernommen (14.10.2026, 09:41)");
@@ -346,9 +346,9 @@ function nominatimFor(lat, lng) {
   const count = async () => (await txt('[data-g="count"]')).trim();
   ok((await count()) === "7 Fotos", "Alle Fotos: 7");
   ok((await page.$$eval(".gl-mh", (h) => h.map((x) => x.textContent))).join() === "November 2026,Oktober 2026,September 2026", "Nach Monaten gruppiert");
-  await page.fill('[data-g="q"]', "seiersberg");
+  await page.fill('[data-g="q"]', "testheim");
   await page.waitForTimeout(350);
-  ok((await count()) === "1 Foto gefunden", "Suche „seiersberg“ (Adresse) → 1");
+  ok((await count()) === "1 Foto gefunden", "Suche „testheim“ (Adresse) → 1");
   await page.fill('[data-g="q"]', "zaehlerkasten");
   await page.waitForTimeout(350);
   ok((await count()) === "1 Foto gefunden", "Suche umlaut-unabhängig über die Notiz → 1");
@@ -570,7 +570,7 @@ function nominatimFor(lat, lng) {
   await page.click(".place-item[data-id=pF]");
   await page.waitForSelector(".sheet [data-r=photos] .ph-th");
   ok((await page.$$(".sheet [data-r=photos] .ph-th")).length === 2, "Ort-Blatt zeigt weiter die Fotos des Orts (2)");
-  await ctx.setGeolocation(LIEBENAU);
+  await ctx.setGeolocation(PROBENAU);
   await page.setInputFiles(".sheet [data-r=photos] input.ph-file", { name: "o.jpg", mimeType: "image/jpeg", buffer: IMG.p2 });
   await page.waitForSelector('.sheet [data-ph="save"]:not([disabled])');
   await page.click('.sheet [data-ph="save"]');
@@ -587,7 +587,7 @@ function nominatimFor(lat, lng) {
   ok(!(await page.$(".sheet")), "Tages-Blatt → „Alle Fotos in der Galerie“");
 
   /* ---------- Update 9 (Agent U): aktive Kategorie „Neue Fotos gehen nach …“ ---------- */
-  const waName = (i) => `${WSTR[i]}, Graz`;
+  const waName = (i) => `${WSTR[i]}, Musterstadt`;
   const chipTxt = async (sel) => (await page.innerText(sel)).replace(/\s+/g, " ").trim();
   const gaToast = async (re) => until(async () => { const t = await page.evaluate(() => { const e = document.getElementById("ga-toast"); return e && !e.hidden ? e.textContent : ""; }); return re.test(t) ? t : null; }, "Toast " + re);
   const openCam = async (buf, name) => {
@@ -620,8 +620,8 @@ function nominatimFor(lat, lng) {
   ok(/Kategorie: 🏠 Wohnungen/.test(await chipTxt('.sheet [data-ga="chip"]')), "Chip im Aufnahme-Blatt zeigt sofort 🏠 Wohnungen");
   await saveCam();
   // 2) drei Fotos an drei Adressen → drei Alben in Wohnungen
-  const t1 = await gaToast(/Wohnungen › Musterstraße 5, Graz/);
-  ok(t1.includes("In „Wohnungen › Musterstraße 5, Graz“ gespeichert") && t1.includes("Ändern"), "Toast: „In „Wohnungen › Musterstraße 5, Graz“ gespeichert“ + Ändern");
+  const t1 = await gaToast(/Wohnungen › Musterstraße 5, Musterstadt/);
+  ok(t1.includes("In „Wohnungen › Musterstraße 5, Musterstadt“ gespeichert") && t1.includes("Ändern"), "Toast: „In „Wohnungen › Musterstraße 5, Musterstadt“ gespeichert“ + Ändern");
   await noDrive();
   await shot("ga-toast-390.png", false);
   for (const i of [1, 2]) {
@@ -637,17 +637,17 @@ function nominatimFor(lat, lng) {
   // 3) Foto an bekannter Adresse → Album bleibt, wo es ist
   const nAlb0 = (await albums()).length;
   const liebFolder = (await albumOf(a3.id)).folderId || null;
-  await ctx.setGeolocation(LIEBENAU);
+  await ctx.setGeolocation(PROBENAU);
   await page.waitForTimeout(300);
   await openCam(IMG.p3, "lieb.jpg");
   await saveCam();
-  await gaToast(/Baustelle Liebenau/);
+  await gaToast(/Baustelle Probenau/);
   ok((await albums()).length === nAlb0 && ((await albumOf(a3.id)).folderId || null) === liebFolder, "Foto an bestehender Album-Adresse → kein neues Album, Kategorie bleibt");
   await ctx.setGeolocation(W[1]);
   await page.waitForTimeout(300);
   await openCam(IMG.p3, "w2b.jpg");
   await saveCam();
-  await gaToast(/Wohnungen › Griesgasse 12/);
+  await gaToast(/Wohnungen › Mustergasse 12/);
   ok((await albums()).length === nAlb0, "Zurück an Adresse 2 → dasselbe Album in Wohnungen");
   // 4) in der Galerie (Kopf) auf Baustellen umschalten → nächste neue Adresse dorthin
   await goHash("#alltag/galerie", ".gl-active [data-ga=chip]");
@@ -664,7 +664,7 @@ function nominatimFor(lat, lng) {
   await page.waitForSelector('.sheet [data-ph="save"]:not([disabled])');
   ok(/🏗️ Baustellen/.test(await chipTxt('.sheet [data-ga="chip"]')), "Aufnahme aus der Galerie: Chip zeigt Baustellen");
   await saveCam();
-  await gaToast(/Baustellen › Annenstraße 40/);
+  await gaToast(/Baustellen › Testerstraße 40/);
   const w4 = await until(async () => (await albums()).find((a) => a.name === waName(3)), "Album 4");
   ok(w4.folderId === "f_bau", "Nächste neue Adresse → Baustellen");
   ok((await albumOf(wAlb[0].id)).folderId === fW.id, "Frühere Wohnungen-Alben bleiben in Wohnungen");
@@ -703,13 +703,13 @@ function nominatimFor(lat, lng) {
   await noDrive();
   await shot("ga-capture-place-390.png", false);
   await saveCam();
-  await gaToast(/Baustellen › Keplerstraße 8/);
+  await gaToast(/Baustellen › Fiktivstraße 8/);
   ok((await albums()).find((a) => a.name === waName(4)).folderId === "f_bau" && (await gset()).activeFolderId === fW.id, "Neue Adresse während Ort-Schicht → Baustellen, eigene Wahl bleibt Wohnungen");
   await page.evaluate(() => import("/js/store.js").then((m) => { const r = m.get().running; return m.setRunning({ ...r, placeId: null, place: "", segments: r.segments.map((x) => ({ ...x, placeId: null, place: "" })) }); }));
   // 7) Einsatz-Banner (einmal pro Tag)
-  await page.evaluate(async (today) => { const A = await import("/js/gallery-albums.js"); await A.setActiveFolder("f_bau"); const m = await import("/js/store.js"); await m.saveTodo({ kind: "einsatz", title: "Wohnungen Gries", date: today }); }, TODAY);
+  await page.evaluate(async (today) => { const A = await import("/js/gallery-albums.js"); await A.setActiveFolder("f_bau"); const m = await import("/js/store.js"); await m.saveTodo({ kind: "einsatz", title: "Wohnungen Musterviertel", date: today }); }, TODAY);
   await goHash("#alltag/galerie", ".gl-active .ga-ez");
-  ok((await chipTxt(".gl-active .ga-ez")).includes("Heute Einsatz „Wohnungen Gries“ – Fotos nach 🏠 Wohnungen?"), "Banner: „Heute Einsatz „Wohnungen Gries“ – Fotos nach 🏠 Wohnungen?“");
+  ok((await chipTxt(".gl-active .ga-ez")).includes("Heute Einsatz „Wohnungen Musterviertel“ – Fotos nach 🏠 Wohnungen?"), "Banner: „Heute Einsatz „Wohnungen Musterviertel“ – Fotos nach 🏠 Wohnungen?“");
   await noDrive();
   await shot("ga-banner-390.png", false);
   await page.click('.gl-active [data-ga="ezno"]');
@@ -732,16 +732,16 @@ function nominatimFor(lat, lng) {
   await page.setInputFiles('.gl-head input[data-in="cam"]', { name: "w6.jpg", mimeType: "image/jpeg", buffer: IMG.p1 });
   await page.waitForSelector('.sheet [data-ph="save"]:not([disabled])');
   await saveCam();
-  await gaToast(/Wohnungen › Mariahilferstraße 2/);
+  await gaToast(/Wohnungen › Beispielhofstraße 2/);
   const w6 = await until(async () => (await albums()).find((a) => a.name === waName(5)), "Album 6");
   await page.click("#ga-toast .ga-toast-b");
   await page.waitForSelector('.sheet [data-gcf="f_bau"]');
-  ok((await txt('.sheet [data-gc="dest"]')) === "Wohnungen › Mariahilferstraße 2, Graz", "„Ändern“ öffnet „Foto einsortieren“ mit Ziel");
+  ok((await txt('.sheet [data-gc="dest"]')) === "Wohnungen › Beispielhofstraße 2, Musterstadt", "„Ändern“ öffnet „Foto einsortieren“ mit Ziel");
   await noDrive();
   await shot("ga-change-390.png", false);
   await page.click('.sheet [data-gcf="f_bau"]');
   await page.waitForTimeout(200);
-  ok((await albumOf(w6.id)).folderId === "f_bau" && (await txt('.sheet [data-gc="dest"]')) === "Baustellen › Mariahilferstraße 2, Graz", "Neues Album per „Ändern“ nach Baustellen verschoben");
+  ok((await albumOf(w6.id)).folderId === "f_bau" && (await txt('.sheet [data-gc="dest"]')) === "Baustellen › Beispielhofstraße 2, Musterstadt", "Neues Album per „Ändern“ nach Baustellen verschoben");
   const ph6 = (await idx()).find((x) => x.albumIds.includes(w6.id));
   await page.click(`.sheet [data-gca="${wAlb[0].id}"]`);
   await page.waitForSelector(".sheet", { state: "detached" });
@@ -759,7 +759,7 @@ function nominatimFor(lat, lng) {
   await page.click('.sheet [data-pl="ok"]');
   await page.waitForSelector(".sheet", { state: "detached" });
   await page.waitForTimeout(200);
-  ok((await albumOf(w4.id)).folderId === fW.id && !!(await page.$(`.gl-acard[data-album="${w4.id}"]`)), "„Alben aus anderer Kategorie hierher holen“ → Annenstraße 40 jetzt in Wohnungen");
+  ok((await albumOf(w4.id)).folderId === fW.id && !!(await page.$(`.gl-acard[data-album="${w4.id}"]`)), "„Alben aus anderer Kategorie hierher holen“ → Testerstraße 40 jetzt in Wohnungen");
   await shot("ga-kat-wohnungen-390.png");
 
   /* ---------- Screenshots ---------- */
@@ -772,7 +772,7 @@ function nominatimFor(lat, lng) {
   const state = await page.evaluate(() => ({ ls: { ...localStorage } }));
 
   for (const [scheme, vp, name] of [["dark", { width: 390, height: 844 }, "390-dark"], ["light", { width: 1440, height: 900 }, "1440"], ["dark", { width: 1440, height: 900 }, "1440-dark"]]) {
-    const c2 = await browser.newContext({ viewport: vp, colorScheme: scheme, permissions: ["geolocation"], geolocation: GRAMBACH });
+    const c2 = await browser.newContext({ viewport: vp, colorScheme: scheme, permissions: ["geolocation"], geolocation: MUSTERDORF });
     await c2.route("**/*", (route) => { const u = new URL(route.request().url()); return (u.hostname === "localhost") ? route.continue() : route.abort(); });
     const p2 = await c2.newPage();
     p2.on("pageerror", (e) => errors.push("pageerror: " + e.message));

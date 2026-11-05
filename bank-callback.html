@@ -4,6 +4,8 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+  <!-- M3: Content-Security-Policy (nur was die App braucht: Firebase/Google, Leaflet von unpkg mit SRI, OSM-Kacheln/Nominatim/OSRM, eigener Worker). Kein 'unsafe-eval', keine Inline-Skripte. Neue externe Adresse? Hier ergänzen. -->
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' https://www.gstatic.com https://apis.google.com https://unpkg.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com https://unpkg.com; font-src 'self' data: https://fonts.gstatic.com; img-src 'self' data: blob: https://tile.openstreetmap.org https://*.tile.openstreetmap.org https://unpkg.com https://*.googleusercontent.com https://www.gstatic.com; media-src 'self' data: blob:; connect-src 'self' https://*.googleapis.com https://*.firebaseio.com wss://*.firebaseio.com https://apis.google.com https://stempelkarte-mcp.lippa-florian.workers.dev https://nominatim.openstreetmap.org https://router.project-osrm.org; frame-src https://accounts.google.com https://apis.google.com https://stempelkarte-40682.firebaseapp.com; worker-src 'self'; manifest-src 'self'; object-src 'none'; base-uri 'self'; form-action 'self'">
   <meta name="referrer" content="no-referrer">
   <title>Bankverbindung – Stempelkarte</title>
   <meta name="theme-color" content="#EEF0F8" media="(prefers-color-scheme: light)">
@@ -30,91 +32,6 @@
     <p id="msg">Einen Moment – die Freigabe wird gespeichert und die letzten 90 Tage werden geladen.</p>
     <a class="btn primary" id="back" href="./#alltag/geld" hidden>Zurück zur App</a>
   </main>
-  <script type="module">
-    import { getFirebase } from "./js/firebase.js";
-
-    const URL_KEY = "stempelkarte.ai.url";
-    const FLASH_KEY = "stempelkarte.bank.flash";
-    const DEFAULT_URL = "https://stempelkarte-mcp.lippa-florian.workers.dev";
-    const $ = (id) => document.getElementById(id);
-    const lsGet = (k) => { try { return localStorage.getItem(k); } catch { return null; } };
-    const lsSet = (k, v) => { try { localStorage.setItem(k, v); } catch { /* egal */ } };
-    const clean = (u) => String(u || "").trim().replace(/\/+$/, "").replace(/\/(mcp|chat)$/, "");
-
-    function show(kind, title, text) {
-      $("spin").hidden = true;
-      $("ic").textContent = kind === "ok" ? "✅" : "⚠️";
-      $("h").textContent = title;
-      const m = $("msg");
-      m.textContent = text;
-      m.className = kind === "ok" ? "" : "err";
-      $("back").hidden = false;
-    }
-
-    // Angemeldeten Nutzer abwarten (Firebase stellt die Sitzung aus dem Speicher wieder her)
-    async function currentUser(f) {
-      if (!f) return null;
-      if (f.auth.currentUser) return f.auth.currentUser;
-      return new Promise((resolve) => {
-        const t = setTimeout(() => { off(); resolve(null); }, 6000);
-        const off = f.fa.onAuthStateChanged(f.auth, (u) => { clearTimeout(t); off(); resolve(u || null); });
-      });
-    }
-
-    async function serverUrl(f, user) {
-      const ls = lsGet(URL_KEY);
-      if (ls) return clean(ls);
-      if (f && user) {
-        try {
-          const d = await f.fs.getDoc(f.fs.doc(f.db, "users", user.uid, "meta", "settings"));
-          const u = d.exists() && d.data().ai && d.data().ai.url;
-          if (u) return clean(u);
-        } catch { /* Standard */ }
-      }
-      return DEFAULT_URL;
-    }
-
-    async function main() {
-      const q = new URLSearchParams(location.search);
-      const code = q.get("code"), state = q.get("state"), error = q.get("error");
-      // Code nicht in der Adresszeile/Verlauf stehen lassen
-      try { history.replaceState(null, "", location.pathname); } catch { /* egal */ }
-      if (error) {
-        const why = error === "access_denied" ? "Die Freigabe wurde bei der Bank abgebrochen oder abgelehnt." : `Die Bank meldet: ${q.get("error_description") || error}`;
-        show("err", "Nicht verbunden", why + " Du kannst es in der App jederzeit nochmal versuchen.");
-        return;
-      }
-      if (!code || !state) {
-        show("err", "Nichts zu tun", "Diese Seite wird nach der Anmeldung bei der Bank automatisch geöffnet. Starte die Verbindung in der App unter Alltag › Geld.");
-        return;
-      }
-      let f = null, user = null;
-      try { f = await getFirebase(); user = await currentUser(f); } catch { /* ohne Anmeldung weiter */ }
-      const headers = { "Content-Type": "application/json" };
-      if (user) { try { headers.Authorization = "Bearer " + (await user.getIdToken()); } catch { /* ohne */ } }
-      let res, data = null;
-      try {
-        res = await fetch((await serverUrl(f, user)) + "/bank/finish", { method: "POST", headers, body: JSON.stringify({ code, state }) });
-        try { data = await res.json(); } catch { /* leer */ }
-      } catch {
-        show("err", "Keine Verbindung", "Der Server war nicht erreichbar. Bitte prüfe dein Internet und starte die Verbindung in der App nochmal.");
-        return;
-      }
-      if (!res.ok) {
-        show("err", "Verbindung fehlgeschlagen", (data && data.error) || `Fehler ${res.status}. Bitte in der App nochmal versuchen.`);
-        return;
-      }
-      const n = Number(data && data.imported) || 0;
-      const msg = data && data.warn ? data.warn : n ? `Mit BAWAG verbunden ✓ – ${n} Buchung${n === 1 ? "" : "en"} übernommen` : "Mit BAWAG verbunden ✓";
-      if (user) {
-        lsSet(FLASH_KEY, JSON.stringify({ ok: true, msg, t: Date.now() }));
-        location.replace("./#alltag/geld");
-        return;
-      }
-      // z. B. im Handy-Browser außerhalb der App: dort ist niemand angemeldet
-      show("ok", "Verbunden ✓", msg.replace(/ ✓/, "") + ". Du kannst dieses Fenster schließen und zur Stempelkarte zurückkehren.");
-    }
-    main();
-  </script>
+  <script type="module" src="js/bank-callback.js"></script>
 </body>
 </html>

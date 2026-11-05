@@ -6,6 +6,7 @@ import * as V from "../js/alltag/vault-crypto.js";
 import * as C from "../js/alltag/vault-core.js";
 
 const ITER = 1000;
+V._setMinIterForTests(ITER); // Tempo: in Produktion gilt MIN_ITER (100.000)
 const PW = "Korrekt Pferd Batterie 9!";
 const ENTRY = { type: "login", title: "Billa Konto", user: "max@example.at", password: "S3hr-geheim!42", url: "billa.at", note: "Notiz äöü €" };
 
@@ -191,4 +192,24 @@ test("WLAN-QR-Text, CSV, URL, Suche", () => {
   assert.equal(C.failDelay(5), 5);
   assert.equal(C.failDelay(7), 20);
   assert.equal(C.failDelay(30), 300);
+});
+
+test("L12: gespeicherte Rundenzahl unter 100.000 wird beim Entsperren abgelehnt (klare Meldung), Standard bleibt 600.000", async () => {
+  const { meta } = await V.createVault(PW, { iter: ITER });
+  V._setMinIterForTests(V.MIN_ITER);
+  try {
+    assert.equal(V.MIN_ITER, 100000);
+    assert.ok(V.ITER >= V.MIN_ITER);
+    await assert.rejects(V.unlockVault(PW, meta), (e) => e.code === "weak-kdf" && /zu wenige Schlüssel-Runden/.test(e.message) && /100\.000/.test(e.message));
+    await assert.rejects(V.unlockVault(PW, { ...meta, iter: 99999 }), { code: "weak-kdf" });
+    await assert.rejects(V.createVault(PW, { iter: 5000 }), { code: "weak-kdf" });
+    await assert.rejects(V.changePassword(meta, PW, "neu-neu-neu-1", { iter: 5000 }), { code: "weak-kdf" });
+    assert.throws(() => V.checkMeta({ ...meta, iter: 1 }), { code: "weak-kdf" });
+    assert.doesNotThrow(() => V.checkMeta({ ...meta, iter: 100000 }));
+    // Test-Schalter kann die Grenze nie über MIN_ITER hinaus „lockern“ und ungültige Werte setzen sie zurück
+    V._setMinIterForTests(0);
+    assert.throws(() => V.checkMeta({ ...meta, iter: 1 }), { code: "weak-kdf" });
+  } finally {
+    V._setMinIterForTests(ITER);
+  }
 });

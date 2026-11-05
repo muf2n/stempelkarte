@@ -2,6 +2,10 @@
 // Nur DEIN Google-Konto (E-Mail unten) darf die App nutzen – und auch nur seinen eigenen Bereich.
 // Jeder andere wird abgewiesen, selbst wenn er sich mit Google anmeldet.
 // Willst du später z. B. ein zweites Konto erlauben, ergänze es in der Liste: ['a@gmail.com', 'b@gmail.com']
+//
+// Server-Dokumente (nur der Cloudflare-Worker schreibt sie, mit dem Firebase-Dienstkonto – das umgeht diese
+// Regeln): Die App darf sie LESEN, aber nicht anlegen, ändern oder löschen. Sonst könnte z. B. ein Skript im
+// Browser den KI-Kostendeckel (ai_usage) zurücksetzen oder Bestätigungs-Codes/Rückruf-Zustände fälschen.
 rules_version = '2';
 
 service cloud.firestore {
@@ -13,9 +17,41 @@ service cloud.firestore {
         && request.auth.token.email in ['lippa.florian@gmail.com'];
     }
 
-    // Eigener Datenbaum (Einträge, Orte, Zustand, Einstellungen)
-    match /users/{uid}/{document=**} {
-      allow read, write: if istErlaubt() && request.auth.uid == uid;
+    function eigen(uid) {
+      return istErlaubt() && request.auth.uid == uid;
+    }
+
+    // users/{uid}/meta/<name>: nur vom Server geschrieben
+    function serverDok(coll, docId) {
+      return coll == 'meta' && docId in [
+        'ai_usage',            // KI-Kostendeckel (/chat)
+        'ai_pending_delete',   // Lösch-Vorschlag mit Bestätigungs-Code
+        'ai_pending_settings', // Einstellungs-Vorschlag mit Bestätigungs-Code
+        'gmail_server',        // verschlüsseltes Gmail-Refresh-Token, Scan-Status
+        'gmail_pending',       // OAuth-state (Hash) für „Gmail dauerhaft verbinden“
+        'bank',                // Bankverbindung (Sitzung, Konten, Salden)
+        'bank_pending',        // Bank-Rückruf-state (Hash)
+        'bank_seen'            // bereits übernommene Bankbuchungen
+      ];
+    }
+
+    // Das Nutzer-Dokument selbst (users/{uid})
+    match /users/{uid} {
+      allow read, write: if eigen(uid);
+    }
+
+    // Dokumente direkt in einer Sammlung des Nutzers (users/{uid}/{coll}/{docId}),
+    // z. B. entries/…, meta/settings, a_money_tx/… – Server-Dokumente nur lesen.
+    match /users/{uid}/{coll}/{docId} {
+      allow read: if eigen(uid);
+      allow write: if eigen(uid) && !serverDok(coll, docId);
+    }
+
+    // Tiefer verschachtelte Unter-Sammlungen (users/{uid}/{coll}/{docId}/{sub}/…): wie bisher frei für dich.
+    // {rest=**} braucht hier mindestens ein Segment (ein Dokumentpfad hat immer eine gerade Länge),
+    // deckt also NICHT die Ebene darüber ab – die Server-Dokumente bleiben geschützt.
+    match /users/{uid}/{coll}/{docId}/{sub}/{rest=**} {
+      allow read, write: if eigen(uid);
     }
 
     // Alles andere: gesperrt

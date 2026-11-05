@@ -572,6 +572,9 @@ function renderAlbum() {
 
 const LEAFLET_CSS = "https://unpkg.com/leaflet@1.9.4/dist/leaflet.css";
 const LEAFLET_JS = "https://unpkg.com/leaflet@1.9.4/dist/leaflet.js";
+// M3: Subresource Integrity (wie js/views/places.js)
+const LEAFLET_JS_SRI = "sha384-cxOPjt7s7Iz04uaHJceBmS+qpjv2JkIHNVcuOrM+YHwZOmJGBXI00mdUXEq65HTH";
+const LEAFLET_CSS_SRI = "sha384-sHL9NAb7lN7rfvG5lfHpm643Xkcjzp4jFvuavGOndn6pjVqS6ny56CAt3nsEVT4H";
 let leafletP = null;
 function loadLeaflet() {
   if (window.L && window.L.map) return Promise.resolve(window.L);
@@ -579,11 +582,11 @@ function loadLeaflet() {
   leafletP = new Promise((resolve, reject) => {
     if (!document.querySelector("link[data-leaflet]")) {
       const link = document.createElement("link");
-      link.rel = "stylesheet"; link.href = LEAFLET_CSS; link.dataset.leaflet = "1";
+      link.rel = "stylesheet"; link.href = LEAFLET_CSS; link.integrity = LEAFLET_CSS_SRI; link.crossOrigin = "anonymous"; link.dataset.leaflet = "1";
       document.head.appendChild(link);
     }
     const sc = document.createElement("script");
-    sc.src = LEAFLET_JS; sc.async = true; sc.dataset.leaflet = "1";
+    sc.src = LEAFLET_JS; sc.integrity = LEAFLET_JS_SRI; sc.crossOrigin = "anonymous"; sc.async = true; sc.dataset.leaflet = "1";
     sc.onload = () => (window.L ? resolve(window.L) : reject(new Error("Leaflet fehlt")));
     sc.onerror = () => { sc.remove(); reject(new Error("Leaflet konnte nicht geladen werden")); };
     document.head.appendChild(sc);

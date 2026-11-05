@@ -427,7 +427,7 @@ function placeSelect(id, places, esc) {
     ${places.map((p) => `<option value="${esc(p.id)}">${esc(p.name || "Ort")}</option>`).join("")}
     <option value="__free">Andere Adresse …</option>
   </select>
-  <input type="text" data-r="${id}-free" placeholder="z. B. Wiener Straße 286, 8051 Graz" maxlength="160" hidden aria-label="Adresse">`;
+  <input type="text" data-r="${id}-free" placeholder="z. B. Musterstraße 1, 8000 Musterstadt" maxlength="160" hidden aria-label="Adresse">`;
 }
 
 function readPlace(box, id, places) {
