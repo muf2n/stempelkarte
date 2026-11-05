@@ -125,7 +125,8 @@ export async function connectGmail(email = "") {
   const provider = new fa.GoogleAuthProvider();
   provider.addScope(GMAIL_SCOPE);
   const hint = email || (auth.currentUser && auth.currentUser.email) || "";
-  provider.setCustomParameters(hint ? { login_hint: hint } : { prompt: "select_account" });
+  // prompt=consent: Google fragt die Gmail-Freigabe sicher neu ab (sonst bleibt ein früher nicht gesetztes Häkchen „hängen“)
+  provider.setCustomParameters(hint ? { login_hint: hint, prompt: "consent" } : { prompt: "consent select_account" });
 
   let res = null;
   try {
@@ -166,7 +167,18 @@ async function api(path, token) {
   try { body = await r.json(); } catch { /* egal */ }
   const reason = JSON.stringify(body || "");
   if (r.status === 401) { tok = null; throw gErr("auth", ERR_TEXT.auth); }
-  if (r.status === 403 || /insufficient|PERMISSION_DENIED|ACCESS_TOKEN_SCOPE/i.test(reason)) { tok = null; throw gErr("scope", ERR_TEXT.scope); }
+  if (r.status === 403 || /insufficient|PERMISSION_DENIED|ACCESS_TOKEN_SCOPE/i.test(reason)) {
+    tok = null;
+    // genauer sagen, was fehlt
+    if (/accessNotConfigured|SERVICE_DISABLED|has not been used|is disabled/i.test(reason)) {
+      throw gErr("scope", "Die Gmail API ist im Google-Projekt „stempelkarte-40682“ noch nicht aktiviert (Schritt 1 der Anleitung). Nach dem Aktivieren ein paar Minuten warten.");
+    }
+    if (/insufficient|ACCESS_TOKEN_SCOPE_INSUFFICIENT|insufficientPermissions/i.test(reason)) {
+      throw gErr("scope", "Google hat den Gmail-Zugriff nicht mitgegeben. Tippe „Trennen“, dann „Mit Gmail verbinden“ – und setz im Google-Fenster unbedingt das Häkchen bei „E-Mails ansehen“.");
+    }
+    const msg = body && body.error && body.error.message ? String(body.error.message).slice(0, 160) : "";
+    throw gErr("scope", ERR_TEXT.scope + (msg ? " (Google: " + msg + ")" : ""));
+  }
   throw gErr("net", ERR_TEXT.net + " (HTTP " + r.status + ")");
 }
 
