@@ -5,6 +5,7 @@ import assert from "node:assert/strict";
 import * as V from "../js/alltag/vault-crypto.js";
 import * as C from "../js/alltag/vault-core.js";
 import * as D from "../js/alltag/vault-docs-core.js";
+V._setMinIterForTests(1000); // Tempo: in Produktion gilt MIN_ITER (100.000)
 
 const ITER = 1000;
 const PW = "Reisepass Tresor Test 2026!";

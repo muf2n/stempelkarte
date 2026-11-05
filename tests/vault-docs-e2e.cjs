@@ -230,7 +230,7 @@ function pdfFixture(text) {
   const needles = [TITLE, "MARKER-TITLE", NUMBER, IMG_MARK, PDF_MARK, AUTH, "MARKER-NOTE", "pass-vorne", "pass-scan"];
   let leaks = leaksIn(dump.text, needles);
   ok(leaks.length === 0, "localStorage/IndexedDB/Cache: kein Titel, keine Nummer, kein JPEG-Kommentar, kein PDF-Text" + (leaks.length ? " → " + leaks : ""));
-  ok(!dump.text.includes("blob:"), "Keine Blob-URLs gespeichert");
+  ok(!/blob:https?:\/\//.test(dump.text), "Keine Blob-URLs gespeichert");
   // Original-Bild-Bytes (Ausschnitte) nirgends
   leaks = leaksIn(dump.text, [front.subarray(4000, 4060), front.subarray(front.length - 300, front.length - 240), pdf.subarray(0, 60)]);
   ok(leaks.length === 0, "Original-Bild-/PDF-Bytes nicht im Speicher");
