@@ -4967,6 +4967,8 @@ div.entry.ek-schcard:hover { border-color: var(--sch-line); }
 .sv-ru-opts .chips { flex: none; }
 .sv-ru-goal { flex: 1 1 180px; min-width: 0; display: flex; flex-direction: column; gap: 4px; font-size: .82rem; font-weight: 600; color: var(--muted); }
 .sv-ru-goal select { width: 100%; }
+.sv-ru-goal { max-width: 360px; }
+@media (min-width: 700px) { .sv-ru { max-width: 720px; } }
 .sv-ru .btn.primary { align-self: flex-start; }
 .sv-ru-push { min-height: 40px; font-size: .94rem !important; }
 .sv-ru-offbtn { align-self: flex-start; font-size: .84rem; color: var(--muted); }

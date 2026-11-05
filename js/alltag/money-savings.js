@@ -34,9 +34,9 @@ export function createSavings(opts) {
     const s = store.get().settings || {};
     const money = s.money && typeof s.money === "object" ? s.money : {};
     const cur = money.roundup && typeof money.roundup === "object" ? money.roundup : {};
-    try { await store.saveSettings({ money: { ...money, roundup: { ...cur, ...partial } } }); }
-    catch (err) { console.error(err); ui.toast("Speichern fehlgeschlagen", 3000); }
+    const p = store.saveSettings({ money: { ...money, roundup: { ...cur, ...partial } } }); // Stand ist sofort lokal da
     render();
+    try { await p; } catch (err) { console.error(err); ui.toast("Speichern fehlgeschlagen", 3000); }
   }
 
   /* ---------- Übersicht: Banner nach dem Zahltag ---------- */
