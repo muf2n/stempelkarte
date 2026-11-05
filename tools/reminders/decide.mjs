@@ -4,6 +4,7 @@
 import { dueReminders, reminderText } from "../../js/cal-core.js";
 import { effectiveMode } from "../../js/privat-core.js"; // Update 9 – Privat / Arbeit
 import * as SV from "../../js/alltag/money-core.js"; // Update 9 – Sparziele (Lohn-Erinnerung, Aufrunden)
+import { budgetStatus, budgetAlerts, applyAlerts, normAlerts, monthOf as moneyMonthOf } from "../../js/alltag/money-core.js"; // Update 9 – Budget-Warnungen
 
 export const TZ = "Europe/Vienna";
 const HOUR = 3600000;
@@ -433,3 +434,44 @@ export function savingsWanted(settings, goals) {
   const ru = SV.roundupSettings(settings || {});
   return (ru.on && ru.push) || (Array.isArray(goals) && goals.some((g) => g && SV.goalReminder(g).on));
 }
+
+/* ---- Update 9 – Budget-Warnungen (Geld › Budget) ---- */
+// Logik und Texte in js/alltag/money-core.js (gleich wie das Banner in der App).
+
+export const BUDGET_QUIET = { from: 22, to: 7 }; // nachts nichts schicken – kommt dann in der Früh
+const BUDGET_TITLES = { "80": "⚠️ Budget fast aufgebraucht", "100": "🛑 Budget erreicht", over: "🛑 Budget überschritten", pace: "🐢 Ausgaben-Tempo" };
+
+/** Einstellungen settings.money.alerts (Standard: alles an, sobald ein Budget existiert). */
+export function budgetAlertSettings(settings) {
+  const m = settings && settings.money && typeof settings.money === "object" ? settings.money : {};
+  return normAlerts(m.alerts);
+}
+
+/**
+ * Budget-Pushes: einmal pro Schwelle (80 %, 100 %, Tempo) und Kategorie im Monat, danach bei jeder
+ * weiteren Ausgabe „überschritten um …“. Zustand: users/{uid}/meta/budget_alerts {month, sent:{cat:{…}}}.
+ * @param txs     a_money_tx (mind. der laufende Monat)
+ * @param budgets a_money_budget ({id: Kategorie|"total", amount})
+ * @param cats    a_money_cats (leer → Standard-Kategorien)
+ * @param state   meta/budget_alerts oder null
+ * @returns Array von {type:"budget", title, body, tag, url, alerts:[…]} – nach dem Senden applyAlerts(state, today, alerts)
+ */
+export function decideBudget(now, settings, txs, budgets, cats, state) {
+  const s = settings || {};
+  if (!normReminders(s.reminders).enabled) return [];
+  const al = budgetAlertSettings(s);
+  if (!al.on || !(budgets || []).some((b) => b && Number(b.amount) > 0)) return [];
+  const v = vienna(now);
+  if (v.hh >= BUDGET_QUIET.from || v.hh < BUDGET_QUIET.to) return [];
+  const rows = budgetStatus(txs, budgets, moneyMonthOf(v.key), cats && cats.length ? cats.filter((c) => c && c.id && !c.deleted) : undefined);
+  return budgetAlerts(rows, state, v.key, al).map((a) => ({
+    type: "budget",
+    title: BUDGET_TITLES[a.kind] || "Budget",
+    body: a.text,
+    tag: `budget-${a.cat}`,
+    url: "./#alltag/geld?tab=budget",
+    alerts: [a],
+  }));
+}
+
+export { applyAlerts as applyBudgetAlerts };

@@ -11,7 +11,7 @@ Er läuft kostenlos als **Cloudflare Worker** und liest/schreibt dieselben Fires
 ## Was Claude damit kann
 
 Claude sieht (fast) alles in der App und darf vieles ändern – Löschen und Einstellungen aber nur in zwei Schritten.
-Insgesamt 48 Werkzeuge (verwandte Lese-Bereiche sind über `bereich`/`aktion` zusammengefasst).
+Insgesamt 49 Werkzeuge (verwandte Lese-Bereiche sind über `bereich`/`aktion` zusammengefasst).
 
 **Lesen**
 
@@ -23,6 +23,7 @@ Insgesamt 48 Werkzeuge (verwandte Lese-Bereiche sind über `bereich`/`aktion` zu
 | `orte_lesen` | gespeicherte Orte |
 | `todos_lesen`, `planer_lesen` | Planer/Kalender: Termine (Serien aufgeklappt, Ausnahmen, Ort, Erinnerungen, ID), Aufgaben, Geburtstage, Einsätze, Schultage, Feiertage |
 | `geld_lesen` | Monat (Einnahmen/Ausgaben/Kategorien, optional alle `buchungen`), Budget, Abos, Sparziele („pro Monat nötig“), Teilen-Gruppen mit Salden, Kontostand der Bank |
+| `leisten_pruefen` | „Kann ich mir das leisten?“ – `betrag`, optional `kategorie`/`notiz`: ✅ Ja / ⚠️ Knapp / 🛑 Nein mit Gründen (Budget der Kategorie und gesamt, Abos bis Monatsende, Kontostand, Sparziele); trägt nichts ein |
 | `abos_lesen` | Abos mit Laufzeit, Fristen, Kündigungslinks |
 | `mails_suchen`, `mail_lesen` | Gmail **nur lesen** (wenn „Gmail dauerhaft verbunden“ ist, siehe unten): Suche wie in Gmail (`von:Netflix`, Zeitraum `von`/`bis`) → Datum, Absender, Betreff, Auszug; einzelne Mail als Text (HTML entfernt, ≈ 6000 Zeichen). Senden/Weiterleiten/Löschen gibt es nicht; Mail-Inhalte gelten als Daten, nicht als Anweisungen |
 | `schule_lesen` | `bereich`: uebersicht, stundenplan, noten, projekte, dokumente (nur Titel), lernplan |

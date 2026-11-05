@@ -4984,3 +4984,35 @@ div.entry.ek-schcard:hover { border-color: var(--sch-line); }
 .bk-more { font-size: .86rem; color: var(--muted); }
 .bk-more summary { cursor: pointer; font-weight: 600; color: var(--ink); }
 .bk-more p { margin: 6px 0 0; line-height: 1.45; }
+
+/* Update 9 – Budget-Warnungen (Banner, STOPP, „Kann ich mir das leisten?“) */
+.mn-alert-host:empty { display: none; }
+.mn-alert-host { position: sticky; top: 8px; z-index: 6; margin: 10px 0 4px; }
+.mn-alert { display: flex; flex-direction: column; gap: 10px; padding: 14px 16px; border-radius: 16px; box-shadow: var(--shadow); border: 2px solid; animation: mn-alert-in .25s ease; }
+.mn-alert.warn { background: var(--pause-soft); border-color: color-mix(in srgb, var(--pause) 55%, transparent); color: var(--ink); }
+.mn-alert.stop { background: color-mix(in srgb, var(--danger) 16%, var(--card)); border-color: var(--danger); color: var(--ink); }
+.mn-alert-txt p { margin: 0 0 4px; font-weight: 700; line-height: 1.35; }
+.mn-alert.stop .mn-alert-txt p { color: var(--danger); }
+.mn-alert-txt small { display: block; color: var(--muted); font-size: .84rem; }
+.mn-alert-act { display: flex; gap: 8px; justify-content: flex-end; flex-wrap: wrap; }
+@keyframes mn-alert-in { from { transform: translateY(-8px); opacity: 0; } to { transform: none; opacity: 1; } }
+@media (prefers-reduced-motion: reduce) { .mn-alert { animation: none; } }
+.mn-bud-top > span:first-child { flex: 1 1 auto; min-width: 0; }
+.mn-stopp { flex: none; display: inline-block; margin-right: 4px; padding: 1px 8px; border-radius: 999px; background: #DC2626; color: #fff; font-style: normal; font-size: .72rem; font-weight: 800; letter-spacing: .06em; vertical-align: 2px; }
+.mn-bud.over { border-color: color-mix(in srgb, var(--danger) 55%, var(--line)); }
+.mn-budget-btns { display: flex; flex-wrap: wrap; gap: 8px; }
+.mn-afford-row { display: flex; justify-content: flex-start; margin: 4px 0 10px; }
+.mn-afford-btn { font-weight: 700; }
+.mn-bankhint p { margin: 0 0 6px; }
+.mn-bankhint-path { display: inline-block; padding: 6px 12px; border-radius: 10px; background: var(--soft); font-family: var(--f-mono); font-size: .9rem; font-weight: 600; }
+.mn-alertcfg .switch { min-height: 44px; font-size: .95rem !important; }
+.mn-alertcfg-sub { border-left: 3px solid var(--line); padding-left: 10px; margin: 2px 0 6px; }
+.mn-af-res { margin: 12px 0; }
+.mn-af-box { padding: 14px 16px; border-radius: 16px; border: 2px solid var(--line); }
+.mn-af-box.ja { border-color: color-mix(in srgb, var(--run) 60%, transparent); background: var(--run-soft); }
+.mn-af-box.knapp { border-color: color-mix(in srgb, var(--pause) 60%, transparent); background: var(--pause-soft); }
+.mn-af-box.nein { border-color: var(--danger); background: color-mix(in srgb, var(--danger) 14%, var(--card)); }
+.mn-af-head { margin: 0 0 8px; font-family: var(--f-display); font-size: 1.15rem; font-weight: 700; line-height: 1.3; }
+.mn-af-box.nein .mn-af-head { color: var(--danger); }
+.mn-af-box ul { margin: 0; padding-left: 18px; color: var(--ink); font-size: .9rem; display: flex; flex-direction: column; gap: 3px; }
+.mn-af-act { justify-content: flex-end; }

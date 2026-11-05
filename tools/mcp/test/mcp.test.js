@@ -71,6 +71,8 @@ test("tools/list: alle Werkzeuge mit deutschen Beschreibungen und Schemas", asyn
     "schule_eintragen", "berichtsheft_notiz", "galerie_bearbeiten", "einstellung_aendern", "einstellung_bestaetigen",
     // Gmail dauerhaft (nur lesen)
     "mails_suchen", "mail_lesen",
+    // Update 9 – Budget: „Kann ich mir das leisten?“
+    "leisten_pruefen",
   ].sort());
   for (const x of result.tools) {
     assert.equal(x.inputSchema.type, "object");

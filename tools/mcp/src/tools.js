@@ -1170,6 +1170,48 @@ tool({
   },
 });
 
+/* ===== Update 9 – „Kann ich mir das leisten?“ ===== */
+
+tool({
+  name: "leisten_pruefen",
+  title: "Kann ich mir das leisten?",
+  description: "Prüft VOR einem Kauf, ob er sich ausgeht: Monatsbudget der Kategorie und Gesamtbudget (Geld › Budget), noch fällige Abos bis Monatsende, Kontostand der Bank (falls verbunden) und Sparziele. Antwort auf Deutsch mit klarem Urteil „✅ Ja“, „⚠️ Knapp“ oder „🛑 Nein“ und Gründen. Ohne Kategorie wird sie aus der Notiz erraten (z. B. „Pizza“ → Essen gehen, „Handy“ → Handy & Internet). Trägt nichts ein.",
+  inputSchema: {
+    type: "object",
+    properties: {
+      betrag: { type: ["number", "string"], description: "Preis in Euro, z. B. 300 oder \"12,50\"" },
+      kategorie: { type: "string", description: "Kategorie-Name oder -ID (optional), z. B. \"Essen gehen\"" },
+      notiz: { type: "string", description: "Was gekauft werden soll, z. B. \"Handy\", \"Pizza\"" },
+    },
+    required: ["betrag"],
+    additionalProperties: false,
+  },
+  annotations: RO,
+  async run(args, d) {
+    const today = dayKey(d.now);
+    let amount = parseAmount(args.betrag);
+    if (!(amount > 0) && s(args.notiz)) amount = MC.splitNoteAmount(args.notiz).amount;
+    if (!(amount > 0)) throw new UserError("Bitte einen positiven Betrag angeben (z. B. 300 oder 12,50).");
+    const [txs, budgets, subs, goals, cats, rules, bank] = await Promise.all([
+      d.alltag("money_tx"), d.alltag("money_budget"), d.alltag("money_subs"), d.alltag("money_goals"), moneyCats(d),
+      d.alltag("money_rules").catch(() => []), d.doc("meta/bank").catch(() => null),
+    ]);
+    const pool = [...cats.values()].filter((c) => c.type !== "in");
+    let cat = null, unknown = "";
+    if (s(args.kategorie)) {
+      const byId = pool.find((c) => c.id === s(args.kategorie).toLowerCase());
+      const m = byId ? { item: byId } : best(args.kategorie, pool, (c) => c.name, 55);
+      if (m) cat = m.item.id; else unknown = `(Kategorie „${s(args.kategorie)}“ gibt es nicht – aus der Notiz geschätzt.)`;
+    }
+    const r = MC.affordCheck({
+      amount, cat, note: s(args.notiz), today, txs, budgets, cats: pool, rules, subs: subs.filter((x) => x && !x.deleted), goals,
+      bank: bank && bank.linked ? bank : null,
+    });
+    const out = MC.affordText(r).replace(/\u00a0/g, " ");
+    return [out, ...(unknown ? [unknown] : []), "", "(Nur eine Rechnung – eingetragen wurde nichts. Kaufen und buchen: ausgabe_eintragen.)"].join("\n");
+  },
+});
+
 /* ===== Abos (Update 9) ===== */
 
 const IV_ALIASES = { week: "week", woche: "week", wöchentlich: "week", woechentlich: "week", month: "month", monat: "month", monatlich: "month", quarter: "quarter", quartal: "quarter", vierteljährlich: "quarter", vierteljaehrlich: "quarter", year: "year", jahr: "year", jährlich: "year", jaehrlich: "year" };
