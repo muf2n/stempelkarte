@@ -92,6 +92,7 @@ Du musst **nicht programmieren können**. Du kopierst nur ein paar Werte und kli
 
 > Diese Regeln sorgen dafür, dass **nur du** die App nutzen kannst: Erlaubt ist ausschließlich das Google-Konto **lippa.florian@gmail.com**. Meldet sich jemand anderes an, sieht er nichts und kann nichts speichern.
 > Willst du ein anderes Konto verwenden, ändere die E-Mail-Adresse in `firestore.rules` (Zeile mit `email in [...]`) und veröffentliche die Regeln erneut.
+> **Regeln geändert?** Immer wenn sich `firestore.rules` ändert (zuletzt: Server-Dokumente wie der KI-Kostendeckel `meta/ai_usage`, Gmail-/Bank-Rückrufe und Bestätigungs-Codes darf die App nur noch lesen, nicht mehr schreiben), die Schritte 7–10 wiederholen: Firestore Database → Regeln → alles ersetzen → **Veröffentlichen**. Die App selbst merkt davon nichts.
 
 ---
 

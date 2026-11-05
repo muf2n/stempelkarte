@@ -23,7 +23,12 @@ const FORGET_WARN = "Wenn du das Master-Passwort vergisst, sind alle Einträge v
 
 // Test-Haken (nur localhost): window.__tresorTest = { autoLockMs, hiddenMs, clipMs, iter }
 const testHook = () => {
-  try { return ["localhost", "127.0.0.1"].includes(location.hostname) && window.__tresorTest || null; } catch { return null; }
+  try {
+    const h = ["localhost", "127.0.0.1"].includes(location.hostname) && window.__tresorTest || null;
+    // L12: Nur lokal in Tests darf die Mindest-Rundenzahl für schnelle Tests gesenkt werden – nie auf GitHub Pages/in der App.
+    if (h && Number.isInteger(h.iter)) V._setMinIterForTests(h.iter);
+    return h;
+  } catch { return null; }
 };
 const lsGet = (k) => { try { return localStorage.getItem(k); } catch { return null; } };
 const lsSet = (k, v) => { try { localStorage.setItem(k, v); } catch { /* egal */ } };
@@ -110,6 +115,7 @@ if (typeof window !== "undefined") {
 /* ---------- Modul ---------- */
 
 export function mount(el, ctx) {
+  testHook(); // Test-Haken früh anwenden (nur localhost)
   const colMeta = collection("vault_meta");
   const colItems = collection("vault_items");
   const S = {

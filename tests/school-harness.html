@@ -25,10 +25,17 @@
   <div id="sheet-root"></div>
   <div id="toast" class="toast" hidden></div>
   <script type="module">
-    import * as store from "../js/store.js";
-    import * as ui from "../js/ui.js";
-    import * as util from "../js/util.js";
-    import { MODULES } from "../js/alltag/modules.js";
+    // L10: Diese Testseite liegt (wie alles im Repo) auch auf GitHub Pages. Dort darf sie nichts tun –
+    // sonst liefe der lokale Speicher der echten App im selben Ursprung. Nur auf localhost/127.0.0.1.
+    const LOCAL = location.hostname === "localhost" || location.hostname === "127.0.0.1";
+    if (!LOCAL) {
+      document.querySelector("main").textContent = "Diese Testseite läuft nur lokal (localhost).";
+      throw new Error("school-harness: nur auf localhost");
+    }
+    const store = await import("../js/store.js");
+    const ui = await import("../js/ui.js");
+    const util = await import("../js/util.js");
+    const { MODULES } = await import("../js/alltag/modules.js");
 
     store.startLocal();
     const ctx = { store, ui, util, go: () => {}, jump: (id) => ui.toast("Sprung zu " + id) };

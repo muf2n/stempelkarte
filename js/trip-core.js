@@ -67,14 +67,14 @@ export function vehicleLabel(v) {
 
 /* ---------- Adressen ---------- */
 
-/** "Wiener Straße 286, 8051 Graz" → {main: "Wiener Straße 286", sub: "8051 Graz"}.
+/** "Musterstraße 1, 8000 Musterstadt" → {main: "Musterstraße 1", sub: "8000 Musterstadt"}.
  *  Ohne PLZ-Teil: erster Teil = main, Rest = sub. */
 export function shortAddr(addr) {
   const s = String(addr || "").replace(/\s+/g, " ").trim();
   if (!s) return { main: "", sub: "" };
   const parts = s.split(",").map((x) => x.trim()).filter(Boolean);
   if (parts.length < 2) {
-    // "8051 Graz" oder "Wiener Straße 286 8051 Graz" (ohne Komma)
+    // "8000 Musterstadt" oder "Musterstraße 1 8000 Musterstadt" (ohne Komma)
     const m = s.match(/^(.*?\S)\s+((?:A-)?\d{4}\s+\S.*)$/);
     if (m && /\D/.test(m[1])) return { main: m[1], sub: m[2] };
     return { main: s, sub: "" };

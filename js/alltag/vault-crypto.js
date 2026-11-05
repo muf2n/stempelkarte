@@ -13,6 +13,12 @@
 // Eintrag (a_vault_items/{id}): { id, iv, ct } (+ updated/created von db.js)
 
 export const ITER = 600000;
+/** L12: Untergrenze für gespeicherte PBKDF2-Runden. Ein Meta-Dokument mit weniger Runden (z. B. von jemandem
+ *  mit Schreibzugriff ausgetauscht, um Passwort-Rateversuche zu erleichtern) wird beim Entsperren abgelehnt. */
+export const MIN_ITER = 100000;
+let minIter = MIN_ITER;
+/** Nur für Tests (Node-Unit-Tests bzw. localhost-Test-Haken in vault.js): schnellere Schlüsselableitung erlauben. */
+export function _setMinIterForTests(n) { minIter = Number.isInteger(n) && n >= 1 ? Math.min(n, MIN_ITER) : MIN_ITER; }
 export const VERSION = 1;
 export const KDF = "PBKDF2-SHA256";
 export const BACKUP_FORMAT = "stempelkarte-tresor";
@@ -93,12 +99,19 @@ async function open(key, ivB64, ctB64, aad) {
   return new Uint8Array(await subtle().decrypt({ name: "AES-GCM", iv, additionalData: te.encode(aad), tagLength: 128 }, key, ct));
 }
 
+const thousands = (n) => String(Math.trunc(Number(n) || 0)).replace(/\B(?=(\d{3})+(?!\d))/g, ".");
+function weakIter(iter) {
+  return new VaultError("weak-kdf", `Der Tresor verwendet zu wenige Schlüssel-Runden (${thousands(iter)} statt mindestens ${thousands(MIN_ITER)}). ` +
+    "Aus Sicherheitsgründen wird er so nicht entsperrt – die Tresor-Daten könnten manipuliert worden sein. Stell ihn aus einer Sicherung wieder her.");
+}
+
 export function checkMeta(meta) {
   const ok = meta && typeof meta === "object" && meta.v === VERSION && meta.kdf === KDF &&
     Number.isInteger(meta.iter) && meta.iter >= 1 && meta.iter <= 10000000 &&
     typeof meta.salt === "string" && typeof meta.wrappedKey === "string" && typeof meta.wrapIv === "string" &&
     meta.verifier && typeof meta.verifier.iv === "string" && typeof meta.verifier.ct === "string";
   if (!ok) throw new VaultError("format", "Tresor-Daten sind beschädigt oder haben ein unbekanntes Format.");
+  if (meta.iter < minIter) throw weakIter(meta.iter);
   return meta;
 }
 
@@ -130,6 +143,7 @@ async function wrapRaw(raw, password, iter) {
 /** Neuen Tresor anlegen → { meta, key } (key = nicht exportierbarer DEK). */
 export async function createVault(password, { iter = ITER } = {}) {
   if (!Number.isInteger(iter) || iter < 1) throw new VaultError("format", "Ungültige Rundenzahl.");
+  if (iter < minIter) throw weakIter(iter);
   const raw = randomBytes(32);
   try {
     const w = await wrapRaw(raw, password, iter);
@@ -157,6 +171,7 @@ export async function unlockVault(password, meta) {
 
 /** Master-Passwort ändern: DEK mit neuem Passwort/Salt neu einpacken → neues Meta. Einträge bleiben gleich. */
 export async function changePassword(meta, oldPassword, newPassword, { iter = meta && meta.iter || ITER } = {}) {
+  if (!Number.isInteger(iter) || iter < minIter) throw weakIter(iter);
   const raw = await unwrapRaw(meta, oldPassword);
   try {
     const w = await wrapRaw(raw, newPassword, iter);
