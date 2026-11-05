@@ -3,7 +3,7 @@
 //   cd <worktree> && python3 -m http.server 8852 &   then   node tests/planer-e2e.cjs [screenshot-dir]
 const { chromium } = require("playwright");
 const path = require("path");
-const BASE = "http://localhost:8852/";
+const BASE = process.env.BASE || "http://localhost:8852/";
 const OUT = process.argv[2] || require("os").tmpdir();
 
 const pad = (n) => String(n).padStart(2, "0");
@@ -237,25 +237,24 @@ const key = (d) => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate(
 
   // --- Monat
   await page.click('[data-mode="monat"]');
-  await page.waitForSelector(".pl-mgrid");
-  const tCell = await page.$(`.pl-mc[data-psel="${tK}"]`);
-  ok(await tCell.$(".pl-dots i.pl-t-geburtstag") && await tCell.$(".pl-dots i.pl-t-einsatz"), "Monat: farbige Punkte (Geburtstag, Einsatz) heute");
-  ok(await page.$(`.pl-mc[data-psel="${in12}"] .pl-dots i.pl-t-event`), "Monat: Event-Punkt");
+  await page.waitForSelector(".pl-mgrid2");
+  ok(await page.$('.pl-mbar.pl-t-geburtstag[aria-label*="Oma Hilde"]') && await page.$(".pl-mbar.pl-t-einsatz"), "Monat: farbige Balken (Geburtstag, Einsatz)");
+  ok(await page.$('.pl-mbar.pl-t-event[aria-label*="Urlaub Kroatien"]'), "Monat: Event-Balken");
   ok((await page.textContent(".pl-selday")).includes("Oma Hilde"), "Monat: Tagesliste mit Symbolen");
   ok(await page.isVisible(".pl-below .pl-bds"), "Monat: Geburtstage-Abschnitt");
   await page.screenshot({ path: path.join(OUT, "pl-month-390-light.png"), fullPage: true });
   // Über den Jahreswechsel zum Jänner nächsten Jahres wischen
   for (let i = 0; i < 14 && !(await page.$(`.pl-mc[data-psel="${nextJan3}"]:not(.out)`)); i++) await swipe(-150);
   const jan = await page.$(`.pl-mc[data-psel="${nextJan3}"]`);
-  ok(jan && await jan.$(".pl-dots i.pl-t-geburtstag"), "Geburtstag 3. Jänner im nächsten Jahr (Jahreswechsel)");
+  ok(jan && await page.$('.pl-mbar.pl-t-geburtstag[aria-label*="Max Muster"]'), "Geburtstag 3. Jänner im nächsten Jahr (Jahreswechsel)");
   ok(await page.$(`.pl-mc[data-psel="${now.getFullYear() + 1}-01-01"].hol`), "Neujahr als Feiertag markiert");
-  await jan.click();
+  await jan.evaluate((e) => e.click());
   await page.waitForTimeout(200);
   ok((await page.textContent(".pl-selday")).includes(`wird ${now.getFullYear() + 1 - 2008}`), "Alter im Jänner korrekt");
   // ein Jahr weiter: wieder da, Alter +1
   for (let i = 0; i < 12; i++) await swipe(-150);
   const jan2 = await page.$(`.pl-mc[data-psel="${now.getFullYear() + 2}-01-03"]`);
-  await jan2.click();
+  await jan2.evaluate((e) => e.click());
   await page.waitForTimeout(200);
   ok((await page.textContent(".pl-selday")).includes(`wird ${now.getFullYear() + 2 - 2008}`), "Jährliche Wiederholung (+1 Jahr)");
   await page.click('[data-pnav="0"]');

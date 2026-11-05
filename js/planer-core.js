@@ -2,6 +2,8 @@
 // Geburtstage (jährlich), Countdowns und das Sammeln aller Einträge pro Tag
 // (Termine, Aufgaben, Geburtstage, Feiertage, Berufsschule, Einsatz, Arbeitszeit).
 
+import { expandTodo, normCalendars, calOf, PALETTE_HEX } from "./cal-core.js"; // Update 9 – Kalender
+
 const pad = (n) => String(n).padStart(2, "0");
 const RE_KEY = /^\d{4}-\d{2}-\d{2}$/;
 const RE_TIME = /^\d{1,2}:\d{2}$/;
@@ -172,27 +174,46 @@ export function buildIndex(snap, fromKey, toKey, deps = {}) {
     if (it.type === "arbeit") d.work = true;
   };
 
-  // Termine, Aufgaben, Geburtstage
+  // Update 9 – Kalender: Sichtbarkeit/Farbe je Kalender
+  const cals = deps.cals || normCalendars(s.calendars);
+  const calById = new Map(cals.map((c) => [c.id, c]));
+  const vis = (id) => { const c = calById.get(id); return !c || c.visible !== false; };
+  const colorOf = (id) => { const c = calById.get(id); return c ? calColor(c.color) : null; };
+  const showLayer = { geburtstage: vis("geburtstage"), feiertage: vis("feiertage"), schule: vis("berufsschule"), arbeit: vis("arbeit"), aufgaben: vis("aufgaben"), arbeitszeit: vis("arbeitszeit") };
+
+  // Termine (mit Wiederholung, mehrtägig), Aufgaben, Geburtstage
   const bdays = [];
   for (const t of todos) {
     if (!t || !t.id) continue;
     if (t.kind === "einsatz") continue;
-    if (t.kind === "geburtstag") { const b = parseBday(t); if (b) bdays.push([t, b]); continue; }
+    if (t.kind === "geburtstag") { if (!showLayer.geburtstage) continue; const b = parseBday(t); if (b) bdays.push([t, b]); continue; }
+    if (t.kind === "termin") {
+      const cal = calOf(t, cals);
+      if (!vis(cal)) continue;
+      for (const inst of expandTodo(t, fromKey, toKey)) addInstance(map, add, inst, { cal, color: inst.color ? calColor(inst.color) : colorOf(cal), editable: true, from: fromKey, to: toKey });
+      continue;
+    }
+    if (!showLayer.aufgaben) continue;
     if (!RE_KEY.test(String(t.date || "")) || !map.has(t.date)) continue;
     const st = toMin(t.time);
-    const type = t.cat && t.cat !== "erinnerung" && CATS[t.cat] ? "event" : t.kind === "termin" ? "termin" : "aufgabe";
+    const type = t.cat && t.cat !== "erinnerung" && CATS[t.cat] ? "event" : "aufgabe";
     const it = {
-      uid: "t" + t.id, type, title: String(t.title || "Ohne Titel"), emoji: t.cat && CATS[t.cat] ? CATS[t.cat].emoji : (type === "termin" ? "📅" : "✅"),
+      uid: "t" + t.id, type, title: String(t.title || "Ohne Titel"), emoji: t.cat && CATS[t.cat] ? CATS[t.cat].emoji : "✅",
       start: st, end: null, done: !!t.done, open: "todo:" + t.id, check: t.id, cls: "", hue: null,
-      sub: t.cat && CATS[t.cat] ? CATS[t.cat].label : (type === "termin" ? "Termin" : "Aufgabe"),
+      sub: t.cat && CATS[t.cat] ? CATS[t.cat].label : "Aufgabe", cal: "aufgaben", color: type === "aufgabe" ? colorOf("aufgaben") : null,
     };
     if (st != null) {
       let en = toMin(t.endTime);
-      if (en == null || en <= st) en = Math.min(24 * 60, st + (type === "aufgabe" ? 30 : 60));
+      if (en == null || en <= st) en = Math.min(24 * 60, st + 30);
       it.end = en;
       it.sub = `${hhmm(st)}${toMin(t.endTime) > st ? "–" + hhmm(en) : ""} · ${it.sub}`;
     }
     add(t.date, it, st != null);
+  }
+  // Google Kalender (nur lesen) – bereits aufgeklappte Instanzen
+  for (const inst of (typeof deps.external === "function" ? deps.external(fromKey, toKey) : deps.external) || []) {
+    if (!inst || !vis(inst.calendarId)) continue;
+    addInstance(map, add, inst, { cal: inst.calendarId, color: inst.color ? calColor(inst.color) : colorOf(inst.calendarId), editable: false, ext: true, from: fromKey, to: toKey });
   }
   if (bdays.length) {
     const y1 = Number(fromKey.slice(0, 4)), y2 = Number(toKey.slice(0, 4));
@@ -204,7 +225,7 @@ export function buildIndex(snap, fromKey, toKey, deps = {}) {
         add(k, {
           uid: "b" + t.id + y, type: "geburtstag", title: String(t.title || "Geburtstag"), emoji: "🎂",
           sub: age != null ? `Geburtstag · wird ${age}` : "Geburtstag", start: null, end: null, done: false,
-          open: "bday:" + t.id, check: null, cls: "", hue: null,
+          open: "bday:" + t.id, check: null, cls: "", hue: null, cal: "geburtstage", color: colorOf("geburtstage"),
         }, false);
       }
     }
@@ -218,13 +239,13 @@ export function buildIndex(snap, fromKey, toKey, deps = {}) {
     let hol = null, school = null;
     if (s.holidays !== false && u.holidayName) { try { hol = u.holidayName(ts); } catch { hol = null; } }
     if (u.schoolLabel) { try { school = u.schoolLabel(ts, s); } catch { school = null; } }
-    if (hol) add(k, { uid: "h" + k, type: "feiertag", title: hol, sub: "Feiertag", emoji: "🎌", start: null, end: null, done: false, open: "", check: null, cls: "", hue: null }, false);
-    if (school) add(k, { uid: "s" + k, type: "schule", title: school, sub: "Berufsschule", emoji: "📚", start: null, end: null, done: false, open: "", check: null, cls: "", hue: null }, false);
+    if (hol && showLayer.feiertage) add(k, { uid: "h" + k, type: "feiertag", title: hol, sub: "Feiertag", emoji: "🎌", start: null, end: null, done: false, open: "", check: null, cls: "", hue: null, cal: "feiertage", color: colorOf("feiertage") }, false);
+    if (school && showLayer.schule) add(k, { uid: "s" + k, type: "schule", title: school, sub: "Berufsschule", emoji: "📚", start: null, end: null, done: false, open: "", check: null, cls: "", hue: null, cal: "berufsschule", color: colorOf("berufsschule") }, false);
     let e = null;
-    if (deps.einsatzFor) { try { e = deps.einsatzFor(k, todos); } catch { e = null; } }
+    if (deps.einsatzFor && showLayer.arbeit) { try { e = deps.einsatzFor(k, todos); } catch { e = null; } }
     const place = e ? String((e.placeId && (snap.places || []).find((p) => p.id === e.placeId) || {}).name || e.place || e.title || "Einsatz") : "";
     const who = e && Array.isArray(e.people) && e.people.length ? " · mit " + e.people.join(", ") : "";
-    const dayPlans = hol || school ? [] : plans.filter((p) => planApplies(p, k, dt.getDay()));
+    const dayPlans = hol || school || !showLayer.arbeit ? [] : plans.filter((p) => planApplies(p, k, dt.getDay()));
     d._plans = dayPlans;
     d._einsatz = e ? { id: e.id, title: place, who } : null;
   }
@@ -263,7 +284,7 @@ export function buildIndex(snap, fromKey, toKey, deps = {}) {
       return { s: s0, e: Math.min(e0, endTs), act: x.activity || "Arbeiten", place: String(x.place || e.place || ""), running: running && i === segs.length - 1 };
     }).filter((x) => x.s > 0 && x.e > x.s);
   };
-  for (const e of (snap && snap.entries) || []) {
+  for (const e of showLayer.arbeitszeit ? (snap && snap.entries) || [] : []) {
     const st = Number(e.start), en = Number(e.end);
     if (!(st > 0) || st > toTs || (en && en < fromTs)) continue;
     if (e.kind && e.kind !== "work") {
@@ -276,7 +297,7 @@ export function buildIndex(snap, fromKey, toKey, deps = {}) {
     pieces(e.id, segsOf(e, en, false));
   }
   const r = snap && snap.running;
-  if (r && Number(r.start) > 0 && Number(r.start) < toTs) pieces("", segsOf(r, now, true));
+  if (showLayer.arbeitszeit && r && Number(r.start) > 0 && Number(r.start) < toTs) pieces("", segsOf(r, now, true));
 
   // Einsatz: mit Planzeit als Block, sonst ganztägig
   for (const [k, d] of map) {
@@ -290,11 +311,11 @@ export function buildIndex(snap, fromKey, toKey, deps = {}) {
         add(k, {
           uid: `p${p.id}${k}`, type: "einsatz", title: e ? e.title : (String(p.place || "").trim() || "Geplante Schicht"),
           sub: `${hhmm(a)}${toMin(p.endTime) != null ? "–" + hhmm(b) : ""} · ${e ? "Einsatz" + e.who : "Geplante Schicht"}`,
-          emoji: "🔧", start: a, end: b, done: false, open: e ? "einsatz:" + e.id : "einsatzday:" + k, check: null, cls: "", hue: null,
+          emoji: "🔧", start: a, end: b, done: false, open: e ? "einsatz:" + e.id : "einsatzday:" + k, check: null, cls: "", hue: null, cal: "arbeit", color: colorOf("arbeit"),
         }, true);
       }
     } else if (e) {
-      add(k, { uid: "e" + e.id + k, type: "einsatz", title: e.title, sub: "Einsatz" + e.who, emoji: "🔧", start: null, end: null, done: false, open: "einsatz:" + e.id, check: null, cls: "", hue: null }, false);
+      add(k, { uid: "e" + e.id + k, type: "einsatz", title: e.title, sub: "Einsatz" + e.who, emoji: "🔧", start: null, end: null, done: false, open: "einsatz:" + e.id, check: null, cls: "", hue: null, cal: "arbeit", color: colorOf("arbeit") }, false);
     }
     delete d._plans; delete d._einsatz;
     d.timed.sort((a, b) => a.start - b.start || b.end - a.end);
@@ -324,3 +345,50 @@ export function layoutColumns(items) {
   if (cluster.length) flush();
   return items;
 }
+
+/* ---------- Update 9 – Kalender: Termin-Instanzen ins Tagesraster ---------- */
+
+/** Palette-Schlüssel oder #hex → CSS-Farbe. */
+export function calColor(c) {
+  if (!c) return null;
+  if (PALETTE_HEX[c]) return `var(--cal-${c})`;
+  return /^#[0-9a-f]{3,8}$/i.test(String(c)) ? String(c) : null;
+}
+
+/**
+ * Instanz (cal-core) als Item(s) eintragen. Ganztägig/≥ 24 h → Ganztags-Zeile (mit spanFrom/spanTo),
+ * sonst Block; über Mitternacht in zwei Blöcke geteilt.
+ */
+function addInstance(map, add, inst, o) {
+  const type = inst.cat && inst.cat !== "erinnerung" && CATS[inst.cat] ? "event" : "termin";
+  const emoji = inst.cat && CATS[inst.cat] ? CATS[inst.cat].emoji : (o.ext ? "🗓️" : "📅");
+  const base = {
+    type, title: String(inst.title || "Ohne Titel"), emoji, done: !!inst.done, cls: "", hue: null,
+    cal: o.cal, color: o.color, inst, rec: !!inst.recurring, editable: !!o.editable, ext: !!o.ext,
+    open: o.ext ? "gev:" + inst.uid : `ev:${inst.id}|${inst.key}`,
+    check: !o.ext && !inst.recurring ? inst.id : null,
+    loc: inst.location || "",
+  };
+  const label = inst.cat && CATS[inst.cat] ? CATS[inst.cat].label : (o.ext ? "Google" : "Termin");
+  const rec = inst.recurring ? " · 🔁" : "";
+  const where = inst.location ? ` · ${inst.location}` : "";
+  if (inst.allDay || inst.durMin >= 1440) {
+    const multi = inst.endDate > inst.date;
+    const timeTxt = inst.allDay ? "" : `${inst.time} – ${inst.endTime}`;
+    const last = inst.endDate < o.to ? inst.endDate : o.to;
+    for (let k = inst.date > o.from ? inst.date : o.from; k <= last; k = addDays(k, 1)) {
+      add(k, { ...base, uid: `i${inst.uid}${k}`, start: null, end: null, spanFrom: inst.date, spanTo: inst.endDate,
+        sub: `${multi ? `${fmtShort(inst.date)}–${fmtShort(inst.endDate)}` : "ganztägig"}${timeTxt ? " · " + timeTxt : ""} · ${label}${rec}${where}` }, false);
+    }
+    return;
+  }
+  const s0 = inst.startMin, e0 = inst.startMin + inst.durMin;
+  const sub = `${inst.time}–${inst.endTime === "24:00" ? "24:00" : inst.endTime} · ${label}${rec}${where}`;
+  if (map.has(inst.date)) add(inst.date, { ...base, uid: "i" + inst.uid, start: s0, end: Math.min(1440, e0), sub, dayPart: e0 > 1440 ? "first" : "" }, true);
+  if (e0 > 1440) {
+    const k2 = addDays(inst.date, 1);
+    if (map.has(k2)) add(k2, { ...base, uid: "i2" + inst.uid, start: 0, end: e0 - 1440, sub, dayPart: "second" }, true);
+  }
+}
+
+function fmtShort(k) { const [, m, d] = k.split("-").map(Number); return `${d}.${m}.`; }

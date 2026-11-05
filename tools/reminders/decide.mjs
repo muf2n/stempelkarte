@@ -1,6 +1,8 @@
 // Reine Entscheidungslogik für Push-Erinnerungen (ohne Firebase) – testbar mit node.
 // Alle Uhrzeiten/Tage werden in Europe/Vienna berechnet, nicht in der Server-Zeit.
 
+import { dueReminders, reminderText } from "../../js/cal-core.js";
+
 export const TZ = "Europe/Vienna";
 const HOUR = 3600000;
 
@@ -269,33 +271,32 @@ export function decide(now, settings, running, todayEntries, pushlog, todos = []
 }
 
 /**
- * Termin-/Aufgaben-Erinnerungen: date+time gesetzt, remind an, nicht erledigt;
- * fällig ab (Uhrzeit − remindMin) bis Uhrzeit + 60 min, einmal pro Todo und Zeitpunkt (pushlog.todoSent[id]).
+ * Termin-/Aufgaben-Erinnerungen (Logik in js/cal-core.js, auch für die lokale Ersatz-Benachrichtigung der App):
+ * - einmalig mit genau einer Erinnerung (wie bisher): fällig ab (Uhrzeit − remindMin) bis Uhrzeit + 60 min,
+ *   einmal pro Todo und Zeitpunkt (pushlog.todoSent[id] = "YYYY-MM-DD HH:MM").
+ * - Update 9 – Kalender: wiederkehrende Termine (rrule, exdates, overrides) und mehrere Vorläufe (reminders [Min.]):
+ *   pro Instanz und Vorlauf ein Schlüssel todoSent["id~Tag~Minuten"] = "YYYY-MM-DD HH:MM"; fällig ab Vorlaufzeit für 60 min;
+ *   sind mehrere Vorläufe gleichzeitig fällig, kommt eine Nachricht (alle werden gemerkt).
  */
 export function decideTodos(now, todos, pushlog) {
   const out = [];
   const sentMap = (pushlog && pushlog.todoSent && typeof pushlog.todoSent === "object") ? pushlog.todoSent : {};
-  for (const t of (Array.isArray(todos) ? todos : [])) {
-    if (!t || !t.id || !t.remind || t.done || t.kind === "einsatz") continue;
-    if (t.kind === "geburtstag") { const b = decideBirthday(now, t, sentMap); if (b) out.push(b); continue; }
-    const date = String(t.date || ""), time = String(t.time || "");
-    if (!/^\d{4}-\d{2}-\d{2}$/.test(date) || !/^\d{1,2}:\d{2}$/.test(time)) continue;
-    const [y, m, d] = date.split("-").map(Number);
-    const [hh, mm] = time.split(":").map(Number);
-    const at = viennaToTs(y, m, d, hh, mm);
-    let before = Number(t.remindMin);
-    if (!Number.isFinite(before) || before < 0) before = 30;
-    const stamp = `${date} ${time}`;
-    if (now < at - before * 60000 || now >= at + HOUR || sentMap[t.id] === stamp) continue;
-    const title = String(t.title || "").trim() || (t.kind === "termin" ? "Termin" : "Aufgabe");
-    const label = t.kind === "termin" ? "Termin" : "Aufgabe";
+  const list = Array.isArray(todos) ? todos : [];
+  for (const t of list) {
+    if (!t || !t.id || !t.remind || t.done || t.kind !== "geburtstag") continue;
+    const b = decideBirthday(now, t, sentMap);
+    if (b) out.push(b);
+  }
+  for (const d of dueReminders(now, list.filter((t) => t && t.kind !== "geburtstag"), sentMap, TZ)) {
+    const { title, body } = reminderText(d, now, TZ);
+    const rec = d.inst && d.inst.recurring;
     out.push({
       type: "todo",
-      title: `${label}: ${title}`,
-      body: `um ${pad(hh)}:${pad(mm)}`,
-      tag: `todo-${t.id}`,
+      title,
+      body,
+      tag: rec ? `todo-${d.t.id}-${d.inst.key}` : `todo-${d.t.id}`,
       url: "./#agenda",
-      log: [[["todoSent", t.id], stamp]],
+      log: d.log.map(([k, v]) => [["todoSent", k], v]),
     });
   }
   return out;

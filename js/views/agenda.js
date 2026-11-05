@@ -4,6 +4,14 @@ import { icon } from "../icons.js";
 import { einsatzFor, einsaetze } from "../einsatz.js";
 import * as PC from "./planer-cal.js"; // Update 9 – Planer-Ansichten
 import { buildIndex, CATS } from "../planer-core.js";
+// Update 9 – Kalender (Termine mit Wiederholung, Ansichten 3 Tage/Jahr/Termine, Ziehen, Suche, ICS, Google)
+import * as CV from "./cal-views.js";
+import { attachDnD } from "./cal-dnd.js";
+import { openEventForm, openGoogleEvent, askScope, persistResult } from "./cal-editor.js";
+import { openCalendarsSheet, openSearch, allCalendars, googleHelpHTML } from "./cal-tools.js";
+import * as GC from "../cal-google.js";
+import * as CN from "../cal-notify.js";
+import { mondayOf as mondayK, addDays as addK, nextInstance, parseRRule, applyEdit, finalizeEvent, hhmm as hhmmK, describeRule } from "../cal-core.js";
 
 const WD = ["So", "Mo", "Di", "Mi", "Do", "Fr", "Sa"];
 const WD_LONG = ["Sonntag", "Montag", "Dienstag", "Mittwoch", "Donnerstag", "Freitag", "Samstag"];
@@ -21,8 +29,9 @@ let lastKey = "";
 let doneOpen = false;
 let stripScrolled = "";
 const MODE_KEY = "stempelkarte.planerMode";
-const MODES = ["list", "tag", "woche", "monat", "einsatz"];
-let mode = "list";            // "list" | "tag" | "woche" | "monat" | "einsatz" (Update 9)
+const MODES = ["list", "tag", "3tage", "woche", "monat", "jahr", "termine", "einsatz"];
+const CAL_MODES = ["tag", "3tage", "woche", "monat", "jahr", "termine"];
+let mode = "list";            // "list" | Kalender-Ansichten (CAL_MODES) | "einsatz" (Update 9)
 try { const m0 = localStorage.getItem(MODE_KEY); if (MODES.includes(m0)) mode = m0; } catch { /* egal */ }
 let focusDay = null;          // Update 9: Tag/Woche – gewählter Tag
 let calMonth = null;          // Update 9: Monat – {y, m}
@@ -31,6 +40,9 @@ let bdAll = false;            // Update 9: alle Geburtstage zeigen
 let snapVer = 0;
 let calScrolled = "";
 let ezMonth = null;           // {y, m} des Einsatzplan-Kalenders
+let agDays = 30;              // Update 9 – Kalender: Tage in „Termine“
+let adExpanded = false;       // Ganztags-Zeile aufgeklappt
+let gVer = 0;                 // Google-Termine geladen → neu zeichnen
 
 const pad = (n) => String(n).padStart(2, "0");
 const keyOf = (d) => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
@@ -104,7 +116,7 @@ export function groupTodos(todos, tKey = todayKey()) {
 /* ---------- Anzeige ---------- */
 
 function itemHTML(t, tKey) {
-  const overdue = !t.done && isKey(t.date) && (t.date < tKey ||
+  const overdue = !t.done && !t._rec && isKey(t.date) && ((isKey(t.endDate) && t.endDate > t.date ? t.endDate : t.date) < tKey ||
     (t.date === tKey && t.time && t.time < `${pad(new Date().getHours())}:${pad(new Date().getMinutes())}` && t.kind === "termin"));
   const meta = [];
   if (t.cat && CATS[t.cat]) meta.push(`<span class="ag-badge pl-cat">${CATS[t.cat].emoji} ${CATS[t.cat].label}</span>`);
@@ -113,11 +125,13 @@ function itemHTML(t, tKey) {
   if (t.time) meta.push(`<span class="ag-time">${icon("clock", 14)}${esc(t.time)}</span>`);
   if (isKey(t.date) && (t.date < tKey || t.done)) meta.push(`<span>${esc(dayLabel(t.date))}</span>`);
   if (overdue && t.date < tKey) meta.push(`<span class="ag-late">überfällig</span>`);
+  if (t._rec) meta.push(`<span class="ag-badge pl-rec" title="${esc(describeRule(t.rrule, t._start))}">${icon("repeat", 13)} Serie</span>`);
+  if (t.location) meta.push(`<span class="ag-note">${icon("pin", 13)} ${esc(t.location)}</span>`);
   if (t.remind && t.time && !t.done) meta.push(`<span class="ag-bell" title="Erinnerung">${bell(14)}</span>`);
   if (t.note) meta.push(`<span class="ag-note">${esc(String(t.note).split("\n")[0])}</span>`);
   return `<li class="ag-item${t.done ? " done" : ""}${t.kind === "termin" ? " termin" : ""}${overdue ? " late" : ""}" data-id="${esc(t.id)}">` +
-    `<button type="button" class="ag-check" data-act="check" aria-pressed="${t.done ? "true" : "false"}" aria-label="${t.done ? "Wieder offen" : "Erledigt"}: ${esc(t.title)}">${icon("check", 22)}</button>` +
-    `<button type="button" class="ag-main" data-act="edit"><span class="ag-title">${esc(t.title || "Ohne Titel")}</span>` +
+    (t._rec ? `<span class="ag-check ag-rec" aria-hidden="true">${icon("repeat", 18)}</span>` : `<button type="button" class="ag-check" data-act="check" aria-pressed="${t.done ? "true" : "false"}" aria-label="${t.done ? "Wieder offen" : "Erledigt"}: ${esc(t.title)}">${icon("check", 22)}</button>`) +
+    `<button type="button" class="ag-main" data-act="edit"${t._rec ? ` data-inst="${esc(t._key)}"` : ""}><span class="ag-title">${esc(t.title || "Ohne Titel")}</span>` +
     (meta.length ? `<span class="ag-meta">${meta.join("")}</span>` : "") + `</button></li>`;
 }
 
@@ -171,8 +185,8 @@ function render() {
   if (mode === "einsatz") { renderEinsatz(); return; }
   renderCountdown();
   if (mode !== "list") { renderCal(); return; }
-  const todos = (snap.todos || []).filter((t) => t.kind !== "einsatz" && t.kind !== "geburtstag");
   const tKey = todayKey();
+  const todos = listTodos(snap.todos || [], tKey);
   const minute = `${new Date().getHours()}:${new Date().getMinutes()}`;
   const key = JSON.stringify(["list", snapVer, tKey, selDay, month, doneOpen, bdAll, minute.slice(0, -1)]);
   if (key === lastKey) return;
@@ -266,6 +280,11 @@ async function quickAdd(text) {
 export function openTodoForm(todo = null, ctx = C, preset = null) {
   const c = ctx || C;
   if (!C) C = c;
+  // Update 9 – Kalender: Termine im Termin-Editor (Wiederholung, Ort, mehrere Erinnerungen …)
+  if ((todo && todo.kind === "termin") || (!todo && preset && preset.kind === "termin")) {
+    const inst = todo && parseRRule(todo.rrule) ? nextInstance(todo, todayKey()) : null;
+    return openEventForm(todo, c, preset, inst ? inst.key : null, { openTask });
+  }
   const isNew = !todo;
   const base = todo || {};
   const pre = preset || {};
@@ -444,9 +463,12 @@ export function mount(el, ctx) {
         `<div class="section-h ag-top"><h2>Planer</h2></div>` +
         `<div class="ez-switch pl-switch" role="group" aria-label="Ansicht im Planer">` +
           `<button type="button" class="ez-sw" data-mode="list">Liste</button>` +
-          `<button type="button" class="ez-sw" data-mode="tag">Tag</button>` +
-          `<button type="button" class="ez-sw" data-mode="woche">Woche</button>` +
-          `<button type="button" class="ez-sw" data-mode="monat">Monat</button>` +
+          `<button type="button" class="ez-sw" data-mode="tag" title="Tag (D)">Tag</button>` +
+          `<button type="button" class="ez-sw" data-mode="3tage" title="3 Tage (X)">3 Tage</button>` +
+          `<button type="button" class="ez-sw" data-mode="woche" title="Woche (W)">Woche</button>` +
+          `<button type="button" class="ez-sw" data-mode="monat" title="Monat (M)">Monat</button>` +
+          `<button type="button" class="ez-sw" data-mode="jahr" title="Jahr (J)">Jahr</button>` +
+          `<button type="button" class="ez-sw" data-mode="termine" title="Termine als Liste (A)">Termine</button>` +
           `<button type="button" class="ez-sw" data-mode="einsatz" aria-label="Einsatzplan">Einsatz</button>` +
         `</div>` +
         `<div data-r="qc">${PC.quickCreateHTML()}</div>` +
@@ -483,7 +505,7 @@ export function mount(el, ctx) {
   el.addEventListener("click", (ev) => {
     const sw = ev.target.closest("[data-mode]");
     if (sw && el.contains(sw)) { setMode(sw.dataset.mode); return; }
-    const pb = ev.target.closest("[data-pnew], [data-popen], [data-pcheck], [data-pslot], [data-pnav], [data-pday], [data-psel], [data-pact]");
+    const pb = ev.target.closest("[data-pnew], [data-popen], [data-pcheck], [data-pslot], [data-pnav], [data-pday], [data-psel], [data-pact], [data-pmonth]");
     if (pb && el.contains(pb)) { onPlanerClick(pb, ev); return; }
     const ez = ev.target.closest("[data-ezday], [data-ezact], [data-ezid]");
     if (ez && el.contains(ez)) { onEinsatzClick(ez); return; }
@@ -508,15 +530,25 @@ export function mount(el, ctx) {
       setTimeout(() => toggleDone(id).finally(() => { delete b.dataset.busy; }), 220);
     } else if (act === "edit") {
       const t = (C.store.get().todos || []).find((x) => x.id === id);
-      if (t) openTodoForm(t, C);
+      if (t && b.dataset.inst) openEventForm(t, C, null, b.dataset.inst, { openTask });
+      else if (t) openTodoForm(t, C);
     }
   });
 
-  PC.attachSwipe(el.querySelector("[data-r=cal]"), (dir) => { calNav(dir); pulse(dir); });
-  el.querySelector("[data-r=cal]").addEventListener("keydown", (ev) => {
-    if (ev.target.closest("input, textarea, select")) return;
-    if (ev.key === "ArrowLeft" || ev.key === "ArrowRight") { if (ev.target.closest(".pl-slot")) return; calNav(ev.key === "ArrowLeft" ? -1 : 1); }
+  PC.attachSwipe(el.querySelector("[data-r=cal]"), (dir) => { if (document.querySelector(".pl-blk.dragging")) return; calNav(dir); pulse(dir); });
+  // Update 9 – Kalender: Ziehen/Dauer ändern, Datum springen, Tastenkürzel, Google, lokale Erinnerungen
+  attachDnD(el.querySelector("[data-r=cal]"), { onDrop, onCancel: () => { lastKey = ""; render(); } });
+  el.querySelector("[data-r=cal]").addEventListener("change", (ev) => {
+    const j = ev.target.closest("[data-pjump]");
+    if (j && isKey(j.value)) jumpTo(j.value);
   });
+  el.querySelector("[data-r=cal]").addEventListener("click", (ev) => {
+    const j = ev.target.closest("[data-pjump]");
+    if (j && typeof j.showPicker === "function") { try { j.showPicker(); } catch { /* egal */ } }
+  });
+  document.addEventListener("keydown", onKey);
+  GC.onChange(() => { gVer++; if (root && CAL_MODES.includes(mode)) { lastKey = ""; render(); } });
+  try { CN.start(ctx); } catch (e) { console.warn(e); }
 
   snap = ctx.store.get ? ctx.store.get() : null;
   render();
@@ -543,7 +575,15 @@ export function onShow() {
 
 /* ---------- Update 9: Ansichten Tag · Woche · Monat ---------- */
 
-function deps() { return { util: (C && C.util) || {}, einsatzFor, now: Date.now() }; }
+function settingsCals() { return allCalendars(settingsOf()); }
+function deps() {
+  const cals = settingsCals();
+  const vis = (id) => { const c = cals.find((x) => x.id === id); return !c || c.visible !== false; };
+  return {
+    util: (C && C.util) || {}, einsatzFor, now: Date.now(), cals,
+    external: (from, to) => GC.instancesFor(from, to, vis),
+  };
+}
 
 function renderCountdown() {
   const el = root.querySelector("[data-r=cd]");
@@ -561,35 +601,65 @@ function ensureCal() {
   if (!calSel) calSel = tk;
 }
 
+const isWide = () => { try { return matchMedia("(min-width: 1024px)").matches; } catch { return false; } };
+
+/** Liste: Serien-Termine erscheinen mit ihrem nächsten Termin. */
+function listTodos(all, tKey) {
+  const out = [];
+  for (const t of all) {
+    if (t.kind === "einsatz" || t.kind === "geburtstag") continue;
+    if (t.kind === "termin" && parseRRule(t.rrule)) {
+      const n = nextInstance(t, tKey);
+      if (!n) continue;
+      out.push({ ...t, _rec: true, _key: n.key, _start: t.date, date: n.date, time: n.time, endDate: n.endDate, title: n.title, done: false });
+      continue;
+    }
+    out.push(t);
+  }
+  return out;
+}
+
 function renderCal() {
   ensureCal();
   const tk = todayKey();
   const minute = new Date().getHours() * 60 + new Date().getMinutes();
   const st = settingsOf();
+  const lanes = isWide() ? 4 : 3;
   // Jetzt-Linie bewegt sich separat; neu zeichnen nur bei Datenänderung, Wechsel oder alle 15 Min (laufende Schicht)
-  const key = JSON.stringify(["cal", mode, snapVer, tk, focusDay, calMonth, calSel, bdAll, Math.floor(minute / 15), st.holidays]);
+  const key = JSON.stringify(["cal", mode, snapVer, tk, focusDay, calMonth, calSel, bdAll, Math.floor(minute / 15), st.holidays, st.calendars, gVer, GC.state.loading > 0, agDays, adExpanded, lanes]);
   if (key === lastKey) return;
   lastKey = key;
   const cal = root.querySelector("[data-r=cal]");
   const below = root.querySelector("[data-r=below]");
   const old = cal.querySelector("[data-pscroll]");
   const oldTop = old ? old.scrollTop : null;
+  const oldName = old ? old.dataset.pscroll : null;
+  const focusEl = document.activeElement && cal.contains(document.activeElement) ? document.activeElement : null;
+  const focusSel = focusEl ? (focusEl.dataset.pnav != null ? `[data-pnav="${focusEl.dataset.pnav}"]` : focusEl.dataset.mode ? null : focusEl.dataset.pact ? `[data-pact="${focusEl.dataset.pact}"]` : null) : null;
   let html = "";
+  const d = deps();
   try {
-    if (mode === "tag") html = PC.dayViewHTML(snap, focusDay, deps());
-    else if (mode === "woche") html = PC.weekViewHTML(snap, focusDay, deps());
-    else html = PC.monthViewHTML(snap, calMonth, calSel, deps());
+    if (mode === "tag") html = CV.gridViewHTML(snap, focusDay, 1, d);
+    else if (mode === "3tage") html = CV.gridViewHTML(snap, focusDay, 3, d, { expanded: adExpanded });
+    else if (mode === "woche") html = CV.gridViewHTML(snap, mondayK(focusDay), 7, d, { expanded: adExpanded });
+    else if (mode === "monat") html = CV.monthGridHTML(snap, calMonth, calSel, d, lanes);
+    else if (mode === "jahr") html = CV.yearViewHTML(snap, Number(focusDay.slice(0, 4)), d);
+    else html = CV.agendaListHTML(snap, focusDay, agDays, d);
   } catch (e) { console.error(e); html = `<p class="note">Ansicht konnte nicht gezeichnet werden.</p>`; }
-  cal.innerHTML = html;
+  const jumpVal = mode === "monat" ? calSel || `${calMonth.y}-${pad(calMonth.m + 1)}-01` : focusDay;
+  cal.innerHTML = CV.toolsHTML(jumpVal, GC.state) + html;
   cal.dataset.view = mode;
   below.innerHTML = mode === "monat" ? PC.birthdaysHTML(snap.todos || [], tk, bdAll) : "";
   below.hidden = mode !== "monat";
+  if (focusSel) { const f = cal.querySelector(focusSel); if (f && !f.disabled) try { f.focus({ preventScroll: true }); } catch { /* egal */ } }
   const sc = cal.querySelector("[data-pscroll]");
   if (sc) {
-    const sk = `${mode}|${mode === "woche" ? PC.mondayOf(focusDay) : focusDay}`;
-    const H = mode === "woche" ? PC.H_WEEK : PC.H_DAY;
-    const showsToday = mode === "tag" ? focusDay === tk : (tk >= PC.mondayOf(focusDay) && tk <= addDays(PC.mondayOf(focusDay), 6));
-    if (calScrolled !== sk || oldTop == null) {
+    const start = mode === "woche" ? mondayK(focusDay) : focusDay;
+    const n = mode === "tag" ? 1 : mode === "3tage" ? 3 : 7;
+    const sk = `${mode}|${start}`;
+    const H = Number(sc.dataset.h) || 56;
+    const showsToday = tk >= start && tk <= addDays(start, n - 1);
+    if (calScrolled !== sk || oldTop == null || oldName !== sc.dataset.pscroll) {
       calScrolled = sk;
       requestAnimationFrame(() => PC.scrollToMorning(sc, H, showsToday));
     } else sc.scrollTop = oldTop;
@@ -606,25 +676,40 @@ function pulse(dir) {
 
 /** dir: -1 zurück, 1 weiter, 0 heute. */
 function calNav(dir) {
-  if (mode !== "tag" && mode !== "woche" && mode !== "monat") return;
+  if (!CAL_MODES.includes(mode)) return;
   ensureCal();
   const tk = todayKey();
-  if (mode === "tag") focusDay = dir === 0 ? tk : addDays(focusDay, dir);
-  else if (mode === "woche") focusDay = dir === 0 ? tk : addDays(focusDay, 7 * dir);
+  if (dir === 0) { jumpTo(tk); return; }
+  if (mode === "tag") focusDay = addDays(focusDay, dir);
+  else if (mode === "3tage") focusDay = addDays(focusDay, 3 * dir);
+  else if (mode === "woche") focusDay = addDays(focusDay, 7 * dir);
+  else if (mode === "termine") focusDay = addDays(focusDay, agDays * dir);
+  else if (mode === "jahr") { const y = Number(focusDay.slice(0, 4)) + dir; focusDay = `${y}-${focusDay.slice(5, 7)}-01`; }
   else {
-    const d0 = new Date();
-    const d = dir === 0 ? new Date(d0.getFullYear(), d0.getMonth(), 1) : new Date(calMonth.y, calMonth.m + dir, 1);
+    const d = new Date(calMonth.y, calMonth.m + dir, 1);
     calMonth = { y: d.getFullYear(), m: d.getMonth() };
     const inMonth = (k) => k && Number(k.slice(0, 4)) === calMonth.y && Number(k.slice(5, 7)) === calMonth.m + 1;
-    calSel = dir === 0 ? tk : (inMonth(tk) ? tk : `${calMonth.y}-${pad(calMonth.m + 1)}-01`);
+    calSel = inMonth(tk) ? tk : `${calMonth.y}-${pad(calMonth.m + 1)}-01`;
+    focusDay = calSel;
   }
+  render();
+}
+
+/** Zu einem Tag springen (Heute, Datumsauswahl, Suche) – Ansicht bleibt. */
+function jumpTo(k) {
+  ensureCal();
+  focusDay = k;
+  calSel = k;
+  calMonth = { y: Number(k.slice(0, 4)), m: Number(k.slice(5, 7)) - 1 };
+  lastKey = "";
+  calScrolled = "";
   render();
 }
 
 /** Datum, für das „Neu erstellen“ etwas anlegt. */
 function baseDay() {
-  if (mode === "tag" || mode === "woche") return focusDay || todayKey();
   if (mode === "monat") return calSel || todayKey();
+  if (CAL_MODES.includes(mode)) return focusDay || todayKey();
   return selDay || todayKey();
 }
 
@@ -634,14 +719,16 @@ function nextHour(day) {
   return `${pad(Math.min(23, d.getHours() + 1))}:00`;
 }
 
+function openTask(preset) { return openTodoForm(null, C, { kind: "todo", ...preset }); }
+
 export function quickCreate(kind, ctx = C) {
   const c = ctx || C;
   const day = baseDay();
   if (kind === "geburtstag") return PC.openBirthdayForm(null, c, { date: day });
   if (kind === "einsatz") return openEinsatzForm(day, einsatzFor(day, c.store.get().todos || []), c);
-  if (kind === "termin") return openTodoForm(null, c, { kind: "termin", date: day, time: nextHour(day) });
+  if (kind === "termin") return openEventForm(null, c, { date: day, time: nextHour(day) }, null, { openTask });
   if (kind === "aufgabe") return openTodoForm(null, c, { kind: "todo", date: mode === "list" && !selDay ? null : day });
-  if (kind === "event") return openTodoForm(null, c, { kind: "termin", cat: "event", countdown: true, date: day === todayKey() ? addDays(day, 7) : day });
+  if (kind === "event") return openEventForm(null, c, { cat: "event", countdown: true, allDay: true, reminders: [1440], date: day === todayKey() ? addDays(day, 7) : day }, null, { openTask });
   if (kind === "erinnerung") return openTodoForm(null, c, { kind: "todo", cat: "erinnerung", date: day, time: nextHour(day), remind: true, remindMin: 0 });
   return null;
 }
@@ -649,7 +736,21 @@ export function quickCreate(kind, ctx = C) {
 function onPlanerClick(b, ev) {
   const todos = C.store.get().todos || [];
   if (b.dataset.pnew) { quickCreate(b.dataset.pnew); return; }
-  if (b.dataset.pact === "bdall") { bdAll = !bdAll; lastKey = ""; render(); return; }
+  const act = b.dataset.pact;
+  if (act === "bdall") { bdAll = !bdAll; lastKey = ""; render(); return; }
+  if (act === "search") { doSearch(); return; }
+  if (act === "cals") { openCalendarsSheet(C, { onImportDone: (k) => { if (k) jumpTo(k); } }); return; }
+  if (act === "gconnect") { GC.connect(C.store.get().user && C.store.get().user.email).catch((e) => { C.ui.toast(e.message || "Google-Verbindung fehlgeschlagen", 4000); gVer++; lastKey = ""; render(); }); return; }
+  if (act === "gerr") { showGoogleError(); return; }
+  if (act === "agmore") { agDays += 30; render(); return; }
+  if (act === "adexp") { adExpanded = !adExpanded; render(); return; }
+  if (b.dataset.pmonth) {
+    const [y, m] = b.dataset.pmonth.split("-").map(Number);
+    calMonth = { y, m };
+    calSel = `${y}-${pad(m + 1)}-01`;
+    setMode("monat");
+    return;
+  }
   if (b.dataset.pcheck) {
     if (b.dataset.busy) return;
     b.dataset.busy = "1";
@@ -658,19 +759,25 @@ function onPlanerClick(b, ev) {
     return;
   }
   if (b.dataset.pnav != null) { const dir = Number(b.dataset.pnav); calNav(dir); if (dir) pulse(dir); return; }
-  if (b.dataset.pday) { focusDay = b.dataset.pday; setMode("tag"); return; }
-  if (b.dataset.psel) { calSel = b.dataset.psel; render(); return; }
+  if (b.dataset.pday) { focusDay = b.dataset.pday; calSel = b.dataset.pday; setMode("tag"); return; }
+  if (b.dataset.psel) { calSel = b.dataset.psel; focusDay = calSel; render(); return; }
   if (b.dataset.pslot) {
     const r = b.getBoundingClientRect();
     const h = Number(b.dataset.h) || 0;
     const frac = ev && ev.clientY && r.height ? Math.min(0.99, Math.max(0, (ev.clientY - r.top) / r.height)) : 0;
     const min = h * 60 + Math.floor((frac * 60) / 15) * 15;
-    openTodoForm(null, C, { kind: "termin", date: b.dataset.pslot, time: `${pad(Math.floor(min / 60))}:${pad(min % 60)}` });
+    openEventForm(null, C, { date: b.dataset.pslot, time: `${pad(Math.floor(min / 60))}:${pad(min % 60)}` }, null, { openTask });
     return;
   }
   if (b.dataset.popen) {
     const [kind, id] = b.dataset.popen.split(/:(.*)/s);
     if (kind === "todo") { const t = todos.find((x) => x.id === id); if (t) openTodoForm(t, C); }
+    else if (kind === "ev") {
+      const [tid, key] = id.split("|");
+      const t = todos.find((x) => x.id === tid);
+      if (t) openEventForm(t, C, null, parseRRule(t.rrule) ? key : null, { openTask });
+    }
+    else if (kind === "gev") { const i = GC.find(id); if (i) openGoogleEvent(i, C, GC.calName(i.calendarId)); }
     else if (kind === "bday") { const t = todos.find((x) => x.id === id); if (t) PC.openBirthdayForm(t, C); }
     else if (kind === "einsatz") { const t = todos.find((x) => x.id === id); if (t) openEinsatzForm(mode === "tag" ? focusDay : t.date, t); }
     else if (kind === "einsatzday") openEinsatzForm(id, null);
@@ -678,6 +785,90 @@ function onPlanerClick(b, ev) {
       const e = (C.store.get().entries || []).find((x) => x.id === id);
       if (e && C.openEntryForm) C.openEntryForm(e);
     }
+  }
+}
+
+/* ---------- Update 9 – Kalender: Ziehen, Suche, Tastenkürzel, Google-Fehler ---------- */
+
+const WD_S = ["So", "Mo", "Di", "Mi", "Do", "Fr", "Sa"];
+
+async function onDrop(d) {
+  const t = (C.store.get().todos || []).find((x) => x.id === d.id);
+  if (!t) { lastKey = ""; render(); return; }
+  const endAbs = d.end;
+  const ch = {
+    date: d.day, time: hhmmK(d.start), allDay: false,
+    endDate: endAbs >= 1440 ? addK(d.day, 1) : d.day, endTime: endAbs >= 1440 ? "00:00" : hhmmK(endAbs),
+  };
+  const when = `${WD_S[dateOf(d.day).getDay()]}, ${Number(d.day.slice(8))}.${Number(d.day.slice(5, 7))}. ${ch.time}–${endAbs >= 1440 ? "24:00" : ch.endTime}`;
+  try {
+    if (parseRRule(t.rrule)) {
+      const scope = await askScope(C, d.mode === "resize" ? "Dauer ändern" : "Termin verschieben");
+      if (!scope) { lastKey = ""; render(); return; }
+      await persistResult(C, applyEdit(t, d.key, ch, scope));
+      C.ui.toast(`${scope === "one" ? "Nur dieser" : scope === "following" ? "Dieser und folgende" : "Alle"}: ${when}`, 2200);
+    } else {
+      await C.store.saveTodo(finalizeEvent({ ...t, ...ch }));
+      C.ui.toast(`${d.mode === "resize" ? "Dauer geändert" : "Verschoben"}: ${when}`, 2000);
+    }
+  } catch (e) { console.error(e); }
+  lastKey = "";
+  render();
+}
+
+function doSearch() {
+  const cals = settingsCals();
+  const vis = (id) => { const c = cals.find((x) => x.id === id); return !c || c.visible !== false; };
+  openSearch(C, {
+    visible: vis,
+    onPick: (i) => {
+      if (i.date) {
+        focusDay = i.date; calSel = i.date;
+        calMonth = { y: Number(i.date.slice(0, 4)), m: Number(i.date.slice(5, 7)) - 1 };
+        if (!CAL_MODES.includes(mode)) setMode("tag"); else { lastKey = ""; calScrolled = ""; render(); }
+      }
+      if (i.ext) { openGoogleEvent(i, C, GC.calName(i.calendarId)); return; }
+      const t = (C.store.get().todos || []).find((x) => x.id === i.id);
+      if (!t) return;
+      if (t.kind === "termin") openEventForm(t, C, null, parseRRule(t.rrule) ? i.key : null, { openTask });
+      else openTodoForm(t, C);
+    },
+  });
+}
+
+function showGoogleError() {
+  const e = GC.state.error;
+  C.ui.openSheet({
+    title: "Google Kalender",
+    bodyHTML: `<p class="hint" role="alert">${esc((e && e.message) || "Unbekannter Fehler.")}</p>` +
+      (e && e.code === "scope" ? googleHelpHTML(true) : "") +
+      `<div class="stack" style="margin-top:12px"><button type="button" class="btn primary" data-r="retry">Nochmal verbinden</button></div>`,
+    onMount(sheet, close) {
+      sheet.querySelector("[data-r=retry]").addEventListener("click", () => {
+        GC.refresh();
+        GC.connect(C.store.get().user && C.store.get().user.email).then(() => close()).catch((err) => C.ui.toast(err.message, 4000));
+      });
+    },
+  });
+}
+
+const KEY_MODES = { d: "tag", x: "3tage", w: "woche", m: "monat", j: "jahr", y: "jahr", a: "termine", l: "list" };
+function onKey(ev) {
+  if (!root || root.hidden || document.body.dataset.route !== "agenda") return;
+  if (ev.ctrlKey || ev.metaKey || ev.altKey) return;
+  if (document.querySelector("#sheet-root .sheet")) return;
+  const t = ev.target;
+  if (t && (t.closest("input, textarea, select, [contenteditable]"))) return;
+  const k = ev.key.toLowerCase();
+  if (KEY_MODES[k]) { ev.preventDefault(); setMode(KEY_MODES[k]); return; }
+  if (k === "t") { ev.preventDefault(); if (!CAL_MODES.includes(mode)) setMode("tag"); jumpTo(todayKey()); return; }
+  if (k === "n") { ev.preventDefault(); quickCreate("termin"); return; }
+  if (k === "/" || k === "s") { ev.preventDefault(); doSearch(); return; }
+  if ((k === "arrowleft" || k === "arrowright") && CAL_MODES.includes(mode)) {
+    if (t && t.closest && t.closest(".pl-slot")) return;
+    ev.preventDefault();
+    const dir = k === "arrowleft" ? -1 : 1;
+    calNav(dir); pulse(dir);
   }
 }
 
@@ -710,7 +901,7 @@ function applyMode() {
   root.querySelectorAll("[data-mode]").forEach((b) => b.setAttribute("aria-pressed", String(b.dataset.mode === mode)));
   const show = (r, on) => { const x = root.querySelector(`[data-r=${r}]`); if (x) x.hidden = !on; };
   const list = mode === "list";
-  const cal = mode === "tag" || mode === "woche" || mode === "monat";
+  const cal = CAL_MODES.includes(mode);
   show("listhead", list);
   show("lists", list);
   show("cal", cal);

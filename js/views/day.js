@@ -1,6 +1,7 @@
 // Update 7 (Agent Q): Karte „Mein Tag“ oben im Reiter Heute – Datum + Hinweis, Arbeitszeit, Schritte,
 // Höhenmeter (Uhr), nächster Termin + offene To-dos, kleine Wochenleiste (Mo–So).
 // Wendet außerdem „Einfacher bedienen“ (settings.comfort) auf <html> an.
+import { nextInstance } from "../cal-core.js"; // Update 9 – Kalender
 import { icon } from "../icons.js";
 import { plansToday } from "./plans.js";
 import { einsatzFor } from "../einsatz.js";
@@ -116,7 +117,12 @@ function agendaInfo(now) {
   const today = u.dayKey(now);
   const nowHM = u.clock(now);
   const open = todos().filter((t) => t && !t.done && t.kind !== "einsatz");
-  const termine = open.filter((t) => t.kind === "termin" && t.date &&
+  // Update 9 – Kalender: Serien mit ihrem nächsten Termin
+  const termine = open.map((t) => {
+    if (t.kind !== "termin" || !t.rrule) return t;
+    const n = nextInstance(t, today);
+    return n ? { ...t, date: n.date, time: n.time } : null;
+  }).filter((t) => t && t.kind === "termin" && t.date &&
     (t.date > today || (t.date === today && (!t.time || t.time >= nowHM))));
   termine.sort((a, b) => (a.date + (a.time || "")).localeCompare(b.date + (b.time || "")));
   const next = termine[0] || null;

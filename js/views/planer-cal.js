@@ -305,7 +305,8 @@ export function scrollToMorning(sc, H, showsToday) {
 export function moveNowLine(root) {
   const m = nowMin();
   root.querySelectorAll("[data-pnow]").forEach((el) => {
-    const H = el.closest("[data-pscroll=week]") ? H_WEEK : H_DAY;
+    const sc = el.closest("[data-pscroll]");
+    const H = (sc && Number(sc.dataset.h)) || (el.closest("[data-pscroll=week]") ? H_WEEK : H_DAY);
     el.style.top = `${((m / 60) * H).toFixed(1)}px`;
     const s = el.querySelector("span");
     if (s) s.textContent = `Jetzt ${hhmm(m)}`;

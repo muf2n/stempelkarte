@@ -15,6 +15,7 @@ on:
     branches: [main]
     paths:
       - "tools/mcp/**"
+      - "js/cal-core.js"
       - ".github/workflows/mcp-deploy.yml"
   workflow_dispatch:
 

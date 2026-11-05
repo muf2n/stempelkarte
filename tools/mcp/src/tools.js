@@ -12,6 +12,7 @@ import {
   defaultCreditMin, absenceRangeDays, creditByDay,
 } from "./logic.js";
 import { best, norm, score } from "./match.js";
+import { expandTodo, nextInstance, describeRule, parseRRule, formatRRule, normCalendars, finalizeEvent } from "./cal.js"; // Update 9 – Kalender
 import { DEFAULT_CATS, suggestCategory, parseAmount, budgetLevel, upcoming, monthlyCost, round2, INTERVALS } from "./money.js";
 
 const SRC = "claude";
@@ -22,6 +23,7 @@ const EXAM_KINDS = ["Schularbeit", "Test", "Prüfung", "Mündlich", "Referat", "
 /* ---------- kleine Hilfen ---------- */
 
 const s = (v) => (v == null ? "" : String(v).trim());
+const pad2 = (n) => String(n).padStart(2, "0");
 function need(v, msg) { if (!s(v)) throw new UserError(msg); return s(v); }
 
 function dateArg(v, today, label = "Datum") {
@@ -582,7 +584,13 @@ function todoLine(t, today) {
     const late = !t.done && t.date < today;
     bits.push(`${fmtKeyWd(t.date)}${t.time ? " " + t.time : ""}${late ? " (überfällig)" : t.date === today ? " (heute)" : ""}`);
   } else bits.push("ohne Datum");
-  if (t.remind && t.date && t.time) bits.push(`Erinnerung ${t.remindMin} min vorher`);
+  if (t.kind === "termin" && parseRRule(t.rrule)) {
+    const n = nextInstance(t, today);
+    bits.push(`${describeRule(t.rrule, t.date)}${n ? ` – nächster ${fmtKeyWd(n.date)}${n.time ? " " + n.time : ""}` : " – beendet"}`);
+  }
+  if (s(t.location)) bits.push(`Ort: ${s(t.location)}`);
+  if (Array.isArray(t.reminders) && t.reminders.length > 1 && t.date && t.time) bits.push(`Erinnerungen ${t.reminders.join(", ")} min vorher`);
+  else if (t.remind && t.date && t.time) bits.push(`Erinnerung ${t.remindMin} min vorher`);
   const note = s(t.note) ? `\n  Notiz: ${s(t.note)}` : "";
   return `- [${t.done ? "x" : " "}] ${t.title || "(ohne Titel)"} – ${bits.join(" · ")}${t.done && t.doneAt ? ` · erledigt ${fmtDateTime(t.doneAt)}` : ""}${note}\n  (ID ${t.id})`;
 }
@@ -617,7 +625,7 @@ tool({
     const today = dayKey(d.now);
     const f = s(args.filter).toLowerCase() || "offen";
     const all = (await d.todos()).sort(sortTodos);
-    const tasks = all.filter((t) => t.kind !== "einsatz");
+    const tasks = all.filter((t) => t.kind !== "einsatz" && t.kind !== "geburtstag");
     const ez = all.filter((t) => t.kind === "einsatz" && (t.dateTo && t.dateTo > t.date ? t.dateTo : t.date) >= today);
     if (!tasks.length && !ez.length) return "Im Planer ist noch nichts eingetragen.";
     const out = [];
@@ -630,7 +638,11 @@ tool({
       }
       if (done.length) out.push("Zuletzt erledigt (max. 30):", ...done.map((t) => todoLine(t, today)), "");
     }
-    const open = tasks.filter((t) => !t.done);
+    const open = tasks.filter((t) => !t.done).map((t) => {
+      if (t.kind !== "termin" || !parseRRule(t.rrule)) return t;
+      const n = nextInstance(t, today);
+      return n ? { ...t, date: n.date, time: n.time } : null;
+    }).filter(Boolean);
     const groups = [
       ["Überfällig", open.filter((t) => t.date && t.date < today)],
       ["Heute", open.filter((t) => t.date === today)],
@@ -643,6 +655,67 @@ tool({
     return out.join("\n").trim();
   },
 });
+
+const REPEAT_WORDS = [
+  [/^(nie|keine?|einmalig)$/, null], [/^t(ä|ae)glich$/, "FREQ=DAILY"], [/^werkt(ä|ae)g(lich)?|^werktags$|mo.?-.?fr/, "FREQ=WEEKLY;BYDAY=MO,TU,WE,TH,FR"],
+  [/^(alle|jede)\s*2\s*wochen|^zweiw(ö|oe)chentlich$/, "W2"], [/^w(ö|oe)chentlich$/, "W"], [/^monatlich$/, "M"], [/^j(ä|ae)hrlich$/, "FREQ=YEARLY"],
+];
+const RD = ["SU", "MO", "TU", "WE", "TH", "FR", "SA"];
+
+/** Update 9 – Kalender: Zusatzfelder für Termine (Ende, ganztägig, Ort, Wiederholung, mehrere Erinnerungen, Kalender). */
+async function eventArgs(d, args, base, today) {
+  const t = { ...base };
+  const wd = RD[wdOf(t.date)];
+  if (args.ganztags === true) { t.allDay = true; t.time = null; }
+  if (s(args.ende_datum)) {
+    const ed = dateArg(args.ende_datum, today, "ende_datum");
+    if (ed < t.date) throw new UserError("ende_datum liegt vor dem Datum.");
+    if (ed > t.date) t.endDate = ed;
+  }
+  if (s(args.bis)) {
+    if (!t.time) throw new UserError("„bis“ (Endzeit) geht nur mit Uhrzeit.");
+    const et = fmtTime(timeArg(args.bis, "bis"));
+    if (!t.endDate && et <= t.time) throw new UserError("Die Endzeit liegt vor der Uhrzeit.");
+    t.endTime = et;
+  }
+  if (s(args.ort)) t.location = s(args.ort).slice(0, 200);
+  if (s(args.wiederholung)) {
+    const w = s(args.wiederholung).toLowerCase();
+    let rr;
+    if (/^(rrule:)?freq=/i.test(w)) rr = parseRRule(w.toUpperCase()) ? formatRRule(w.toUpperCase()) : null;
+    else {
+      const hit = REPEAT_WORDS.find(([re]) => re.test(w));
+      if (!hit) throw new UserError("wiederholung: täglich, werktags, wöchentlich, alle 2 wochen, monatlich, jährlich oder eine RRULE (FREQ=…).");
+      rr = hit[1] === "W" ? `FREQ=WEEKLY;BYDAY=${wd}` : hit[1] === "W2" ? `FREQ=WEEKLY;INTERVAL=2;BYDAY=${wd}` : hit[1] === "M" ? `FREQ=MONTHLY;BYMONTHDAY=${Number(t.date.slice(8))}` : hit[1];
+    }
+    if (rr) {
+      const r = parseRRule(rr);
+      if (s(args.wiederholen_bis)) { r.until = dateArg(args.wiederholen_bis, today, "wiederholen_bis"); r.count = null; }
+      else if (args.anzahl != null) { const n = Math.round(Number(args.anzahl)); if (!(n >= 1 && n <= 999)) throw new UserError("anzahl muss 1–999 sein."); r.count = n; r.until = null; }
+      t.rrule = formatRRule(r);
+    }
+  }
+  if (Array.isArray(args.erinnerungen)) {
+    const list = args.erinnerungen.map((x) => Math.round(Number(x)));
+    if (list.some((x) => !Number.isFinite(x) || x < 0 || x > 40320)) throw new UserError("erinnerungen: Minuten vorher, 0 bis 40320.");
+    t.reminders = list;
+  }
+  if (s(args.kalender)) {
+    const cals = normCalendars((await d.settings()).calendars).filter((c) => c.kind === "user");
+    const m = best(args.kalender, cals, (c) => c.name) || null;
+    const c = cals.find((x) => x.id === s(args.kalender)) || (m && !m.ambiguous ? m.item : null);
+    if (!c) throw new UserError(`Kalender „${s(args.kalender)}“ nicht gefunden. Vorhanden: ${cals.map((x) => x.name).join(", ")}.`);
+    t.calendarId = c.id;
+  }
+  const extended = ["allDay", "endDate", "endTime", "location", "rrule", "reminders", "calendarId"].some((k) => t[k] !== undefined);
+  if (!extended) return t;
+  const f = finalizeEvent({ ...t, reminders: t.reminders || (t.remind ? [t.remindMin] : []) });
+  if (f.endDate == null) delete f.endDate;
+  if (f.rrule == null) delete f.rrule;
+  if (f.allDay && !f.reminders.length && args.erinnern == null) { f.remind = false; }
+  if (!f.allDay && !(f.date && f.time)) { f.remind = false; f.reminders = []; }
+  return f;
+}
 
 function remindArgs(args, date, time, defaultOn) {
   const rm = args.erinnern_min == null ? 30 : Math.round(Number(args.erinnern_min));
@@ -659,10 +732,12 @@ async function createTodo(d, kind, args) {
   const time = s(args.uhrzeit) ? fmtTime(timeArg(args.uhrzeit, "Uhrzeit")) : null;
   const { remind, remindMin } = remindArgs(args, date, time, !!time);
   const id = newId("t", d.now);
-  const full = normTodo({
+  let base = {
     title, kind, date, time: date ? time : null, remind, remindMin,
     note: s(args.notiz), done: false, doneAt: null, createdAt: d.now, src: SRC,
-  }, id, d.now);
+  };
+  if (kind === "termin") base = await eventArgs(d, args, base, today);
+  const full = normTodo(base, id, d.now);
   const { id: _i, ...data } = full;
   await d.commit([d.fs.setWrite(d.p(`todos/${id}`), clean(data))]);
   return full;
@@ -702,9 +777,18 @@ tool({
       titel: { type: "string" },
       datum: { type: "string", description: "Datum, z. B. \"12.11.2026\"" },
       uhrzeit: { type: "string", description: "Uhrzeit HH:MM (optional)" },
+      bis: { type: "string", description: "Endzeit HH:MM (optional, Standard 1 Stunde)" },
+      ende_datum: { type: "string", description: "Letzter Tag bei mehrtägigen Terminen (optional)" },
+      ganztags: { type: "boolean", description: "Ganztägiger Termin" },
+      ort: { type: "string", description: "Ort/Adresse (optional)" },
+      wiederholung: { type: "string", description: "täglich, werktags, wöchentlich, alle 2 wochen, monatlich, jährlich oder RRULE (z. B. FREQ=MONTHLY;BYDAY=2TU)" },
+      wiederholen_bis: { type: "string", description: "Letzter Tag der Wiederholung (optional)" },
+      anzahl: { type: "number", description: "Anzahl der Wiederholungen (statt wiederholen_bis)" },
+      kalender: { type: "string", description: "Kalender, z. B. Privat, Arbeit, Berufsschule (Standard Privat)" },
       notiz: { type: "string" },
       erinnern: { type: "boolean" },
       erinnern_min: { type: "number", description: "Minuten vorher (Standard 30)" },
+      erinnerungen: { type: "array", items: { type: "number" }, description: "Mehrere Erinnerungen in Minuten vorher, z. B. [10, 60, 1440]" },
     },
     required: ["titel", "datum"],
     additionalProperties: false,
@@ -712,7 +796,12 @@ tool({
   annotations: WR,
   async run(args, d) {
     const t = await createTodo(d, "termin", args);
-    return `Termin angelegt: „${t.title}“ am ${fmtKeyWd(t.date)}${t.time ? ` um ${t.time}` : ""}${t.remind ? `, Erinnerung ${t.remindMin} min vorher` : ""}.\n(ID ${t.id})`;
+    const rem = Array.isArray(t.reminders) && t.reminders.length > 1 ? `, Erinnerungen ${t.reminders.join(", ")} min vorher` : t.remind ? `, Erinnerung ${t.remindMin} min vorher` : "";
+    const extra = [
+      t.endDate ? `bis ${fmtKeyWd(t.endDate)}${t.endTime ? " " + t.endTime : ""}` : t.endTime ? `bis ${t.endTime}` : "",
+      t.allDay ? "ganztägig" : "", t.location ? `Ort: ${t.location}` : "", t.rrule ? describeRule(t.rrule, t.date) : "",
+    ].filter(Boolean).join(" · ");
+    return `Termin angelegt: „${t.title}“ am ${fmtKeyWd(t.date)}${t.time ? ` um ${t.time}` : ""}${rem}${extra ? ` · ${extra}` : ""}.\n(ID ${t.id})`;
   },
 });
 
@@ -776,7 +865,7 @@ tool({
   annotations: { ...WR, idempotentHint: true },
   async run(args, d) {
     const done = args.erledigt == null ? true : !!args.erledigt;
-    const todos = (await d.todos()).filter((t) => t.kind !== "einsatz");
+    const todos = (await d.todos()).filter((t) => t.kind !== "einsatz" && t.kind !== "geburtstag");
     let t = null;
     if (s(args.id)) {
       t = todos.find((x) => x.id === s(args.id));
@@ -814,6 +903,23 @@ tool({
     const { from, to } = rangeArgs({ von: from0, bis: args.bis || addDays(from0, 6) }, today, { defFrom: today, defTo: addDays(today, 6), maxDays: 92 });
     const [todos, settings] = await Promise.all([d.todos(), d.settings()]);
     const out = [`Planer ${fmtKey(from)} – ${fmtKey(to)}`];
+    // Update 9 – Kalender: Termine mit Wiederholung/mehrtägig aufklappen, Geburtstage jährlich
+    const byDay = new Map();
+    for (const t of todos) {
+      if (t.kind !== "termin") continue;
+      for (const i of expandTodo(t, from, to)) {
+        for (let k = i.date < from ? from : i.date; k <= i.lastDay && k <= to; k = addDays(k, 1)) {
+          if (!byDay.has(k)) byDay.set(k, []);
+          byDay.get(k).push(i);
+        }
+      }
+    }
+    const bdays = [];
+    for (const t of todos) {
+      const m = t.kind === "geburtstag" && /^(\d{1,2})-(\d{1,2})$/.exec(s(t.bday));
+      if (!m) continue;
+      for (let y = Number(from.slice(0, 4)); y <= Number(to.slice(0, 4)); y++) bdays.push({ title: t.title, date: `${y}-${pad2(m[1])}-${pad2(m[2])}` });
+    }
     let any = false;
     for (let k = from; k <= to; k = addDays(k, 1)) {
       const bits = [];
@@ -823,14 +929,21 @@ tool({
       if (sch) bits.push(`  ${sch === "Berufsschule" ? "Berufsschule" : "Berufsschule – " + sch}`);
       const ez = einsatzFor(k, todos);
       if (ez) bits.push(`  Einsatz: ${ez.place || ez.title}${ez.people && ez.people.length ? ` mit ${ez.people.join(", ")}` : ""}${s(ez.note) ? ` (${s(ez.note)})` : ""}`);
-      const items = todos.filter((t) => t.kind !== "einsatz" && t.date === k).sort(sortTodos);
-      for (const t of items) bits.push(`  ${t.done ? "[x]" : "[ ]"} ${t.time ? t.time + " " : ""}${t.kind === "termin" ? "Termin: " : ""}${t.title}${s(t.note) ? ` – ${s(t.note)}` : ""}`);
+      for (const b of bdays) if (b.date === k) bits.push(`  🎂 Geburtstag: ${b.title}`);
+      const items = todos.filter((t) => t.kind !== "einsatz" && t.kind !== "termin" && t.kind !== "geburtstag" && t.date === k).sort(sortTodos);
+      const evs = (byDay.get(k) || []).map((i) => ({ i, sk: i.allDay || i.date < k ? "" : i.time }));
+      const lines = [
+        ...evs.map(({ i, sk }) => [sk || "", `  ${i.done ? "[x]" : "[ ]"} ${i.allDay ? "ganztägig " : i.date < k ? "(Fortsetzung) " : i.time + " "}Termin: ${i.title}` +
+          `${i.endDate > i.date ? ` (${fmtKey(i.date)} – ${fmtKey(i.endDate)})` : !i.allDay ? `–${i.endTime}` : ""}${i.recurring ? " (Serie)" : ""}${s(i.location) ? ` · ${s(i.location)}` : ""}${s(i.note) ? ` – ${s(i.note)}` : ""}`]),
+        ...items.map((t) => [t.time || "99", `  ${t.done ? "[x]" : "[ ]"} ${t.time ? t.time + " " : ""}${t.title}${s(t.note) ? ` – ${s(t.note)}` : ""}`]),
+      ].sort((a, b) => (a[0] < b[0] ? -1 : a[0] > b[0] ? 1 : 0));
+      for (const [, l] of lines) bits.push(l);
       if (bits.length) { any = true; out.push("", `${fmtKeyWd(k)}${k === today ? " (heute)" : ""}`, ...bits); }
     }
     if (!any) out.push("", "In diesem Zeitraum steht nichts im Planer.");
-    const undated = todos.filter((t) => t.kind !== "einsatz" && !t.done && !t.date);
+    const undated = todos.filter((t) => t.kind !== "einsatz" && t.kind !== "geburtstag" && !t.done && !t.date);
     if (undated.length) out.push("", "Offen ohne Datum:", ...undated.sort(sortTodos).map((t) => `  [ ] ${t.title}`));
-    const late = todos.filter((t) => t.kind !== "einsatz" && !t.done && t.date && t.date < from);
+    const late = todos.filter((t) => t.kind !== "einsatz" && t.kind !== "geburtstag" && !t.done && t.date && (t.kind !== "termin" || !parseRRule(t.rrule)) && (t.endDate && t.endDate > t.date ? t.endDate : t.date) < from);
     if (late.length) out.push("", `Überfällig (vor ${fmtKey(from)}):`, ...late.sort(sortTodos).map((t) => `  [ ] ${fmtKey(t.date)} ${t.title}`));
     return out.join("\n");
   },

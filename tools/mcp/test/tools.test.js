@@ -364,3 +364,31 @@ test("Formatierung: Euro, Datum, Zeiten", () => {
   assert.equal(T.parseMonth("Jänner 2027", "2026-11-04"), "2027-01");
   assert.equal(T.parseMonth("letzter", "2026-01-04"), "2025-12");
 });
+
+test("Update 9 – Kalender: termin_anlegen mit Wiederholung, Ort, Endzeit, mehreren Erinnerungen; planer_lesen klappt Serien auf", async () => {
+  const t = await seeded();
+  let r = await t.tool("termin_anlegen", { titel: "Fußballtraining", datum: "02.11.2026", uhrzeit: "18:30", bis: "20:00", ort: "Sportplatz Wels",
+    wiederholung: "wöchentlich", wiederholen_bis: "30.11.2026", erinnerungen: [15, 120], kalender: "privat" });
+  assert.match(r.text, /Termin angelegt: „Fußballtraining“ am Mo, 02\.11\.2026 um 18:30, Erinnerungen 15, 120 min vorher · bis 20:00 · Ort: Sportplatz Wels · Wöchentlich am Montag, bis 30\.11\.2026/);
+  r = await t.tool("termin_anlegen", { titel: "Urlaub", datum: "05.11.2026", ende_datum: "07.11.2026", ganztags: true });
+  assert.match(r.text, /ganztägig/);
+  r = await t.tool("termin_anlegen", { titel: "X", datum: "05.11.2026", wiederholung: "stündlich" });
+  assert.ok(r.isError);
+  r = await t.tool("termin_anlegen", { titel: "X", datum: "05.11.2026", kalender: "Gibtsnicht" });
+  assert.ok(r.isError);
+  const docs = t.g.list(`${t.base}/todos`);
+  const ft = docs.find((x) => x.title === "Fußballtraining");
+  assert.deepEqual([ft.rrule, ft.endTime, ft.location, ft.reminders, ft.remind, ft.remindMin, ft.calendarId],
+    ["FREQ=WEEKLY;BYDAY=MO;UNTIL=20261130", "20:00", "Sportplatz Wels", [15, 120], true, 15, "privat"]);
+  for (const x of docs) assert.deepEqual({ ...L.normTodo(x, x.id), id: x.id }, { ...x }, "Dokument ist normalisiert");
+  t.g.set(`${t.base}/todos/bd1`, { kind: "geburtstag", title: "Oma", bday: "11-10", byear: 1950, time: "09:00", remind: true, remindDays: 1, date: null, done: false, createdAt: 1 });
+  r = await t.tool("planer_lesen", { von: "04.11.2026", bis: "17.11.2026" });
+  assert.match(r.text, /Do, 05\.11\.2026\n  Berufsschule\n  \[ \] ganztägig Termin: Urlaub \(05\.11\.2026 – 07\.11\.2026\)/);
+  assert.match(r.text, /Fr, 06\.11\.2026\n  \[ \] ganztägig Termin: Urlaub/);
+  assert.match(r.text, /Mo, 09\.11\.2026\n  \[ \] 18:30 Termin: Fußballtraining–20:00 \(Serie\) · Sportplatz Wels/);
+  assert.match(r.text, /Mo, 16\.11\.2026\n  \[ \] 18:30 Termin: Fußballtraining/);
+  assert.match(r.text, /Di, 10\.11\.2026\n  🎂 Geburtstag: Oma/);
+  assert.ok(!/Offen ohne Datum:[\s\S]*Oma/.test(r.text), "Geburtstag nicht unter „ohne Datum“");
+  r = await t.tool("todos_lesen");
+  assert.match(r.text, /Fußballtraining – Termin · Mo, 09\.11\.2026 18:30 · Wöchentlich am Montag, bis 30\.11\.2026 – nächster Mo, 09\.11\.2026 18:30 · Ort: Sportplatz Wels · Erinnerungen 15, 120 min vorher/);
+});

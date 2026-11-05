@@ -23,7 +23,7 @@ export function mergeSettings(s) {
 
 /** Wie store.js normTodo. */
 export function normTodo(t, id, now = Date.now()) {
-  const kind = t?.kind === "termin" || t?.kind === "einsatz" ? t.kind : "todo";
+  const kind = t?.kind === "termin" || t?.kind === "einsatz" || t?.kind === "geburtstag" ? t.kind : "todo"; // Update 9: Geburtstage bleiben Geburtstage
   const rm = Number(t?.remindMin);
   return {
     ...t,
