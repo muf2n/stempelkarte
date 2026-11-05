@@ -130,6 +130,23 @@ export function sanitizeName(n) {
 }
 
 /** Nur bekannte Modi übernehmen, alles andere still ignorieren. */
+/** Kleine Modell-Ausrutscher reparieren: "true"/"false" → boolean, "5" → Zahl, leere/unbekannte Felder weg. */
+export function coerceArgs(schema, args) {
+  const props = (schema && schema.properties) || {};
+  const out = {};
+  for (const [k, v] of Object.entries(args || {})) {
+    const p = props[k];
+    if (!p) { if (schema && schema.additionalProperties === false) continue; out[k] = v; continue; }
+    if (v === null || v === undefined || v === "") continue;
+    const types = Array.isArray(p.type) ? p.type : p.type ? [p.type] : [];
+    if (typeof v === "string" && types.includes("boolean") && !types.includes("string") && /^(true|false|ja|nein)$/i.test(v.trim())) out[k] = /^(true|ja)$/i.test(v.trim());
+    else if (typeof v === "string" && (types.includes("integer") || types.includes("number")) && !types.includes("string") && /^-?\d+([.,]\d+)?$/.test(v.trim())) out[k] = Number(v.trim().replace(",", "."));
+    else if (typeof v === "number" && types.includes("string") && !types.includes("number") && !types.includes("integer")) out[k] = String(v);
+    else out[k] = v;
+  }
+  return out;
+}
+
 export function chatMode(body) {
   const mode = body && body.mode === "voice" ? "voice" : "text";
   return { mode, short: mode === "voice" ? body.short !== false : false, name: sanitizeName(body && body.assistantName) };
@@ -271,7 +288,7 @@ export async function runChat({ env, fetchImpl, now, data, messages, mode = "tex
         else if (TWO_STEP[u.name] && proposed.has(TWO_STEP[u.name])) { out = u.name === "einstellung_bestaetigen" ? SAME_TURN_SETTINGS_MSG : SAME_TURN_MSG; isError = true; }
         else if (sawUntrusted && writeTools.has(u.name)) { out = UNTRUSTED_WRITE_MSG; isError = true; }
         else {
-          const args = u.input && typeof u.input === "object" ? u.input : {};
+          const args = coerceArgs(t.inputSchema, u.input && typeof u.input === "object" ? u.input : {});
           const bad = checkArgs(t.inputSchema, args);
           if (bad) { out = `Ungültige Eingabe: ${bad}`; isError = true; }
           else {
@@ -283,7 +300,8 @@ export async function runChat({ env, fetchImpl, now, data, messages, mode = "tex
             } catch (e) {
               if (t.untrusted) sawUntrusted = true; // vorsichtshalber auch bei Fehlern
               isError = true;
-              out = e instanceof UserError || (e && e.expose) ? e.message : "Interner Fehler beim Zugriff auf die Daten.";
+              out = e instanceof UserError || (e && e.expose) ? e.message
+                : `Interner Fehler beim Zugriff auf die Daten${e && e.status ? ` (${e.status})` : ""}. Einmal neu versuchen; geht es wieder nicht, sag Florian, welches Werkzeug (${u.name}) betroffen ist.`;
             }
           }
         }
