@@ -781,9 +781,9 @@ function dayExtraHTML(k, items, tgMap, settings, esc) {
   const bits = [];
   if (km > 0) bits.push(`<span class="tg-dkm">${icon("car", 16)}≈ ${esc(fmtKm(km))} km</span>`);
   if (tg) {
-    const amt = tg.level === "none" ? "" : (tg.amount == null ? "" : ` · ${fmtEur(tg.amount)}`);
+    const amt = tg.level === "none" ? "" : (tg.amount == null ? "" : ` · <span class="mm-amt">${esc(fmtEur(tg.amount))}</span>`); // Update 9 – Geld-Sperre: mm-amt
     bits.push(`<button type="button" class="tg-dbtn lvl-${esc(tg.level)}" data-tgday="${esc(k)}" aria-label="Taggeld für diesen Tag ändern">` +
-      `Taggeld: ${esc({ none: "keins", part: "teilweise", full: "voll" }[tg.level] || LEVEL_LABELS[tg.level])}${esc(amt)}${tg.manual ? " <small>manuell</small>" : ""}</button>`);
+      `Taggeld: ${esc({ none: "keins", part: "teilweise", full: "voll" }[tg.level] || LEVEL_LABELS[tg.level])}${amt}${tg.manual ? " <small>manuell</small>" : ""}</button>`);
   }
   return `<div class="tg-dayline">${bits.join("")}</div>`;
 }

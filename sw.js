@@ -110,6 +110,10 @@ const SHELL = [
   "js/alltag/subs-catalog.js",
   // Update 9 – Bankverbindung (BAWAG über Enable Banking)
   "js/alltag/money-bank.js",
+  "js/alltag/money-lock.js",
+  "js/alltag/money-lock-core.js",
+  "js/alltag/money-lock-state.js",
+  "css/alltag-moneylock.css",
   "bank-callback.html",
   // Update 9 – Passwort-Tresor
   "js/alltag/vault.js",

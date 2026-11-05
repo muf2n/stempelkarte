@@ -9,6 +9,7 @@ import * as ui from "../ui.js";
 import { createGmail } from "./money-gmail.js";
 import { createBank, bankMark } from "./money-bank.js";
 import { createSubs } from "./money-subs.js"; // Update 9 – Abos: Kündigen, Fristen, Katalog
+import { guard as lockGuard } from "./money-lock.js"; // Update 9 – Geld-Sperre (Fingerabdruck/PIN)
 
 const TABS = [
   ["uebersicht", "Übersicht", "pie"],
@@ -27,7 +28,12 @@ const lsSet = (k, v) => { try { localStorage.setItem(k, v); } catch { /* egal */
 const amt = (v, o) => esc(M.eur(v, o));
 const ruleId = (kw) => "r_" + String(kw).toLowerCase().replace(/[^a-z0-9]/g, (c) => "_" + c.charCodeAt(0).toString(36));
 
+// Update 9 – Geld-Sperre: der eigentliche Bereich wird erst nach dem Entsperren eingehängt.
 export function mount(el, ctx) {
+  return lockGuard(el, ctx, mountMoney);
+}
+
+function mountMoney(el, ctx) {
   const col = {
     tx: collection("money_tx"),
     cats: collection("money_cats"),

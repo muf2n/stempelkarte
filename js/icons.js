@@ -75,6 +75,8 @@ const P = {
   // Update 9 – Galerie
   image: '<rect x="3.5" y="4.5" width="17" height="15" rx="2.5"/><circle cx="9" cy="10" r="1.8"/><path d="M4 17.5l4.8-4.8a1.5 1.5 0 0 1 2.1 0L15 16.8l1.8-1.8a1.5 1.5 0 0 1 2.1 0l1.6 1.6"/>',
   map: '<path d="M3.5 6.5l5.5-2 6 2 5.5-2v13l-5.5 2-6-2-5.5 2z"/><path d="M9 4.5v13M15 6.5v13"/>',
+  // Update 9 – Geld-Sperre
+  fingerprint: '<path d="M6.5 6.2A8 8 0 0 1 20 12v1.5"/><path d="M4 9.5A8 8 0 0 0 4 12v3"/><path d="M8 12a4 4 0 0 1 8 0v2.5a9 9 0 0 1-1 4.2"/><path d="M12 12v3a7 7 0 0 1-2 5"/><path d="M8 15.5a7 7 0 0 1-1.2 3.8"/><path d="M19.6 16.5a12 12 0 0 1-.9 3"/>',
   check2: '<circle cx="12" cy="12" r="9"/><path d="M8 12.3l2.7 2.7L16 9.7"/>',
 };
 

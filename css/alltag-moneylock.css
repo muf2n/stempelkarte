@@ -1,0 +1,98 @@
+/* Update 9 – Geld-Sperre: Sperrbildschirm, Ziffernblock, Einrichtungs-Banner, Einstellungen (hell + dunkel). */
+.ml-host { --ml-c: #3fae7a; --ml-c2: #0f766e; display: flex; flex-direction: column; gap: 14px; }
+.ml-host:empty { display: none; }
+.ml-lockslot:empty, .ml-banner-slot:empty { display: none; }
+
+/* Kopfzeile: Sperren + Zahnrad rechts */
+.ml-tools { margin-left: auto; display: flex; gap: 6px; flex: none; }
+.ml-tools:empty { display: none; }
+.ml-tbtn {
+  display: grid; place-items: center; width: 42px; height: 42px; border-radius: 999px;
+  border: 1px solid var(--line); background: var(--card); color: var(--ink); cursor: pointer;
+}
+.ml-tbtn:focus-visible { outline: none; box-shadow: var(--ring); }
+.ml-tbtn:active { transform: scale(.95); }
+
+/* Banner */
+.ml-banner {
+  display: flex; align-items: center; gap: 12px; padding: 12px 12px 12px 14px; border-radius: var(--r);
+  background: linear-gradient(135deg, color-mix(in srgb, var(--ml-c) 16%, var(--card)) 0%, var(--card) 100%);
+  border: 1px solid color-mix(in srgb, var(--ml-c) 35%, var(--line)); box-shadow: var(--shadow);
+}
+.ml-banner-ic { flex: none; display: grid; place-items: center; width: 42px; height: 42px; border-radius: 14px; background: var(--ml-c); color: #fff; }
+.ml-banner-txt { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+.ml-banner-txt b { font-size: .98rem; line-height: 1.25; }
+.ml-banner-txt small { color: var(--muted); font-size: .84rem; line-height: 1.3; }
+.ml-banner .btn.sm { flex: none; min-height: 40px; padding: 6px 12px; }
+.ml-x { flex: none; align-self: flex-start; border: 0; background: none; color: var(--muted); font-size: 1rem; padding: 4px 6px; cursor: pointer; border-radius: 8px; }
+.ml-x:focus-visible { outline: none; box-shadow: var(--ring); }
+@media (max-width: 420px) {
+  .ml-banner { flex-wrap: wrap; }
+  .ml-banner-txt { flex: 1 1 calc(100% - 100px); }
+  .ml-banner .btn.sm { order: 3; margin-left: 54px; }
+}
+
+/* Ziffernblock */
+.ml-pad { display: flex; flex-direction: column; align-items: center; gap: 10px; text-align: center; }
+.ml-lock { max-width: 420px; width: 100%; margin: 0 auto; padding: 26px 20px 20px; }
+.ml-ic {
+  display: grid; place-items: center; width: 68px; height: 68px; border-radius: 22px; color: #fff;
+  background: linear-gradient(140deg, var(--ml-c, #3fae7a) 0%, var(--ml-c2, #0f766e) 100%);
+  box-shadow: 0 12px 24px -12px color-mix(in srgb, var(--ml-c, #3fae7a) 80%, transparent);
+}
+.sheet .ml-pad { --ml-c: #3fae7a; --ml-c2: #0f766e; padding: 4px 0 6px; }
+.ml-h { margin: 4px 0 0; font-family: var(--f-display); font-size: 1.4rem; }
+.ml-text { margin: 0; max-width: 32ch; }
+.ml-dots { display: flex; gap: 14px; justify-content: center; min-height: 18px; margin: 10px 0 2px; }
+.ml-dots i { width: 14px; height: 14px; border-radius: 50%; border: 2px solid color-mix(in srgb, var(--ink) 35%, transparent); transition: background-color .12s ease, transform .12s ease; }
+.ml-dots i.on { background: var(--ml-c, #3fae7a); border-color: var(--ml-c, #3fae7a); transform: scale(1.08); }
+.ml-sr { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+.ml-err { margin: 0; min-height: 1.3em; color: var(--danger); font-weight: 600; font-size: .92rem; }
+.ml-keys { display: grid; grid-template-columns: repeat(3, 76px); gap: 12px 22px; justify-content: center; margin-top: 2px; }
+.ml-key {
+  width: 76px; height: 76px; border-radius: 50%; border: 1px solid var(--line); background: var(--soft); color: var(--ink);
+  font-family: var(--f-display); font-size: 1.75rem; font-weight: 600; display: grid; place-items: center; cursor: pointer;
+  transition: transform .08s ease, background-color .12s ease; -webkit-user-select: none; user-select: none; touch-action: manipulation;
+}
+.ml-key:active:not(:disabled) { transform: scale(.93); background: color-mix(in srgb, var(--ml-c, #3fae7a) 22%, var(--soft)); }
+.ml-key:focus-visible { outline: none; box-shadow: var(--ring); }
+.ml-key:disabled { opacity: .45; }
+.ml-key-del, .ml-key-bio { background: transparent; border-color: transparent; font-size: 1.5rem; }
+.ml-key-bio { color: var(--ml-c, #3fae7a); }
+.ml-key-gap { width: 76px; height: 76px; }
+.ml-ok { margin-top: 6px; max-width: 320px; }
+.ml-pad.is-busy .ml-dots i.on { animation: ml-pulse .8s ease-in-out infinite alternate; }
+@keyframes ml-pulse { to { opacity: .35; } }
+.ml-pad.shake .ml-dots { animation: ml-shake .38s ease; }
+@keyframes ml-shake { 20%, 60% { transform: translateX(-8px); } 40%, 80% { transform: translateX(8px); } }
+@media (prefers-reduced-motion: reduce) { .ml-pad.shake .ml-dots, .ml-pad.is-busy .ml-dots i.on { animation: none; } }
+.ml-foot { display: flex; flex-direction: column; align-items: center; gap: 6px; margin-top: 8px; width: 100%; }
+.ml-biobtn { color: var(--ml-c, #3fae7a); }
+.ml-link { border: 0; background: none; color: var(--accent); font-weight: 600; font-size: .95rem; padding: 8px 10px; cursor: pointer; border-radius: 10px; }
+.ml-link:focus-visible { outline: none; box-shadow: var(--ring); }
+.ml-bioask { gap: 12px; }
+.ml-bioask .btn { max-width: 340px; }
+@media (max-height: 700px) {
+  .ml-keys { grid-template-columns: repeat(3, 64px); gap: 8px 18px; }
+  .ml-key, .ml-key-gap { width: 64px; height: 64px; font-size: 1.5rem; }
+}
+
+/* PIN vergessen */
+.ml-forgot { display: flex; flex-direction: column; gap: 12px; }
+.ml-forgot p { margin: 0; line-height: 1.45; }
+
+/* Einstellungen */
+.ml-set { display: flex; flex-direction: column; gap: 10px; }
+.ml-set .note { margin: -2px 0 4px; }
+.ml-sub { margin: 10px 0 0; font-size: .82rem; text-transform: uppercase; letter-spacing: .06em; color: var(--muted); }
+.ml-row { display: flex; align-items: center; gap: 12px; padding: 12px; border-radius: var(--r-sm); background: var(--soft); }
+.ml-row > svg { flex: none; color: #3fae7a; }
+.ml-row > span { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+.ml-row small { color: var(--muted); font-size: .85rem; line-height: 1.3; }
+.ml-row .btn.sm { flex: none; min-height: 40px; padding: 6px 12px; }
+.ml-auto { display: flex; gap: 8px; flex-wrap: wrap; }
+.ml-info { display: flex; gap: 10px; align-items: flex-start; padding: 10px 12px; border-radius: var(--r-sm); border: 1px dashed var(--line); color: var(--muted); font-size: .88rem; line-height: 1.4; }
+.ml-info > svg { flex: none; margin-top: 1px; }
+.ml-info p { margin: 0; }
+.ml-info b { color: var(--ink); font-weight: 600; }
+.ml-set .btn.ghost { margin-top: 4px; }

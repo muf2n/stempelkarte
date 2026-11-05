@@ -120,6 +120,11 @@ export function openSheet({ title = "", bodyHTML = "", onMount } = {}) {
   return { el, close };
 }
 
+/** Update 9 – Geld-Sperre: alle offenen Blätter schließen (z. B. beim automatischen Sperren). */
+export function closeAllSheets() {
+  for (const e of openSheets.slice().reverse()) { try { e.close(); } catch { /* egal */ } }
+}
+
 /* ---------- Zweifach-Tipp-Bestätigung ---------- */
 
 /**
