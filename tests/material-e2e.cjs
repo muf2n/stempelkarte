@@ -4,7 +4,7 @@
 const { chromium } = require("playwright");
 const fs = require("fs");
 const path = require("path");
-const BASE = "http://localhost:8857/";
+const BASE = process.env.BASE || "http://localhost:8857/"; // anderer Port: BASE=http://localhost:8867/
 const OUT = process.argv[2] || require("os").tmpdir();
 
 const pad = (n) => String(n).padStart(2, "0");
@@ -49,6 +49,7 @@ const TODAY_DE = TODAY.split("-").reverse().join(".");
       settings: { weeklyTarget: 38.5, apprentice: { name: "Florian", trade: "Elektrotechnik", company: "Elektro Maier", start: "2025-09-01", years: 3.5, notes: {} } },
     }));
     for (const k of Object.keys(localStorage)) if (k.startsWith("sk-a-material") || k === "sk-mt-tab") localStorage.removeItem(k);
+    localStorage.setItem("sk-mt-tab", "brauche"); // alter Reitername (vor „Offen“)
   });
   await page.reload();
   await page.click("#btn-local");
@@ -63,6 +64,7 @@ const TODAY_DE = TODAY.split("-").reverse().join(".");
   ok(await page.inputValue("#mt-place") === "p1", "Baustelle = aktueller Ort (eingestempelt)");
   ok(await page.inputValue("#mt-day") === TODAY, "Tag = heute");
   ok(await page.getAttribute('.sheet [data-status="verbaut"]', "aria-pressed") === "true", "Status vorbelegt: verbaut");
+  ok((await page.$$eval(".sheet [data-status]", (b) => b.map((x) => x.dataset.status + ":" + x.textContent))).join() === "brauche:Brauche,besorgt:Besorgt,baustelle:Vor Ort,verbaut:Verbaut", "Vier Status im Erfassen-Blatt (… Vor Ort …)");
   await page.fill("#mt-q", "3x1,5");
   await page.waitForTimeout(100);
   ok((await txt(".mt-sugg .mt-sg")).includes("NYM-J 3×1,5"), "Unscharfe Suche: „3x1,5“ → NYM-J 3×1,5");
@@ -91,11 +93,12 @@ const TODAY_DE = TODAY.split("-").reverse().join(".");
   /* ---------- Modulseite ---------- */
   await page.evaluate(() => { location.hash = "#alltag"; });
   await page.waitForSelector('.al-tile[data-id="material"]');
-  ok((await txt('.al-tile[data-id="material"]')).includes("Brauche ich · verbaut · pro Baustelle"), "Kachel „Material“");
+  ok((await txt('.al-tile[data-id="material"]')).includes("Offen · vor Ort · verbaut · pro Baustelle"), "Kachel „Material“");
   await page.click('.al-tile[data-id="material"]');
   await page.waitForSelector(".mt-tabs");
   ok((await page.$$(".mt-tab")).length === 4, "4 Unterreiter");
-  ok((await txt(".mt-page")).includes("Einkaufsliste ist leer"), "Leerer Zustand „Brauche ich“");
+  ok(await page.getAttribute('.mt-tab[data-tab="offen"]', "aria-selected") === "true" && (await txt('.mt-tab[data-tab="offen"]')).includes("Offen"), "Gemerkter alter Reiter „brauche“ → „Offen“");
+  ok((await txt(".mt-page")).includes("Nichts offen"), "Leerer Zustand „Offen“");
 
   // Einkaufsliste anlegen (Speichern & weiter)
   await page.click(".mt-fab");
@@ -132,18 +135,36 @@ const TODAY_DE = TODAY.split("-").reverse().join(".");
   ok((await txt(".mt-sugg")).includes("übernehmen"), "Unbekannt → „… übernehmen“");
   await page.click('.sheet [data-m="save"]');
   await page.waitForTimeout(250);
+  // direkt als „Auf der Baustelle“ anlegen (liegt schon vor Ort)
+  await page.click(".mt-fab");
+  await page.fill("#mt-q", "kleinverteiler");
+  await page.waitForTimeout(80);
+  await page.click(".mt-sugg .mt-sg");
+  await page.click('.sheet [data-status="baustelle"]');
+  ok(await page.getAttribute('.sheet [data-status="baustelle"]', "aria-pressed") === "true", "Status „Vor Ort“ wählbar");
+  await page.selectOption("#mt-place", "__free");
+  await page.fill("#mt-free", "Oma Huber");
+  await page.click('.sheet [data-m="save"]');
+  await page.waitForTimeout(250);
   it = await items();
-  ok(it.length === 6, "6 Materialzeilen");
+  ok(it.length === 7, "7 Materialzeilen");
+  const kv = it.find((x) => x.name === "Kleinverteiler");
+  ok(kv.status === "baustelle" && kv.place === "Oma Huber" && !kv.doneAt, "Direkt als „Auf der Baustelle“ gespeichert (nicht verbaut)");
   ok(it.find((x) => x.name === "Rauchmelder").place === "Oma Huber" && !it.find((x) => x.name === "Rauchmelder").placeId, "Freitext-Ort gespeichert");
   const cat = await page.evaluate(() => JSON.parse(localStorage.getItem("sk-a-material_catalog") || "[]"));
   ok(cat.some((c) => c.own && c.name === "Gira E2 Rahmen anthrazit"), "Eigenes Material im Katalog gemerkt");
   ok(cat.find((c) => c.id === "b_nym-j-3x1-5").count === 1, "Zähler für Katalog-Eintrag");
 
-  // Brauche ich: gruppiert nach Baustelle
+  // Offen: gruppiert nach Baustelle, darin Zu besorgen / Besorgt / Auf der Baustelle
   const groups = await page.$$eval(".mt-card h3", (h) => h.map((x) => x.textContent.trim()));
   ok(groups.join("|") === "Oma Huber|Teststraße 15", "Gruppiert nach Baustelle: " + groups.join(", "));
-  ok((await txt(".mt-bar-t")).includes("4 noch zu besorgen"), "Zähler „4 noch zu besorgen“");
-  await shot("mt-brauche-390.png");
+  ok((await txt(".mt-bar-t")).replace(/\s+/g, " ").includes("4 zu besorgen · 1 vor Ort"), "Zähler „4 zu besorgen · 1 vor Ort“");
+  const secs = (pk) => page.$$eval(`.mt-card[data-pk="${pk}"] .mt-sec`, (x) => x.map((s) => s.dataset.sec + ":" + s.querySelectorAll(".mt-line").length).join());
+  ok(await secs("t:oma huber") === "brauche:1,baustelle:1", "Oma Huber: Zu besorgen 1, Auf der Baustelle 1");
+  ok((await txt('.mt-card[data-pk="t:oma huber"] .mt-sec[data-sec="baustelle"] .mt-sub-h')).includes("Auf der Baustelle"), "Abschnitt „Auf der Baustelle“");
+  ok(await page.$(`.mt-line[data-id="${kv.id}"] .mt-site-ic`) && !(await page.$(`.mt-line[data-id="${kv.id}"] .mt-check`)), "Vor-Ort-Zeile mit eigenem Symbol statt Haken");
+  ok((await txt(`.mt-line[data-id="${kv.id}"] [data-a="next"]`)) === "Verbaut", "Vor-Ort-Zeile: Knopf „Verbaut“");
+  await shot("mt-offen-start-390.png");
   const wago = it.find((x) => x.name === "Wago 221-413").id;
   const lus = it.find((x) => x.name === "Lüsterklemme").id;
   await page.click(`.mt-line[data-id="${wago}"] [data-a="plus"]`);
@@ -165,32 +186,69 @@ const TODAY_DE = TODAY.split("-").reverse().join(".");
   await page.waitForTimeout(250);
   ok((await items()).find((x) => x.id === lus).status === "besorgt", "Wischen nach rechts → besorgt");
   ok(!(await page.$(".sheet")), "Wischen öffnet kein Bearbeiten-Blatt");
+  ok(await secs("p:p1") === "brauche:1,besorgt:2", "Teststraße 15: Zu besorgen 1, Besorgt 2");
+  ok((await txt(`.mt-line[data-id="${wago}"] [data-a="next"]`)) === "Vor Ort", "Besorgt-Zeile: Knopf „Vor Ort“");
+  await shot("mt-offen-390.png");
+  await page.emulateMedia({ colorScheme: "dark" });
+  await shot("mt-offen-390-dark.png");
+  await page.emulateMedia({ colorScheme: "light" });
   // Teilen Einkaufsliste (Baustelle Teststraße 15)
   await page.click('.mt-card[data-pk="p:p1"] [data-x="share"]');
   await page.waitForSelector(".mt-preview");
   ok((await txt(".mt-preview")) === `Materialliste Teststraße 15 (${TODAY_DE}):\n• 1× Gira E2 Rahmen anthrazit`, "Teilen „Brauche ich“: besorgte Zeilen sind nicht mehr auf der Einkaufsliste");
   await closeSheet();
-  // Alles Besorgte als verbaut
-  ok((await txt('.mt-card[data-pk="p:p1"] .mt-allin')).includes("Alles Besorgte als verbaut markieren"), "Knopf „Alles Besorgte als verbaut markieren“");
-  await shot("mt-brauche-besorgt-390.png");
-  await page.click('.mt-card[data-pk="p:p1"] .mt-allin');
-  ok((await txt('.mt-card[data-pk="p:p1"] .mt-allin')).includes("wirklich"), "Rückfrage");
-  await page.click('.mt-card[data-pk="p:p1"] .mt-allin');
+  // Sammel-Aktion 1: Alles Besorgte auf Baustelle
+  const bulkSite = '.mt-card[data-pk="p:p1"] [data-x="bulk"][data-to="baustelle"]';
+  ok((await txt(bulkSite)).includes("Alles Besorgte auf Baustelle"), "Knopf „Alles Besorgte auf Baustelle“");
+  ok(!(await page.$('.mt-card[data-pk="t:oma huber"] [data-x="bulk"]')), "Kein Sammel-Knopf bei nur einer Zeile");
+  await page.click(bulkSite);
+  ok((await txt(bulkSite)).includes("2 wirklich auf die Baustelle?"), "Rückfrage (auf die Baustelle)");
+  await page.click(bulkSite);
   await page.waitForTimeout(250);
   it = await items();
-  ok(it.filter((x) => x.placeId === "p1" && x.status === "verbaut").length === 4, "Alles Besorgte an Teststraße 15 ist verbaut");
-  ok(it.find((x) => x.id === wago).doneAt > 0, "doneAt gesetzt");
+  ok([wago, lus].every((id) => it.find((x) => x.id === id).status === "baustelle") && !it.find((x) => x.id === wago).doneAt, "Besorgtes an Teststraße 15 liegt jetzt auf der Baustelle");
+  ok(await secs("p:p1") === "brauche:1,baustelle:2", "Abschnitte danach: Zu besorgen 1, Auf der Baustelle 2");
+  // Wischen links: vor Ort → besorgt, Knopf „Vor Ort“ → wieder auf der Baustelle
+  const box2 = await page.locator(`.mt-line[data-id="${wago}"] .mt-l-main`).boundingBox();
+  await page.mouse.move(box2.x + 160, box2.y + box2.height / 2);
+  await page.mouse.down();
+  for (let i = 1; i <= 8; i++) await page.mouse.move(box2.x + 160 - i * 16, box2.y + box2.height / 2);
+  await page.mouse.up();
+  await page.waitForTimeout(250);
+  ok((await items()).find((x) => x.id === wago).status === "besorgt", "Wischen nach links: vor Ort → besorgt");
+  await page.click(`.mt-line[data-id="${wago}"] [data-a="next"]`);
+  await page.waitForTimeout(150);
+  ok((await items()).find((x) => x.id === wago).status === "baustelle", "Knopf „Vor Ort“ → auf der Baustelle");
+  // Teilen „Was liegt auf der Baustelle“
+  await page.click('.mt-card[data-pk="p:p1"] [data-x="share"]');
+  await page.waitForSelector(".mt-preview");
+  await page.click('.sheet [data-kind="baustelle"]');
+  ok((await txt(".mt-preview")) === `Material vor Ort Teststraße 15 (${TODAY_DE}):\n• 3× Lüsterklemme\n• 1× Wago 221-413`, "Teilen „Was liegt auf der Baustelle“");
+  ok(!(await page.isVisible("#mt-sh-day")), "Kein Tag-Feld bei „vor Ort“");
+  await shot("mt-share-site-390.png", false);
+  await closeSheet();
+  // Sammel-Aktion 2: Alles vor Ort als verbaut
+  const bulkDone = '.mt-card[data-pk="p:p1"] [data-x="bulk"][data-to="verbaut"]';
+  ok((await txt(bulkDone)).includes("Alles vor Ort als verbaut markieren"), "Knopf „Alles vor Ort als verbaut markieren“");
+  await page.click(bulkDone);
+  ok((await txt(bulkDone)).includes("2 wirklich als verbaut markieren?"), "Rückfrage (verbaut)");
+  await page.click(bulkDone);
+  await page.waitForTimeout(250);
+  it = await items();
+  ok(it.filter((x) => x.placeId === "p1" && x.status === "verbaut").length === 4, "Alles vor Ort an Teststraße 15 ist verbaut");
+  ok(it.find((x) => x.id === wago).doneAt > 0 && it.find((x) => x.id === wago).dayKey === TODAY, "doneAt gesetzt, Tag = heute");
+  ok(it.find((x) => x.id === kv.id).status === "baustelle", "Andere Baustelle unberührt");
 
   /* ---------- Verbaut ---------- */
   await tab("verbaut");
   ok((await txt(".mt-day h3")).includes(TODAY_DE), "Verbaut nach Tag");
   ok((await txt(".mt-day .mt-sub-h")).includes("Teststraße 15"), "… und Baustelle");
   await shot("mt-verbaut-390.png");
-  // zurück auf besorgt und wieder verbaut (Status-Fluss rückwärts)
+  // zurück auf die Baustelle und wieder verbaut (Status-Fluss rückwärts)
   await page.click(`.mt-line[data-id="${lus}"] [data-a="prev"]`);
   await page.waitForTimeout(150);
-  ok((await items()).find((x) => x.id === lus).status === "besorgt", "↩ zurück auf besorgt");
-  await tab("brauche");
+  ok((await items()).find((x) => x.id === lus).status === "baustelle", "↩ zurück auf die Baustelle");
+  await tab("offen");
   await page.click(`.mt-line[data-id="${lus}"] [data-a="next"]`);
   await page.waitForTimeout(150);
   ok((await items()).find((x) => x.id === lus).status === "verbaut", "Knopf „Verbaut“");
@@ -204,12 +262,17 @@ const TODAY_DE = TODAY.split("-").reverse().join(".");
   await page.waitForTimeout(150);
   const shared = await page.evaluate(() => window.__shared);
   ok(shared.length === 1 && shared[0].text === dayText, "navigator.share mit dem Text");
+  ok((await page.$$eval('.sheet [data-kind]', (b) => b.map((x) => x.textContent))).join("|") === "Was fehlt noch|Was liegt auf der Baustelle|Verbaut", "Teilen-Auswahl: Was fehlt noch · Was liegt auf der Baustelle · Verbaut");
   // Filter: brauche
-  await page.click('.sheet [data-mode="brauche"]');
-  ok((await txt(".mt-preview")) === `Materialliste (${TODAY_DE}):\n\nOma Huber:\n• 1× Rauchmelder\n\nTeststraße 15:\n• 1× Gira E2 Rahmen anthrazit`, "Filter „Brauche ich“ (alle Baustellen)");
+  await page.click('.sheet [data-kind="brauche"]');
+  ok((await txt(".mt-preview")) === `Materialliste (${TODAY_DE}):\n\nOma Huber:\n• 1× Rauchmelder\n\nTeststraße 15:\n• 1× Gira E2 Rahmen anthrazit`, "Filter „Was fehlt noch“ (alle Baustellen)");
   await page.selectOption("#mt-sh-place", "t:oma huber");
   ok((await txt(".mt-preview")) === `Materialliste Oma Huber (${TODAY_DE}):\n• 1× Rauchmelder`, "Filter Baustelle");
+  await page.click('.sheet [data-kind="baustelle"]');
+  ok((await txt(".mt-preview")) === `Material vor Ort Oma Huber (${TODAY_DE}):\n• 1× Kleinverteiler`, "Filter „Was liegt auf der Baustelle“ + Baustelle");
   await page.selectOption("#mt-sh-place", "");
+  await page.click('.sheet [data-kind="verbaut"]');
+  ok(await page.getAttribute('.sheet [data-mode="tag"]', "aria-pressed") === "true", "„Verbaut“ merkt sich Tag/Woche");
   await page.click('.sheet [data-mode="woche"]');
   ok((await txt(".mt-preview")).startsWith("Verbautes Material Teststraße 15 ("), "Filter „Woche“");
   // Kopieren-Fallback ohne navigator.share
@@ -232,8 +295,11 @@ const TODAY_DE = TODAY.split("-").reverse().join(".");
   /* ---------- Nach Baustelle ---------- */
   await tab("orte");
   const sumTxt = await txt(".mt-sum");
-  ok(sumTxt.includes("Teststraße 15") && sumTxt.includes("25 m") && sumTxt.includes("NYM-J 3×1,5") && sumTxt.includes("Oma Huber") && sumTxt.includes("1 zu besorgen"), "Zusammenfassung pro Baustelle");
+  ok(sumTxt.includes("Teststraße 15") && sumTxt.includes("25 m") && sumTxt.includes("NYM-J 3×1,5") && sumTxt.includes("Oma Huber") && sumTxt.includes("1 zu besorgen, 1 vor Ort") && sumTxt.includes("Auf der Baustelle"), "Zusammenfassung pro Baustelle (… 1 vor Ort)");
   await shot("mt-orte-390.png");
+  await page.emulateMedia({ colorScheme: "dark" });
+  await shot("mt-orte-390-dark.png");
+  await page.emulateMedia({ colorScheme: "light" });
 
   /* ---------- Katalog ---------- */
   await tab("katalog");
@@ -258,9 +324,9 @@ const TODAY_DE = TODAY.split("-").reverse().join(".");
   await closeSheet();
 
   /* ---------- Dunkel + PC ---------- */
-  await tab("brauche");
+  await tab("offen");
   await page.emulateMedia({ colorScheme: "dark" });
-  await shot("mt-brauche-390-dark.png");
+  await shot("mt-offen2-390-dark.png");
   await tab("verbaut");
   await shot("mt-verbaut-390-dark.png");
   await page.click(".mt-fab");
@@ -271,8 +337,8 @@ const TODAY_DE = TODAY.split("-").reverse().join(".");
   await tab("orte");
   await shot("mt-orte-1440-dark.png", false);
   await page.emulateMedia({ colorScheme: "light" });
-  await tab("brauche");
-  await shot("mt-brauche-1440.png", false);
+  await tab("offen");
+  await shot("mt-offen-1440.png", false);
   await tab("katalog");
   await shot("mt-katalog-1440.png", false);
   await page.setViewportSize({ width: 390, height: 844 });

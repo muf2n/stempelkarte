@@ -1,4 +1,4 @@
-// Alltag › Material (Update 9): Brauche ich · Verbaut · Nach Baustelle · Katalog.
+// Alltag › Material (Update 9): Offen (zu besorgen · besorgt · auf der Baustelle) · Verbaut · Nach Baustelle · Katalog.
 // Sammlungen (js/alltag/db.js): material_items (eine Zeile pro Material), material_catalog (eigene Einträge,
 // Favoriten, Zähler). Reine Logik in material-core.js (auch vom Claude-Server genutzt).
 // Außerdem exportiert: openQuickAdd (Schnell-Erfassen), mountTodayButton („Heute“), mountPlaceMaterial (Ort-Blatt).
@@ -14,7 +14,7 @@ import { download } from "../export.js";
 import { runningMeta, openViewer, camIcon } from "../views/gallery.js";
 
 const TABS = [
-  ["brauche", "Brauche ich", "list"],
+  ["offen", "Offen", "list"],
   ["verbaut", "Verbaut", "check"],
   ["orte", "Nach Baustelle", "building"],
   ["katalog", "Katalog", "search"],
@@ -82,8 +82,14 @@ export async function setStatus(id, status) {
   await items.patch(id, patch);
 }
 
-const NEXT = { brauche: "besorgt", besorgt: "verbaut" };
-const PREV = { besorgt: "brauche", verbaut: "besorgt" };
+const NEXT = M.NEXT_STATUS; // brauche → besorgt → baustelle → verbaut
+const PREV = M.PREV_STATUS;
+const OPEN_SECTIONS = [["brauche", "Zu besorgen"], ["besorgt", "Besorgt"], ["baustelle", "Auf der Baustelle"]];
+// Sammel-Aktionen im Reiter „Offen“ (pro Baustelle): [Knopftext, Rückfrage, Meldung]
+const BULK = {
+  baustelle: ["Alles Besorgte auf Baustelle", (n) => `${n} wirklich auf die Baustelle?`, (n) => `${n} auf der Baustelle.`],
+  verbaut: ["Alles vor Ort als verbaut markieren", (n) => `${n} wirklich als verbaut markieren?`, (n) => `${n} als verbaut markiert.`],
+};
 
 /* ---------- Schnell-Erfassen ---------- */
 
@@ -130,7 +136,7 @@ export function openQuickAdd(opts = {}) {
           `</div>` +
           `<div class="mt-units" role="group" aria-label="Einheit">${M.UNITS.map((u) => `<button type="button" class="mt-unit" data-unit="${u}" aria-pressed="${u === st.unit}">${u}</button>`).join("")}</div>` +
         `</div>` +
-        `<div class="mt-seg" role="group" aria-label="Status">${M.STATUSES.map((s) => `<button type="button" data-status="${s}" aria-pressed="${s === st.status}">${esc(M.STATUS_LABEL[s])}</button>`).join("")}</div>` +
+        `<div class="mt-seg" role="group" aria-label="Status">${M.STATUSES.map((s) => `<button type="button" class="seg-${s}" data-status="${s}" aria-pressed="${s === st.status}" title="${esc(M.STATUS_LABEL[s])}">${esc(M.STATUS_SHORT[s])}</button>`).join("")}</div>` +
         `<div class="fields">` +
           `<div class="row">` +
             `<label>Baustelle<select id="mt-place">${placeOpts}</select></label>` +
@@ -272,7 +278,7 @@ export function openQuickAdd(opts = {}) {
             drawSugg(); q.focus();
           } else {
             close();
-            ui.toast(edit ? "Gespeichert." : `${M.lineText(doc)} – ${M.STATUS_LABEL[doc.status].toLowerCase()}.`);
+            ui.toast(edit ? "Gespeichert." : `${M.lineText(doc)} · ${M.STATUS_LABEL[doc.status]}`);
           }
         } catch (e) {
           console.error(e);
@@ -322,14 +328,19 @@ export async function shareOrCopy(text, title = "Materialliste") {
 export function openShare(f = {}) {
   injectCSS();
   const { items } = cols();
-  const st = { mode: f.mode || "brauche", day: f.day || todayKey(), placeKey: f.placeKey || "" };
+  const mode0 = ["brauche", "baustelle", "tag", "woche"].includes(f.mode) ? f.mode : "brauche";
+  const st = { mode: mode0, vmode: mode0 === "tag" ? "tag" : "woche", day: f.day || todayKey(), placeKey: f.placeKey || "" };
+  const kind = () => (st.mode === "tag" || st.mode === "woche" ? "verbaut" : st.mode);
   const groups = M.byPlace(items.all(), places());
   ui.openSheet({
     title: "Liste teilen",
     bodyHTML:
       `<div class="mt-share">` +
-        `<div class="mt-seg" role="group" aria-label="Was teilen?">` +
-          [["brauche", "Brauche ich"], ["tag", "Verbaut · Tag"], ["woche", "Verbaut · Woche"]].map(([m, l]) => `<button type="button" data-mode="${m}" aria-pressed="${m === st.mode}">${l}</button>`).join("") +
+        `<div class="mt-seg mt-seg-share" role="group" aria-label="Was teilen?">` +
+          [["brauche", "Was fehlt noch"], ["baustelle", "Was liegt auf der Baustelle"], ["verbaut", "Verbaut"]].map(([m, l]) => `<button type="button" data-kind="${m}" aria-pressed="${m === kind()}">${l}</button>`).join("") +
+        `</div>` +
+        `<div class="mt-seg mt-seg-sm" role="group" aria-label="Zeitraum" data-s="vwrap">` +
+          [["tag", "Tag"], ["woche", "Woche"]].map(([m, l]) => `<button type="button" data-mode="${m}" aria-pressed="${m === st.mode}">${l}</button>`).join("") +
         `</div>` +
         `<div class="fields"><div class="row">` +
           `<label data-s="daywrap">Tag<input type="date" id="mt-sh-day" value="${esc(st.day)}"></label>` +
@@ -343,17 +354,22 @@ export function openShare(f = {}) {
       const $ = (s) => sheet.querySelector(s);
       let text = "";
       const draw = () => {
+        sheet.querySelectorAll("[data-kind]").forEach((b) => b.setAttribute("aria-pressed", String(b.dataset.kind === kind())));
         sheet.querySelectorAll("[data-mode]").forEach((b) => b.setAttribute("aria-pressed", String(b.dataset.mode === st.mode)));
-        $('[data-s="daywrap"]').hidden = st.mode === "brauche";
+        $('[data-s="vwrap"]').hidden = $('[data-s="daywrap"]').hidden = kind() !== "verbaut";
         const sel = M.shareSelection(items.all(), st, todayKey());
         text = M.shareText(sel, places());
         $('[data-s="prev"]').textContent = text || "Für diese Auswahl gibt es kein Material.";
         $('[data-s="share"]').disabled = $('[data-s="copy"]').disabled = !text;
       };
-      sheet.querySelector(".mt-seg").addEventListener("click", (ev) => { const b = ev.target.closest("[data-mode]"); if (b) { st.mode = b.dataset.mode; draw(); } });
+      sheet.querySelector(".mt-seg-share").addEventListener("click", (ev) => {
+        const b = ev.target.closest("[data-kind]");
+        if (b) { st.mode = b.dataset.kind === "verbaut" ? st.vmode : b.dataset.kind; draw(); }
+      });
+      $('[data-s="vwrap"]').addEventListener("click", (ev) => { const b = ev.target.closest("[data-mode]"); if (b) { st.mode = st.vmode = b.dataset.mode; draw(); } });
       $("#mt-sh-day").addEventListener("change", (ev) => { if (ev.target.value) { st.day = ev.target.value; draw(); } });
       $("#mt-sh-place").addEventListener("change", (ev) => { st.placeKey = ev.target.value; draw(); });
-      $('[data-s="share"]').addEventListener("click", () => shareOrCopy(text, st.mode === "brauche" ? "Materialliste" : "Verbautes Material"));
+      $('[data-s="share"]').addEventListener("click", () => shareOrCopy(text, st.mode === "brauche" ? "Materialliste" : st.mode === "baustelle" ? "Material vor Ort" : "Verbautes Material"));
       $('[data-s="copy"]').addEventListener("click", async () => { const ok = await copyText(text); ui.toast(ok ? "Liste kopiert." : "Kopieren hat nicht geklappt."); });
       draw();
     },
@@ -383,19 +399,22 @@ async function showPhoto(it) {
 function lineHTML(it, { stepper = false, showPlace = false } = {}) {
   const s = it.status;
   const sub = [showPlace ? M.placeLabel(it, places()) : "", it.note || ""].filter(Boolean).join(" · ");
+  const nx = NEXT[s] && s !== "brauche" ? NEXT[s] : null; // brauche → besorgt läuft über den Haken
   return `<li class="mt-line st-${esc(s)}" data-id="${esc(it.id)}">` +
     `<div class="mt-swipe-bg" aria-hidden="true"><span class="l">${PREV[s] ? "↩ " + esc(M.STATUS_LABEL[PREV[s]]) : ""}</span><span class="r">${NEXT[s] ? esc(M.STATUS_LABEL[NEXT[s]]) + " →" : ""}</span></div>` +
     `<div class="mt-line-in">` +
-      (s !== "verbaut"
+      (s === "brauche" || s === "besorgt"
         ? `<button type="button" class="mt-check" data-a="toggle" role="checkbox" aria-checked="${s === "besorgt"}" aria-label="${esc(it.name)} besorgt">${icon("check", 18)}</button>`
-        : `<span class="mt-done-ic" aria-hidden="true">${icon("check", 16)}</span>`) +
-      `<button type="button" class="mt-l-main" data-a="edit"><b>${s === "verbaut" || !stepper ? `<span class="mt-q">${esc(M.qtyText(it.qty, it.unit))}</span> ` : ""}${esc(it.name)}</b>${sub || it.photoId ? `<small>${esc(sub)}${it.photoId ? " 📷" : ""}</small>` : ""}</button>` +
+        : s === "baustelle"
+          ? `<span class="mt-site-ic" title="Auf der Baustelle" aria-hidden="true">${icon("pin", 16)}</span>`
+          : `<span class="mt-done-ic" aria-hidden="true">${icon("check", 16)}</span>`) +
+      `<button type="button" class="mt-l-main" data-a="edit"><b>${!(stepper && s === "brauche") ? `<span class="mt-q">${esc(M.qtyText(it.qty, it.unit))}</span> ` : ""}${esc(it.name)}</b>${sub || it.photoId ? `<small>${esc(sub)}${it.photoId ? " 📷" : ""}</small>` : ""}</button>` +
       (it.photoId ? `<button type="button" class="mt-ib" data-a="photo" aria-label="Foto ansehen">${camIcon(16)}</button>` : "") +
       (stepper && s === "brauche"
         ? `<span class="mt-step sm" role="group" aria-label="Menge ${esc(it.name)}"><button type="button" data-a="minus" aria-label="Weniger">−</button><span class="mt-step-v">${esc(M.qtyText(it.qty, it.unit))}</span><button type="button" data-a="plus" aria-label="Mehr">+</button></span>`
         : "") +
-      (s === "besorgt" ? `<button type="button" class="mt-go" data-a="next">Verbaut</button>` : "") +
-      (s === "verbaut" ? `<button type="button" class="mt-ib" data-a="prev" aria-label="Zurück auf besorgt">↩</button>` : "") +
+      (nx ? `<button type="button" class="mt-go go-${nx}" data-a="next" aria-label="${esc(it.name)}: ${esc(M.STATUS_LABEL[nx])}">${esc(M.STATUS_SHORT[nx])}</button>` : "") +
+      (s === "verbaut" ? `<button type="button" class="mt-ib" data-a="prev" aria-label="Zurück auf die Baustelle">↩</button>` : "") +
     `</div>` +
   `</li>`;
 }
@@ -456,8 +475,8 @@ function wireLines(host) {
     d.li.style.setProperty("--dx", "0px");
     const it = items.get(d.li.dataset.id);
     if (!it) return;
-    if (d.dx > 80 && NEXT[it.status]) { safe(setStatus(it.id, NEXT[it.status])); ui.toast(`${it.name}: ${M.STATUS_LABEL[NEXT[it.status]].toLowerCase()}`); }
-    else if (d.dx < -80 && PREV[it.status]) { safe(setStatus(it.id, PREV[it.status])); ui.toast(`${it.name}: zurück auf ${M.STATUS_LABEL[PREV[it.status]].toLowerCase()}`); }
+    if (d.dx > 80 && NEXT[it.status]) { safe(setStatus(it.id, NEXT[it.status])); ui.toast(`${it.name} → ${M.STATUS_LABEL[NEXT[it.status]]}`); }
+    else if (d.dx < -80 && PREV[it.status]) { safe(setStatus(it.id, PREV[it.status])); ui.toast(`${it.name} ↩ ${M.STATUS_LABEL[PREV[it.status]]}`); }
   };
   host.addEventListener("pointerup", end);
   host.addEventListener("pointercancel", end);
@@ -473,7 +492,7 @@ export function mount(el) {
   injectCSS();
   const { items, cat } = cols();
   const S = {
-    tab: TABS.some((t) => t[0] === lsGet(TAB_KEY)) ? lsGet(TAB_KEY) : "brauche",
+    tab: (() => { const t = lsGet(TAB_KEY) === "brauche" ? "offen" : lsGet(TAB_KEY); return TABS.some((x) => x[0] === t) ? t : "offen"; })(), // „brauche“ = alter Reitername
     q: "", favOnly: false,
     month: todayKey().slice(0, 7),
   };
@@ -499,26 +518,33 @@ export function mount(el) {
     return `<div class="empty mt-empty"><div class="mt-empty-emo">${emo}</div><h3>${h}</h3><p>${p}</p>${btn ? `<button type="button" class="btn primary sm" data-x="add">${btn}</button>` : ""}</div>`;
   }
 
-  function braucheHTML() {
-    const open = items.all().filter((x) => x.status !== "verbaut");
-    const nB = open.filter((x) => x.status === "brauche").length;
-    const nG = open.length - nB;
-    const head = `<div class="mt-bar"><p class="mt-bar-t"><b>${nB}</b> noch zu besorgen${nG ? ` · <b>${nG}</b> besorgt` : ""}</p>` +
-      (open.length ? `<button type="button" class="chip sm" data-x="share" data-mode="brauche">${icon("share", 16)} Teilen</button>` : "") + `</div>`;
-    if (!open.length) return emptyHTML("🛒", "Einkaufsliste ist leer", "Trag ein, was du für die Baustelle noch brauchst – abhaken, sobald du es hast.");
+  function offenHTML() {
+    const open = items.all().filter((x) => M.OPEN_STATUSES.includes(x.status));
+    const n = (st, list = open) => list.filter((x) => x.status === st).length;
+    const nB = n("brauche"), nG = n("besorgt"), nO = n("baustelle");
+    const head = `<div class="mt-bar"><p class="mt-bar-t"><b>${nB}</b> zu besorgen${nG ? ` · <b>${nG}</b> besorgt` : ""}${nO ? ` · <b>${nO}</b> vor Ort` : ""}</p>` +
+      (open.length ? `<button type="button" class="chip sm" data-x="share" data-mode="${nB || !nO ? "brauche" : "baustelle"}">${icon("share", 16)} Teilen</button>` : "") + `</div>`;
+    if (!open.length) return emptyHTML("🛒", "Nichts offen", "Trag ein, was du für die Baustelle noch brauchst – abhaken, sobald du es hast, „Vor Ort“, sobald es auf der Baustelle liegt.");
     const groups = M.byPlace(open, places());
+    const byName = (a, b) => String(a.name).localeCompare(String(b.name), "de", { numeric: true });
     return head + `<div class="mt-cards">` + groups.map((g) => {
-      const list = g.items.sort((a, b) => (a.status === "besorgt") - (b.status === "besorgt") || String(a.name).localeCompare(String(b.name), "de", { numeric: true }));
-      const got = list.filter((x) => x.status === "besorgt").length;
-      return `<section class="card mt-card" data-pk="${esc(g.key)}">` +
-        `<div class="mt-card-h"><h3>${icon("pin", 17)}<span>${esc(g.place)}</span></h3><span class="mt-n">${got}/${list.length}</span>` +
-          `<button type="button" class="mt-ib" data-x="share" data-mode="brauche" data-pk="${esc(g.key)}" aria-label="Liste ${esc(g.place)} teilen">${icon("share", 16)}</button>` +
-          `<button type="button" class="mt-ib" data-x="addat" data-pk="${esc(g.key)}" aria-label="Material für ${esc(g.place)} hinzufügen">${icon("plus", 16)}</button></div>` +
-        `<ul class="mt-lines">${list.map((it) => lineHTML(it, { stepper: true })).join("")}</ul>` +
-        (got ? `<button type="button" class="btn sm ghost mt-allin" data-x="allin" data-pk="${esc(g.key)}">${icon("check", 16)}<span>Alles Besorgte als verbaut markieren</span></button>` : "") +
+      const pk = esc(g.key);
+      return `<section class="card mt-card" data-pk="${pk}">` +
+        `<div class="mt-card-h"><h3>${icon("pin", 17)}<span>${esc(g.place)}</span></h3><span class="mt-n">${g.items.length}</span>` +
+          `<button type="button" class="mt-ib" data-x="share" data-mode="${n("brauche", g.items) || !n("baustelle", g.items) ? "brauche" : "baustelle"}" data-pk="${pk}" aria-label="Liste ${esc(g.place)} teilen">${icon("share", 16)}</button>` +
+          `<button type="button" class="mt-ib" data-x="addat" data-pk="${pk}" aria-label="Material für ${esc(g.place)} hinzufügen">${icon("plus", 16)}</button></div>` +
+        OPEN_SECTIONS.map(([st, label]) => {
+          const list = g.items.filter((x) => x.status === st).sort(byName);
+          if (!list.length) return "";
+          const to = NEXT[st];
+          const bulk = BULK[to] && list.length >= 2
+            ? `<button type="button" class="btn sm ghost mt-allin to-${to}" data-x="bulk" data-from="${st}" data-to="${to}" data-pk="${pk}">${icon(to === "verbaut" ? "check" : "pin", 16)}<span>${esc(BULK[to][0])}</span></button>` : "";
+          return `<div class="mt-sub mt-sec sec-${st}" data-sec="${st}"><div class="mt-sub-h"><span class="mt-dot" aria-hidden="true"></span><span>${esc(label)}</span><span class="mt-sec-n">${list.length}</span></div>` +
+            `<ul class="mt-lines">${list.map((it) => lineHTML(it, { stepper: true })).join("")}</ul>${bulk}</div>`;
+        }).join("") +
       `</section>`;
     }).join("") + `</div>` +
-    `<p class="note mt-tip">Tipp: Zeile nach rechts wischen = nächster Schritt (besorgt → verbaut), nach links = zurück.</p>`;
+    `<p class="note mt-tip">Tipp: Zeile nach rechts wischen = nächster Schritt (besorgt → vor Ort → verbaut), nach links = zurück.</p>`;
   }
 
   function verbautHTML() {
@@ -552,9 +578,10 @@ export function mount(el) {
       `<section class="card mt-card">` +
         `<div class="mt-card-h"><h3>${icon("building", 17)}<span>${esc(g.place)}</span></h3>` +
           `<button type="button" class="mt-ib" data-x="share" data-mode="woche" data-pk="${esc(g.key)}" aria-label="Teilen">${icon("share", 16)}</button></div>` +
-        `<p class="note">${g.last ? `zuletzt ${esc(M.fmtKeyDate(g.last))}` : ""}${g.brauche || g.besorgt ? ` · <span class="mt-open">${g.brauche ? `${g.brauche} zu besorgen` : ""}${g.brauche && g.besorgt ? ", " : ""}${g.besorgt ? `${g.besorgt} besorgt` : ""}</span>` : ""}</p>` +
+        `<p class="note">${[g.last ? `zuletzt ${esc(M.fmtKeyDate(g.last))}` : "", M.openCountText(g) ? `<span class="mt-open">${esc(M.openCountText(g))}</span>` : ""].filter(Boolean).join(" · ")}</p>` +
         (g.verbaut.length ? `<h4 class="mt-h4">Verbaut gesamt</h4>${totalsHTML(g.verbaut)}` : `<p class="note">Noch nichts verbaut.</p>`) +
-        (g.offen.length ? `<h4 class="mt-h4">Offen</h4>${totalsHTML(g.offen, "open")}` : "") +
+        (g.vorOrt.length ? `<h4 class="mt-h4 site">Auf der Baustelle</h4>${totalsHTML(g.vorOrt, "site")}` : "") +
+        (g.brauche || g.besorgt ? `<h4 class="mt-h4">Noch offen</h4>${totalsHTML(M.totals(all.filter((x) => M.placeKey(x) === g.key && (x.status === "brauche" || x.status === "besorgt"))), "open")}` : "") +
       `</section>`).join("") + `</div>`;
   }
 
@@ -592,7 +619,7 @@ export function mount(el) {
     const a = document.activeElement;
     const keep = a && page.contains(a) && a.id ? { id: a.id, s: a.selectionStart, e: a.selectionEnd } : null;
     page.dataset.tab = S.tab;
-    page.innerHTML = S.tab === "verbaut" ? verbautHTML() : S.tab === "orte" ? orteHTML() : S.tab === "katalog" ? katalogHTML() : braucheHTML();
+    page.innerHTML = S.tab === "verbaut" ? verbautHTML() : S.tab === "orte" ? orteHTML() : S.tab === "katalog" ? katalogHTML() : offenHTML();
     if (keep) {
       const n = page.querySelector("#" + CSS.escape(keep.id));
       if (n) { n.focus({ preventScroll: true }); try { n.setSelectionRange(keep.s, keep.e); } catch { /* egal */ } }
@@ -647,14 +674,18 @@ export function mount(el) {
       else if (x === "csv") exportMonthCSV(S.month);
       else if (x === "favonly") { S.favOnly = !S.favOnly; render(); }
       else if (x === "own") openOwnForm(S.q.trim());
-      else if (x === "allin") {
-        const list = items.all().filter((it) => it.status === "besorgt" && M.placeKey(it) === b.dataset.pk);
+      else if (x === "bulk") {
+        const { from, to, pk } = b.dataset;
+        const L = BULK[to];
+        if (!L) return;
+        const list = items.all().filter((it) => it.status === from && M.placeKey(it) === pk);
         if (b.dataset.armed) {
-          Promise.all(list.map((it) => setStatus(it.id, "verbaut"))).then(() => ui.toast(`${list.length} als verbaut markiert.`)).catch(() => ui.toast("Speichern fehlgeschlagen."));
+          delete b.dataset.armed;
+          Promise.all(list.map((it) => setStatus(it.id, to))).then(() => ui.toast(L[2](list.length))).catch(() => ui.toast("Speichern fehlgeschlagen."));
         } else {
           b.dataset.armed = "1";
-          b.querySelector("span").textContent = `${list.length} wirklich als verbaut markieren?`;
-          setTimeout(() => { if (b.isConnected) { delete b.dataset.armed; b.querySelector("span").textContent = "Alles Besorgte als verbaut markieren"; } }, 4000);
+          b.querySelector("span").textContent = L[1](list.length);
+          setTimeout(() => { if (b.isConnected) { delete b.dataset.armed; b.querySelector("span").textContent = L[0]; } }, 4000);
         }
       }
       return;
@@ -726,7 +757,8 @@ export function mountPlaceMaterial(host, place) {
         `<button type="button" class="btn sm ghost" data-p="add">${icon("plus", 16)}<span>Material</span></button></div>` +
       (!sum ? `<p class="note">Noch kein Material für diesen Ort. In „Heute“ während der Arbeit auf „🧰 Material“ tippen.</p>`
         : (sum.verbaut.length ? `<p class="mt-place-s">Verbaut gesamt</p>${totalsHTML(sum.verbaut)}` : `<p class="note">Noch nichts verbaut.</p>`) +
-          (sum.brauche || sum.besorgt ? `<p class="note mt-open">Offen: ${sum.brauche ? `${sum.brauche} zu besorgen` : ""}${sum.brauche && sum.besorgt ? ", " : ""}${sum.besorgt ? `${sum.besorgt} besorgt` : ""} – ${sum.offen.map(M.lineText).join(", ")}</p>` : ""));
+          (sum.vorOrt.length ? `<p class="mt-place-s site">Auf der Baustelle</p>${totalsHTML(sum.vorOrt, "site")}` : "") +
+          (sum.brauche || sum.besorgt ? `<p class="note mt-open">Offen: ${esc(M.openCountText({ ...sum, baustelle: 0 }))} – ${esc(M.totals(mine.filter((x) => x.status === "brauche" || x.status === "besorgt")).map(M.lineText).join(", "))}</p>` : ""));
   };
   host.addEventListener("click", (ev) => {
     const b = ev.target.closest("[data-p]");
@@ -735,6 +767,7 @@ export function mountPlaceMaterial(host, place) {
     else {
       const mine = items.all().filter((x) => x.placeId === place.id);
       const text = M.shareText({ items: mine.filter((x) => x.status === "verbaut"), title: "Verbautes Material", when: `Stand ${M.fmtKeyDate(todayKey())}` }, places())
+        || M.shareText(M.shareSelection(mine, { mode: "baustelle" }, todayKey()), places())
         || M.shareText(M.shareSelection(mine, { mode: "brauche" }, todayKey()), places());
       shareOrCopy(text, "Material " + (place.name || ""));
     }

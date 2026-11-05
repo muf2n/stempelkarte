@@ -1216,13 +1216,21 @@ tool({
 
 /* ===== Material (Alltag › Material) ===== */
 
-const MAT_STATUS = { brauche: "brauche", brauch: "brauche", kaufen: "brauche", besorgen: "brauche", offen: "brauche", besorgt: "besorgt", gekauft: "besorgt", verbaut: "verbaut", eingebaut: "verbaut", montiert: "verbaut" };
+// Schlüssel ohne Leerzeichen (norm → „auf der Baustelle“ = „aufderbaustelle“).
+const MAT_STATUS = {
+  brauche: "brauche", brauch: "brauche", kaufen: "brauche", besorgen: "brauche", offen: "brauche", fehlt: "brauche",
+  besorgt: "besorgt", gekauft: "besorgt", geholt: "besorgt",
+  baustelle: "baustelle", vorort: "baustelle", aufderbaustelle: "baustelle", aufbaustelle: "baustelle", geliefert: "baustelle", liegtbereit: "baustelle", bereit: "baustelle", liegtvorort: "baustelle",
+  verbaut: "verbaut", eingebaut: "verbaut", montiert: "verbaut",
+};
+const MAT_STATUS_HELP = "„brauche“, „besorgt“, „baustelle“ (vor Ort/geliefert) oder „verbaut“";
 function matStatus(v, fallback) {
   const k = norm(v).replace(/ /g, "");
   if (!k) return fallback;
   if (MAT_STATUS[k]) return MAT_STATUS[k];
-  throw new UserError(`Status „${s(v)}“ gibt es nicht – bitte „brauche“, „besorgt“ oder „verbaut“.`);
+  throw new UserError(`Status „${s(v)}“ gibt es nicht – bitte ${MAT_STATUS_HELP}.`);
 }
+const MAT_DONE = { brauche: "Auf die Einkaufsliste gesetzt", besorgt: "Als besorgt eingetragen", baustelle: "Als „auf der Baustelle“ eingetragen (vor Ort, noch nicht verbaut)", verbaut: "Als verbaut eingetragen" };
 function matUnit(v) {
   const t = s(v).toLowerCase().replace(/\.$/, "");
   if (!t) return null;
@@ -1234,14 +1242,14 @@ function matUnit(v) {
 tool({
   name: "material_anlegen",
   title: "Material eintragen",
-  description: "Trägt Material im Bereich „Material“ ein – entweder auf die Einkaufsliste (status \"brauche\", Standard) oder als heute verbaut (status \"verbaut\"). Der Name wird mit dem Elektriker-Katalog abgeglichen (z. B. \"3x1,5\" → NYM-J 3×1,5, \"Schuko\" → Schuko-Steckdose), die Einheit kommt dann aus dem Katalog. Ohne Ort: eingestempelt → aktueller Arbeitsort.",
+  description: "Trägt Material im Bereich „Material“ ein – auf die Einkaufsliste (status \"brauche\", Standard), als besorgt (\"besorgt\"), als schon auf der Baustelle (\"baustelle\": geliefert bzw. liegt vor Ort, noch nicht eingebaut; auch \"vor ort\", \"geliefert\", \"liegt bereit\") oder als heute verbaut (\"verbaut\"). Der Name wird mit dem Elektriker-Katalog abgeglichen (z. B. \"3x1,5\" → NYM-J 3×1,5, \"Schuko\" → Schuko-Steckdose), die Einheit kommt dann aus dem Katalog. Ohne Ort: eingestempelt → aktueller Arbeitsort.",
   inputSchema: {
     type: "object",
     properties: {
       name: { type: "string", description: "Material, z. B. \"NYM 3x1,5\", \"Wago 221-413\", \"Schuko-Steckdose\"" },
       menge: { type: ["number", "string"], description: "Menge, Standard 1" },
       einheit: { type: "string", description: "Stk, m, Pkg, Rolle, kg, l, Satz (Standard aus dem Katalog)" },
-      status: { type: "string", enum: ["brauche", "verbaut"], description: "Standard brauche (Einkaufsliste)" },
+      status: { type: "string", description: "brauche (Standard, Einkaufsliste) · besorgt · baustelle (auf der Baustelle/vor Ort/geliefert, noch nicht verbaut) · verbaut" },
       ort: { type: "string", description: "Baustelle/Ort, z. B. \"Huber\" (gespeicherte Orte werden unscharf gefunden)" },
       notiz: { type: "string" },
     },
@@ -1279,18 +1287,18 @@ tool({
     }
     await d.commit(writes);
     const hint = m && MAT.norm(m.item.name) !== MAT.norm(raw) ? ` (Katalog: „${m.item.name}“ zu „${raw}“)` : m ? "" : " (nicht im Katalog – als eigener Name übernommen)";
-    return `${status === "verbaut" ? "Als verbaut eingetragen" : "Auf die Einkaufsliste gesetzt"}: ${MAT.lineText(doc)}${hint}${doc.place ? ` · Baustelle: ${doc.place}${where.info}` : " · ohne Baustelle"} · ${fmtKey(today)}.`;
+    return `${MAT_DONE[status]}: ${MAT.lineText(doc)}${hint}${doc.place ? ` · Baustelle: ${doc.place}${where.info}` : " · ohne Baustelle"} · ${fmtKey(today)}.`;
   },
 });
 
 tool({
   name: "material_lesen",
   title: "Material lesen",
-  description: "Zeigt Material aus dem Bereich „Material“: Einkaufsliste (brauche/besorgt) und verbautes Material, gruppiert nach Baustelle mit Summen pro Material. Filter: status (brauche, besorgt, verbaut, offen = brauche+besorgt), ort, Zeitraum von/bis (für verbaut).",
+  description: "Zeigt Material aus dem Bereich „Material“: Einkaufsliste (brauche/besorgt), was schon auf der Baustelle liegt (baustelle, noch nicht verbaut) und verbautes Material, gruppiert nach Baustelle mit Summen pro Material. Filter: status (brauche, besorgt, baustelle bzw. \"vor ort\", verbaut, offen = brauche+besorgt+baustelle, alle), ort, Zeitraum von/bis (für verbaut).",
   inputSchema: {
     type: "object",
     properties: {
-      status: { type: "string", enum: ["brauche", "besorgt", "verbaut", "offen", "alle"], description: "Standard: offen + verbaut der letzten 30 Tage" },
+      status: { type: "string", description: "brauche, besorgt, baustelle (vor Ort), verbaut, offen (= brauche+besorgt+baustelle) oder alle. Standard: offen + verbaut der letzten 30 Tage" },
       ort: { type: "string" },
       von: { type: "string", description: "Datum TT.MM.JJJJ / heute / gestern" },
       bis: { type: "string" },
@@ -1302,7 +1310,8 @@ tool({
     const today = dayKey(d.now);
     const [all, places] = await Promise.all([d.alltag("material_items"), d.places()]);
     const items = all.filter((x) => x && s(x.name));
-    const stv = s(args.status).toLowerCase();
+    const raw = norm(args.status).replace(/ /g, "");
+    const stv = raw === "offen" || raw === "alle" ? raw : matStatus(args.status, "");
     const from = dateArg(args.von, today, "von"), to = dateArg(args.bis, today, "bis");
     if (from && to && from > to) throw new UserError("„von“ liegt nach „bis“.");
     let list = items;
@@ -1316,7 +1325,8 @@ tool({
     const verbaut = list.filter((x) => x.status === "verbaut" && (from || to ? inRange(x) : (!lo || x.dayKey >= lo)));
     const brauche = list.filter((x) => x.status === "brauche");
     const besorgt = list.filter((x) => x.status === "besorgt");
-    const want = (k) => !stv || stv === "alle" || stv === k || (stv === "offen" && (k === "brauche" || k === "besorgt"));
+    const vorOrt = list.filter((x) => x.status === "baustelle");
+    const want = (k) => !stv || stv === "alle" || stv === k || (stv === "offen" && MAT.OPEN_STATUSES.includes(k));
     const out = [];
     const section = (title, arr) => {
       if (!arr.length) return;
@@ -1324,7 +1334,8 @@ tool({
       for (const g of MAT.byPlace(arr, places)) out.push(`- ${g.place}: ${MAT.totals(g.items).map(MAT.lineText).join(", ")}`);
     };
     if (want("brauche")) section(`Noch zu besorgen (${brauche.length})`, brauche);
-    if (want("besorgt")) section(`Besorgt, noch nicht verbaut (${besorgt.length})`, besorgt);
+    if (want("besorgt")) section(`Besorgt, noch nicht auf der Baustelle (${besorgt.length})`, besorgt);
+    if (want("baustelle")) section(`Auf der Baustelle, noch nicht verbaut (${vorOrt.length})`, vorOrt);
     if (want("verbaut")) {
       const range = from || to ? `${from ? fmtKey(from) : "Anfang"} – ${to ? fmtKey(to) : "heute"}` : lo ? `seit ${fmtKey(lo)}` : "gesamt";
       if (verbaut.length) {

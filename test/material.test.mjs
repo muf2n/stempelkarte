@@ -133,3 +133,50 @@ test("normItem: Standardwerte und Status", () => {
     { name: "Taster", qty: 1, unit: "Stk", status: "brauche", dayKey: "2026-11-05", doneAt: null, placeId: null, photoId: null });
   assert.equal(M.normItem({ name: "a", status: "verbaut" }, now).doneAt, now);
 });
+
+test("Status „Auf der Baustelle“: Ablauf, Labels, normItem", () => {
+  assert.deepEqual(M.STATUSES, ["brauche", "besorgt", "baustelle", "verbaut"]);
+  assert.equal(M.STATUS_LABEL.baustelle, "Auf der Baustelle");
+  assert.equal(M.STATUS_SHORT.baustelle, "Vor Ort");
+  // Kette vorwärts und rückwärts
+  const fwd = []; for (let s = "brauche"; s; s = M.NEXT_STATUS[s]) fwd.push(s);
+  assert.deepEqual(fwd, ["brauche", "besorgt", "baustelle", "verbaut"]);
+  const back = []; for (let s = "verbaut"; s; s = M.PREV_STATUS[s]) back.push(s);
+  assert.deepEqual(back, ["verbaut", "baustelle", "besorgt", "brauche"]);
+  const now = new Date(2026, 10, 5, 10).getTime();
+  const x = M.normItem({ name: "Kleinverteiler", status: "baustelle" }, now);
+  assert.equal(x.status, "baustelle");
+  assert.equal(x.doneAt, null);
+});
+
+test("Status „Auf der Baustelle“: Zusammenfassung, Teilen, alte Daten", () => {
+  const today = "2026-11-05";
+  const J = [...I,
+    { id: "k", name: "Kleinverteiler", qty: 1, unit: "Stk", status: "baustelle", placeId: "p1", dayKey: "2026-11-04" },
+    { id: "l", name: "NYM-J 5×2,5", qty: 50, unit: "m", status: "baustelle", placeId: "p1", dayKey: "2026-11-03" },
+    { id: "m", name: "Isolierband", qty: 2, unit: "Rolle", status: "baustelle", placeId: null, place: "Oma Huber", dayKey: "2026-11-04" },
+  ];
+  const sum = M.summarize(J, PLACES);
+  const ts = sum.find((g) => g.place === "Teststraße 15");
+  assert.equal(ts.baustelle, 2);
+  assert.deepEqual(ts.vorOrt.map(M.lineText), ["1× Kleinverteiler", "50 m NYM-J 5×2,5"]);
+  assert.equal(M.openCountText(ts), "1 zu besorgen, 2 vor Ort");
+  assert.equal(M.openCountText(sum.find((g) => g.place === "Oma Huber")), "1 besorgt, 1 vor Ort");
+  assert.equal(M.openCountText(sum.find((g) => g.place === "Firma")), "");
+  // vor Ort ist nicht verbaut (Berichtsheft/CSV unverändert)
+  assert.equal(M.shortLine(M.verbautOn(J, today)), "25 m NYM-J 3×1,5, 2× Schuko-Steckdose");
+  assert.equal(M.monthCSV(J, "2026-11", PLACES).trim().split("\r\n").length, 1 + 4);
+  // Teilen: „Was liegt auf der Baustelle“
+  let sel = M.shareSelection(J, { mode: "baustelle" }, today);
+  assert.equal(M.shareText(sel, PLACES), "Material vor Ort (05.11.2026):\n\nOma Huber:\n• 2 Rollen Isolierband\n\nTeststraße 15:\n• 1× Kleinverteiler\n• 50 m NYM-J 5×2,5");
+  sel = M.shareSelection(J, { mode: "baustelle", placeKey: "p:p1" }, today);
+  assert.equal(M.shareText(sel, PLACES), "Material vor Ort Teststraße 15 (05.11.2026):\n• 1× Kleinverteiler\n• 50 m NYM-J 5×2,5");
+  // „Was fehlt noch“ zeigt nur brauche
+  assert.equal(M.shareText(M.shareSelection(J, { mode: "brauche", placeKey: "p:p1" }, today), PLACES), "Materialliste Teststraße 15 (05.11.2026):\n• 1 Pkg Wago 221-413");
+  // alte Daten (nur drei Status) bleiben wie gehabt
+  const old = M.summarize(I, PLACES).find((g) => g.place === "Teststraße 15");
+  assert.equal(old.baustelle, 0);
+  assert.deepEqual(old.vorOrt, []);
+  assert.equal(M.openCountText(old), "1 zu besorgen");
+  assert.equal(M.shareText(M.shareSelection(I, { mode: "baustelle" }, today), PLACES), "");
+});

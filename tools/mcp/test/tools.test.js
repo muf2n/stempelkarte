@@ -382,6 +382,39 @@ test("Material: anlegen (Katalog + Ort unscharf, eingestempelt → aktueller Ort
   assert.match(r.text, /nichts eingetragen/);
 });
 
+test("Material: Status „baustelle“ (vor Ort) mit Synonymen anlegen und lesen", async () => {
+  const t = await seeded();
+  let r = await t.tool("material_anlegen", { name: "Kleinverteiler", status: "baustelle", ort: "Firma" });
+  assert.match(r.text, /^Als „auf der Baustelle“ eingetragen \(vor Ort, noch nicht verbaut\): 1× Kleinverteiler · Baustelle: Firma Elektro Maier/);
+  for (const [name, status] of [["nym 5x2,5", "vor Ort"], ["Schuko", "auf der Baustelle"], ["Wago 413", "geliefert"], ["Rauchmelder", "liegt bereit"], ["Dübel 6", "Vor-Ort"]]) {
+    r = await t.tool("material_anlegen", { name, status, ort: "Firma" });
+    assert.ok(!r.isError, `${status}: ${r.text}`);
+    assert.match(r.text, /auf der Baustelle/);
+  }
+  r = await t.tool("material_anlegen", { name: "Taster", status: "besorgt", ort: "Firma" });
+  assert.match(r.text, /^Als besorgt eingetragen: 1× Taster/);
+  r = await t.tool("material_anlegen", { name: "Taster", status: "irgendwo" });
+  assert.ok(r.isError);
+  assert.match(r.text, /„baustelle“/);
+  const items = t.g.list(`${t.base}/a_material_items`);
+  assert.equal(items.filter((x) => x.status === "baustelle").length, 6);
+  assert.ok(items.every((x) => x.doneAt == null));
+  r = await t.tool("material_lesen", { status: "vor ort" });
+  assert.match(r.text, /^Auf der Baustelle, noch nicht verbaut \(6\):\n- Firma Elektro Maier: /);
+  assert.match(r.text, /1× Kleinverteiler/);
+  assert.doesNotMatch(r.text, /Taster|Noch zu besorgen|Verbaut/);
+  r = await t.tool("material_lesen", { status: "offen" });
+  assert.match(r.text, /Besorgt, noch nicht auf der Baustelle \(1\):\n- Firma Elektro Maier: 1× Taster/);
+  assert.match(r.text, /Auf der Baustelle, noch nicht verbaut \(6\)/);
+  r = await t.tool("material_lesen", { status: "baustelle", ort: "huber" });
+  assert.match(r.text, /kein Material/);
+  r = await t.tool("material_lesen", { status: "quatsch" });
+  assert.ok(r.isError);
+  const def = (await t.rpc("tools/list")).result.tools.find((x) => x.name === "material_anlegen");
+  assert.match(def.description, /baustelle/);
+  assert.equal(def.inputSchema.properties.status.enum, undefined); // Synonyme wie „vor ort“ dürfen nicht an einer enum-Prüfung scheitern
+});
+
 test("Formatierung: Euro, Datum, Zeiten", () => {
   assert.equal(T.eur(1234.56), "1.234,56 €");
   assert.equal(T.eur(-5), "−5,00 €");

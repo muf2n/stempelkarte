@@ -2,13 +2,19 @@
 // Katalog (österreichische Elektriker-Begriffe), unscharfe Suche (umlaut-/schreibweisen-tolerant, „3x1,5“ findet
 // „NYM-J 3×1,5“), Mengen-Text, Zusammenfassung pro Baustelle, Teilen-Text, CSV.
 //
-// material_items: { id, name, qty, unit, status ("brauche"|"besorgt"|"verbaut"), placeId|null, place, dayKey,
+// material_items: { id, name, qty, unit, status ("brauche"|"besorgt"|"baustelle"|"verbaut"), placeId|null, place, dayKey,
 //                   entryId|null, note, photoId|null, catalogId|null, created, updated, doneAt }
 // material_catalog: { id ("b_<katalog-id>" für eingebaute, sonst frei), name, unit, group, own, fav, count, lastUsed }
 
 export const UNITS = ["Stk", "m", "Pkg", "Rolle", "kg", "l", "Satz"];
-export const STATUSES = ["brauche", "besorgt", "verbaut"];
-export const STATUS_LABEL = { brauche: "Brauche ich", besorgt: "Besorgt", verbaut: "Verbaut" };
+// Ablauf: brauche → besorgt → baustelle (geliefert/liegt vor Ort, noch nicht eingebaut) → verbaut.
+// Ältere Daten kennen nur drei Status – die bleiben gültig.
+export const STATUSES = ["brauche", "besorgt", "baustelle", "verbaut"];
+export const OPEN_STATUSES = ["brauche", "besorgt", "baustelle"];
+export const STATUS_LABEL = { brauche: "Brauche ich", besorgt: "Besorgt", baustelle: "Auf der Baustelle", verbaut: "Verbaut" };
+export const STATUS_SHORT = { brauche: "Brauche", besorgt: "Besorgt", baustelle: "Vor Ort", verbaut: "Verbaut" };
+export const NEXT_STATUS = { brauche: "besorgt", besorgt: "baustelle", baustelle: "verbaut" };
+export const PREV_STATUS = { besorgt: "brauche", baustelle: "besorgt", verbaut: "baustelle" };
 export const OWN_GROUP = "Eigene";
 
 /* ---------- Katalog ---------- */
@@ -300,16 +306,24 @@ export function byPlace(items, places) {
   return [...m.values()].sort((a, b) => (a.key === "-") - (b.key === "-") || a.place.localeCompare(b.place, "de"));
 }
 
-/** Zusammenfassung pro Baustelle: [{ key, place, placeId, verbaut:[totals], offen:[totals], besorgt:n, brauche:n, last }] */
+/** Zusammenfassung pro Baustelle: [{ key, place, placeId, verbaut:[totals], offen:[totals], vorOrt:[totals], brauche:n, besorgt:n, baustelle:n, last }] */
 export function summarize(items, places) {
   return byPlace(items, places).map((g) => ({
     key: g.key, place: g.place, placeId: g.placeId,
     verbaut: totals(g.items.filter((x) => x.status === "verbaut")),
     offen: totals(g.items.filter((x) => x.status !== "verbaut")),
+    vorOrt: totals(g.items.filter((x) => x.status === "baustelle")),
     brauche: g.items.filter((x) => x.status === "brauche").length,
     besorgt: g.items.filter((x) => x.status === "besorgt").length,
+    baustelle: g.items.filter((x) => x.status === "baustelle").length,
     last: g.items.reduce((mx, x) => (String(x.dayKey || "") > mx ? String(x.dayKey) : mx), ""),
   }));
+}
+
+/** „2 zu besorgen, 1 besorgt, 3 vor Ort“ aus einer Zusammenfassung (oder ""). */
+export function openCountText(g) {
+  if (!g) return "";
+  return [g.brauche ? `${g.brauche} zu besorgen` : "", g.besorgt ? `${g.besorgt} besorgt` : "", g.baustelle ? `${g.baustelle} vor Ort` : ""].filter(Boolean).join(", ");
 }
 
 /** Kurze Zeile „2× Schuko-Steckdose, 25 m NYM-J 3×1,5“ (Berichtsheft). */
@@ -325,7 +339,8 @@ export function verbautOn(items, dayKey) {
 }
 
 /**
- * Auswahl fürs Teilen. f = { mode: "brauche"|"tag"|"woche", day: dayKey, placeKey?: "…"|"" }
+ * Auswahl fürs Teilen. f = { mode: "brauche"|"baustelle"|"tag"|"woche", day: dayKey, placeKey?: "…"|"" }
+ * brauche = „Was fehlt noch“, baustelle = „Was liegt auf der Baustelle“, tag/woche = verbaut.
  * → { items, title, when }
  */
 export function shareSelection(items, f, today) {
@@ -339,6 +354,9 @@ export function shareSelection(items, f, today) {
     const r = weekRange(day);
     list = (items || []).filter((x) => x.status === "verbaut" && x.dayKey >= r.from && x.dayKey <= r.to);
     when = `${fmtKeyDate(r.from).slice(0, 6)}–${fmtKeyDate(r.to)}`; title = "Verbautes Material";
+  } else if (mode === "baustelle") {
+    list = (items || []).filter((x) => x.status === "baustelle");
+    when = fmtKeyDate(today); title = "Material vor Ort";
   } else {
     list = (items || []).filter((x) => x.status === "brauche");
     when = fmtKeyDate(today); title = "Materialliste";
