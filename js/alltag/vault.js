@@ -11,6 +11,9 @@ import { esc } from "../util.js";
 import * as ui from "../ui.js";
 import * as store from "../store.js";
 import { download } from "../export.js";
+import { createDocs } from "./vault-docs.js";            // Update 9 – Dokumente
+import * as F from "./vault-files.js";
+import { usedBytes, fmtSize, FREE_TIER } from "./vault-docs-core.js";
 
 const META_ID = "main";
 const FAIL_KEY = "sk-tresor-fails";
@@ -135,6 +138,18 @@ export function mount(el, ctx) {
 
   el.innerHTML = `<div class="tr"></div>`;
   const root = el.querySelector(".tr");
+  // Update 9 – Dokumente: eigenes Modul, bekommt nur Zugriff über diese Schnittstelle
+  const docs = createDocs({
+    getKey: () => S.key,
+    getEntry: (id) => S.cache.get(id) || null,
+    entries: () => entries(),
+    saveEntry: (id, data, prev) => saveEntry(id, data, prev),
+    removeEntry: async (id) => { S.cache.delete(id); renderBody(); await settle(colItems.remove(id), 800); },
+    sheet: (opts) => sheet(opts),
+    track: (o) => sheets.add(o),
+    untrack: (o) => sheets.delete(o),
+    settle, renderBody: () => renderBody(), copySecret, showErr: (e, m) => showErr(e, m), newId,
+  });
 
   /* ---------- Sperren ---------- */
 
@@ -147,8 +162,9 @@ export function mount(el, ctx) {
     S.filter = "all";
     syncToken++;
     stopIdle();
-    for (const s of sheets) { try { s.close(); } catch { /* egal */ } }
+    for (const s of [...sheets]) { try { s.close(); } catch { /* egal */ } }
     sheets.clear();
+    docs.reset(); // entschlüsselte Vorschaubilder/Dateien (Object-URLs) verwerfen
     if (was) clearClipboard();
     S.lockReason = reason;
     if (alive) render();
@@ -330,6 +346,7 @@ export function mount(el, ctx) {
         const { meta, key } = await V.createVault(pw.value, { iter: (testHook() && testHook().iter) || V.ITER });
         // Reste ohne Schlüssel (z. B. abgebrochener Import) wären nie mehr lesbar
         for (const r of colItems.all()) await settle(colItems.remove(r.id), 800);
+        await settle(F.wipeAll().catch((e) => console.warn("Tresor-Dateien löschen:", e)), 3000);
         await putMeta(meta);
         pw.value = pw2.value = "";
         S.key = key;
@@ -441,12 +458,13 @@ export function mount(el, ctx) {
       bodyHTML:
         `<div class="tr-warn danger">${icon("lock", 22)}<p>Das Master-Passwort kann <b>niemand</b> wiederherstellen – auch nicht der Entwickler. Ohne es sind die Einträge nicht lesbar.</p></div>` +
         `<p>Probier ruhig weiter (Groß-/Kleinschreibung, Tastatur-Sprache). Wenn du eine Sicherungsdatei mit einem anderen Passwort hast, kannst du den Tresor löschen und die Sicherung danach wiederherstellen.</p>` +
-        `<p class="note">Löschen entfernt alle ${colItems.all().length} verschlüsselten Einträge endgültig.</p>` +
+        `<p class="note">Löschen entfernt alle ${colItems.all().length} verschlüsselten Einträge und Dokument-Dateien endgültig. Erinnerungen im Planer bleiben stehen.</p>` +
         `<div class="row"><button type="button" class="btn danger" data-del>Tresor endgültig löschen</button></div>`,
     });
     ui.confirmButton(s.el.querySelector("[data-del]"), "Wirklich alles löschen?", async () => {
       try {
         for (const r of colItems.all()) await settle(colItems.remove(r.id), 800);
+        await settle(F.wipeAll().catch((e) => console.warn("Tresor-Dateien löschen:", e)), 3000);
         await settle(colMeta.remove(META_ID));
         resetFails();
         s.close();
@@ -525,8 +543,8 @@ export function mount(el, ctx) {
     const all = entries();
     if (!all.length) {
       main.innerHTML = (S.broken ? brokenNote() : "") +
-        `<div class="empty tr-empty">${icon("lock", 34)}<h3>Noch keine Einträge</h3><p>Leg Logins, PINs (z. B. SIM-Karte), WLAN-Zugänge oder geheime Notizen an.</p>` +
-        `<button type="button" class="btn primary sm" data-tr="new">+ Hinzufügen</button></div>`;
+        `<div class="empty tr-empty">${icon("lock", 34)}<h3>Noch keine Einträge</h3><p>Leg Logins, PINs (z. B. SIM-Karte), WLAN-Zugänge, geheime Notizen oder Dokumente (Reisepass, Ausweise) an.</p>` +
+        `<div class="row tr-empty-row"><button type="button" class="btn primary sm" data-tr="new">+ Hinzufügen</button><button type="button" class="btn ghost sm" data-tr="newdoc">🛂 Dokument</button></div></div>`;
       return;
     }
     const { list, weak, reused } = filtered();
@@ -536,10 +554,18 @@ export function mount(el, ctx) {
     const chips = [chip("all", "Alle", all.length)];
     const favN = count((e) => e.data.fav);
     if (favN) chips.push(chip("fav", `${icon("star", 15)} Favoriten`, favN));
-    for (const t of C.TYPE_IDS) { const n = count((e) => e.data.type === t); if (n) chips.push(chip("t:" + t, esc(C.TYPES[t].label), n)); }
+    chips.push(chip("t:doc", "🛂 Dokumente", count((e) => e.data.type === "doc"))); // Update 9 – immer sichtbar
+    for (const t of C.TYPE_IDS) { if (t === "doc") continue; const n = count((e) => e.data.type === t); if (n) chips.push(chip("t:" + t, esc(C.TYPES[t].label), n)); }
     for (const c of cats) chips.push(chip("c:" + c, "# " + esc(c), count((e) => e.data.category === c)));
     if (S.filter === "weak") chips.push(chip("weak", "⚠️ Schwach", weak.size));
     if (S.filter === "reused") chips.push(chip("reused", "⚠️ Mehrfach", reused.size));
+    if (S.filter === "t:doc") {
+      main.innerHTML = (S.broken ? brokenNote() : "") +
+        `<div class="chips tr-chips" role="toolbar" aria-label="Filter">${chips.join("")}</div>` +
+        (list.length || !S.q ? docs.cardsHTML(list) : `<div class="empty tr-empty"><h3>Nichts gefunden</h3><p>Probier ein anderes Suchwort.</p></div>`);
+      docs.hydrate(main);
+      return;
+    }
     main.innerHTML =
       (S.broken ? brokenNote() : "") +
       `<div class="chips tr-chips" role="toolbar" aria-label="Filter">${chips.join("")}</div>` +
@@ -550,7 +576,8 @@ export function mount(el, ctx) {
 
   const brokenNote = () => `<p class="hint tr-broken">⚠️ ${S.broken} ${S.broken === 1 ? "Eintrag kann" : "Einträge können"} nicht entschlüsselt werden (beschädigt oder aus einem anderen Tresor).</p>`;
 
-  function bubble(type, size = 20) {
+  function bubble(type, size = 20, d = null) {
+    if (type === "doc" && d) return docs.bubble(d);
     const t = C.TYPES[type] || C.TYPES.login;
     return `<span class="tr-bub" style="--c:${t.color}" aria-hidden="true">${icon(t.icon, size)}</span>`;
   }
@@ -558,7 +585,7 @@ export function mount(el, ctx) {
   function quickSecret(d) {
     if (d.type === "login" || d.type === "wifi") return d.password ? ["password", "Passwort"] : null;
     if (d.type === "pin") return d.pin ? ["pin", "PIN"] : null;
-    if (d.type === "card") return d.number ? ["number", "Nummer"] : null;
+    if (d.type === "card" || d.type === "doc") return d.number ? ["number", "Nummer"] : null;
     return null;
   }
 
@@ -566,10 +593,11 @@ export function mount(el, ctx) {
     const d = e.data;
     const sub = [C.subtitle(d), d.category].filter(Boolean).join(" · ");
     const q = quickSecret(d);
-    const flags = (isWeak ? `<span class="tr-flag" title="Schwaches Passwort">schwach</span>` : "") + (isReused ? `<span class="tr-flag" title="Mehrfach verwendet">mehrfach</span>` : "");
+    const flags = (isWeak ? `<span class="tr-flag" title="Schwaches Passwort">schwach</span>` : "") + (isReused ? `<span class="tr-flag" title="Mehrfach verwendet">mehrfach</span>` : "") +
+      (d.type === "doc" ? docs.badge(d) : "");
     return `<li class="tr-item">` +
       `<button type="button" class="tr-item-main" data-tr="open" data-id="${esc(e.id)}">` +
-        bubble(d.type) +
+        bubble(d.type, 20, d) +
         `<span class="tr-item-t"><b>${esc(d.title)}${d.fav ? ` <span class="tr-star" aria-label="Favorit">${icon("star", 14)}</span>` : ""}</b>` +
         `<small>${esc(sub || C.TYPES[d.type].label)}</small></span>${flags}` +
       `</button>` +
@@ -585,6 +613,7 @@ export function mount(el, ctx) {
     if (a === "open") { const e = S.cache.get(b.dataset.id); if (e) openDetail(e.id); return; }
     if (a === "copy") { const e = S.cache.get(b.dataset.id); if (e) copySecret(e.data[b.dataset.field], b.dataset.field === "pin" ? "PIN" : b.dataset.field === "number" ? "Nummer" : "Passwort"); return; }
     if (a === "new") { openEdit(null); return; }
+    if (a === "newdoc") { docs.openEditor(null); return; }
     if (a === "generator") { openGenerator(null); return; }
     if (a === "settings") { openSettings(); return; }
   }
@@ -597,11 +626,13 @@ export function mount(el, ctx) {
     wifi: [["ssid", "SSID (Netzwerkname)"], ["password", "Passwort", true], ["enc", "Verschlüsselung"]],
     note: [],
     card: [["holder", "Name"], ["number", "Nummer", true]],
+    doc: [],
   };
 
   function openDetail(id) {
     const e = S.cache.get(id);
     if (!e) return;
+    if (e.data.type === "doc") { docs.openDetail(id); return; }
     const d = e.data;
     const chk = C.securityCheck(entries());
     const warn = [];
@@ -704,6 +735,7 @@ export function mount(el, ctx) {
 
   function openEdit(id) {
     const prev = id ? S.cache.get(id) : null;
+    if (prev && prev.data.type === "doc") { docs.openEditor(id); return; }
     let type = prev ? prev.data.type : "login";
     let draft = prev ? { ...prev.data } : {};
     const s = sheet({
@@ -728,6 +760,7 @@ export function mount(el, ctx) {
     };
     drawForm();
     box.querySelectorAll("[data-type]").forEach((b) => b.addEventListener("click", () => {
+      if (b.dataset.type === "doc") { s.close(); docs.openEditor(null); return; }
       draft = { ...draft, ...Object.fromEntries(Object.entries(readForm(box, type)).filter(([, v]) => v !== undefined)) };
       type = b.dataset.type;
       box.querySelectorAll("[data-type]").forEach((x) => x.setAttribute("aria-pressed", String(x.dataset.type === type)));
@@ -802,21 +835,31 @@ export function mount(el, ctx) {
 
   function openSettings() {
     const m = autoLockMin();
+    const used = usedBytes(colItems.all(), entries());
+    const local = store.get().mode === "local";
+    const nDocs = entries().filter((e) => e.data.type === "doc").length;
+    const pct = Math.min(100, (used / FREE_TIER) * 100);
     const s = sheet({
       title: "Tresor-Einstellungen",
       bodyHTML:
         `<p class="lbl">Automatisch sperren nach</p>` +
         `<div class="chips tr-auto">${AUTOLOCK_CHOICES.map((x) => `<button type="button" class="chip" data-min="${x}" aria-pressed="${x === m}">${x} Min.</button>`).join("")}</div>` +
         `<p class="note">ohne Aktivität. Außerdem wird gesperrt, wenn die App 60 s im Hintergrund ist oder du den Tresor verlässt.</p>` +
+        `<div class="tr-usage" data-usage="${used}">` +
+          `<div class="tr-usage-h"><b>Belegter Speicher (verschlüsselt)</b><span>${esc(fmtSize(used))}</span></div>` +
+          `<div class="tr-usage-bar" role="img" aria-label="${esc(fmtSize(used))} von etwa 1 GB"><i style="width:${Math.max(used ? 0.8 : 0, pct).toFixed(2)}%"></i></div>` +
+          `<small>${local ? "Auf diesem Gerät (lokaler Modus)." : "In der Cloud – das Firestore-Gratis-Kontingent sind ca. 1 GB."} ${nDocs} ${nDocs === 1 ? "Dokument" : "Dokumente"}, Einträge + Dateien + Vorschaubilder.</small>` +
+        `</div>` +
         `<div class="tr-setlist">` +
           `<button type="button" class="tr-row" data-a="pw">${icon("key", 20)}<span><b>Master-Passwort ändern</b><small>Einträge bleiben erhalten</small></span>${icon("chevron-right", 18)}</button>` +
-          `<button type="button" class="tr-row" data-a="export">${icon("download", 20)}<span><b>Verschlüsselte Sicherung herunterladen</b><small>JSON-Datei, nur mit Master-Passwort lesbar</small></span>${icon("chevron-right", 18)}</button>` +
+          `<button type="button" class="tr-row" data-a="export">${icon("download", 20)}<span><b>Verschlüsselte Sicherung herunterladen</b><small>JSON-Datei, nur mit Master-Passwort lesbar – ohne Dokument-Fotos/PDFs</small></span>${icon("chevron-right", 18)}</button>` +
           `<button type="button" class="tr-row" data-a="import">${icon("upload", 20)}<span><b>Sicherung importieren</b><small>Einträge aus einer Sicherungsdatei übernehmen</small></span>${icon("chevron-right", 18)}</button>` +
           `<button type="button" class="tr-row danger" data-a="csv">${icon("file", 20)}<span><b>Klartext-Export (CSV) für Bitwarden</b><small>Nur zum Umziehen – unverschlüsselt!</small></span>${icon("chevron-right", 18)}</button>` +
         `</div>` +
         `<details class="tr-about"><summary>So schützt der Tresor deine Daten</summary>` +
           `<ul><li>Verschlüsselung direkt im Gerät: AES-256-GCM, Schlüssel aus dem Master-Passwort mit PBKDF2-SHA256 (${V.ITER.toLocaleString("de-AT")} Runden).</li>` +
           `<li>Gespeichert (Cloud bzw. Gerät) wird nur Zeichensalat – auch Titel und Website sind verschlüsselt.</li>` +
+          `<li>Dokumente: Fotos und PDFs werden im Gerät verschlüsselt und erst beim Öffnen entschlüsselt. Nur wenn du „Erinnern vor Ablauf“ einschaltest, steht z. B. „Reisepass läuft ab am …“ als normaler Planer-Termin unverschlüsselt da.</li>` +
           `<li>Das Master-Passwort wird nirgends gespeichert. Der Claude-Assistent bekommt keine Tresor-Daten.</li>` +
           `<li>Kopierte Passwörter werden nach 30 s aus der Zwischenablage gelöscht (soweit der Browser das erlaubt).</li></ul></details>`,
     });

@@ -116,6 +116,10 @@ const SHELL = [
   "js/alltag/vault.js",
   "js/alltag/vault-crypto.js",
   "js/alltag/vault-core.js",
+  "js/alltag/vault-docs.js",
+  "js/alltag/vault-docs-core.js",
+  "js/alltag/vault-files.js",
+  "css/alltag-vault-docs.css",
   "js/alltag/qr.js",
   // Update 9 – Unterwegs
   "js/alltag/unterwegs.js",

@@ -1,5 +1,6 @@
 // Alltag › Passwort-Tresor: reine Hilfsfunktionen ohne DOM/Krypto-Schlüssel
 // (Eintragsarten, Stärke-Schätzung, Generator, Sicherheits-Check, Suche, CSV für Bitwarden, WLAN-QR-Text).
+import { normDocFields, docSubtitle, DOC_KINDS, fmtKey } from "./vault-docs-core.js";
 
 export const TYPES = {
   login: { label: "Login", icon: "key", color: "#4F46E5" },
@@ -7,6 +8,7 @@ export const TYPES = {
   wifi:  { label: "WLAN", icon: "wifi", color: "#0E7490" },
   note:  { label: "Notiz", icon: "note", color: "#7C3AED" },
   card:  { label: "Karte/Ausweis", icon: "card", color: "#059669" },
+  doc:   { label: "Dokument", icon: "file", color: "#1D4ED8" },   // Update 9 – Dokumente (vault-docs.js)
 };
 export const TYPE_IDS = Object.keys(TYPES);
 export const CATEGORIES = ["Privat", "Arbeit", "Schule", "Bank & Geld", "Einkaufen", "Social Media", "Spiele", "Handy", "Zuhause"];
@@ -22,7 +24,8 @@ export function normEntry(e) {
   if (type === "pin") Object.assign(out, { pin: s(e.pin).slice(0, 100), puk: s(e.puk).slice(0, 100) });
   if (type === "wifi") Object.assign(out, { ssid: s(e.ssid).slice(0, 64), password: s(e.password).slice(0, 200), enc: WIFI_ENC[e.enc] ? e.enc : "WPA", hidden: !!e.hidden });
   if (type === "card") Object.assign(out, { holder: s(e.holder).trim().slice(0, 120), number: s(e.number).trim().slice(0, 60) });
-  if (!out.title) out.title = type === "wifi" && out.ssid ? out.ssid : TYPES[type].label;
+  if (type === "doc") Object.assign(out, normDocFields(e));
+  if (!out.title) out.title = type === "wifi" && out.ssid ? out.ssid : type === "doc" ? DOC_KINDS[out.kind].label : TYPES[type].label;
   if (e.pwChanged) out.pwChanged = Number(e.pwChanged) || null;
   return out;
 }
@@ -33,6 +36,7 @@ export function subtitle(e) {
   if (e.type === "wifi") return e.ssid ? "SSID " + e.ssid : "";
   if (e.type === "card") return [e.holder, maskNumber(e.number)].filter(Boolean).join(" · ");
   if (e.type === "pin") return e.puk ? "PIN + PUK" : "PIN/Code";
+  if (e.type === "doc") return docSubtitle(e);
   return ""; // Notizen: Inhalt nicht in der Liste zeigen (Blick über die Schulter)
 }
 
@@ -241,7 +245,8 @@ export function sortEntries(list) {
 export function matches(e, q) {
   q = s(q).trim().toLowerCase();
   if (!q) return true;
-  const hay = [e.title, e.user, e.url, e.ssid, e.category, e.note, e.holder, TYPES[e.type] && TYPES[e.type].label].map(s).join("\n").toLowerCase();
+  const hay = [e.title, e.user, e.url, e.ssid, e.category, e.note, e.holder, TYPES[e.type] && TYPES[e.type].label,
+    e.type === "doc" && DOC_KINDS[e.kind] ? DOC_KINDS[e.kind].label : "", e.authority].map(s).join("\n").toLowerCase();
   return q.split(/\s+/).every((w) => hay.includes(w));
 }
 
@@ -271,6 +276,14 @@ export function toBitwardenCsv(entries) {
     if (e.type === "pin") { if (e.pin) fields.push("PIN: " + e.pin); if (e.puk) fields.push("PUK: " + e.puk); }
     if (e.type === "wifi") { fields.push("SSID: " + e.ssid, "Passwort: " + (e.password || ""), "Verschlüsselung: " + (WIFI_ENC[e.enc] || e.enc)); }
     if (e.type === "card") { if (e.holder) fields.push("Name: " + e.holder); if (e.number) fields.push("Nummer: " + e.number); }
+    if (e.type === "doc") {
+      fields.push("Art: " + (DOC_KINDS[e.kind] || DOC_KINDS.sonstiges).label);
+      if (e.number) fields.push("Nummer: " + e.number);
+      if (e.issued) fields.push("Ausgestellt: " + fmtKey(e.issued));
+      if (e.expires) fields.push("Gültig bis: " + fmtKey(e.expires));
+      if (e.authority) fields.push("Behörde: " + e.authority);
+      if (e.files && e.files.length) fields.push(`Dateien: ${e.files.length} (nicht im CSV enthalten)`);
+    }
     if (e.type !== "login" && e.type !== "note") notes.push(TYPES[e.type].label);
     if (e.note) notes.push(e.note);
     const isLogin = e.type === "login";

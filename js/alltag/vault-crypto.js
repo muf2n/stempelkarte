@@ -183,6 +183,54 @@ export async function decryptItem(key, rec) {
   catch { throw new VaultError("tampered", "Eintrag ist beschädigt."); }
 }
 
+/* ---------- Dateien (Dokumente): in Stücke geteilt, jedes Stück eigener IV ---------- */
+// Datei-ID zufällig (verrät nichts). Stück n von total: a_vault_files/{fileId}_{n} = { id, n, total, iv, ct }
+// AAD = Datei-ID + n + total → vertauschte, fehlende oder fremde Stücke fallen auf.
+// 512 KiB Klartext → 512 KiB + 16 Byte Tag → ≈ 683 kB base64 (< 700 kB, Firestore-Dokument max. 1 MiB).
+export const CHUNK_BYTES = 512 * 1024;
+const aadChunk = (fileId, n, total) => `tresor:file:v1:${fileId}:${n}:${total}`;
+
+/** Zufällige Datei-ID (32 Hex-Zeichen, als Firestore-Dokument-ID geeignet). */
+export function newFileId() {
+  return [...randomBytes(16)].map((b) => b.toString(16).padStart(2, "0")).join("");
+}
+
+/** Bytes verschlüsseln → [{ id, n, total, iv, ct }] (Reihenfolge n = 0 … total-1). */
+export async function encryptFile(key, fileId, bytes, { chunkBytes = CHUNK_BYTES } = {}) {
+  if (!fileId || !/^[A-Za-z0-9-]{8,64}$/.test(fileId)) throw new VaultError("format", "Ungültige Datei-ID.");
+  const u8 = bytes instanceof Uint8Array ? bytes : new Uint8Array(bytes);
+  const total = Math.max(1, Math.ceil(u8.length / chunkBytes));
+  const out = [];
+  for (let n = 0; n < total; n++) {
+    const s = await seal(key, u8.subarray(n * chunkBytes, Math.min(u8.length, (n + 1) * chunkBytes)), aadChunk(fileId, n, total));
+    out.push({ id: `${fileId}_${n}`, n, total, iv: s.iv, ct: s.ct });
+  }
+  return out;
+}
+
+/** Stücke entschlüsseln → Uint8Array. Wirft VaultError("tampered"), wenn ein Stück fehlt, vertauscht oder verändert ist. */
+export async function decryptFile(key, fileId, chunks, expectTotal) {
+  if (!Array.isArray(chunks) || !chunks.length) throw new VaultError("tampered", "Datei fehlt.");
+  const total = Number(expectTotal) || chunks[0].total;
+  if (!Number.isInteger(total) || total < 1 || chunks.length !== total) throw new VaultError("tampered", "Datei ist unvollständig.");
+  const parts = new Array(total);
+  for (const c of chunks) {
+    if (!c || c.total !== total || !Number.isInteger(c.n) || c.n < 0 || c.n >= total || parts[c.n] || c.id !== `${fileId}_${c.n}`) {
+      throw new VaultError("tampered", "Datei ist beschädigt (Stücke passen nicht zusammen).");
+    }
+    try { parts[c.n] = await open(key, c.iv, c.ct, aadChunk(fileId, c.n, total)); }
+    catch { throw new VaultError("tampered", "Datei kann nicht entschlüsselt werden (verändert oder falscher Schlüssel)."); }
+  }
+  const len = parts.reduce((a, p) => a + p.length, 0);
+  const out = new Uint8Array(len);
+  let o = 0;
+  for (const p of parts) { out.set(p, o); o += p.length; p.fill(0); }
+  return out;
+}
+
+/** Gespeicherte Größe (base64-Zeichen ≈ Bytes in Firestore) einer Stückliste. */
+export const storedSize = (chunks) => (chunks || []).reduce((a, c) => a + (c.ct ? c.ct.length : 0) + (c.iv ? c.iv.length : 0) + 40, 0);
+
 /* ---------- Sicherung (verschlüsselt, gleiches Format) ---------- */
 
 export function makeBackup(meta, records, now = new Date()) {
