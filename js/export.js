@@ -1,5 +1,5 @@
 // Export: Einträge als Excel-taugliche CSV (Semikolon, BOM) erzeugen und herunterladen/teilen.
-import { WD, pad, clock, netMin, creditMin, kindLabel, dayKey } from "./util.js";
+import { WD, pad, clock, netMin, creditMin, kindLabel, dayKey, isPrivateTrip } from "./util.js";
 import { entryKm, allowanceByDay } from "./travel.js";
 
 const HEAD = ["Datum", "Wochentag", "Art", "Beginn", "Ende", "Pause (Min)", "Netto (h)",
@@ -67,6 +67,7 @@ export function entriesCSV(entries, { from, to, settings = null, days = null, pl
   const f = toMs(from), t = toMs(to);
   const list = (entries || [])
     .filter(e => e && Number.isFinite(e.start) && (f == null || e.start >= f) && (t == null || e.start < t))
+    .filter(e => !isPrivateTrip(e)) // Update 9 – Privatfahrten sind keine Arbeitszeit (stehen im Fahrtenbuch)
     .sort((a, b) => a.start - b.start);
 
   const rows = [HEAD];

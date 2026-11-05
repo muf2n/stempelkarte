@@ -96,7 +96,7 @@ test("Werkzeug-Schleife: einstempeln über den Chat, Antwort + actions + Verbrau
   assert.equal(c.headers["anthropic-version"], "2023-06-01");
   assert.equal(c.body.model, "claude-haiku-4-5");
   assert.equal(c.body.max_tokens, 1024);
-  assert.equal(c.body.tools.length, 25);
+  assert.equal(c.body.tools.length, 26);
   assert.ok(c.body.tools.every((x) => x.name && x.description && x.input_schema.type === "object"));
   assert.match(c.body.system, /Elektriker-Lehrling/);
   assert.match(c.body.system, /Mi, 04\.11\.2026, 10:00 Uhr/);

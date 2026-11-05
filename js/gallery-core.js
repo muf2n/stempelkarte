@@ -653,9 +653,14 @@ export function activeSetting(g) {
  *   opts = { folders, gallery (settings.gallery), placeId (Ort der laufenden Schicht), places, ignorePlace }
  * → { id: folderId|null, source: "place"|"manual"|"default"|"none", place: Ort|null, manualId }
  */
-export function resolveActiveFolder({ folders = [], gallery = {}, placeId = null, places = [], ignorePlace = false } = {}) {
+export function resolveActiveFolder({ folders = [], gallery = {}, placeId = null, places = [], ignorePlace = false, privat = false } = {}) {
   const raw = activeSetting(gallery);
   const manualId = resolveAutoFolder(folders, raw);
+  // Update 9 – Privat-Modus: neue Fotos → 🏠 Privat (feste ID, sonst Kategorie namens „Privat“)
+  if (privat) {
+    const pf = privatFolder(folders);
+    if (pf) return { id: pf.id, source: "privat", place: null, manualId };
+  }
   if (placeId && !ignorePlace) {
     const pl = (places || []).find((p) => p && p.id === placeId) || null;
     if (pl && pl.photoFolderId && byId(folders, String(pl.photoFolderId))) {
@@ -664,6 +669,12 @@ export function resolveActiveFolder({ folders = [], gallery = {}, placeId = null
   }
   if (!manualId) return { id: null, source: "none", place: null, manualId: null };
   return { id: manualId, source: raw === undefined ? "default" : "manual", place: null, manualId };
+}
+
+/** Update 9 – Privat: Hauptkategorie „Privat“ (feste ID bevorzugt) oder null. */
+export function privatFolder(folders) {
+  const list = folders || [];
+  return byId(list, PRIVAT_ID) || list.find((f) => f && String(f.name || "").trim().toLowerCase() === "privat") || null;
 }
 
 /** Ort der laufenden Schicht (letzter Abschnitt vor der Schicht selbst) oder null. */

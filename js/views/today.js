@@ -7,9 +7,12 @@ import { readPlans, plansToday, dueTs, planKey } from "./plans.js";
 import { getFirebase } from "../firebase.js";
 import * as motion from "../motion.js";
 import * as myday from "./day.js";
-import { peoplePicker, cleanPeople, peopleText, rememberPeople } from "./entries.js";
+import { peoplePicker, cleanPeople, peopleText, rememberPeople, privTripRow } from "./entries.js";
 import { mountPhotoBar } from "./gallery.js"; // Update 9 – Fotos
 import { mountTodayButton as mountMaterialBtn } from "../alltag/material.js"; // Update 9 – Material
+import * as privatUi from "./privat-mode.js"; // Update 9 – Privat / Arbeit
+import * as privDrive from "../privat-drive.js";
+import { isPrivatNow } from "../privat.js";
 
 // Einsatzplan-Helfer (js/einsatz.js, Agent T) – dynamisch, mit Fallback (null)
 let einsatzForFn = null;
@@ -265,6 +268,7 @@ export function mount(el, c) {
   root = el;
   el.innerHTML = `
 <div class="stack">
+  <section data-r="privat"></section>
   <section data-r="myday"></section>
   <div class="card clock" data-r="clock">
     <div class="clock-deco" aria-hidden="true">${sparkles()}${leaves("left")}${leaves("right")}</div>
@@ -316,6 +320,12 @@ export function mount(el, c) {
 </div>`;
 
   try { myday.mount($("myday"), ctx); } catch (e) { console.error(e); }
+  try { // Update 9 – Privat / Arbeit
+    privatUi.mount($("privat"), ctx, {
+      clockOutNow: () => clockOutAt(Date.now()),
+      startWork: (place) => doClockIn(null, place),
+    });
+  } catch (e) { console.error(e); }
   try { photoBar = mountPhotoBar($("photo"), ctx); } catch (e) { console.error(e); }
   try { mountMaterialBtn($("photo")); } catch (e) { console.error(e); } // Update 9 – Material neben dem Foto-Knopf
   $("btns").addEventListener("click", onButton);
@@ -354,6 +364,7 @@ export function update(s) {
   snap = s;
   if (!root) return;
   try { myday.update(s); } catch (e) { console.error(e); }
+  try { privatUi.update(s); } catch (e) { console.error(e); }
   try { if (photoBar) photoBar.update(s); } catch (e) { console.error(e); }
   if (s.running) {
     done = null;              // neue/andere Schicht läuft
@@ -404,8 +415,10 @@ function renderClock() {
   let placeName = "";
 
   if (st === "idle") {
-    pill.textContent = "Nicht eingestempelt";
-    metaHTML = `<span>Tippe auf „Einstempeln“, wenn du anfängst.</span>`;
+    const priv = isPrivatNow(snap); // Update 9 – Privat
+    pill.textContent = priv ? "Privat-Modus" : "Nicht eingestempelt";
+    metaHTML = priv ? `<span>Nichts zählt als Arbeit. Zum Arbeiten oben auf „Arbeit“ tippen oder einstempeln.</span>`
+      : `<span>Tippe auf „Einstempeln“, wenn du anfängst.</span>`;
   } else if (st === "running" || st === "paused") {
     pill.textContent = st === "paused" ? `Pause seit ${util.clock(r.pauseStart)}` : "Bei der Arbeit";
     // Ort/Standort des aktuellen Abschnitts
@@ -636,6 +649,7 @@ function currentTip() {
     return null;
   }
   if (st === "idle" || st === "done") {
+    if (isPrivatNow(snap)) return null; // Update 9 – Privat: keine Einstempel-Vorschläge
     // Direkt nach dem Ausstempeln nicht gleich wieder zum Einstempeln drängen
     const e = st === "done" ? doneEntry() : null;
     if (e && Date.now() - e.end < 15 * 60000) return null;
@@ -1605,6 +1619,7 @@ function renderList() {
         `<span class="d">${util.hm(credit(e))} h</span>` +
         `<span class="p">${bits.join(" · ")}</span></button>`;
     }
+    if (util.isPrivateTrip && util.isPrivateTrip(e)) return privTripRow(e, util, settings()); // Update 9 – Privatfahrt
     if (e.place) bits.push(`<span class="tag">${util.esc(e.place)}</span>`);
     if (e.pauseMin) bits.push(`Pause ${util.hm(e.pauseMin)}`);
     if (e.note) bits.push(util.esc(e.note));
@@ -1634,6 +1649,7 @@ export function tick() {
   if (state() === "idle" || state() === "done") renderList(); // Tageswechsel
   try { planTick(); } catch (e) { console.error(e); }
   try { driveWatchTick(); } catch (e) { console.error(e); }
+  try { privatUi.tick(); privDrive.tick(ctx); } catch (e) { console.error(e); } // Update 9 – Privat
 }
 
 export function onShow() {
@@ -1702,6 +1718,7 @@ function earlyPlanTip() {
 function planTick() {
   if (!snap || !snap.ready || snap.running || busyOp || planHandling || ctx.timer.isLocked()) return;
   if (document.visibilityState !== "visible") return;
+  if (isPrivatNow(snap)) return; // Update 9 – Privat: nie automatisch einstempeln
   const now = Date.now();
   const list = plansToday(snap, ctx.util, now).filter((p) => !planDone(planKey(p.id, now)));
   if (!list.length) return;
@@ -1786,6 +1803,7 @@ export async function handlePlan({ planId, due } = {}, c = ctx) {
     const plan = readPlans((s && s.settings) || {}).find((p) => p.id === planId);
     if (!plan) { ui.toast("Diese geplante Schicht gibt es nicht mehr.", 3500); return; }
     if (s.running) { ui.toast("Du bist schon eingestempelt.", 3000); return; }
+    if (isPrivatNow(s)) { ui.toast("🏠 Privat-Modus – du wirst nicht automatisch eingestempelt.", 3500); return; } // Update 9
     const now = Date.now();
     let dueMs = Number(due);
     if (!Number.isFinite(dueMs) || dueMs <= 0) dueMs = dueTs(plan, now);
@@ -1902,7 +1920,8 @@ function driveWatchTick() {
   const r = snap.running;
   const ad = motion.readAutoDrive(settings());
   const visible = document.visibilityState === "visible";
-  const want = !!r && r.pauseStart == null && ad.enabled && visible;
+  const wantPriv = !r && visible && privDrive.wantWatch(snap); // Update 9 – Privatfahrten
+  const want = (!!r && r.pauseStart == null && ad.enabled && visible) || wantPriv;
   if (!r) { driveTip = null; driveSeg = null; driveSuppressed = false; arriveSuppressed = ""; }
   else if (r.pauseStart != null) driveTip = null;
   if (want) {
@@ -1934,6 +1953,11 @@ function driveWatchTick() {
 }
 
 function onDriveSample(s) {
+  if (!snap || !snap.running) { // Update 9 – Privat-Modus: Fahrt als Privatfahrt aufzeichnen
+    lastLoc = plainLoc(s); lastLocAt = Date.now();
+    try { privDrive.onSample(s, ctx); } catch (e) { console.error(e); }
+    return;
+  }
   samples.push(s);
   motion.prune(samples);
   lastLoc = plainLoc(s); lastLocAt = Date.now();

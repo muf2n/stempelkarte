@@ -38,7 +38,7 @@ export function einsatzSuggestion() {
   const key = `${k}|${ez.id || ez.title}`;
   if (lsGet(EZ_KEY) === key) return null;
   const act = A.activeFolder();
-  if (act.source === "place") return null;
+  if (act.source === "place" || act.source === "privat") return null;
   const f = G.einsatzFolderSuggestion(ez.title, A.folders());
   if (!f || f.id === act.id) return null;
   return { einsatz: ez, folder: f, key };
@@ -49,7 +49,8 @@ export function einsatzSuggestion() {
 function chipHTML() {
   const a = A.activeFolder();
   const f = a.folder;
-  const src = a.source === "place" && a.place ? `<small class="ga-src">(von Ort ${esc(a.place.name || "Ort")})</small>` : "";
+  const src = a.source === "place" && a.place ? `<small class="ga-src">(von Ort ${esc(a.place.name || "Ort")})</small>`
+    : a.source === "privat" ? `<small class="ga-src">(Privat-Modus)</small>` : ""; // Update 9 – Privat
   return `<button type="button" class="ga-chip${f ? "" : " is-none"}" data-ga="chip" ${fst(f)} aria-haspopup="dialog" aria-label="Neue Fotos gehen nach ${esc(f ? f.name : "keine Kategorie")} – ändern">` +
     `<span class="ga-lbl" aria-hidden="true">📂 Kategorie:</span>` +
     `<b class="ga-val"><span aria-hidden="true">${esc(f ? f.emoji : "🗂️")}</span> ${esc(f ? f.name : "keine")}</b>${src}` +
@@ -140,6 +141,7 @@ export function openActivePicker() {
           box.innerHTML =
             `<p class="note ga-why">Jede neue Adresse bekommt ihr eigenes Album – es landet in der Kategorie, die hier aktiv ist. Fotos an einer schon bekannten Adresse bleiben in deren Album.</p>` +
             (act.source === "place" && act.place ? `<div class="ga-info" ${fst(act.folder)}>📍 Eingestempelt bei <b>${esc(act.place.name || "Ort")}</b> – dort gilt ${esc(act.folder.emoji)} ${esc(act.folder.name)}. Wählst du hier etwas anderes, gilt das für diese Schicht.</div>` : "") +
+            (act.source === "privat" && act.folder ? `<div class="ga-info" ${fst(act.folder)}>🏠 <b>Privat-Modus</b> – neue Fotos gehen nach ${esc(act.folder.emoji)} ${esc(act.folder.name)}, solange Privat an ist.</div>` : "") + // Update 9 – Privat
             (ign ? `<div class="ga-info">Die Foto-Kategorie von <b>${esc(ign.name || "Ort")}</b> ist für diese Schicht aus. <button type="button" class="linkbtn" data-gp="useplace">Wieder einschalten</button></div>` : "") +
             `<div class="ga-list" role="group" aria-label="Hauptkategorien">${fs.map((f) => row(f, nA(f.id))).join("")}${row(OHNE, 0)}</div>` +
             `<button type="button" class="ga-new" data-gp="new" aria-expanded="false">＋ Neue Hauptkategorie</button>` +

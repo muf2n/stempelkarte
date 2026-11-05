@@ -133,6 +133,12 @@ const SHELL = [
   "js/media-import-core.js", // Update 9 (Agent W3) – Kamera-Fotos übernehmen
   "js/media-import.js",
   "css/media-import.css",
+  // Update 9 – Privat / Arbeit
+  "js/privat-core.js",
+  "js/privat.js",
+  "js/privat-drive.js",
+  "js/views/privat-mode.js",
+  "css/privat.css",
   "js/app.js"
 ];
 

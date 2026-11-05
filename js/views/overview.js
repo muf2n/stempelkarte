@@ -373,7 +373,7 @@ function creditOf(e) {
 /** Alle Stücke inkl. laufender Schicht: [{start, min (Gutschrift), net, pauseMin, place, kind}] */
 function items() {
   const u = ctx.util;
-  const out = (snap.entries || []).filter((e) => e && Number.isFinite(e.start)).map((e) => {
+  const out = (snap.entries || []).filter((e) => e && Number.isFinite(e.start) && !(u.isPrivateTrip && u.isPrivateTrip(e))).map((e) => { // Update 9 – Privatfahrten zählen nicht
     const kind = e.kind || "work";
     return {
       start: e.start,

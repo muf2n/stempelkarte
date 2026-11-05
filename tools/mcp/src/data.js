@@ -50,7 +50,7 @@ export class Data {
   /** Alle Einträge (für Überstundenkonto nur die nötigen Felder). */
   entriesAll({ light = false } = {}) {
     return this.once("entries:" + light, async () => {
-      const mask = light ? ["start", "end", "pauseMin", "kind", "creditMin"] : null;
+      const mask = light ? ["start", "end", "pauseMin", "kind", "creditMin", "privateTrip"] : null; // Update 9: privateTrip
       const docs = await this.fs.list(this.p("entries"), { mask, pageSize: 1000 });
       return docs.map((d) => ({ ...d.data, id: d.id }));
     });

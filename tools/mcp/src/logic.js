@@ -8,6 +8,8 @@
 import {
   dayKey, keyToTs, addDays, wdOf, keyOfYMD, parseKey, mondayOf, pad, isKey,
 } from "./time.js";
+import { isPrivateTrip } from "./privat.js"; // Update 9 – Privatfahrten zählen nie als Arbeitszeit
+export { isPrivateTrip };
 
 /* ---------- store.js ---------- */
 
@@ -76,6 +78,7 @@ export function alltagId(now = Date.now()) {
 
 export function netMin(entry) {
   if (!entry) return 0;
+  if (isPrivateTrip(entry)) return 0;
   const dur = ((Number(entry.end) || 0) - (Number(entry.start) || 0)) / 60000;
   return Math.max(0, dur - (Number(entry.pauseMin) || 0));
 }
@@ -321,7 +324,7 @@ export function clockOut(r, { outLoc = null, end = null, outPlace = "" } = {}, n
 
 /** Stücke inkl. laufender Schicht: [{start, min (Gutschrift), net, pauseMin, place, kind}] */
 export function items(entries, running, now) {
-  const out = (entries || []).filter((e) => e && Number.isFinite(e.start)).map((e) => {
+  const out = (entries || []).filter((e) => e && Number.isFinite(e.start) && !isPrivateTrip(e)).map((e) => {
     const kind = e.kind || "work";
     return {
       start: e.start,
@@ -488,7 +491,7 @@ export function buildWeek(settings, entries, ws) {
       tags.push({ kind: "schule", text: "Berufsschule" });
       min += schoolCreditMin(k, settings);
     }
-    const list = (entries || []).filter((e) => e && Number.isFinite(e.start) && dayKey(e.start) === k).sort((a, b) => a.start - b.start);
+    const list = (entries || []).filter((e) => e && Number.isFinite(e.start) && dayKey(e.start) === k && !isPrivateTrip(e)).sort((a, b) => a.start - b.start);
     const notes = [], segActs = [], people = [];
     let workCount = 0, noteCount = 0;
     for (const e of list) {

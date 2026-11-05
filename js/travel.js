@@ -7,6 +7,8 @@
 // Vorrang überall (Übersicht, Taggeld, CSV, Unterwegs): manuell `km` > `kmRoad` > Luftlinie × Faktor.
 // Weitere Abschnitt-Felder fürs Fahrtenbuch: `purpose` (Zweck), `private` (true = Privatfahrt), `vehicleId`.
 // days/{dayKey}.allowance = "none" | "part" | "full" (manuell; null/fehlt = automatisch).
+// Update 9 – Privat: Privatfahrt-Einträge (privateTrip) stehen im Fahrtenbuch, zählen aber nicht für Taggeld/Tages-km.
+import { isPrivateTrip } from "./privat-core.js";
 
 export const DEFAULT_ALLOWANCE = Object.freeze({
   enabled: false,
@@ -133,7 +135,7 @@ function isWork(e) { return !!e && (!e.kind || e.kind === "work"); }
 
 /** Summe der Fahrt-km eines Eintrags (nur bekannte Strecken). */
 export function entryKm(e, settings) {
-  if (!isWork(e)) return 0;
+  if (!isWork(e) || isPrivateTrip(e)) return 0;
   let sum = 0;
   for (const s of segmentsWithEnd(e)) {
     if (!isDriving(s)) continue;
@@ -293,7 +295,7 @@ export function allowanceByDay({ entries, places, days, settings, dayKey }, from
   const home = (Array.isArray(places) ? places : []).filter((p) => p && homeById.has(p.id));
   const spans = new Map();
   for (const e of Array.isArray(entries) ? entries : []) {
-    if (!isWork(e) || !Number.isFinite(e.start) || e.start < from || e.start >= to) continue;
+    if (!isWork(e) || isPrivateTrip(e) || !Number.isFinite(e.start) || e.start < from || e.start >= to) continue;
     const k = dayKey(e.start);
     if (!spans.has(k)) spans.set(k, []);
     spans.get(k).push(...awaySpans(e, home, homeById));

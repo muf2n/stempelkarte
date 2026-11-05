@@ -18,6 +18,7 @@ on:
       - "js/cal-core.js"
       - "js/alltag/material-core.js"
       - "js/alltag/trash-core.js"
+      - "js/privat-core.js"
       - ".github/workflows/mcp-deploy.yml"
   workflow_dispatch:
 

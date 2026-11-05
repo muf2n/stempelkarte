@@ -16,6 +16,7 @@ import * as photos from "./photos.js";
 import * as geo from "./geo.js";
 import * as store from "./store.js";
 import * as G from "./gallery-core.js";
+import { isPrivatNow } from "./privat.js"; // Update 9 – Privat-Modus
 
 let col = null;
 export function albumsCol() { return col || (col = collection("photo_albums")); }
@@ -78,7 +79,7 @@ export function activeFolder() {
   const snap = store.get();
   const r = G.resolveActiveFolder({
     folders: folders(), gallery: rawSettings(), placeId: G.runningPlaceId(snap.running),
-    places: snap.places || [], ignorePlace: placeIgnored(),
+    places: snap.places || [], ignorePlace: placeIgnored(), privat: isPrivatNow(snap),
   });
   return { ...r, folder: r.id ? folderById(r.id) : null };
 }
@@ -257,9 +258,13 @@ async function doFile(photo, opts) {
   let album = null;
   let addr = "";
   if (auto) await albumsReady();
-  const pls = store.get().places || [];
+  // Update 9 – Privat-Modus: nur Alben der Kategorie „Privat“, keine Arbeitsorte
+  const act = activeFolder();
+  const priv = act.source === "privat";
+  const pls = priv ? [] : (store.get().places || []);
+  const pool = () => (priv ? albums().filter((a) => a.folderId === act.id) : albums());
   if (pos) {
-    const m = G.matchLocation(pos, { places: pls, albums: albums(), defaultRadius: set.radius });
+    const m = G.matchLocation(pos, { places: pls, albums: pool(), defaultRadius: set.radius });
     if (auto && m.type === "place") {
       album = m.album || await placeAlbum(m.place, opts);
       if (!m.album) created = true;
@@ -273,12 +278,12 @@ async function doFile(photo, opts) {
       addr = G.fullAddrFrom(data);
       if (auto) {
         // nach der Wartezeit noch einmal prüfen (andere Geräte/Fotos)
-        const again = G.matchLocation(pos, { places: pls, albums: albums(), defaultRadius: set.radius });
+        const again = G.matchLocation(pos, { places: pls, albums: pool(), defaultRadius: set.radius });
         if (again.type === "address") album = again.album;
         else { album = await createAlbum({ kind: "address", name: G.albumNameFrom(data) || G.coordName(pos), lat: pos.lat, lng: pos.lng, radius: set.radius, addr }, { activeFolderId: opts.activeFolderId }); created = true; }
       }
     }
-  } else if (auto && (opts.placeId || photo.placeId)) {
+  } else if (auto && !priv && (opts.placeId || photo.placeId)) {
     // kein GPS, aber eingestempelt an einem Ort → Ort-Album
     const pid = opts.placeId || photo.placeId;
     const pl = pls.find((p) => p.id === pid) || { id: pid, name: photo.place || "Ort" };

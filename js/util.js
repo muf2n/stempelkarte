@@ -1,4 +1,6 @@
 // Kleine Hilfsfunktionen: Zeit-/Datumsformatierung, Wochen-/Monatsgrenzen, HTML-Escaping, IDs.
+import { isPrivateTrip } from "./privat-core.js"; // Update 9 – Privat: private Fahrten zählen nie als Arbeitszeit
+export { isPrivateTrip };
 
 export const WD = ["So", "Mo", "Di", "Mi", "Do", "Fr", "Sa"];
 export const MONTHS = ["Januar", "Februar", "März", "April", "Mai", "Juni",
@@ -64,6 +66,7 @@ export function startOfMonth(y, m) {
 /** Netto-Minuten eines Eintrags: max(0, Dauer − Pause). */
 export function netMin(entry) {
   if (!entry) return 0;
+  if (isPrivateTrip(entry)) return 0; // Update 9 – Privatfahrt (eigener Eintrag) = 0 h
   const dur = ((Number(entry.end) || 0) - (Number(entry.start) || 0)) / 60000;
   return Math.max(0, dur - (Number(entry.pauseMin) || 0));
 }

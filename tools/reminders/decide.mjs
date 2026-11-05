@@ -2,6 +2,7 @@
 // Alle Uhrzeiten/Tage werden in Europe/Vienna berechnet, nicht in der Server-Zeit.
 
 import { dueReminders, reminderText } from "../../js/cal-core.js";
+import { effectiveMode } from "../../js/privat-core.js"; // Update 9 – Privat / Arbeit
 
 export const TZ = "Europe/Vienna";
 const HOUR = 3600000;
@@ -107,6 +108,18 @@ export function isSchoolDayVienna(settings, v) {
     b && re.test(String(b.from || "")) && re.test(String(b.to || "")) && b.from <= v.key && v.key <= b.to);
 }
 
+/* ---- Update 9: Privat-Modus (settings.mode / settings.modeSchedule) ---- */
+/** Kalender-Sicht in Wiener Zeit für js/privat-core.js. */
+export function viennaCal(ts, settings) {
+  const v = vienna(ts);
+  const s = settings || {};
+  return { key: v.key, wd: v.wd, min: v.hh * 60 + v.mm, holiday: s.holidays !== false && holidaysOf(v.y).has(v.key) };
+}
+/** Ist jetzt Privat (selbst gewählt oder laut Zeitplan) und nicht eingestempelt? */
+export function isPrivatVienna(now, settings, running) {
+  return effectiveMode(settings || {}, now, { running, calOf: (t) => viennaCal(t, settings) }).privat;
+}
+
 /* ---- Einstellungen ---- */
 export const DEFAULT_REMINDERS = Object.freeze({
   enabled: true,
@@ -163,9 +176,10 @@ export function decide(now, settings, running, todayEntries, pushlog, todos = []
   const planSent = (log.planSent && typeof log.planSent === "object") ? log.planSent : {};
   const snooze = (log.snooze && typeof log.snooze === "object") ? log.snooze : {};
   const snoozeSent = (log.snoozeSent && typeof log.snoozeSent === "object") ? log.snoozeSent : {};
+  const privat = !running && isPrivatVienna(now, s, running); // Update 9: Privat → keine „nicht eingestempelt“-Erinnerung
 
   // Geplante Schichten: Push zur Planzeit (nachholen höchstens bis +60 min) und bei „Später erinnern“
-  if (!running && !isHoliday && !isSchool && !absent) {
+  if (!running && !privat && !isHoliday && !isSchool && !absent) {
     for (const p of plans) {
       const k = `${p.id}:${v.key}`;
       const [ph, pm] = String(p.time).split(":").map(Number);
@@ -189,7 +203,7 @@ export function decide(now, settings, running, todayEntries, pushlog, todos = []
   }
 
   // Start-Erinnerung (entfällt an Tagen mit geplanter Schicht – dann übernimmt der Plan)
-  if (rem.start.enabled && !running && plans.length === 0) {
+  if (rem.start.enabled && !running && !privat && plans.length === 0) {
     const days = Array.isArray(s.workDays) ? s.workDays.map(Number) : [1, 2, 3, 4, 5];
     const isWorkDay = days.includes(v.wd);
     const [th, tm] = rem.start.time.split(":").map(Number);

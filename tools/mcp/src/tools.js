@@ -15,6 +15,8 @@ import { best, norm, score } from "./match.js";
 import { expandTodo, nextInstance, describeRule, parseRRule, formatRRule, normCalendars, finalizeEvent } from "./cal.js"; // Update 9 – Kalender
 import * as MAT from "./material.js";
 import { DELETE_TOOLS } from "./delete.js";
+import * as PM from "./privat.js"; // Update 9 – Privat / Arbeit
+import { vienna } from "./time.js";
 import { DEFAULT_CATS, suggestCategory, parseAmount, budgetLevel, upcoming, monthlyCost, round2, INTERVALS } from "./money.js";
 
 const SRC = "claude";
@@ -147,6 +149,27 @@ function rangeArgs(args, today, { defFrom, defTo, maxDays = 366 }) {
   return { from, to };
 }
 
+/* ---------- Update 9: Privat / Arbeit ---------- */
+
+function calOf(settings) {
+  return (ts) => {
+    const v = vienna(ts);
+    return { key: v.key, wd: v.wd, min: v.hh * 60 + v.mm, holiday: settings.holidays !== false && !!holidayName(v.key) };
+  };
+}
+function modeOf(settings, running, now) {
+  return PM.effectiveMode(settings, now, { running, calOf: calOf(settings) });
+}
+function dayWord(ts, now) {
+  const k = dayKey(ts), t = dayKey(now);
+  if (k === t) return "";
+  if (k === addDays(t, 1)) return "morgen";
+  return fmtKeyWd(k);
+}
+function modeLine(settings, running, now) {
+  return "Modus: " + PM.modeText(modeOf(settings, running, now), clock, (ts) => dayWord(ts, now));
+}
+
 /* ---------- Werkzeuge ---------- */
 
 const RO = { readOnlyHint: true, destructiveHint: false, idempotentHint: true, openWorldHint: false };
@@ -173,6 +196,7 @@ tool({
     out.push("");
     if (r) out.push(...runningLines(r, now));
     else out.push("Nicht eingestempelt.");
+    out.push(modeLine(settings, r, now)); // Update 9 – Privat / Arbeit
     out.push("");
     const todayMin = creditByDay(entries, r, now).get(today) || 0;
     const tgt = dailyTargetMin(today, settings);
@@ -292,6 +316,59 @@ tool({
 });
 
 tool({
+  name: "modus_setzen",
+  title: "Privat / Arbeit umschalten",
+  description: "Schaltet zwischen Arbeit und Privat um (wie der Schalter „Arbeit | Privat“ in der App). Im Privat-Modus wird nicht automatisch eingestempelt, es kommen keine „Nicht eingestempelt“-Erinnerungen und Fahrten zählen als Privatfahrt (0 h). Optional „bis“: \"1h\" (1 Stunde), \"abend\" (heute 20:00), \"morgen\" (morgen früh zu Arbeitsbeginn), eine Uhrzeit HH:MM (heute bzw. morgen) – ohne „bis“ gilt Privat, bis wieder auf Arbeit geschaltet wird. Während einer laufenden Schicht wird nicht umgeschaltet (zuerst ausstempeln).",
+  inputSchema: {
+    type: "object",
+    properties: {
+      modus: { type: "string", enum: ["privat", "arbeit"], description: "\"privat\" oder \"arbeit\"" },
+      bis: { type: "string", description: "Nur bei privat: \"1h\", \"abend\", \"morgen\" oder HH:MM" },
+    },
+    required: ["modus"],
+    additionalProperties: false,
+  },
+  annotations: WR,
+  async run(args, d) {
+    const now = d.now, today = dayKey(now);
+    const want = s(args.modus).toLowerCase();
+    if (want !== "privat" && want !== "arbeit") throw new UserError("„modus“ muss \"privat\" oder \"arbeit\" sein.");
+    const [st, settings] = await Promise.all([d.state(), d.settings()]);
+    const r = st.running;
+    let until = null;
+    if (want === "privat") {
+      if (r) throw new UserError(`Du bist eingestempelt (seit ${clock(r.start)}). Bitte zuerst ausstempeln – ich stemple nie still aus.`);
+      const b = s(args.bis).toLowerCase().replace(/\s+/g, "");
+      if (b) {
+        const ids = { "1h": "1h", "1std": "1h", "1stunde": "1h", abend: "abend", heuteabend: "abend", morgen: "morgen", morgenfrüh: "morgen", morgenfrueh: "morgen", aus: "aus" };
+        const tsOf = (off, hh, mm) => keyToTs(addDays(today, off), hh, mm);
+        if (ids[b]) {
+          const u = PM.untilFor(ids[b], now, settings, tsOf);
+          if (!u.ok) throw new UserError("„bis heute Abend“ geht jetzt nicht mehr – bitte eine Uhrzeit angeben.");
+          until = u.until;
+        } else {
+          const t = timeArg(args.bis, "„bis“");
+          until = keyToTs(today, t.h, t.mi);
+          if (until <= now) until = keyToTs(addDays(today, 1), t.h, t.mi);
+        }
+      }
+    } else if (args.bis != null && s(args.bis)) {
+      throw new UserError("„bis“ gibt es nur für den Privat-Modus.");
+    }
+    const mode = PM.modeValue(want === "privat", now, until, "manual");
+    await d.commit([d.fs.patchWrite(d.p("meta/settings"), { mode })]);
+    d.invalidate("settings");
+    const after = await d.settings();
+    const out = [want === "privat"
+      ? `Privat-Modus an${until ? ` bis ${dayWord(until, now) ? dayWord(until, now) + " " : ""}${clock(until)}` : " (bis du wieder auf Arbeit schaltest)"} – nichts zählt als Arbeit.`
+      : "Arbeit-Modus an – Stempeln wieder wie gewohnt."];
+    out.push(modeLine(after, r, now));
+    if (want === "arbeit" && !r) out.push("Zum Einstempeln: „einstempeln“ verwenden.");
+    return out.join("\n");
+  },
+});
+
+tool({
   name: "einstempeln",
   title: "Einstempeln",
   description: "Startet eine neue Schicht (wie der Einstempeln-Knopf der App). Der Ort wird unscharf mit den gespeicherten Orten abgeglichen (z. B. \"huber\" → \"Baustelle Huber\"); ohne Ort wird – wie in der App – der Ort aus dem Einsatzplan von heute genommen. Optional Tätigkeit des ersten Abschnitts (Standard \"Arbeiten\"), Notiz, Personen und eine frühere Beginnzeit von heute.",
@@ -334,6 +411,13 @@ tool({
     });
     const r = res.running;
     const out = [`Eingestempelt um ${clock(r.start)} Uhr.`];
+    // Update 9 – Einstempeln beendet ein selbst gewähltes Privat (wie in der App)
+    const pm = PM.readMode(settings);
+    if (pm && pm.privat && pm.source === "manual") {
+      await d.commit([d.fs.patchWrite(d.p("meta/settings"), { mode: PM.modeValue(false, now, null, "manual") })]);
+      d.invalidate("settings");
+      out.push("Privat-Modus beendet.");
+    }
     out.push(`Ort: ${r.place || "ohne Ort"}${pl.info}`);
     out.push(`Tätigkeit: ${r.segments[0].activity}`);
     if (r.people.length) out.push(`Personen: ${r.people.join(", ")}`);
