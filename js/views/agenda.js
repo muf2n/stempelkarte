@@ -581,7 +581,7 @@ function deps() {
   const vis = (id) => { const c = cals.find((x) => x.id === id); return !c || c.visible !== false; };
   return {
     util: (C && C.util) || {}, einsatzFor, now: Date.now(), cals,
-    external: (from, to) => GC.instancesFor(from, to, vis),
+    external: (from, to) => { GC.setBuiltinHolidays((settingsOf() || {}).holidays); return GC.instancesFor(from, to, vis); },
   };
 }
 

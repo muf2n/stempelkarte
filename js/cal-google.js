@@ -11,6 +11,7 @@ import { getFirebase } from "./firebase.js";
 import { firebaseConfig, isConfigured } from "./firebase-config.js";
 import { isNative, plugin } from "./native.js";
 import { zoned, addDays, diffDays, toMin, hhmm, parseKey } from "./cal-core.js";
+import { holidayName } from "./util.js";
 
 export const GCAL_SCOPE = "https://www.googleapis.com/auth/calendar.readonly";
 const API = "https://www.googleapis.com/calendar/v3/";
@@ -277,14 +278,25 @@ export function instancesFor(from, to, visible = () => true) {
     for (const mk of monthKeys(from, to)) {
       const list = months.get(`${cal.id}|${mk}`);
       if (!list) { if (hasToken() && !state.error) loadMonth(cal, mk); continue; }
+      const isHolCal = /#holiday@group\.v\.calendar\.google\.com$/i.test(String(cal.id));
       for (const i of list) {
         if (seen.has(i.uid) || i.date > to || i.lastDay < from) continue;
+        // Google-Feiertagskalender: gesetzliche Feiertage zeigt die App schon selbst → nicht doppelt
+        if (isHolCal && i.allDay !== false && skipHoliday(i.date)) continue;
         seen.add(i.uid);
         out.push(i);
       }
     }
   }
   return out;
+}
+
+let holOn = true;
+/** Eingebaute Feiertage an/aus (settings.holidays) – nur dann werden Google-Feiertage ausgeblendet. */
+export function setBuiltinHolidays(on) { holOn = on !== false; }
+function skipHoliday(key) {
+  if (!holOn) return false;
+  try { return !!holidayName(new Date(key + "T12:00:00").getTime()); } catch { return false; }
 }
 
 export function find(uid) {
