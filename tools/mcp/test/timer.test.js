@@ -89,9 +89,13 @@ test("Einstempeln → Abschnitt → Pause → Ausstempeln: identisch zu timer.js
   const ents = t.g.list(`${t.base}/entries`);
   assert.equal(ents.length, 1);
   assert.match(ents[0].id, /^e[0-9a-z]{9}[0-9a-z]{8}$/);
-  assert.deepEqual(noId(ents[0]), noId(webEntry));
+  // Update 10c – Änderungsprotokoll: gleiche Daten, nur die Herkunft unterscheidet sich (Assistent vs. App)
+  const noH = (e) => { const { history, ...x } = noId(e); return x; };
+  assert.deepEqual(ents[0].history, [{ at: T4, by: "assistent", op: "neu" }]);
+  assert.deepEqual(webEntry.history, [{ at: T4, by: "manuell", op: "neu" }]);
+  assert.deepEqual(noH(ents[0]), noH(webEntry));
   const localEntry = store.get().entries[0];
-  assert.deepEqual(noId(ents[0]), noId(localEntry));
+  assert.deepEqual(noH(ents[0]), noH(localEntry));
   assert.equal(ents[0].segments.length, 2);
   assert.equal(ents[0].segments[1].end, T4);
   assert.equal(ents[0].pauseMin, 33);

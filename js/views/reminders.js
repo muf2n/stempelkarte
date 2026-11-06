@@ -67,7 +67,7 @@ export function mount(el, c) {
       <div class="rm-opt">
         <label class="switch">
           <input type="checkbox" id="rm-pause-on">
-          <span>Pausen-Erinnerung nach 6 h ohne Pause</span>
+          <span>Pausen-Erinnerung auch als Push (Zeit oben einstellbar)</span>
         </label>
       </div>
     </div>

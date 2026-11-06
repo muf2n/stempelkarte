@@ -63,7 +63,8 @@ function toMs(v) {
   return Number.isFinite(n) ? n : null;
 }
 
-export function entriesCSV(entries, { from, to, settings = null, days = null, places = null } = {}) {
+/** Update 10c: Zeilen (Kopf + Einträge + Summe) als Text-Zellen – Grundlage für CSV und Excel. */
+export function entriesRows(entries, { from, to, settings = null, days = null, places = null } = {}) {
   const f = toMs(from), t = toMs(to);
   const list = (entries || [])
     .filter(e => e && Number.isFinite(e.start) && (f == null || e.start >= f) && (t == null || e.start < t))
@@ -113,8 +114,28 @@ export function entriesCSV(entries, { from, to, settings = null, days = null, pl
   }
   rows.push(["Summe", "", "", "", "", sumPause, hours(sumNet), "", "", "", "", "", "",
     sumKm > 0 ? kmText(sumKm) : "", anyTg ? money(sumTg) : ""]);
+  return rows;
+}
 
-  return "﻿" + rows.map(r => r.map(cell).join(";")).join("\r\n") + "\r\n";
+export function entriesCSV(entries, opts = {}) {
+  const rows = entriesRows(entries, opts);
+  return "\uFEFF" + rows.map(r => r.map(cell).join(";")).join("\r\n") + "\r\n";
+}
+
+// Update 10c: echte Excel-Datei (.xlsx) – Zahlenspalten (Pause, Netto, km, Taggeld) als Zahlen.
+const NUM_COLS = new Set([5, 6, 13, 14]);
+const XLSX_WIDTHS = [11, 6, 13, 7, 7, 10, 9, 22, 30, 16, 24, 24, 40, 7, 10];
+export function entriesXlsxRows(entries, opts = {}) {
+  return entriesRows(entries, opts).map((r, ri) => r.map((v, ci) => {
+    if (ri === 0 || !NUM_COLS.has(ci)) return v;
+    if (typeof v === "number") return v;
+    const t = String(v ?? "");
+    return /^-?\d+(,\d+)?$/.test(t) ? Number(t.replace(",", ".")) : t;
+  }));
+}
+export async function entriesXlsx(entries, opts = {}, extraSheets = []) {
+  const { buildXlsx } = await import("./xlsx.js");
+  return buildXlsx([{ name: opts.sheetName || "Arbeitszeiten", rows: entriesXlsxRows(entries, opts), widths: XLSX_WIDTHS }, ...extraSheets]);
 }
 
 // Update 9 – Fahrtenbuch (klassisches österreichisches Format): Kopf + Zeilen aus trip-core.logRows,

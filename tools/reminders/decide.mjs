@@ -4,6 +4,7 @@
 import { dueReminders, reminderText } from "../../js/cal-core.js";
 import { effectiveMode } from "../../js/privat-core.js"; // Update 9 – Privat / Arbeit
 import * as SV from "../../js/alltag/money-core.js"; // Update 9 – Sparziele (Lohn-Erinnerung, Aufrunden)
+import { weekdayTargetMin, readDayHours } from "../../js/util.js"; // Update 10c – Soll je Wochentag (eine Regel für App/Server/Push)
 import { budgetStatus, budgetAlerts, applyAlerts, normAlerts, monthOf as moneyMonthOf } from "../../js/alltag/money-core.js"; // Update 9 – Budget-Warnungen
 
 export const TZ = "Europe/Vienna";
@@ -110,6 +111,22 @@ export function isSchoolDayVienna(settings, v) {
     b && re.test(String(b.from || "")) && re.test(String(b.to || "")) && b.from <= v.key && v.key <= b.to);
 }
 
+/* ---- Update 10c: Tagessoll (gleiche Regel wie js/util.js dailyTargetMin, Wiener Tag) ---- */
+/** Soll-Minuten am Wiener Tag v (0 an freien Tagen, Feiertagen und Berufsschultagen). */
+export function dailyTargetMinVienna(settings, v) {
+  const s = settings || {};
+  if (s.holidays !== false && holidaysOf(v.y).has(v.key)) return 0;
+  const base = weekdayTargetMin(v.wd, s);
+  if (base > 0 && isSchoolDayVienna(s, v)) return 0;
+  return base;
+}
+
+/** Pausen-Erinnerung: ab wie vielen Minuten ohne Pause (settings.pauseAfterMin, 240–600, Standard 360). */
+export function pauseAfterMin(settings) {
+  const v = Math.round(Number(settings && settings.pauseAfterMin));
+  return Number.isFinite(v) && v >= 240 && v <= 600 ? v : 360;
+}
+
 /* ---- Update 9: Privat-Modus (settings.mode / settings.modeSchedule) ---- */
 /** Kalender-Sicht in Wiener Zeit für js/privat-core.js. */
 export function viennaCal(ts, settings) {
@@ -207,7 +224,7 @@ export function decide(now, settings, running, todayEntries, pushlog, todos = []
   // Start-Erinnerung (entfällt an Tagen mit geplanter Schicht – dann übernimmt der Plan)
   if (rem.start.enabled && !running && !privat && plans.length === 0) {
     const days = Array.isArray(s.workDays) ? s.workDays.map(Number) : [1, 2, 3, 4, 5];
-    const isWorkDay = days.includes(v.wd);
+    const isWorkDay = days.includes(v.wd) && readDayHours(s).get(v.wd) !== 0; // Update 10c: eigener Tag mit 0 h = frei
     const [th, tm] = rem.start.time.split(":").map(Number);
     const nowMin = v.hh * 60 + v.mm;
     const startMin = th * 60 + tm;
@@ -270,11 +287,12 @@ export function decide(now, settings, running, todayEntries, pushlog, todos = []
     }
     // Pausen-Erinnerung (einmal pro Schicht): netto > 6 h ohne Pause
     const hadPause = (Number(running.pauseMs) || 0) > 0 || running.pauseStart != null;
-    if (rem.pause.enabled && !hadPause && gross > 6 * HOUR && log.pauseSentFor !== start) {
+    const pAfter = pauseAfterMin(s);
+    if (rem.pause.enabled && !hadPause && gross > pAfter * 60000 && log.pauseSentFor !== start) {
       out.push({
         type: "pause",
-        title: "Zeit für eine Pause",
-        body: "Du arbeitest seit über 6 Stunden ohne Pause.",
+        title: "☕ Zeit für eine Pause",
+        body: `Du arbeitest seit über ${fmtHours(pAfter * 60000)} h ohne Pause. Laut AZG gibt's ab mehr als 6 h 30 Min Pause – prüf deinen Kollektivvertrag.`,
         tag: "stempel-pause",
         url: "./#heute",
         log: [[["pauseSentFor"], start]],

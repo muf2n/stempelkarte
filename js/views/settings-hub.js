@@ -17,7 +17,7 @@ let cat = "";          // offene Kategorie ("" = Liste)
 let open = false;
 let pendingAfterClose = null;
 let token = ""; // kennzeichnet die Verlaufseinträge dieser Öffnung (alte Einträge nach Neuladen zählen nicht)
-const mq = window.matchMedia ? window.matchMedia("(min-width: 1024px)") : null;
+const mq = typeof window !== "undefined" && window.matchMedia ? window.matchMedia("(min-width: 1024px)") : null;
 const wide = () => !!(mq && mq.matches);
 
 const GROUPS = [
@@ -34,7 +34,7 @@ const CATS = [
   { id: "konto", g: "konto", e: "👤", t: "Google-Konto", k: "konto google anmelden abmelden synchronisieren sync daten export csv excel",
     html: `<div class="sh-card"><div class="lbl">Konto</div><div id="ov-account"></div></div>
       <div class="sh-links"><button type="button" class="sh-row" data-sh-act="csv"><span class="sh-ic" aria-hidden="true">📊</span><span class="sh-lb"><b>Daten als CSV (Excel)</b><small>In der Übersicht unter Monat – Monat wählen und herunterladen</small></span><span class="sh-chev" aria-hidden="true">›</span></button></div>` },
-  { id: "arbeitszeit", g: "arbeit", e: "⏱️", t: "Arbeitszeit", k: "soll stunden woche arbeitstage feiertage österreich überstunden konto startsaldo saldo zählt ab pläne geplante schichten auto-stempeln",
+  { id: "arbeitszeit", g: "arbeit", e: "⏱️", t: "Arbeitszeit", k: "soll stunden woche arbeitstage feiertage österreich überstunden konto startsaldo saldo zählt ab pläne geplante schichten auto-stempeln soll je wochentag tagesstunden freitag urlaubsanspruch urlaub tage vergessen stempelung nachtragen",
     html: `<div class="sh-card"><div class="fields">
         <label>Soll-Stunden pro Woche
           <input type="number" id="ov-target" inputmode="decimal" min="0" max="80" step="0.5">
@@ -55,6 +55,7 @@ const CATS = [
         </label>
         <p class="note">Ohne Datum zählt das Konto ab deinem ersten Eintrag.</p>
       </div></div>
+      <div class="sh-card"><div id="wt-settings"></div></div>
       <div class="sh-links">
         <button type="button" class="sh-row" id="ov-plans-link"><span class="sh-ic" aria-hidden="true">📅</span><span class="sh-lb"><b>Geplante Schichten (Auto-Stempeln) öffnen</b><small>Unter Orte – Schichten planen und automatisch stempeln</small></span><span class="sh-chev" aria-hidden="true">›</span></button>
         <button type="button" class="sh-row" data-sh-act="leave"><span class="sh-ic" aria-hidden="true">🌴</span><span class="sh-lb"><b>Urlaub &amp; Krankenstand</b><small>Urlaubskonto in der Übersicht</small></span><span class="sh-chev" aria-hidden="true">›</span></button>
@@ -83,8 +84,8 @@ const CATS = [
   { id: "benachrichtigungen", g: "app", e: "🔔", t: "Benachrichtigungen", k: "benachrichtigung erinnerung push pause pausen-erinnerung einstempeln ausstempeln sperrbildschirm",
     html: `<div class="sh-card"><div class="fields"><label class="switch">
           <input type="checkbox" id="ov-pauserem">
-          <span>Pausen-Erinnerung nach 6 Stunden</span>
-        </label></div></div>
+          <span>Pausen-Hinweis in der App</span>
+        </label><div id="wt-pause-settings"></div></div></div>
       <div class="sh-card"><div id="reminders-panel"></div></div>
       <div class="sh-card"><div id="lock-panel"></div></div>` },
   { id: "aussehen", g: "app", e: "🎨", t: "Erscheinungsbild", k: "farbe akzent design dunkel hell dark mode schrift groß einfache ansicht bedienen dashboard überblick widgets heute",

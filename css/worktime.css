@@ -1,0 +1,103 @@
+/* Update 10c – Arbeitszeit-Pro: Prognose, Was-wäre-wenn, Konten, vergessene Stempelungen, Monatsabschluss,
+   Verlauf im Eintragsblatt, Soll je Wochentag. Nur Tokens aus styles.css → hell/dunkel und Akzentfarbe automatisch. */
+
+.wt-wrap { display: grid; gap: inherit; min-width: 0; }
+.wt-wrap:empty { display: none; }
+.ov-main > .wt-wrap { gap: 16px; }
+.wt-card h2 { display: flex; align-items: center; gap: 8px; margin: 0 0 12px; font-size: 1.1rem; }
+.wt-card .note { margin: 6px 0 0; }
+
+/* Prognose */
+.wt-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
+.wt-tile {
+  min-width: 0; padding: 12px; border-radius: var(--r-sm);
+  background: color-mix(in srgb, var(--accent) 7%, var(--card));
+  border: 1px solid color-mix(in srgb, var(--accent) 18%, var(--line));
+}
+.wt-tl { font-size: .8rem; color: var(--muted); font-weight: 600; }
+.wt-tv { font-size: 1.05rem; margin: 2px 0 8px; font-variant-numeric: tabular-nums; overflow-wrap: anywhere; }
+.wt-tv b { font-family: var(--f-display); font-size: 1.3rem; }
+.wt-tile .progress { margin: 0 0 6px; }
+.wt-tile .progress > div { background: linear-gradient(90deg, var(--accent), var(--accent-2)); }
+.wt-ts { font-size: .8rem; color: var(--muted); }
+.wt-eom { margin-top: 10px; }
+
+/* Was wäre, wenn */
+.wt-wif { margin-top: 12px; border-top: 1px dashed var(--line); padding-top: 10px; }
+.wt-wif > summary { cursor: pointer; font-weight: 700; padding: 6px 0; list-style: none; display: flex; align-items: center; gap: 8px; }
+.wt-wif > summary::-webkit-details-marker { display: none; }
+.wt-wif > summary::after { content: "›"; margin-left: auto; transition: transform .2s; color: var(--muted); font-size: 1.3rem; }
+.wt-wif[open] > summary::after { transform: rotate(90deg); }
+.wt-wif .fields { margin-top: 8px; }
+.wt-wif .row { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
+.wt-wif-res { padding: 10px 12px; border-radius: var(--r-sm); background: var(--soft); }
+.wt-wif-q { margin: 0 0 4px; font-weight: 700; color: var(--accent); }
+
+/* Konten */
+.wt-acc { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
+.wt-acc-i {
+  display: flex; gap: 10px; align-items: flex-start; min-width: 0;
+  padding: 12px; border-radius: var(--r-sm); border: 1px solid var(--line); background: var(--card);
+}
+.wt-acc-e { font-size: 1.4rem; line-height: 1; }
+.wt-acc-i > div { min-width: 0; }
+.wt-acc-l { font-size: .8rem; color: var(--muted); font-weight: 600; overflow-wrap: anywhere; }
+.wt-acc-v { font-family: var(--f-display); font-size: 1.25rem; font-weight: 700; font-variant-numeric: tabular-nums; }
+.wt-acc-v small { font-family: var(--f-body); font-size: .75rem; font-weight: 500; color: var(--muted); }
+.wt-acc-s { font-size: .78rem; color: var(--muted); }
+.wt-acc-i.plus { border-color: color-mix(in srgb, var(--run) 40%, var(--line)); }
+.wt-acc-i.minus { border-color: color-mix(in srgb, var(--danger) 40%, var(--line)); }
+.wt-acc-i.plus .wt-acc-v { color: var(--run); }
+.wt-acc-i.minus .wt-acc-v { color: var(--danger); }
+/* .plus/.minus aus styles.css färben sonst die ganze Kachel */
+.wt-acc-i.plus, .wt-acc-i.minus { color: var(--ink) !important; }
+
+/* Vergessene Stempelungen + Monatsabschluss */
+.wt-gaps, .wt-mos { list-style: none; margin: 0; padding: 0; display: grid; gap: 8px; }
+.wt-gap, .wt-mo {
+  display: flex; align-items: center; justify-content: space-between; gap: 10px; flex-wrap: wrap;
+  padding: 10px 12px; border-radius: var(--r-sm); border: 1px solid var(--line); background: var(--card);
+}
+.wt-gap > div:first-child, .wt-mo > div { display: grid; gap: 2px; min-width: 0; flex: 1 1 180px; }
+.wt-gap small, .wt-mo small { color: var(--muted); overflow-wrap: anywhere; }
+.wt-gap-a { display: flex; gap: 6px; flex-wrap: wrap; }
+.wt-gap-leer { border-left: 4px solid var(--pause); }
+.wt-gap-lang, .wt-gap-laeuft { border-left: 4px solid var(--danger); }
+.wt-gap-offen { border-left: 4px solid var(--accent); }
+.wt-mo.is-closed { background: color-mix(in srgb, var(--run) 7%, var(--card)); border-color: color-mix(in srgb, var(--run) 30%, var(--line)); }
+.wt-ok { font-weight: 600; }
+
+/* Eintragsblatt: Pausenhinweis, Grund, Verlauf */
+.wt-pausehint {
+  margin: 0; padding: 8px 10px; border-radius: var(--r-sm);
+  background: var(--pause-soft); color: var(--ink);
+}
+.wt-closed-note { margin: 0; padding: 8px 10px; border-radius: var(--r-sm); background: var(--soft); }
+.wt-hist { border: 1px solid var(--line); border-radius: var(--r-sm); padding: 4px 12px; background: var(--card); }
+.wt-hist > summary { cursor: pointer; font-weight: 700; padding: 8px 0; }
+.wt-hist > summary small { color: var(--muted); font-weight: 500; }
+.wt-hist-list { list-style: none; margin: 0 0 8px; padding: 0 0 0 14px; border-left: 2px solid color-mix(in srgb, var(--accent) 40%, var(--line)); display: grid; gap: 10px; }
+.wt-hist-list li { position: relative; display: grid; gap: 2px; }
+.wt-hist-list li::before {
+  content: ""; position: absolute; left: -20px; top: 5px; width: 10px; height: 10px; border-radius: 50%;
+  background: var(--accent); box-shadow: 0 0 0 3px var(--card);
+}
+.wt-hist-list li.wt-h-gps::before { background: var(--k-zeitausgleich); }
+.wt-hist-list li.wt-h-assistent::before { background: var(--accent-2); }
+.wt-hist-list b { font-weight: 600; overflow-wrap: anywhere; }
+.wt-hist-list small { color: var(--muted); }
+
+/* Einstellungen: Soll je Wochentag */
+.wt-dayhours { display: grid; grid-template-columns: repeat(auto-fill, minmax(72px, 1fr)); gap: 8px; margin-top: 6px; }
+.wt-dh { display: grid; gap: 4px; font-size: .85rem; font-weight: 600; text-align: center; }
+.wt-dh input { text-align: center; padding-left: 4px; padding-right: 4px; min-width: 0; }
+.wt-dh input.is-own { border-color: var(--accent); background: color-mix(in srgb, var(--accent) 8%, var(--card)); }
+.wt-set .row { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
+
+@media (max-width: 420px) {
+  .wt-acc { grid-template-columns: 1fr; }
+}
+@media (min-width: 1024px) {
+  .wt-wrap { grid-template-columns: repeat(2, minmax(0, 1fr)); align-items: start; }
+  #wt-forecast { grid-column: 1 / -1; }
+}

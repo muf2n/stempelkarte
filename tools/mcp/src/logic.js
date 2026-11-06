@@ -147,9 +147,37 @@ export function baseTargetMin(k, settings) {
   if (!days.length) return 0;
   if (!days.includes(wdOf(k))) return 0;
   if (s.holidays !== false && holidayName(k)) return 0;
+  return weekdayTargetMin(wdOf(k), s);
+}
+
+/** Update 10c – Soll je Wochentag (wie js/util.js readDayHours/weekdayTargetMin). */
+export function readDayHours(settings) {
+  const s = settings || {};
+  const out = new Map();
+  const dh = s.dayHours && typeof s.dayHours === "object" ? s.dayHours : null;
+  if (!dh) return out;
+  for (const wd of workDaysOf(s)) {
+    const v = dh[String(wd)];
+    if (v == null || v === "") continue;
+    const h = Number(v);
+    if (Number.isFinite(h) && h >= 0 && h <= 24) out.set(Number(wd), Math.round(h * 60));
+  }
+  return out;
+}
+
+export function weekdayTargetMin(wd, settings) {
+  const s = settings || {};
+  const days = workDaysOf(s);
+  if (!days.length || !days.includes(wd)) return 0;
+  const own = readDayHours(s);
+  if (own.has(wd)) return own.get(wd);
   const weekly = Number(s.weeklyTarget ?? 38.5);
   if (!Number.isFinite(weekly) || weekly <= 0) return 0;
-  return (weekly * 60) / days.length;
+  const rest = days.length - own.size;
+  if (rest <= 0) return 0;
+  let used = 0;
+  for (const m of own.values()) used += m;
+  return Math.max(0, weekly * 60 - used) / rest;
 }
 
 /** util.js dailyTargetMin: 0 an Berufsschultagen. */

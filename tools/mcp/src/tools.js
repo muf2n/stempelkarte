@@ -21,6 +21,7 @@ import { DEFAULT_CATS, suggestCategory, parseAmount, budgetLevel, upcoming, mont
 import * as AB from "./subs.js"; // Update 9 – Abos: „Wie lange noch“, Fristen, Katalog (gemeinsam mit der Web-App)
 import * as MC from "./moneycore.js";
 import { READ_TOOLS, schoolSection, moneyExtra, savingsSection } from "./read.js"; // Update 9 – Claude sieht (fast) alles
+import * as WT from "./worktime.js"; // Update 10c – Änderungsprotokoll (entry.history, by "assistent")
 import { WRITE_TOOLS } from "./write.js"; // Update 9 – Claude darf (fast) alles ändern
 import { SETTINGS_TOOLS } from "./settings.js"; // Update 9 – Einstellungen nur mit Bestätigung
 import { GMAIL_TOOLS } from "./gmail.js"; // Gmail dauerhaft (nur lesen): mails_suchen, mail_lesen
@@ -428,7 +429,7 @@ tool({
       const extra = s(args.notiz);
       const r = extra ? { ...cur, note: [s(cur.note), extra].filter(Boolean).join(" · ") } : cur;
       const id = newId("e", n);
-      const entry = clockOut(r, { end }, n, id);
+      const entry = { ...clockOut(r, { end }, n, id), history: [{ at: n, by: "assistent", op: "neu" }] }; // Update 10c
       const { id: _x, ...data } = entry;
       // Reihenfolge wie timer.clockOut: zuerst running = null (meta/state, vorne in writes), dann der Eintrag
       return { running: null, writes: [d.fs.setWrite(d.p(`entries/${id}`), clean(data))], entry };
@@ -542,6 +543,7 @@ tool({
     if (kind !== "work" && !ABS_KINDS.includes(kind)) throw new UserError("art muss work, urlaub, krank, zeitausgleich oder schule sein.");
     const day = dateArg(need(args.datum, "Bitte ein Datum angeben."), today);
     const settings = await d.settings();
+    if (WT.isClosedMonth(settings, day.slice(0, 7))) throw new UserError(`${WT.monthLabel(day.slice(0, 7))} ist abgeschlossen 🔒 – bitte zuerst in der App (Übersicht → Monatsabschluss) wieder öffnen.`); // Update 10c
     if (kind === "work") {
       const b = timeArg(need(args.beginn, "Für Arbeitszeit bitte beginn (HH:MM) angeben."), "Beginn");
       const e = timeArg(need(args.ende, "Für Arbeitszeit bitte ende (HH:MM) angeben."), "Ende");
@@ -561,6 +563,7 @@ tool({
         placeId: pl.placeId, place: pl.place,
         note: s(args.notiz), people: cleanPeople(args.personen),
         inLoc: null, outLoc: null, src: SRC,
+        history: [{ at: now, by: "assistent", op: "neu" }], // Update 10c – Änderungsprotokoll
       };
       const id = newId("e", now);
       await d.commit([d.fs.setWrite(d.p(`entries/${id}`), clean(data))]);
@@ -596,7 +599,7 @@ tool({
       const cm = manual != null ? manual : Math.round(days.length > 1 && kind !== "zeitausgleich" ? nominal : defaultCreditMin(kind, k, settings));
       const ts = keyToTs(k);
       const id = newId("e", now + made.length);
-      const data = { kind, start: ts, end: ts, pauseMin: 0, creditMin: cm, placeId: null, place: "", note: s(args.notiz), inLoc: null, outLoc: null, src: SRC };
+      const data = { kind, start: ts, end: ts, pauseMin: 0, creditMin: cm, placeId: null, place: "", note: s(args.notiz), inLoc: null, outLoc: null, src: SRC, history: [{ at: now, by: "assistent", op: "neu" }] };
       writes.push(d.fs.setWrite(d.p(`entries/${id}`), data));
       made.push({ k, cm });
     }

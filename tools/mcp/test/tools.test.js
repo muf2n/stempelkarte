@@ -5,6 +5,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { setup, vt } from "./helpers.js";
 import * as L from "../src/logic.js";
+import * as DEC from "../../reminders/decide.mjs"; // Update 10c – Tagessoll auch in der Push-Logik gleich
 import * as T from "../src/time.js";
 
 const util = await import(new URL("../../../js/util.js", import.meta.url).href);
@@ -54,13 +55,18 @@ test("Feiertage, Tagessoll, Schultage und dayKey stimmen mit util.js überein (2
   for (let y = 2025; y <= 2028; y++) {
     assert.deepEqual([...L.holidaysOf(y).entries()].sort(), [...util.atHolidays(y).entries()].sort(), `Feiertage ${y}`);
   }
-  const variants = [SETTINGS, {}, { ...SETTINGS, holidays: false, workDays: [1, 2, 3, 4], weeklyTarget: 40 }];
+  const variants = [SETTINGS, {}, { ...SETTINGS, holidays: false, workDays: [1, 2, 3, 4], weeklyTarget: 40 },
+    // Update 10c – Soll je Wochentag (eigener Wert + Rest gleichmäßig; 0 h; ungültige Werte; Nicht-Arbeitstag)
+    { ...SETTINGS, dayHours: { 5: 6, 1: "" } }, { ...SETTINGS, weeklyTarget: 20, dayHours: { 1: 9, 2: 9, 3: 9, 6: 4 } },
+    { ...SETTINGS, dayHours: { 1: 0, 2: "x", 3: 30 } }, { workDays: [1, 2], dayHours: { 1: 7.75, 2: 8.25 } }];
   for (let k = "2025-12-20"; k <= "2027-01-10"; k = T.addDays(k, 1)) {
     const d = new Date(+k.slice(0, 4), +k.slice(5, 7) - 1, +k.slice(8, 10));
     for (const s of variants) {
       assert.equal(L.dailyTargetMin(k, s), util.dailyTargetMin(d.getTime(), s), `Soll ${k}`);
       assert.equal(L.schoolLabel(k, s), util.schoolLabel(d.getTime(), s), `Schule ${k}`);
       assert.equal(L.schoolCreditMin(k, s), util.schoolCreditMin(d.getTime(), s));
+      const v = { y: +k.slice(0, 4), m: +k.slice(5, 7), d: +k.slice(8, 10), wd: d.getDay(), key: k };
+      assert.equal(DEC.dailyTargetMinVienna(s, v), util.dailyTargetMin(d.getTime(), s), `Push-Soll ${k}`);
     }
   }
   // Tagesgrenzen inkl. Sommer-/Winterzeit-Umstellung
@@ -185,6 +191,7 @@ test("eintrag_nachtragen: Arbeit (Pause, Ort, über Mitternacht), Urlaub-Zeitrau
   assert.deepEqual({ ...e, id: undefined }, {
     id: undefined, kind: "work", start: vt(2026, 11, 3, 6, 30), end: vt(2026, 11, 3, 11, 0), pauseMin: 15,
     placeId: "p2", place: "Firma Elektro Maier", note: "Lager", people: [], inLoc: null, outLoc: null, src: "claude",
+    history: [{ at: e.history[0].at, by: "assistent", op: "neu" }], // Update 10c – Änderungsprotokoll
   });
   assert.equal(util.netMin(e), 255);
   r = await t.tool("eintrag_nachtragen", { datum: "01.11.2026", beginn: "22:00", ende: "02:00" });
