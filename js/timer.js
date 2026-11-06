@@ -58,7 +58,7 @@ function cleanPeople(list) {
 }
 
 /** Schicht beginnen (legt den ersten Abschnitt an). Wirft, wenn bereits eine Schicht läuft. */
-export async function clockIn({ placeId = null, place = "", note = "", inLoc = null, activity = DEFAULT_ACTIVITY, people = [] } = {}) {
+export async function clockIn({ placeId = null, place = "", note = "", inLoc = null, activity = DEFAULT_ACTIVITY, people = [], src = null } = {}) {
   if (store.get().running) throw new Error("Du bist schon eingestempelt.");
   const start = Date.now();
   const running = {
@@ -77,6 +77,7 @@ export async function clockIn({ placeId = null, place = "", note = "", inLoc = n
     pauseStart: null,
     pauseMs: 0,
     inLoc: inLoc ?? null,
+    ...(src === "gps" ? { src: "gps" } : {}), // Update 10c – automatisch (geplante Schicht/GPS) eingestempelt
   };
   await store.setRunning(running);
   return running;
@@ -208,6 +209,8 @@ export async function clockOut({ outLoc = null, end = null, outPlace = "" } = {}
     inLoc: r.inLoc ?? null,
     outLoc: outLoc ?? null,
     segments: closeSegments(r, now, outLoc ?? null, outPlace || ""),
+    // Update 10c – Änderungsprotokoll: Entstehung merken (automatisch eingestempelt → "gps")
+    history: [{ at: Date.now(), by: r.src === "gps" ? "gps" : "manuell", op: "neu" }],
   };
   await store.setRunning(null);
   await store.saveEntry(entry);

@@ -13,6 +13,7 @@ import { mountPhotoBar } from "./gallery.js"; // Update 9 – Fotos
 import { mountTodayButton as mountMaterialBtn } from "../alltag/material.js"; // Update 9 – Material
 import * as privatUi from "./privat-mode.js"; // Update 9 – Privat / Arbeit
 import * as privDrive from "../privat-drive.js";
+import * as WT from "../worktime-core.js"; // Update 10c – Änderungsprotokoll, GPS-Schutz, Pausenhinweis
 import { isPrivatNow } from "../privat.js";
 
 // Einsatzplan-Helfer (js/einsatz.js, Agent T) – dynamisch, mit Fallback (null)
@@ -647,7 +648,7 @@ function currentTip() {
       if (d > rad + 200 && !dismissed.has(id)) return { kind: "away", id, place: p };
     }
     if (set.pauseReminder !== false && !r.pauseStart && !(Number(r.pauseMs) > 0) &&
-        ctx.timer.netMs(r) > 6 * H && !pauseHintOff(r.start)) {
+        ctx.timer.netMs(r) > WT.pauseAfterMin(set) * 60000 && !pauseHintOff(r.start)) {
       return { kind: "pause", id: "pause|" + r.start };
     }
     return null;
@@ -733,7 +734,7 @@ function renderTips() {
       `<button type="button" class="btn go drive-big" data-act="tip-arrive"${dis}>${icon("play", 20)}<span>Weiter mit ${util.esc(tip.act)}</span></button></div>`;
   } else if (tip.kind === "pause") {
     html = `<div class="card tip" data-id="${util.esc(tip.id)}">${closeX()}` +
-      `<p class="tip-t">Nach 6 Stunden steht dir eine Pause von 30 Minuten zu.</p></div>`;
+      `<p class="tip-t">☕ Du arbeitest schon über ${util.hm(WT.pauseAfterMin(settings()))} h ohne Pause. ${util.esc(WT.PAUSE_HINT)}</p></div>`;
   }
   box.innerHTML = html;
   box.hidden = false;
@@ -981,6 +982,7 @@ async function doClockIn(btn, forcedPlace = null, opts = null) {
         people,
         inLoc,
         activity: (opts && opts.activity) || clockInAct(),
+        src: opts && opts.planKey ? "gps" : null,
       });
       // Geplante Schicht: Beginn auf die Planzeit zurücksetzen (nur wenn noch dieselbe Schicht)
       if (opts && Number.isFinite(opts.start)) {
@@ -1357,7 +1359,7 @@ function askNoteAfterOut(entryId) {
         const people = cleanPeople(pick.get());
         ui.setBusy(btn, true, "Speichern …");
         try {
-          await store.saveEntry({ ...cur, note, people });
+          await store.saveEntry(WT.withHistory({ ...cur, note, people }, { by: "manuell", op: "edit", prev: cur }));
           rememberPeople(store, people);
           close();
           if (!off.checked) ui.toast("Notiz gespeichert");
@@ -1701,6 +1703,23 @@ function autoMsg(start) {
   return (place) => `Automatisch eingestempelt um ${ctx.util.clock(start)}` + (place ? ` – ${place.name}` : "");
 }
 
+/**
+ * Update 10c – GPS-Automatik überschreibt nie einen vorhandenen Eintrag: überschneidet sich die Zeit mit einem
+ * Eintrag, wird der Beginn hinter dessen Ende gelegt; läuft ein Eintrag gerade bzw. ist heute Abwesenheit
+ * eingetragen, wird nicht automatisch eingestempelt (Hinweis, Plan für heute erledigt). → {start} oder null.
+ */
+function autoGuard(start, now, key) {
+  const g = WT.guardAutoStart((ctx.store.get() || {}).entries || [], start, now);
+  if (g.ok) {
+    if (g.reason === "verschoben") ctx.ui.toast(`📍 Beginn auf ${ctx.util.clock(g.start)} gesetzt – davor hast du schon einen Eintrag.`, 4500);
+    return g;
+  }
+  if (key) markPlanDone(key);
+  const what = g.reason === "abwesend" ? `heute ist ${ctx.util.kindLabel(g.conflict.kind)} eingetragen` : "für jetzt gibt's schon einen Eintrag";
+  ctx.ui.toast(`📝 Nicht automatisch eingestempelt – ${what}. Dein Eintrag bleibt, wie er ist.`, 5000);
+  return null;
+}
+
 /** „Früher da“: zwischen Planzeit − 60 min und Planzeit, Standort im Radius. */
 function earlyPlanTip() {
   if (!lastLoc || Date.now() - lastLocAt > LOC_FRESH_MS) return null;
@@ -1762,7 +1781,9 @@ function planTick() {
     if (now < due) continue;
     const place = planPlace(plan);
     if (!atPlace(lastLoc, place)) continue;
-    const start = planStart(due, now);
+    const g = autoGuard(planStart(due, now), now, planKey(plan.id, now));
+    if (!g) return;
+    const start = g.start;
     doClockIn(null, place, { activity: plan.activity || "Arbeiten", inLoc: lastLoc, start, planKey: planKey(plan.id, now), msg: autoMsg(start) });
     return;
   }
@@ -1827,7 +1848,9 @@ export async function handlePlan({ planId, due } = {}, c = ctx) {
     if (snap.running) { ui.toast("Du bist schon eingestempelt.", 3000); return; }
     const m = atPlace(loc, place);
     if (m) {
-      const start = planStart(dueMs, Date.now());
+      const g = autoGuard(planStart(dueMs, Date.now()), Date.now(), key);
+      if (!g) return;
+      const start = g.start;
       while (busyOp) await new Promise((r) => setTimeout(r, 100));
       await doClockIn(null, place, { activity: plan.activity || "Arbeiten", inLoc: loc, start, planKey: key, msg: autoMsg(start) });
       return;

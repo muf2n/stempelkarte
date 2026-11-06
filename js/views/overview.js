@@ -49,6 +49,8 @@ export function mount(el, c) {
           <div class="kv"><span>${icon("calendar", 18)}Diesen Monat</span><b id="ov-bal-month"></b></div>
         </div>
 
+        <div class="wt-wrap" id="worktime-panel"></div>
+
         <div class="panel card" id="leave-panel"></div>
 
         <div class="panel card" id="stats-panel">
@@ -89,6 +91,7 @@ export function mount(el, c) {
           <div class="lbl">Stunden je Tätigkeit</div>
           <div id="ov-month-acts"></div>
           <button class="btn primary" type="button" id="ov-csv">Als CSV (Excel) herunterladen</button>
+          <button class="btn ghost" type="button" id="ov-xlsx">📗 <span>Als Excel-Datei (.xlsx)</span></button>
           <button class="btn ghost" type="button" id="ov-ts">${icon("file", 20)}<span>Stundenzettel (PDF)</span></button>
         </div>
 
@@ -146,6 +149,7 @@ export function mount(el, c) {
   try { hubEl = settingsHub.mount(ctx); } catch (err) { console.error(err); }
   $("#ov-open-settings").addEventListener("click", () => settingsHub.openHub());
   $("#ov-csv").addEventListener("click", exportCSV);
+  $("#ov-xlsx").addEventListener("click", exportXlsx);
   // Update 9: Stundenzettel für den gewählten Monat
   $("#ov-ts").addEventListener("click", () => {
     const { from } = monthRange();
@@ -155,7 +159,7 @@ export function mount(el, c) {
 
   try { reminders.mount($("#reminders-panel"), ctx); } catch (err) { console.error(err); }
   // Update 6: Fahrerkennung + Sperrbildschirm – Module werden dynamisch geladen
-  for (const [mod, sel] of [["./drive-settings.js", "#drive-panel"], ["./lock-settings.js", "#lock-panel"], ["./school-settings.js", "#school-panel"], ["./apprentice.js", "#apprentice-panel"], ["./watch-settings.js", "#watch-panel"], ["./comfort-settings.js", "#comfort-panel"], ["./accent-settings.js", "#accent-panel"], ["./leave.js", "#leave-panel"], ["./trips.js", "#trips-panel"], ["./allowance-settings.js", "#allowance-panel"], ...(isNative() ? [["./android-settings.js", "#android-panel"]] : [])]) {
+  for (const [mod, sel] of [["./drive-settings.js", "#drive-panel"], ["./lock-settings.js", "#lock-panel"], ["./school-settings.js", "#school-panel"], ["./apprentice.js", "#apprentice-panel"], ["./watch-settings.js", "#watch-panel"], ["./comfort-settings.js", "#comfort-panel"], ["./accent-settings.js", "#accent-panel"], ["./leave.js", "#leave-panel"], ["./worktime.js", "#worktime-panel"], ["./worktime-settings.js", "#wt-settings"], ["./trips.js", "#trips-panel"], ["./allowance-settings.js", "#allowance-panel"], ...(isNative() ? [["./android-settings.js", "#android-panel"]] : [])]) {
     import(mod).then((m) => { extraPanels.push(m); m.mount($(sel), ctx); if (lastSnapForExtras) m.update(lastSnapForExtras); })
       .catch((err) => console.error(err));
   }
@@ -718,6 +722,33 @@ function exportCSV() {
   ctx.exporter.download(`Arbeitszeiten-${from.getFullYear()}-${u.pad(from.getMonth() + 1)}.csv`, csv);
   if (snap.running && snap.running.start >= f && snap.running.start < t) {
     ctx.ui.toast("Laufende Schicht ist noch nicht enthalten.");
+  }
+}
+
+/** Update 10c – echte .xlsx (Arbeitszeiten + Monatsübersicht) für den gewählten Monat. */
+async function exportXlsx() {
+  if (!snap) return;
+  const u = ctx.util;
+  const { from, to } = monthRange();
+  const f = from.getTime(), t = to.getTime();
+  const list = (snap.entries || []).filter((e) => e.start >= f && e.start < t);
+  if (!list.length) { ctx.ui.toast("Keine Einträge in diesem Monat."); return; }
+  try {
+    const WT = await import("../worktime-core.js");
+    const mk = `${from.getFullYear()}-${u.pad(from.getMonth() + 1)}`;
+    const tot = WT.monthTotals({ entries: snap.entries || [], settings: snap.settings || {} }, mk);
+    const h = (m) => Math.round((m / 60) * 100) / 100;
+    const sum = [["Monatsübersicht", WT.monthLabel(mk)], ["Ist (h)", h(tot.ist)], ["Soll (h)", h(tot.soll)], ["Differenz (h)", h(tot.diff)],
+      ["Arbeitszeit netto (h)", h(tot.net)], ["Pausen (h)", h(tot.pause)], ["Arbeitstage", tot.workDays], ["Urlaubstage", tot.urlaub],
+      ["Krankentage", tot.krank], ["Zeitausgleich-Tage", tot.za], ["Abgeschlossen", WT.isClosedMonth(snap.settings, mk) ? "ja" : "nein"]];
+    const bytes = await ctx.exporter.entriesXlsx(list, { from: f, to: t - 1, settings: snap.settings, days: snap.days, places: snap.places },
+      [{ name: "Monat", rows: sum, widths: [24, 18] }]);
+    const { XLSX_MIME } = await import("../xlsx.js");
+    await ctx.exporter.download(`Arbeitszeiten-${mk}.xlsx`, bytes, XLSX_MIME);
+    if (snap.running && snap.running.start >= f && snap.running.start < t) ctx.ui.toast("Laufende Schicht ist noch nicht enthalten.");
+  } catch (err) {
+    console.error(err);
+    ctx.ui.toast("Excel-Datei konnte nicht erstellt werden.");
   }
 }
 

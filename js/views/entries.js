@@ -4,6 +4,8 @@ import { icon } from "../icons.js";
 import { leaves, sparkles, emptyClipboard } from "../deco.js";
 import { segmentKm, isDriving, fmtKm, fmtEur, entryKm, allowanceByDay, LEVEL_LABELS } from "../travel.js"; // Update 9
 import { openAllowanceDay } from "./trips.js"; // Update 9
+import * as WT from "../worktime-core.js"; // Update 10c – Änderungsprotokoll, Monatsabschluss, Pausenhinweis
+import { esc as escH, kindLabel as kindLabelH } from "../util.js";
 
 const SEL_KEY = "stempelkarte.selPlace";
 
@@ -844,6 +846,11 @@ function fmtHours(min) {
 }
 
 export function openEntryForm(entry, ctx, prefill = null) {
+  if (!document.getElementById("wt-css")) { // Update 10c – Verlauf/Pausenhinweis-Stile
+    const l = document.createElement("link");
+    l.id = "wt-css"; l.rel = "stylesheet"; l.href = new URL("../../css/worktime.css", import.meta.url).href;
+    document.head.appendChild(l);
+  }
   const c = ctx || C;
   const { store, ui, util } = c;
   const { esc, hm, clock, dayKey, netMin } = util;
@@ -941,6 +948,15 @@ export function openEntryForm(entry, ctx, prefill = null) {
         <textarea id="ef-note" rows="2" placeholder="z. B. Montage Küche">${esc(vNote)}</textarea>
       </label>
       <p class="hint" id="ef-net" aria-live="polite"></p>
+      <p class="note wt-pausehint" id="ef-pausehint" hidden></p>
+      ${isNew ? "" : `<label class="wt-reason">Grund der Änderung (optional)
+        <input type="text" id="ef-reason" maxlength="140" placeholder="z. B. Ausstempeln vergessen" autocomplete="off">
+      </label>`}
+      ${!isNew && WT.isClosedMonth(settings, entry.start) ? `<p class="note wt-closed-note">🔒 ${esc(WT.monthLabel(WT.monthKeyOf(entry.start)))} ist abgeschlossen – beim Speichern fragen wir, ob du ihn wieder öffnen willst.</p>` : ""}
+      ${!isNew && Array.isArray(entry.history) && entry.history.length ? `<details class="wt-hist" id="ef-hist">
+        <summary>🕓 Verlauf <small>(${entry.history.length})</small></summary>
+        <ol class="wt-hist-list">${WT.historyRows(entry).map((h) => `<li class="wt-h-${esc(h.byId)}"><div class="wt-h-top"><b>${esc(h.text)}</b></div><small>${esc(h.when)} · ${esc(h.by)}${h.reason ? ` · „${esc(h.reason)}“` : ""}</small></li>`).join("")}</ol>
+      </details>` : ""}
       <div class="row">
         <button type="button" class="btn primary" id="ef-save">Speichern</button>
       </div>
@@ -999,6 +1015,7 @@ export function openEntryForm(entry, ctx, prefill = null) {
   renderSegEdit();
   const pplPick = peoplePicker(box.querySelector('[data-r="ef-ppl"]'), c, { selected: entry ? entry.people : [] });
   const netEl = box.querySelector("#ef-net");
+  const pauseEl = box.querySelector("#ef-pausehint");
   const saveBtn = box.querySelector("#ef-save");
   const creditInp = box.querySelector("#ef-credit");
   const untilInp = box.querySelector("#ef-until");
@@ -1052,9 +1069,12 @@ export function openEntryForm(entry, ctx, prefill = null) {
       } else {
         const n = netMin({ start: r.start, end: r.end, pauseMin: r.pauseMin });
         netEl.textContent = `Netto ${hm(n)} h` + (r.overnight ? " · endet am nächsten Tag" : "");
+        const ph = WT.pauseHint((r.end - r.start) / 60000, r.pauseMin);
+        if (pauseEl) { pauseEl.textContent = ph; pauseEl.hidden = !ph; }
       }
       return;
     }
+    if (pauseEl) pauseEl.hidden = true;
     if (!creditTouched) applyKind();
     const r = absenceDays();
     if (r.error) { netEl.textContent = r.error; return; }
@@ -1096,6 +1116,9 @@ export function openEntryForm(entry, ctx, prefill = null) {
   refresh();
 
   const note = () => box.querySelector("#ef-note").value.trim();
+  // Update 10c – Änderungsprotokoll: jeder Speicher-/Löschweg der App schreibt entry.history (by "manuell")
+  const reason = () => { const r = box.querySelector("#ef-reason"); return r ? r.value.trim() : ""; };
+  const logged = (data, prev) => WT.withHistory(data, { by: "manuell", op: prev ? "edit" : "neu", prev, reason: prev ? reason() : "" });
 
   const saveWork = async () => {
     const r = readTimes(box);
@@ -1130,7 +1153,8 @@ export function openEntryForm(entry, ctx, prefill = null) {
     }
     delete data.creditMin;
     if (entry && entry.id) data.id = entry.id;
-    await store.saveEntry(data);
+    if (!(await monthOpenOk([entry && entry.start, r.start]))) return null;
+    await store.saveEntry(logged(data, entry));
     rememberPeople(store, data.people);
     return { ts: r.start, msg: isNew ? "Eintrag gespeichert" : "Änderung gespeichert" };
   };
@@ -1155,10 +1179,11 @@ export function openEntryForm(entry, ctx, prefill = null) {
       inLoc: null,
       outLoc: null,
     });
+    if (!(await monthOpenOk([entry && entry.start, ...r.days]))) return null;
     if (!isNew) {
-      await store.saveEntry({ ...entry, ...base(r.days[0]), id: entry.id });
+      await store.saveEntry(logged({ ...entry, ...base(r.days[0]), id: entry.id }, entry));
     } else {
-      for (const ts of r.days) await store.saveEntry(base(ts));
+      for (const ts of r.days) await store.saveEntry(logged(base(ts), null));
     }
     const n = r.days.length;
     return { ts: r.days[0], msg: n > 1 ? `${n} Tage ${kindLabel(kind)} gespeichert` : `${kindLabel(kind)} gespeichert` };
@@ -1184,6 +1209,8 @@ export function openEntryForm(entry, ctx, prefill = null) {
   if (delBtn) {
     ui.confirmButton(delBtn, "Wirklich löschen?", async () => {
       try {
+        if (!(await monthOpenOk([entry.start]))) return;
+        await trashCopy(entry, reason());
         await store.deleteEntry(entry.id);
         sheet.close();
         ui.toast("Eintrag gelöscht");
@@ -1191,5 +1218,53 @@ export function openEntryForm(entry, ctx, prefill = null) {
     });
   }
 
+  /** Abgeschlossener Monat betroffen? → „Monat wieder öffnen?“ fragen; true = weiter speichern. */
+  async function monthOpenOk(tsList) {
+    const cur = (store.get() || {}).settings || settings;
+    const mks = [...new Set(tsList.filter((t) => Number.isFinite(t)).map((t) => WT.monthKeyOf(t)))].filter((mk) => WT.isClosedMonth(cur, mk));
+    if (!mks.length) return true;
+    const ok = await askReopen(ui, mks.map(WT.monthLabel).join(", "));
+    if (!ok) return false;
+    let cm = cur;
+    for (const mk of mks) cm = { ...cm, closedMonths: WT.reopenMonth(cm, mk) };
+    try { await store.saveSettings({ closedMonths: cm.closedMonths }); } catch { return false; }
+    ui.toast(`🔓 ${mks.map(WT.monthLabel).join(", ")} wieder geöffnet`);
+    return true;
+  }
+
   return sheet;
+}
+
+/** Bestätigung „Monat wieder öffnen?“ als kleines Blatt → Promise<boolean>. */
+function askReopen(ui, label) {
+  return new Promise((resolve) => {
+    let done = false;
+    const fin = (v) => { if (done) return; done = true; resolve(v); };
+    const sh = ui.openSheet({
+      title: "Monat wieder öffnen?",
+      bodyHTML: `<p>🔒 <b>${escH(label)}</b> ist abgeschlossen. Wenn du hier etwas änderst, wird der Monat wieder geöffnet und du kannst ihn danach neu abschließen.</p>
+        <div class="row"><button type="button" class="btn primary" data-wt="reopen">🔓 Monat wieder öffnen</button>
+        <button type="button" class="btn ghost" data-wt="keep">Abbrechen</button></div>`,
+    });
+    sh.el.querySelector('[data-wt="reopen"]').addEventListener("click", () => { fin(true); sh.close(); });
+    sh.el.querySelector('[data-wt="keep"]').addEventListener("click", () => { fin(false); sh.close(); });
+    const obs = new MutationObserver(() => { if (!sh.el.isConnected) { obs.disconnect(); fin(false); } });
+    obs.observe(document.body, { childList: true, subtree: true });
+  });
+}
+
+/** Gelöschten Eintrag mit Protokoll in den Papierkorb legen (30 Tage wiederherstellbar). Fehler stoppen das Löschen nicht. */
+async function trashCopy(entry, why) {
+  try {
+    const { collection } = await import("../alltag/db.js");
+    const { id, ...data } = WT.withHistory(entry, { by: "manuell", op: "delete", reason: why });
+    const d = new Date(entry.start);
+    const p2 = (n) => String(n).padStart(2, "0");
+    const what = entry.kind && entry.kind !== "work" ? kindLabelH(entry.kind) : `${p2(d.getHours())}:${p2(d.getMinutes())}–${Number.isFinite(entry.end) ? `${p2(new Date(entry.end).getHours())}:${p2(new Date(entry.end).getMinutes())}` : "?"}`;
+    const now = Date.now();
+    await collection("trash").put({
+      id: `app-${id}-${now.toString(36)}`, path: `entries/${id}`, data, op: "delete", type: "eintrag",
+      label: `${p2(d.getDate())}.${p2(d.getMonth() + 1)}.${d.getFullYear()} · ${what}`, deletedAt: now, by: "dir", batchId: `app-${now.toString(36)}`,
+    });
+  } catch (err) { console.warn("Papierkorb-Kopie nicht möglich:", err); }
 }

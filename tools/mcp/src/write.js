@@ -14,6 +14,7 @@ import * as UW from "./unterwegs.js";
 import * as MAT from "./material.js";
 import * as G from "./gallery.js";
 import * as MC from "./moneycore.js";
+import * as WT from "./worktime.js"; // Update 10c – Änderungsprotokoll + Monatsabschluss
 import { photoIndex, monthTrips } from "./read.js";
 import { parseAmount, round2 } from "./money.js";
 
@@ -196,6 +197,15 @@ const TOOL_PLANER_BEARBEITEN = {
 
 /* ===================== Arbeitszeit-Eintrag bearbeiten ===================== */
 
+/** Update 10c – Monatsabschluss: abgeschlossene Monate ändert der Assistent nicht (wieder öffnen nur in der App). */
+async function closedGuard(d, k) {
+  const settings = await d.settings();
+  const mk = String(k || "").slice(0, 7);
+  if (WT.isClosedMonth(settings, mk)) {
+    throw new UserError(`${WT.monthLabel(mk)} ist abgeschlossen 🔒 – bitte zuerst in der App (Übersicht → Monatsabschluss) wieder öffnen.`);
+  }
+}
+
 const TOOL_EINTRAG_BEARBEITEN = {
   name: "eintrag_bearbeiten",
   title: "Eintrag ändern",
@@ -213,6 +223,7 @@ const TOOL_EINTRAG_BEARBEITEN = {
       notiz_anhaengen: { type: "boolean", description: "true = an die bisherige Notiz anhängen statt ersetzen" },
       personen: { type: "array", items: { type: "string" } },
       gutschrift_h: { type: "number", description: "Nur Urlaub/Krank/Zeitausgleich/Schule: Gutschrift in Stunden" },
+      grund: { type: "string", description: "Optional: kurzer Grund der Änderung fürs Änderungsprotokoll (z. B. \"Ausstempeln vergessen\")" },
     },
     additionalProperties: false,
   },
@@ -233,8 +244,10 @@ const TOOL_EINTRAG_BEARBEITEN = {
       ({ id, ...data } = list[0]);
     }
     const e = { ...data };
+    const prev = { ...data };
     const kind = e.kind || "work";
     const said = [];
+    await closedGuard(d, dayKey(e.start));
     if (kind !== "work") {
       for (const k of ["beginn", "ende", "pause_min", "ort", "personen"]) if (args[k] != null && s(args[k]) !== "") throw new UserError(`Bei ${kindLabel(kind)} gibt es kein Feld „${k}“ – nur Notiz und gutschrift_h.`);
       if (args.gutschrift_h != null) {
@@ -293,7 +306,9 @@ const TOOL_EINTRAG_BEARBEITEN = {
       said.push(args.notiz_anhaengen === true ? "Notiz ergänzt" : "Notiz ersetzt");
     }
     if (!said.length) throw new UserError("Was soll geändert werden? (beginn, ende, pause_min, ort, notiz, personen, gutschrift_h)");
-    await d.commit([d.fs.setWrite(d.p(`entries/${id}`), clean(e), { exists: true })]);
+    if (dayKey(e.start).slice(0, 7) !== dayKey(prev.start).slice(0, 7)) await closedGuard(d, dayKey(e.start));
+    const logged = WT.withHistory(e, { by: "assistent", op: "edit", prev, at: d.now, reason: s(args.grund) });
+    await d.commit([d.fs.setWrite(d.p(`entries/${id}`), clean(logged), { exists: true })]);
     d.invalidate("entries:true", "entries:false");
     const now = kind === "work"
       ? `${clock(e.start)}–${clock(e.end)} · Pause ${Math.round(Number(e.pauseMin) || 0)} min · netto ${hm(netMin(e))} h${e.place ? ` · ${e.place}` : ""}`
@@ -341,6 +356,7 @@ const TOOL_FAHRT = {
     const doc = await d.fs.get(d.p(`entries/${entryId}`));
     if (!doc) throw new UserError("Diese Fahrt gibt es nicht (mehr).");
     const e = doc.data;
+    await closedGuard(d, dayKey(e.start));
     const seg = Array.isArray(e.segments) ? e.segments[raw] : null;
     if (!seg || !TR.isDriving(seg)) throw new UserError("Unter dieser Kennung ist keine Fahrt („Autofahren“).");
     const settings = await d.settings();
@@ -370,7 +386,8 @@ const TOOL_FAHRT = {
       next.privateTrip = priv;
       next.pauseMin = priv ? Math.max(0, Math.round((e.end - e.start) / 60000)) : 0;
     }
-    await d.commit([d.fs.setWrite(d.p(`entries/${entryId}`), clean(next), { exists: true })]);
+    const logged = WT.withHistory(next, { by: "assistent", op: "edit", prev: e, at: d.now, reason: `Fahrt ${clock(seg.start)}: ${said.join(", ")}` });
+    await d.commit([d.fs.setWrite(d.p(`entries/${entryId}`), clean(logged), { exists: true })]);
     d.invalidate("entries:true", "entries:false");
     return `Fahrt ${fmtKeyWd(dayKey(seg.start))} ${clock(seg.start)} geändert: ${said.join(" · ")}.`;
   },
