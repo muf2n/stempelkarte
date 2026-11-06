@@ -549,7 +549,7 @@ export function mount(el, ctx) {
     const all = entries();
     if (!all.length) {
       main.innerHTML = (S.broken ? brokenNote() : "") +
-        `<div class="empty tr-empty">${icon("lock", 34)}<h3>Noch keine Einträge</h3><p>Leg Logins, PINs (z. B. SIM-Karte), WLAN-Zugänge, geheime Notizen oder Dokumente (Reisepass, Ausweise) an.</p>` +
+        `<div class="empty tr-empty">${icon("lock", 34)}<h3>🔐 Noch keine Einträge</h3><p>Leg Logins, PINs (z. B. SIM-Karte), WLAN-Zugänge, geheime Notizen oder Dokumente (Reisepass, Ausweise) an.</p>` +
         `<div class="row tr-empty-row"><button type="button" class="btn primary sm" data-tr="new">+ Hinzufügen</button><button type="button" class="btn ghost sm" data-tr="newdoc">🛂 Dokument</button></div></div>`;
       return;
     }

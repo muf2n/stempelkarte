@@ -103,7 +103,7 @@ function render(st) {
     cls = "ok";
     html = `${icon("check", 18)}<span>Uhr bekannt: <b>${esc(st.deviceName || "Bangle.js")}</b>${st.installedAt ? "" : " – App noch nicht aufgespielt?"}</span>`;
   } else {
-    html = `${icon("note", 18)}<span>Noch keine Uhr verbunden.</span>`;
+    html = `${icon("note", 18)}<span>⌚ Noch keine Uhr verbunden.</span>`;
   }
   box.className = "rm-status " + cls;
   box.innerHTML = html;

@@ -208,7 +208,7 @@ export function renderExams(body, S) {
   body.innerHTML = `<div class="ss-toolbar"><p class="note">${up.length ? `${up.length} ${up.length === 1 ? "Prüfung" : "Prüfungen"} vor dir` : "Schularbeiten, Tests und die LAP im Blick."}</p>
       <button type="button" class="btn primary sm" data-act="add-exam">+ Prüfung</button></div>
     ${up.length ? `<div class="ss-grid">${up.map((e) => examCardHTML(S, e)).join("")}</div>`
-      : emptyHTML("🎯", "Keine Prüfungen geplant", "Trag Schularbeiten und Tests mit Stoff ein – du bekommst einen Countdown und einen Lernplan.", "Hinzufügen", "add-exam")}
+      : emptyHTML("🎯", "🎉 Keine Prüfungen geplant", "Trag Schularbeiten und Tests mit Stoff ein – du bekommst einen Countdown und einen Lernplan.", "Hinzufügen", "add-exam")}
     ${past.length ? `<details class="ss-past"><summary>Vergangene Prüfungen (${past.length})</summary><div class="ss-grid">${past.map((e) => examCardHTML(S, e)).join("")}</div></details>` : ""}`;
   body.querySelectorAll("[data-act=add-exam]").forEach((b) => b.addEventListener("click", () => openExamForm(S)));
   wireExams(body, S);
@@ -307,7 +307,7 @@ export function renderGrades(body, S) {
           <b>${esc(g.grade)}</b><span>${esc(g.kind || "")}${Number(g.weight) !== 1 ? ` · ${String(g.weight).replace(".", ",")}×` : ""}</span><small>${esc(fmtDay(g.date))}</small></button></li>`).join("")}</ul>
       </section>`).join("")}
     </div><p class="note ss-foot">Der Schnitt ist gewichtet und nur eine Orientierung – die Zeugnisnote legt die Lehrkraft fest.</p>`
-      : emptyHTML("⭐", "Noch keine Noten", "Trag Schularbeiten, Tests und Mitarbeit ein – du siehst den Schnitt pro Fach und gesamt.", "Hinzufügen", "add-grade")}`;
+      : emptyHTML("⭐", "📒 Noch keine Noten", "Trag Schularbeiten, Tests und Mitarbeit ein – du siehst den Schnitt pro Fach und gesamt.", "Hinzufügen", "add-grade")}`;
   body.querySelectorAll("[data-act=add-grade]").forEach((b) => b.addEventListener("click", () => openGradeForm(S)));
   body.querySelectorAll("[data-gedit]").forEach((b) => b.addEventListener("click", () => openGradeForm(S, col("grades").get(b.dataset.gedit))));
 }

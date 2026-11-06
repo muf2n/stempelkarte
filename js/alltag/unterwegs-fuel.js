@@ -88,7 +88,7 @@ export function createFuel({ col, ui, queue }) {
     const monthFills = all.filter((f) => C.monthOf(f.date) === mk);
 
     if (!all.length) {
-      return `<div class="empty uw-empty"><div class="uw-empty-emo">⛽</div><h3>Noch keine Tankungen</h3>` +
+      return `<div class="empty uw-empty"><div class="uw-empty-emo">⛽</div><h3>⛽ Noch keine Tankungen</h3>` +
         `<p>Trag beim Tanken Liter, Betrag und Kilometerstand ein – ab der zweiten Volltankung rechnet die App deinen Verbrauch aus.</p>` +
         `<button type="button" class="btn primary sm" data-fu="new">+ Tankung eintragen</button></div>` +
         (dkm ? `<p class="note uw-drivekm">${icon("car", 15)} Fahrtenbuch ${esc(C.monthLabel(mk))}: ≈ ${esc(C.num(dkm, 0))} km (aus deinen Arbeitsfahrten)</p>` : "");

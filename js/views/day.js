@@ -224,6 +224,8 @@ function render() {
   lastKey = key;
 
   root.querySelector('[data-md="date"]').textContent = `${DAYS_LONG[d.getDay()]}, ${d.getDate()}. ${u.MONTHS[d.getMonth()]}`;
+  const mh = root.querySelector(".md-h");
+  if (mh) mh.textContent = greeting(new Date());
   const hEl = root.querySelector('[data-md="hint"]');
   hEl.hidden = !hint;
   hEl.className = "md-hint" + (hint ? " md-hint-" + hint.kind : "");
@@ -269,4 +271,15 @@ function render() {
       `<span class="md-wd">${x.label}</span></div>`;
   }).join("") +
     `<div class="md-legend"><span><i class="md-b-h"></i>Stunden</span>${anySteps ? `<span><i class="md-b-s"></i>Schritte</span>` : ""}</div>`;
+}
+
+// Update 10: freundlicher Gruß nach Tageszeit statt nur „Mein Tag“
+export function greeting(now) {
+  const h = now.getHours();
+  if (h < 5) return "Gute Nacht 😴";
+  if (h < 11) return "Guten Morgen ☀️";
+  if (h < 14) return "Mahlzeit 🍽️";
+  if (h < 18) return "Servus 👋";
+  if (h < 22) return "Guten Abend 🌆";
+  return "Gute Nacht 🌙";
 }

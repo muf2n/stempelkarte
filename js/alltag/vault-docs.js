@@ -117,7 +117,7 @@ export function createDocs(api) {
 
   function cardsHTML(list) {
     if (!list.length) {
-      return `<div class="empty tr-empty vd-empty"><span class="vd-empty-ic" aria-hidden="true">🛂</span><h3>Noch keine Dokumente</h3>` +
+      return `<div class="empty tr-empty vd-empty"><span class="vd-empty-ic" aria-hidden="true">🛂</span><h3>🪪 Noch keine Dokumente</h3>` +
         `<p>Reisepass, Personalausweis, Lehrlingsausweis, e-card, Zeugnisse … – Fotos und PDFs, verschlüsselt im Tresor.</p>` +
         `<button type="button" class="btn primary sm" data-tr="newdoc">+ Dokument hinzufügen</button></div>`;
     }

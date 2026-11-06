@@ -133,6 +133,7 @@ export function mount(el, c) {
           <div id="apprentice-panel"></div>
           <div id="watch-panel"></div>
           <div id="comfort-panel"></div>
+          <div id="accent-panel"></div>
           <button type="button" class="btn ghost sm" id="ov-plans-link">Geplante Schichten (Auto-Stempeln) öffnen</button>
           <button type="button" class="btn ghost sm" id="ov-trash">${icon("trash", 18)}<span>Papierkorb (von Claude gelöscht)</span></button>
           <div class="lbl">Konto</div>
@@ -192,7 +193,7 @@ export function mount(el, c) {
 
   try { reminders.mount($("#reminders-panel"), ctx); } catch (err) { console.error(err); }
   // Update 6: Fahrerkennung + Sperrbildschirm – Module werden dynamisch geladen
-  for (const [mod, sel] of [["./drive-settings.js", "#drive-panel"], ["./lock-settings.js", "#lock-panel"], ["./school-settings.js", "#school-panel"], ["./apprentice.js", "#apprentice-panel"], ["./watch-settings.js", "#watch-panel"], ["./comfort-settings.js", "#comfort-panel"], ["./leave.js", "#leave-panel"], ["./trips.js", "#trips-panel"], ["./allowance-settings.js", "#allowance-panel"], ...(isNative() ? [["./android-settings.js", "#android-panel"]] : [])]) {
+  for (const [mod, sel] of [["./drive-settings.js", "#drive-panel"], ["./lock-settings.js", "#lock-panel"], ["./school-settings.js", "#school-panel"], ["./apprentice.js", "#apprentice-panel"], ["./watch-settings.js", "#watch-panel"], ["./comfort-settings.js", "#comfort-panel"], ["./accent-settings.js", "#accent-panel"], ["./leave.js", "#leave-panel"], ["./trips.js", "#trips-panel"], ["./allowance-settings.js", "#allowance-panel"], ...(isNative() ? [["./android-settings.js", "#android-panel"]] : [])]) {
     import(mod).then((m) => { extraPanels.push(m); m.mount($(sel), ctx); if (lastSnapForExtras) m.update(lastSnapForExtras); })
       .catch((err) => console.error(err));
   }
@@ -557,7 +558,7 @@ function renderRail() {
   $("#ov-today-prog").style.width = `${tp}%`;
   let note;
   if (snap.running) note = todayTarget > 0 ? `Läuft · ${Math.round(tp)} % vom Tagessoll (${hmRound(todayTarget)} h)` : "Läuft · heute kein Soll";
-  else if (todayMin < 1) note = todayTarget > 0 ? `Noch keine Arbeitszeit erfasst · Soll ${hmRound(todayTarget)} h` : "Noch keine Arbeitszeit erfasst.";
+  else if (todayMin < 1) note = todayTarget > 0 ? `Noch keine Arbeitszeit erfasst · Soll ${hmRound(todayTarget)} h` : "⏱️ Noch keine Arbeitszeit erfasst.";
   else note = todayTarget > 0 ? `${Math.round(tp)} % vom Tagessoll (${hmRound(todayTarget)} h)` : "Heute kein Soll";
   $("#ov-today-note").textContent = note;
 

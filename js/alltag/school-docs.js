@@ -252,7 +252,7 @@ export function renderDocs(body, S) {
           <span class="ss-doc-ic">${d.thumb ? `<img src="${esc(d.thumb)}" alt="">` : `<span aria-hidden="true">${kindIcon(d)}</span>`}</span>
           <span class="ss-doc-t"><b>${esc(d.title || "Dokument")}</b><span class="ss-meta">${d.subject ? `${dot(subjectColor(S.data, d.subject))}${esc(d.subject)}` : ""}<span>${esc(fmtDate(d.date))}</span><span>${esc(kb(d.size || 0))}</span></span></span>
         </button></li>`).join("")}</ul>` : `<p class="note">Nichts gefunden.</p>`}`
-      : emptyHTML("📚", "Noch keine Dokumente", "PDFs und Fotos von Arbeitsblättern hier ablegen – bis 700 kB pro Datei, Fotos werden automatisch verkleinert.", "Hinzufügen", "add-doc")}`;
+      : emptyHTML("📚", "📄 Noch keine Dokumente", "PDFs und Fotos von Arbeitsblättern hier ablegen – bis 700 kB pro Datei, Fotos werden automatisch verkleinert.", "Hinzufügen", "add-doc")}`;
   body.querySelectorAll("[data-act=add-doc]").forEach((b) => b.addEventListener("click", () => openUpload(S)));
   body.querySelectorAll("[data-doc]").forEach((b) => b.addEventListener("click", () => openDoc(S, col("docs").get(b.dataset.doc))));
   body.querySelectorAll("[data-ds]").forEach((b) => b.addEventListener("click", () => { S.view.docSubj = b.dataset.ds; S.rerender(); }));

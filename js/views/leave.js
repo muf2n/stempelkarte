@@ -301,7 +301,7 @@ function openList(kind) {
     return d.credit > 0 ? `${hm(d.credit)} h` : "";
   };
   const body = !list.length
-    ? `<p class="note">${esc(intro)}</p><p class="lv-empty">Noch keine Einträge.</p>`
+    ? `<p class="note">${esc(intro)}</p><p class="lv-empty">🏖️ Noch keine Einträge.</p>`
     : `<p class="note">${esc(intro)}</p>` + groups.slice().reverse().map((g) => {
       const a = g.days[0].date, b = g.days[g.days.length - 1].date;
       const n = kind === "urlaub" ? g.days.reduce((s, d) => s + d.value, 0) : g.days.length;

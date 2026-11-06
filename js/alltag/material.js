@@ -556,7 +556,7 @@ export function mount(el) {
       `<button type="button" class="chip sm" data-x="csv">${icon("download", 16)} CSV ${esc(MONTHS[m - 1] || "")}</button>` +
       (done.length ? `<button type="button" class="chip sm" data-x="share" data-mode="woche">${icon("share", 16)} Woche teilen</button>` : "") +
     `</div>`;
-    if (!done.length) return tools + emptyHTML("🧰", "Noch nichts verbaut", "Was du eingebaut hast, landet hier – nach Tag und Baustelle. Praktisch fürs Berichtsheft.");
+    if (!done.length) return tools + emptyHTML("🧰", "🧰 Noch nichts verbaut", "Was du eingebaut hast, landet hier – nach Tag und Baustelle. Praktisch fürs Berichtsheft.");
     const byDay = new Map();
     for (const it of done) { const k = it.dayKey || ""; if (!byDay.has(k)) byDay.set(k, []); byDay.get(k).push(it); }
     const days = [...byDay.keys()].sort().reverse();
@@ -580,7 +580,7 @@ export function mount(el) {
         `<div class="mt-card-h"><h3>${icon("building", 17)}<span>${esc(g.place)}</span></h3>` +
           `<button type="button" class="mt-ib" data-x="share" data-mode="woche" data-pk="${esc(g.key)}" aria-label="Teilen">${icon("share", 16)}</button></div>` +
         `<p class="note">${[g.last ? `zuletzt ${esc(M.fmtKeyDate(g.last))}` : "", M.openCountText(g) ? `<span class="mt-open">${esc(M.openCountText(g))}</span>` : ""].filter(Boolean).join(" · ")}</p>` +
-        (g.verbaut.length ? `<h4 class="mt-h4">Verbaut gesamt</h4>${totalsHTML(g.verbaut)}` : `<p class="note">Noch nichts verbaut.</p>`) +
+        (g.verbaut.length ? `<h4 class="mt-h4">Verbaut gesamt</h4>${totalsHTML(g.verbaut)}` : `<p class="note">🧰 Noch nichts verbaut.</p>`) +
         (g.vorOrt.length ? `<h4 class="mt-h4 site">Auf der Baustelle</h4>${totalsHTML(g.vorOrt, "site")}` : "") +
         (g.brauche || g.besorgt ? `<h4 class="mt-h4">Noch offen</h4>${totalsHTML(M.totals(all.filter((x) => M.placeKey(x) === g.key && (x.status === "brauche" || x.status === "besorgt"))), "open")}` : "") +
       `</section>`).join("") + `</div>`;

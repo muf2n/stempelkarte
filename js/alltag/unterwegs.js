@@ -129,7 +129,7 @@ export function mount(el, ctx) {
   function tripsHTML() {
     const list = C.sortTrips(trips());
     if (!list.length) {
-      return `<div class="empty uw-empty"><div class="uw-empty-emo">🧳</div><h3>Noch keine Reisen</h3>` +
+      return `<div class="empty uw-empty"><div class="uw-empty-emo">🧳</div><h3>🧳 Noch keine Reisen</h3>` +
         `<p>Urlaub, Wochenende oder Montage – leg eine Reise an und hab Packliste, Budget und Plan an einem Ort.</p>` +
         `<button type="button" class="btn primary sm" data-uw="newtrip">+ Reise hinzufügen</button></div>`;
     }

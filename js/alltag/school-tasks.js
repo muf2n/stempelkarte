@@ -132,7 +132,7 @@ export function renderTasks(body, S) {
     }).join("") + `</div>`;
   } else {
     html += done.length ? `<section class="card ss-card"><ul class="ss-list">${done.map((t) => taskRowHTML(S, t)).join("")}</ul></section>`
-      : `<p class="note">Noch nichts erledigt.</p>`;
+      : `<p class="note">✅ Noch nichts erledigt.</p>`;
   }
   body.innerHTML = html;
   body.querySelectorAll("[data-act=add-task]").forEach((b) => b.addEventListener("click", () => openTaskForm(S)));
@@ -212,7 +212,7 @@ export function renderProjects(body, S) {
   body.innerHTML = `<div class="ss-toolbar"><p class="note">Größere Arbeiten in Schritte aufteilen und abhaken.</p>
       <button type="button" class="btn primary sm" data-act="add-proj">+ Projekt</button></div>
     ${list.length ? `<div class="ss-grid">${list.map((p) => projectCardHTML(S, p)).join("")}</div>`
-      : emptyHTML("🛠️", "Noch keine Projekte", "Projektarbeiten, Referate oder die Vorbereitung auf die Lehrabschlussprüfung – mit Schritten und Fortschritt.", "Hinzufügen", "add-proj")}`;
+      : emptyHTML("🛠️", "🛠️ Noch keine Projekte", "Projektarbeiten, Referate oder die Vorbereitung auf die Lehrabschlussprüfung – mit Schritten und Fortschritt.", "Hinzufügen", "add-proj")}`;
   body.querySelectorAll("[data-act=add-proj]").forEach((b) => b.addEventListener("click", () => openProjectForm(S)));
   body.querySelectorAll("[data-pedit]").forEach((b) => b.addEventListener("click", () => openProjectForm(S, col("projects").get(b.dataset.pedit))));
   body.querySelectorAll("[data-pstep]").forEach((b) => b.addEventListener("click", () => {

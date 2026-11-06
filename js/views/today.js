@@ -418,7 +418,7 @@ function renderClock() {
     const priv = isPrivatNow(snap); // Update 9 – Privat
     pill.textContent = priv ? "Privat-Modus" : "Nicht eingestempelt";
     metaHTML = priv ? `<span>Nichts zählt als Arbeit. Zum Arbeiten oben auf „Arbeit“ tippen oder einstempeln.</span>`
-      : `<span>Tippe auf „Einstempeln“, wenn du anfängst.</span>`;
+      : `<span>Tippe auf „Einstempeln“, wenn du anfängst. 💪</span>`;
   } else if (st === "running" || st === "paused") {
     pill.textContent = st === "paused" ? `Pause seit ${util.clock(r.pauseStart)}` : "Bei der Arbeit";
     // Ort/Standort des aktuellen Abschnitts
@@ -820,7 +820,7 @@ export async function clockOutAt(end, btn = null) {
     if (entry) done = entry;
     saved = true;
     buzz([40, 60, 40]);
-    ui.toast(`Ausgestempelt um ${util.clock(end)} · ${util.hm(util.netMin(done))} h`, 3000);
+    ui.toast(`🎉 Feierabend! Ausgestempelt um ${util.clock(end)} · ${util.hm(util.netMin(done))} h`, 3000);
   } catch (e) {
     ui.toast("Ausstempeln fehlgeschlagen" + (e && e.message ? ": " + e.message : ""), 3500);
     done = null;
@@ -997,7 +997,7 @@ async function doClockIn(btn, forcedPlace = null, opts = null) {
         ui.toast(opts.msg(place), 4500);
       } else {
         buzz(40);
-        ui.toast(place ? `Eingestempelt · ${place.name}` : (inLoc ? "Eingestempelt · Adresse wird ermittelt …" : "Eingestempelt · Ort unbekannt"));
+        ui.toast(place ? `👷 Eingestempelt · ${place.name}` : (inLoc ? "👷 Eingestempelt · Adresse wird ermittelt …" : "👷 Eingestempelt · Ort unbekannt"));
       }
     } catch (e) {
       ui.toast("Einstempeln fehlgeschlagen" + (e && e.message ? ": " + e.message : ""), 3500);
@@ -1130,7 +1130,7 @@ async function doClockOut(btn) {
       entry = await timer.clockOut({ outLoc, outPlace });
       if (entry) done = entry;
       buzz([40, 60, 40]);
-      ui.toast(`Ausgestempelt · ${util.hm(util.netMin(done))} h`);
+      ui.toast(`🎉 Feierabend! Ausgestempelt · ${util.hm(util.netMin(done))} h`);
     } catch (e) {
       ui.toast("Ausstempeln fehlgeschlagen" + (e && e.message ? ": " + e.message : ""), 3500);
       done = null;
@@ -1606,7 +1606,7 @@ function renderList() {
   if (key === listKey) return;
   listKey = key;
   if (!list.length) {
-    $("list").innerHTML = `<div class="empty empty-illu">${emptyClipboard()}<h3>Noch keine Einträge für heute</h3>` +
+    $("list").innerHTML = `<div class="empty empty-illu">${emptyClipboard()}<h3>☕ Noch keine Einträge für heute</h3>` +
       `<p class="note">Deine Arbeitszeiten werden hier angezeigt, sobald du eingestempelt hast.</p></div>`;
     return;
   }

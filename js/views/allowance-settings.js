@@ -145,7 +145,7 @@ export function update(s) {
   $("#al-road").checked = readTripSettings(snap.settings).roadKm;
   const vs = readVehicles(snap.settings);
   const dv = defaultVehicle(snap.settings);
-  $("#al-veh-txt").textContent = vs.length ? `${vs.length} ${vs.length === 1 ? "Fahrzeug" : "Fahrzeuge"}${dv ? ` · Standard: ${vehicleLabel(dv)}` : ""}` : "Noch keine Fahrzeuge";
+  $("#al-veh-txt").textContent = vs.length ? `${vs.length} ${vs.length === 1 ? "Fahrzeug" : "Fahrzeuge"}${dv ? ` · Standard: ${vehicleLabel(dv)}` : ""}` : "🚗 Noch keine Fahrzeuge";
   for (const [id, key] of NUM_FIELDS) {
     const inp = $(id);
     if (document.activeElement !== inp) inp.value = show(key, a[key]);
@@ -157,5 +157,5 @@ export function update(s) {
   const esc = ctx.util.esc;
   $("#al-places").innerHTML = places.length
     ? places.map((p) => `<button type="button" class="chip" data-pid="${esc(p.id)}" aria-pressed="${String(a.homePlaceIds.includes(p.id))}">${esc(p.name || "Ort")}</button>`).join("")
-    : `<p class="note">Noch keine Orte gespeichert – lege sie im Reiter „Orte“ an.</p>`;
+    : `<p class="note">📍 Noch keine Orte gespeichert – lege sie im Reiter „Orte“ an.</p>`;
 }

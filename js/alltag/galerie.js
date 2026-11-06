@@ -360,7 +360,7 @@ function renderAlbums() {
     pg.innerHTML = head +
       `<div class="gl-tools"><span></span><button type="button" class="btn sm ghost" data-g="newfolder">${icon("plus", 18)}<span>Hauptkategorie</span></button></div>` +
       (st || (!list.length
-        ? `<div class="gl-empty"><div class="gl-empty-ic">📷</div><h3>Noch keine Fotos</h3><p>Mach ein Foto – ${set.auto ? "es landet automatisch im Album der Adresse, an der du gerade bist" : "und ordne es dann einem Album zu"}. Z. B. in „Heute“ während der Arbeit.</p></div>`
+        ? `<div class="gl-empty"><div class="gl-empty-ic">📷</div><h3>📸 Noch keine Fotos</h3><p>Mach ein Foto – ${set.auto ? "es landet automatisch im Album der Adresse, an der du gerade bist" : "und ordne es dann einem Album zu"}. Z. B. in „Heute“ während der Arbeit.</p></div>`
         : `<div class="gl-agrid">${list.map(albumCard).join("")}` +
           `<button type="button" class="gl-acard gl-anew" data-g="newalbum"><span class="gl-acov"><span class="gl-acov-e">${icon("plus", 30)}</span></span><span class="gl-atxt"><b>Neues Album</b><small>z. B. „Verteiler“, „Vorher/Nachher“</small></span></button>` +
           `</div>`)) +
@@ -528,7 +528,7 @@ function renderAll(soft) {
   pg.querySelector('[data-g="selhead"]').innerHTML = selectHead(list.length);
   const st = statusHTML();
   pg.querySelector('[data-g="grid"]').innerHTML = st || (list.length ? gridHTML(list) :
-    `<div class="gl-empty"><p>${filtered ? "Keine Fotos für diesen Filter." : "Noch keine Fotos."}</p>${filtered ? "" : addButtons()}</div>`);
+    `<div class="gl-empty"><p>${filtered ? "Keine Fotos für diesen Filter." : "📸 Noch keine Fotos."}</p>${filtered ? "" : addButtons()}</div>`);
   watchMore();
 }
 
@@ -564,7 +564,7 @@ function renderAlbum() {
     `</div>` +
     `<div class="gl-bar"><span>${esc(nFotos(list.length))}</span><span class="gl-bar-r">${selectHead(list.length)}</span></div>` +
     (statusHTML() || (list.length ? gridHTML(list, { months: false }) :
-      `<div class="gl-empty"><p>${virtual ? "Alle Fotos haben einen Ort. 👍" : "Noch keine Fotos in diesem Album."}</p></div>`));
+      `<div class="gl-empty"><p>${virtual ? "Alle Fotos haben einen Ort. 👍" : "📸 Noch keine Fotos in diesem Album."}</p></div>`));
   watchMore();
 }
 
@@ -599,7 +599,7 @@ function renderMap(soft) {
   const pts = sortedAlbums().filter((x) => x.a.kind !== "virtual" && G.hasPos(x.a));
   const listHTML = pts.length
     ? `<div class="gl-mlist">${pts.map(({ a, st }) => `<button type="button" class="gl-mrow" data-album="${esc(a.id)}">${albumGlyph(a, 18)}<span><b>${esc(a.name)}</b><small>${esc(nFotos(st.count))}</small></span>${icon("chevron-right", 18)}</button>`).join("")}</div>`
-    : `<div class="gl-empty"><p>Noch keine Alben mit Standort.</p></div>`;
+    : `<div class="gl-empty"><p>🗺️ Noch keine Alben mit Standort.</p></div>`;
   if (soft && S.map && pg.querySelector(".gl-map")) { drawMarkers(pts); pg.querySelector('[data-g="mlist"]').innerHTML = listHTML; return; }
   if (S.map) { try { S.map.remove(); } catch { /* egal */ } S.map = null; }
   pg.innerHTML = `<div class="gl-map" data-g="map"><p class="gl-mapnote" data-g="mapnote">Karte wird geladen …</p></div><div data-g="mlist">${listHTML}</div>`;

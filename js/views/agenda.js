@@ -205,7 +205,7 @@ function render() {
     const exHTML = ex.length ? `<div class="pl-allday pl-selx">${ex.map((it) =>
       `<div class="pl-ad pl-t-${it.type}">${it.open ? `<button type="button" class="pl-ad-m" data-popen="${esc(it.open)}">` : `<span class="pl-ad-m">`}<span aria-hidden="true">${it.emoji}</span><b>${esc(it.title)}</b><span class="pl-ad-s">${esc(it.sub)}</span>${it.open ? "</button>" : "</span>"}</div>`).join("")}</div>` : "";
     html += section(`${esc(dayLabel(selDay, true))}<button type="button" class="btn sm ghost ag-clear" data-act="clearday">Alle Tage</button>`,
-      exHTML + (items.length ? listHTML(items, tKey) : `<p class="note ag-none">Nichts geplant. Tippe oben auf ＋, um für diesen Tag etwas einzutragen.</p>`), "ag-sel");
+      exHTML + (items.length ? listHTML(items, tKey) : `<p class="note ag-none">🌤️ Nichts geplant. Tippe oben auf ＋, um für diesen Tag etwas einzutragen.</p>`), "ag-sel");
   } else {
     const openCount = g.today.length + g.soon.length + g.nodate.length;
     if (!openCount) {
@@ -1028,7 +1028,7 @@ function ezNextHTML(todos, tKey) {
         `<span class="ez-rmain"><b>${esc(ezPlace(e) || "Ohne Ort")}</b><span class="ez-rmeta">${esc(when)}${who ? " · " + esc(who) : ""}${e.note ? " · " + esc(String(e.note).split("\n")[0]) : ""}</span></span>` +
         `${icon("chevron-right", 18)}</button></li>`;
     }).join("")}</ul>`
-    : `<p class="note ag-none">Noch nichts eingetragen. Tippe oben auf einen Tag.</p>`;
+    : `<p class="note ag-none">📝 Noch nichts eingetragen. Tippe oben auf einen Tag.</p>`;
   return section("Nächste Einsätze", body, "ez-next");
 }
 

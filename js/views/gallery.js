@@ -373,7 +373,7 @@ export function mountGallery(host, ctx, q, opts = {}) {
   function draw() {
     tEl.textContent = (opts.title || "Fotos") + (list.length ? ` (${list.length})` : "");
     if (!list.length) {
-      grid.innerHTML = `<span class="note ph-empty">${esc(opts.empty || "Noch keine Fotos.")}</span>`;
+      grid.innerHTML = `<span class="note ph-empty">${esc(opts.empty || "📸 Noch keine Fotos.")}</span>`;
     } else {
       grid.innerHTML = list.map((p, n) =>
         `<button type="button" class="ph-th" data-n="${n}" aria-label="${esc(p.note ? "Foto: " + p.note : "Foto " + clock(p.ts))}">` +

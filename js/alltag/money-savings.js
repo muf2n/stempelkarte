@@ -162,7 +162,7 @@ export function createSavings(opts) {
 
   function goalsPageHTML(emptyBox) {
     const list = goals().sort((a, b) => (a.done === b.done ? (a.created || 0) - (b.created || 0) : a.done ? 1 : -1));
-    if (!list.length) return emptyBox("Noch keine Sparziele", "Spar auf etwas Bestimmtes – z. B. Führerschein, Moped oder neues Handy.", "newgoal") + roundupCardHTML();
+    if (!list.length) return emptyBox("🐷 Noch keine Sparziele", "Spar auf etwas Bestimmtes – z. B. Führerschein, Moped oder neues Handy.", "newgoal") + roundupCardHTML();
     const totalSaved = list.reduce((s, g) => s + current(g).amount, 0);
     return `<div class="mn-goal-sum"><span>Gespart insgesamt</span><b>${amt(totalSaved)}</b></div>` +
       `<div class="mn-goals">${list.map(goalCardHTML).join("")}</div>` +

@@ -141,7 +141,7 @@ function renderDetail(body, S, s) {
         ${pastExams.length ? `<details class="ss-past"><summary>Vergangene Prüfungen (${pastExams.length})</summary><ul class="ss-mini">${pastExams.map((e) => `<li><button type="button" data-eedit="${esc(e.id)}"><b>${esc(e.kind || "Prüfung")}</b><span>${esc(fmtDate(e.date))}</span></button></li>`).join("")}</ul></details>` : ""}
       </section>
       <section class="card ss-card">${head("Noten", grades.length, "grade")}
-        ${grades.length ? `<ul class="ss-grades">${grades.map((g) => `<li><button type="button" data-gedit="${esc(g.id)}" style="--g:${GRADE_COLORS[g.grade] || "#64748b"}"><b>${esc(g.grade)}</b><span>${esc(g.kind || "")}</span><small>${esc(fmtDay(g.date))}</small></button></li>`).join("")}</ul>` : `<p class="note">Noch keine Noten.</p>`}
+        ${grades.length ? `<ul class="ss-grades">${grades.map((g) => `<li><button type="button" data-gedit="${esc(g.id)}" style="--g:${GRADE_COLORS[g.grade] || "#64748b"}"><b>${esc(g.grade)}</b><span>${esc(g.kind || "")}</span><small>${esc(fmtDay(g.date))}</small></button></li>`).join("")}</ul>` : `<p class="note">📒 Noch keine Noten.</p>`}
       </section>
       <section class="card ss-card"><div class="ss-h-row"><h3 class="ss-h">Lernplan <span class="ss-count">${planNext.length}</span></h3><button type="button" class="linkbtn" data-go="planer">Planer</button></div>
         ${planNext.length ? `<ul class="ss-list">${planNext.map((p) => planRowHTML(S, p)).join("")}</ul>` : `<p class="note">${st.plan.length ? "Alle Lerneinheiten erledigt. 🎉" : "Noch keine Lerneinheiten – im Planer „✨ Mit KI planen“ tippen."}</p>`}
@@ -182,7 +182,7 @@ export function renderSubjects(body, S) {
   if (sel) { renderDetail(body, S, sel); return; }
   S.view.subject = null;
   if (!list.length) {
-    body.innerHTML = emptyHTML("📚", "Noch keine Fächer", "Fächer entstehen aus deinem Stundenplan, deinen Aufgaben, Prüfungen und Noten. Trag am besten zuerst den Stundenplan ein.", "Stundenplan anlegen", "add-lesson");
+    body.innerHTML = emptyHTML("📚", "📚 Noch keine Fächer", "Fächer entstehen aus deinem Stundenplan, deinen Aufgaben, Prüfungen und Noten. Trag am besten zuerst den Stundenplan ein.", "Stundenplan anlegen", "add-lesson");
     body.querySelectorAll("[data-act=add-lesson]").forEach((b) => b.addEventListener("click", () => openLessonForm(S)));
     return;
   }

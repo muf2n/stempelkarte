@@ -290,7 +290,7 @@ export function scheduleHTML(k, d) {
       `<b>${esc(it.title)}</b><span>${esc(it.sub)}</span>` + (it.open ? `</button>` : `</span>`) +
       (it.check ? `<button type="button" class="pl-chk" data-pcheck="${esc(it.check)}" aria-pressed="${it.done}" aria-label="${it.done ? "Wieder offen" : "Erledigt"}: ${esc(it.title)}">${icon("check", 14)}</button>` : "") +
       `</li>`).join("")}</ol>`
-    : `<p class="note ag-none">Nichts geplant.</p>`;
+    : `<p class="note ag-none">🌤️ Nichts geplant.</p>`;
   return `<div class="pl-selday"><div class="pl-selh"><b>${esc(dayLong(k))}</b>` +
     `<button type="button" class="btn sm ghost" data-pday="${k}">Tag öffnen</button></div>${body}</div>`;
 }

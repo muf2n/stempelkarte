@@ -180,7 +180,7 @@ function renderList() {
   const places = (snap && snap.places) || [];
   if (places.length === 0) {
     list.innerHTML =
-      `<div class="empty"><h3>Noch keine Orte</h3>` +
+      `<div class="empty"><h3>📍 Noch keine Orte</h3>` +
       `<p class="note">Speichere deine Arbeitsorte – dann erkennt die App beim Einstempeln automatisch, wo du bist.</p></div>`;
     return;
   }

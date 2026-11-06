@@ -84,7 +84,7 @@ export function createSubs(opts) {
   function pageHTML(emptyBox) {
     const subs = col.subs.all().filter((s) => s && !s.deleted);
     const gm = opts.gmCardHTML();
-    if (!subs.length) return gm + emptyBox("Noch keine Abos", "Netflix, Spotify, Handyvertrag, Fitnessstudio … – trag sie ein: Du siehst, was es kostet, wie lange es noch läuft und wie du kündigst.", "newsub");
+    if (!subs.length) return gm + emptyBox("📺 Noch keine Abos", "Netflix, Spotify, Handyvertrag, Fitnessstudio … – trag sie ein: Du siehst, was es kostet, wie lange es noch läuft und wie du kündigst.", "newsub");
     const t = today();
     const sum = C.subsSummary(subs, t);
     const up = M.upcoming(sum.active, t, 31).slice(0, 6);

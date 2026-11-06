@@ -17,6 +17,7 @@ import * as alltag from "./views/alltag.js";
 import { openEntryForm } from "./views/entries.js";
 import { openPlaceForm } from "./views/places.js";
 import { icon } from "./icons.js";
+import { readAccent, applyAccent } from "./accent.js"; // Update 10 – Akzentfarbe
 import * as lockscreen from "./lockscreen.js";
 import * as native from "./native.js";
 
@@ -109,7 +110,7 @@ function mountViews() {
     renderRunState();
     renderSync();
     safe(lockscreen.sync, snap);
-    if (snap && snap.ready) { runPendingAction(); maybeAutoSync(); }
+    if (snap && snap.ready) { safe(applyAccent, readAccent(snap.settings)); runPendingAction(); maybeAutoSync(); }
   });
   setInterval(() => safe(today.tick), 1000);
 }

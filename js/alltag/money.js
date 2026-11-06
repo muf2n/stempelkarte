@@ -330,7 +330,7 @@ function mountMoney(el, ctx) {
         }).join("")
       : (q || S.catFilter
           ? `<div class="empty mn-empty"><h3>Nichts gefunden</h3><p>Probier ein anderes Suchwort.</p></div>`
-          : emptyBox("Noch keine Buchungen", `Für ${M.monthLabel(S.mk)} ist noch nichts eingetragen.`, "newtx"));
+          : emptyBox("💶 Noch keine Buchungen", `Für ${M.monthLabel(S.mk)} ist noch nichts eingetragen.`, "newtx"));
     return head + sum + `<div class="mn-days">${body}</div>`;
   }
 
@@ -448,7 +448,7 @@ function mountMoney(el, ctx) {
                 `<span class="mn-tx-amt">${amt(e.amount)}</span>` +
               `</button></li>`;
             }).join("")}</ul>`
-          : emptyBox("Noch keine Ausgaben", "Trag ein, wer was bezahlt hat.", "newexp", "+ Ausgabe")) +
+          : emptyBox("💶 Noch keine Ausgaben", "Trag ein, wer was bezahlt hat.", "newexp", "+ Ausgabe")) +
       `</section>`;
   }
 
