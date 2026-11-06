@@ -235,8 +235,8 @@ function nextTermin(today, nowHM) {
 }
 function openTasks(today) {
   return todos().filter((t) => t && !t.done && t.kind !== "termin" && t.kind !== "geburtstag" && t.kind !== "einsatz" &&
-    /^\d{4}-\d{2}-\d{2}$/.test(String(t.date || "")) && t.date <= today)
-    .sort((a, b) => (a.date + (a.time || "99")).localeCompare(b.date + (b.time || "99")));
+    (!/^\d{4}-\d{2}-\d{2}$/.test(String(t.date || "")) || t.date <= today)) // ohne Datum (To-do-Liste) oder heute/überfällig
+    .sort((a, b) => ((a.date || "9999") + (a.time || "99")).localeCompare((b.date || "9999") + (b.time || "99")));
 }
 function wAgenda(f) {
   const nowHM = u().clock(f.now);
@@ -247,10 +247,10 @@ function wAgenda(f) {
     html += `<button type="button" class="dw-row dw-next" data-todo="${esc(n.t.id)}"><span class="dw-when">${esc(dayName(n.date, f.today))}${n.time ? " · " + esc(n.time) : ""}</span><b>${esc(n.t.title || "Termin")}</b></button>`;
   } else html += empty("Kein Termin in Sicht – Zeit für dich 🌿");
   if (tasks.length) {
-    html += `<div class="dw-sub">Aufgaben heute <span class="dw-count">${tasks.length}</span></div><ul class="dw-list">` +
-      tasks.slice(0, 3).map((t) => `<li><button type="button" class="dw-row" data-todo="${esc(t.id)}"><span aria-hidden="true">${t.date < f.today ? "⏰" : "✅"}</span><span>${esc(t.title || "Aufgabe")}</span>${t.date < f.today ? `<small class="dw-late">überfällig</small>` : t.time ? `<small>${esc(t.time)}</small>` : ""}</button></li>`).join("") +
-      (tasks.length > 3 ? `<li class="dw-more-n">+ ${tasks.length - 3} weitere</li>` : "") + "</ul>";
-  } else html += `<p class="dw-note">Heute keine offenen Aufgaben 🎉</p>`;
+    html += `<div class="dw-sub">Offene Aufgaben <span class="dw-count">${tasks.length}</span></div><ul class="dw-list">` +
+      tasks.slice(0, 5).map((t) => `<li><button type="button" class="dw-row" data-todo="${esc(t.id)}"><span aria-hidden="true">${!t.date ? "☐" : t.date < f.today ? "⏰" : "✅"}</span><span>${esc(t.title || "Aufgabe")}</span>${t.date && t.date < f.today ? `<small class="dw-late">überfällig</small>` : t.time ? `<small>${esc(t.time)}</small>` : ""}</button></li>`).join("") +
+      (tasks.length > 5 ? `<li class="dw-more-n">+ ${tasks.length - 5} weitere</li>` : "") + "</ul>";
+  } else html += `<p class="dw-note">Keine offenen Aufgaben 🎉</p>`;
   return card("agenda", html, { go: "agenda", more: "Planer" });
 }
 
