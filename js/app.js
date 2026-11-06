@@ -219,6 +219,7 @@ if (tabbarEl) {
   tabbarEl.addEventListener("click", (ev) => {
     const b = ev.target.closest("[data-tab]");
     if (!b) return;
+    if (b.dataset.settings) { window.dispatchEvent(new CustomEvent("sk:open-settings")); return; } // Einstellungs-Zentrale
     if (b.dataset.jump || b.dataset.tab === "uebersicht") { jump(b.dataset.jump || ""); return; }
     go(b.dataset.tab);
   });

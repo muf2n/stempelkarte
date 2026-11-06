@@ -52,8 +52,11 @@ const DAY = 86400000;
 
   /* ---------- über Übersicht → Einstellungen ---------- */
   await page.evaluate(() => { location.hash = "#uebersicht"; });
-  await page.waitForSelector("#ov-trash", { state: "attached" });
-  await page.$eval("#ov-trash", (b) => b.scrollIntoView({ block: "center" }));
+  // Update 10e: Einstellungen sind jetzt eine eigene Zentrale (Übersicht → „Einstellungen öffnen“ → Papierkorb)
+  await page.waitForSelector("#ov-open-settings", { state: "visible" });
+  await page.click("#ov-open-settings");
+  await page.click('#settings-hub .sh-row[data-cat="papierkorb"]');
+  await page.waitForSelector("#ov-trash", { state: "visible" });
   ok((await page.textContent("#ov-trash")).includes("Papierkorb"), "Knopf „Papierkorb“ in Übersicht → Einstellungen");
   await page.click("#ov-trash");
   await page.waitForSelector(".pk-batch");

@@ -1,0 +1,108 @@
+/* Update 10e: Einstellungs-Zentrale (js/views/settings-hub.js) – Discord-artige Liste am Handy, zwei Spalten am PC. */
+body.sh-open { overflow: hidden; }
+.sh [hidden] { display: none !important; }
+.sh {
+  position: fixed; inset: 0; z-index: 44; /* über Kopf-/Tableiste (20/30), unter Berichtsheft (45), Blättern (50) und Toast (60) */
+  display: flex; background: var(--bg); color: var(--ink);
+  font-family: var(--f-body);
+}
+.sh:focus { outline: none; }
+.sh-nav, .sh-page { display: flex; flex-direction: column; min-height: 0; height: 100%; }
+.sh-nav { flex: 1; min-width: 0; }
+.sh-pages { display: none; flex: 1; min-width: 0; height: 100%; position: relative; }
+.sh[data-level="page"] .sh-nav { display: none; }
+.sh[data-level="page"] .sh-pages { display: block; }
+
+.sh-head {
+  display: flex; align-items: center; gap: 8px; flex: none;
+  padding: calc(10px + env(safe-area-inset-top)) var(--side) 8px;
+}
+.sh-head h2 { margin: 0; font-family: var(--f-display); font-weight: 800; font-size: 1.3rem; letter-spacing: -.01em;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.sh-back {
+  flex: none; width: 42px; height: 42px; border-radius: 50%; border: 0; cursor: pointer;
+  display: grid; place-items: center; font-size: 1.35rem; line-height: 1;
+  background: transparent; color: var(--ink);
+}
+.sh-back:hover { background: color-mix(in srgb, var(--accent) 10%, transparent); }
+.sh-back:focus-visible, .sh-row:focus-visible, .sh-signout:focus-visible { outline: none; box-shadow: var(--ring); }
+
+.sh-search {
+  flex: none; display: flex; align-items: center; gap: 8px;
+  margin: 2px var(--side) 10px; padding: 0 14px; height: 44px; border-radius: 14px;
+  background: var(--card); border: 1px solid var(--line);
+}
+.sh-search:focus-within { border-color: var(--accent); }
+.sh-search input { flex: 1; min-width: 0; border: 0; background: transparent; color: var(--ink); font: inherit; font-size: 1rem; padding: 0; height: 100%; box-shadow: none; }
+.sh-search input:focus { outline: none; box-shadow: none; }
+
+.sh-list { flex: 1; min-height: 0; overflow-y: auto; overscroll-behavior: contain; padding: 0 var(--side) calc(28px + env(safe-area-inset-bottom)); }
+.sh-group { margin-top: 16px; }
+.sh-group:first-child { margin-top: 4px; }
+.sh-gh { margin: 0 4px 8px; font-size: .8rem; font-weight: 700; color: var(--muted); letter-spacing: .02em; }
+.sh-rows, .sh-links { background: var(--card); border-radius: 16px; overflow: hidden; border: 1px solid color-mix(in srgb, var(--line) 70%, transparent); }
+
+.sh-row {
+  display: flex; align-items: center; gap: 12px; width: 100%; min-height: 54px;
+  padding: 10px 14px; border: 0; margin: 0; background: transparent; color: var(--ink);
+  font: inherit; text-align: left; cursor: pointer; border-radius: 0;
+}
+.sh-row + .sh-row { border-top: 1px solid var(--line); }
+.sh-row:hover { background: color-mix(in srgb, var(--accent) 6%, var(--card)); }
+.sh-row:active { background: color-mix(in srgb, var(--accent) 12%, var(--card)); }
+.sh-row[aria-current="page"] { background: color-mix(in srgb, var(--accent) 14%, var(--card)); }
+.sh-row[aria-current="page"] .sh-lb b { color: var(--accent); }
+.sh-ic {
+  flex: none; width: 34px; height: 34px; border-radius: 10px; display: grid; place-items: center;
+  font-size: 1.15rem; line-height: 1; background: color-mix(in srgb, var(--accent) 14%, var(--card));
+}
+.sh-lb { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 1px; }
+.sh-lb b { font-weight: 600; font-size: .98rem; }
+.sh-lb small { color: var(--muted); font-size: .8rem; line-height: 1.3; }
+.sh-hit { color: var(--accent) !important; }
+.sh-val { flex: none; max-width: 42%; color: var(--muted); font-size: .88rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.sh-val:empty { display: none; }
+.sh-chev { flex: none; color: var(--muted); font-size: 1.4rem; line-height: 1; margin-left: -2px; }
+
+.sh-empty { text-align: center; margin: 28px 0; }
+.sh-signout {
+  display: block; width: 100%; margin-top: 22px; min-height: 52px; border-radius: 16px; cursor: pointer;
+  background: var(--card); border: 1px solid color-mix(in srgb, var(--line) 70%, transparent);
+  color: var(--danger); font: inherit; font-weight: 700; font-size: 1rem;
+}
+.sh-signout[data-armed] { background: var(--danger); color: #fff; }
+.sh-list.searching .sh-signout, .sh-list.searching .sh-ver { display: none; }
+.sh-ver { text-align: center; margin: 16px 0 0; font-size: .8rem; }
+
+/* Unterseite */
+.sh-page { overflow-y: auto; overscroll-behavior: contain; }
+.sh-phead { position: sticky; top: 0; z-index: 2; background: var(--bg); }
+.sh-body { display: flex; flex-direction: column; gap: 14px; padding: 4px var(--side) calc(32px + env(safe-area-inset-bottom)); }
+.sh-card { background: var(--card); border-radius: 16px; padding: 16px; border: 1px solid color-mix(in srgb, var(--line) 70%, transparent); }
+.sh-card > p { margin: 0 0 12px; }
+.sh-card > p:last-child { margin-bottom: 0; }
+.sh-card > .lbl { margin-bottom: 8px; }
+.sh-card > [id$="-panel"] { margin-top: 0 !important; padding-top: 0 !important; border-top: 0 !important; }
+.sh-foot { text-align: center; margin: 0; }
+.sh-about { display: flex; flex-direction: column; align-items: center; gap: 4px; text-align: center; padding: 22px 16px; }
+.sh-about-ic { font-size: 2.4rem; line-height: 1; margin-bottom: 4px; }
+.sh-about b { font-family: var(--f-display); font-size: 1.2rem; }
+.sh-tips { margin: 0; padding-left: 20px; display: flex; flex-direction: column; gap: 6px; color: var(--ink); }
+.sh-pick { display: none; }
+
+/* Übersicht: kompakter Knopf statt langer Liste */
+.ov-set-cta .note { margin: 0 0 12px; }
+
+/* PC: zwei Spalten */
+@media (min-width: 1024px) {
+  .sh { background: var(--bg); }
+  .sh-nav { flex: none; width: 360px; border-right: 1px solid var(--line); background: color-mix(in srgb, var(--card) 45%, var(--bg)); }
+  .sh-pages, .sh[data-level="page"] .sh-pages { display: block; }
+  .sh[data-level="page"] .sh-nav { display: flex; }
+  .sh-phead .sh-back { display: none; }
+  .sh-phead { padding-top: 22px; padding-left: 40px; }
+  .sh-phead h2 { font-size: 1.6rem; }
+  .sh-body { max-width: 760px; padding: 8px 40px 48px; }
+  .sh-pick { display: grid; place-items: center; height: 100%; }
+  .sh-row { min-height: 50px; }
+}

@@ -359,6 +359,9 @@ const TODAY_DE = TODAY.split("-").reverse().join(".");
 
   /* ---------- Berichtsheft ---------- */
   await page.evaluate(() => { location.hash = "#uebersicht"; });
+  // Update 10e: Lehre/Berichtsheft liegt in der Einstellungs-Zentrale
+  await page.click("#ov-open-settings");
+  await page.click('#settings-hub .sh-row[data-cat="lehre"]');
   await page.waitForSelector("#ap-report", { timeout: 8000 });
   await page.click("#ap-report");
   await page.waitForSelector(".rp-mat", { timeout: 5000 });

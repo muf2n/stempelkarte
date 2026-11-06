@@ -323,6 +323,9 @@ function seed(extra = []) {
   await page.screenshot({ path: path.join(OUT, "ov-trips-card.png"), clip: await page.$eval("#trips-panel", (e) => { e.scrollIntoView(); const b = e.getBoundingClientRect(); return { x: 0, y: Math.max(0, b.y - 8), width: 390, height: Math.min(844 - Math.max(0, b.y - 8), b.height + 16) }; }) });
 
   /* ---------- Schalter aus → keine Anfragen ---------- */
+  // Update 10e: Taggeld/Kilometer-Einstellungen liegen in der Einstellungs-Zentrale
+  await page.click("#btn-settings");
+  await page.click('#settings-hub .sh-row[data-cat="taggeld"]');
   await page.waitForSelector("#al-road", { state: "attached" });
   ok(await page.isChecked("#al-road"), "„Straßen-km berechnen“ standardmäßig an");
   ok((await page.textContent("#allowance-panel")).includes("router.project-osrm.org"), "Datenschutz-Hinweis OSRM");
@@ -352,9 +355,14 @@ function seed(extra = []) {
   ok(last.startsWith("≈"), `neue Fahrt als Luftlinie „${last}“`);
   // wieder einschalten → wird geholt
   await page.click('#fb-root [data-fb="close"]');
+  await page.click("#btn-settings");
+  await page.click('#settings-hub .sh-row[data-cat="taggeld"]');
   await page.$eval("#al-road", (e) => e.scrollIntoView({ block: "center" }));
   await page.click("label:has(#al-road)");
   await page.waitForTimeout(300);
+  await page.keyboard.press("Escape"); // Unterseite → Liste
+  await page.keyboard.press("Escape"); // Zentrale zu
+  await page.waitForFunction(() => document.getElementById("settings-hub").hidden);
   await openLog();
   await page.evaluate(() => { const r = document.getElementById("fb-root"); r.scrollTop = r.scrollHeight; });
   await page.waitForFunction(() => JSON.parse(localStorage.getItem("stempelkarte.local.v1")).entries.find((e) => e.id === "e-do").segments[1].kmRoad > 0, null, { timeout: 8000 });

@@ -3,14 +3,10 @@ try {
   var acc = localStorage.getItem("stempelkarte.accent");
   if (acc && acc !== "lila" && /^[a-z]+$/.test(acc)) document.documentElement.setAttribute("data-accent", acc);
 } catch (e) { /* egal */ }
-// Zahnrad in der Kopfzeile: zur Übersicht wechseln und zum Einstellungs-Panel scrollen (Panel kann erst nach dem Rendern existieren).
-// Früher ein Inline-Skript in index.html – ausgelagert, damit die Content-Security-Policy ohne 'unsafe-inline' für Skripte auskommt.
+// Zahnrad in der Kopfzeile: öffnet die Einstellungs-Zentrale (js/views/settings-hub.js hört auf „sk:open-settings“).
+// Solange die App noch nicht eingehängt ist (z. B. Anmeldebildschirm), wie früher zur Übersicht wechseln.
+// Bewusst kein Inline-Skript in index.html – die Content-Security-Policy kommt ohne 'unsafe-inline' für Skripte aus.
 document.getElementById("btn-settings").addEventListener("click", function () {
+  if (document.getElementById("settings-hub")) { window.dispatchEvent(new CustomEvent("sk:open-settings")); return; }
   if (location.hash !== "#uebersicht") location.hash = "#uebersicht";
-  var tries = 0;
-  (function go() {
-    var p = document.getElementById("settings-panel");
-    if (p && p.offsetParent !== null) { p.scrollIntoView({ behavior: "smooth", block: "start" }); return; }
-    if (++tries < 30) setTimeout(go, 60);
-  })();
 });

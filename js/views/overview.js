@@ -3,6 +3,7 @@
 import { icon } from "../icons.js";
 import { leaves, sparkles } from "../deco.js";
 import * as reminders from "./reminders.js";
+import * as settingsHub from "./settings-hub.js";
 import { isNative } from "../native.js";
 const extraPanels = [];
 let lastSnapForExtras = null;
@@ -17,7 +18,9 @@ let radiusTimer = null;
 let accountKey = "";
 let offsetTimer = null;
 
-const $ = (sel) => root.querySelector(sel);
+let hubEl = null;
+// Einstellungsfelder wohnen seit Update 10e in der Einstellungs-Zentrale (settings-hub.js) – gleiche IDs.
+const $ = (sel) => root.querySelector(sel) || (hubEl && hubEl.querySelector(sel));
 
 export function mount(el, c) {
   ctx = c;
@@ -91,53 +94,10 @@ export function mount(el, c) {
 
         <div class="panel card" id="trips-panel"></div>
 
-        <div class="panel card" id="settings-panel">
+        <div class="panel card ov-set-cta" id="settings-panel">
           <h2>${icon("gear", 20)}Einstellungen</h2>
-          <div class="fields">
-            <label>Soll-Stunden pro Woche
-              <input type="number" id="ov-target" inputmode="decimal" min="0" max="80" step="0.5">
-            </label>
-            <label class="switch">
-              <input type="checkbox" id="ov-autoloc">
-              <span>Standort beim Stempeln erfassen</span>
-            </label>
-            <label>Standard-Radius für Orte (m)
-              <input type="number" id="ov-radius" inputmode="numeric" min="50" max="1000" step="10">
-            </label>
-            <div>
-              <div class="lbl">Arbeitstage</div>
-              <div class="chips ov-wd" id="ov-workdays" role="group" aria-label="Arbeitstage"></div>
-            </div>
-            <label class="switch">
-              <input type="checkbox" id="ov-holidays">
-              <span>Feiertage (Österreich) berücksichtigen</span>
-            </label>
-            <label class="switch">
-              <input type="checkbox" id="ov-pauserem">
-              <span>Pausen-Erinnerung nach 6 Stunden</span>
-            </label>
-            <label>Überstundenkonto zählt ab
-              <input type="date" id="ov-balstart">
-            </label>
-            <label>Startsaldo (Stunden, darf negativ sein)
-              <input type="text" id="ov-baloffset" inputmode="text" placeholder="z. B. 12,5 oder -3:15">
-            </label>
-            <p class="note">Ohne Datum zählt das Konto ab deinem ersten Eintrag.</p>
-          </div>
-          <div id="android-panel" hidden></div>
-          <div id="reminders-panel"></div>
-          <div id="drive-panel"></div>
-          <div id="lock-panel"></div>
-          <div id="school-panel"></div>
-          <div id="allowance-panel"></div>
-          <div id="apprentice-panel"></div>
-          <div id="watch-panel"></div>
-          <div id="comfort-panel"></div>
-          <div id="accent-panel"></div>
-          <button type="button" class="btn ghost sm" id="ov-plans-link">Geplante Schichten (Auto-Stempeln) öffnen</button>
-          <button type="button" class="btn ghost sm" id="ov-trash">${icon("trash", 18)}<span>Papierkorb (von Claude gelöscht)</span></button>
-          <div class="lbl">Konto</div>
-          <div id="ov-account"></div>
+          <p class="note">Arbeitszeit, Erinnerungen, Farbe, Konto und mehr – alles an einem Ort.</p>
+          <button type="button" class="btn ghost" id="ov-open-settings">⚙️ <span>Einstellungen öffnen</span></button>
         </div>
       </div>
 
@@ -183,6 +143,8 @@ export function mount(el, c) {
       renderMonth();
     }));
 
+  try { hubEl = settingsHub.mount(ctx); } catch (err) { console.error(err); }
+  $("#ov-open-settings").addEventListener("click", () => settingsHub.openHub());
   $("#ov-csv").addEventListener("click", exportCSV);
   // Update 9: Stundenzettel für den gewählten Monat
   $("#ov-ts").addEventListener("click", () => {
@@ -202,10 +164,10 @@ export function mount(el, c) {
       .catch((err) => { console.error(err); ctx.ui.toast("Papierkorb konnte nicht geladen werden."); });
   });
   const pl = $("#ov-plans-link");
-  if (pl) pl.addEventListener("click", () => {
+  if (pl) pl.addEventListener("click", () => settingsHub.close(() => {
     ctx.go("orte");
     setTimeout(() => { const t = document.getElementById("plans-panel"); if (t) t.scrollIntoView({ behavior: "smooth", block: "start" }); }, 150);
-  });
+  }));
 
   const target = $("#ov-target");
   target.addEventListener("input", () => {
@@ -272,6 +234,7 @@ export function update(s) {
   renderSettings();
   renderAccount();
   try { reminders.update(snap); } catch (err) { console.error(err); }
+  try { settingsHub.update(snap); } catch (err) { console.error(err); }
   lastSnapForExtras = snap;
   for (const m of extraPanels) { try { m.update(snap); } catch (err) { console.error(err); } }
 }
@@ -759,7 +722,7 @@ function renderSettings() {
   if (document.activeElement !== radius) radius.value = s.defaultRadius ?? 150;
 
   const wd = new Set(workDays());
-  root.querySelectorAll("#ov-workdays [data-wd]").forEach((b) =>
+  $("#ov-workdays").querySelectorAll("[data-wd]").forEach((b) =>
     b.setAttribute("aria-pressed", String(wd.has(Number(b.dataset.wd)))));
   $("#ov-holidays").checked = s.holidays !== false;
   $("#ov-pauserem").checked = s.pauseReminder !== false;

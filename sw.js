@@ -59,6 +59,8 @@ const SHELL = [
   "js/views/apprentice.js",
   "js/views/comfort-settings.js",
   "js/views/accent-settings.js",
+  "js/views/settings-hub.js",
+  "css/settings-hub.css",
   "js/accent.js",
   "js/views/day.js",
   "js/views/report.js",
