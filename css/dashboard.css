@@ -130,3 +130,14 @@ body[data-route="eintraege"] #view-heute .dash-ctx { display: none; }
 html[data-compact="1"] #view-heute .dash { display: none; }
 
 @media (prefers-reduced-motion: reduce) { .dw-bar i { transition: none; } }
+
+/* Aufgaben direkt abhaken */
+.dw-task { display: flex; align-items: center; gap: 4px; }
+.dw-task .dw-row { flex: 1; min-width: 0; }
+.dw-tick { flex: none; width: 26px; height: 26px; margin: 0 4px 0 2px; border-radius: 8px; border: 2px solid var(--accent); background: transparent; cursor: pointer; display: grid; place-items: center; padding: 0; transition: background .15s, transform .15s; }
+.dw-tick::after { content: ""; width: 7px; height: 12px; border: solid transparent; border-width: 0 3px 3px 0; transform: rotate(45deg) translate(-1px, -1px); }
+.dw-tick:hover { background: color-mix(in srgb, var(--accent) 14%, transparent); }
+.dw-tick.on { background: var(--accent); transform: scale(1.08); }
+.dw-tick.on::after { border-color: #fff; }
+.dw-tick:focus-visible { outline: none; box-shadow: var(--ring); }
+@media (prefers-reduced-motion: reduce) { .dw-tick { transition: none; } }

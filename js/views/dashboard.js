@@ -248,7 +248,7 @@ function wAgenda(f) {
   } else html += empty("Kein Termin in Sicht – Zeit für dich 🌿");
   if (tasks.length) {
     html += `<div class="dw-sub">Offene Aufgaben <span class="dw-count">${tasks.length}</span></div><ul class="dw-list">` +
-      tasks.slice(0, 5).map((t) => `<li><button type="button" class="dw-row" data-todo="${esc(t.id)}"><span aria-hidden="true">${!t.date ? "☐" : t.date < f.today ? "⏰" : "✅"}</span><span>${esc(t.title || "Aufgabe")}</span>${t.date && t.date < f.today ? `<small class="dw-late">überfällig</small>` : t.time ? `<small>${esc(t.time)}</small>` : ""}</button></li>`).join("") +
+      tasks.slice(0, 5).map((t) => `<li class="dw-task"><button type="button" class="dw-tick" data-tick="${esc(t.id)}" aria-label="${esc(t.title || "Aufgabe")} erledigt"></button><button type="button" class="dw-row" data-todo="${esc(t.id)}"><span>${esc(t.title || "Aufgabe")}</span>${t.date && t.date < f.today ? `<small class="dw-late">überfällig</small>` : t.time ? `<small>${esc(t.time)}</small>` : ""}</button></li>`).join("") +
       (tasks.length > 5 ? `<li class="dw-more-n">+ ${tasks.length - 5} weitere</li>` : "") + "</ul>";
   } else html += `<p class="dw-note">Keine offenen Aufgaben 🎉</p>`;
   return card("agenda", html, { go: "agenda", more: "Planer" });
@@ -493,6 +493,19 @@ function onClick(ev) {
   if (d.d === "done") { setEditing(false); root.querySelector('[data-d="edit"]').focus(); return; }
   if (d.d === "reset") { save({ order: D.DEFAULT_ORDER, hidden: [], auto: true }); return; }
   if (d.mv) { const c = cfg(); save({ ...c, order: D.moveWidget(c.order, d.id, d.mv === "up" ? -1 : 1) }); return; }
+  if (d.tick) {
+    const t = todos().find((x) => x.id === d.tick);
+    if (!t || b.dataset.busy) return;
+    b.dataset.busy = "1";
+    b.classList.add("on");
+    setTimeout(async () => {
+      try {
+        await ctx.store.saveTodo({ ...t, done: true, doneAt: Date.now() });
+        ctx.ui.toast(`✅ „${t.title || "Aufgabe"}“ erledigt – stark! 💪`, 2200);
+      } catch { b.classList.remove("on"); delete b.dataset.busy; }
+    }, 250);
+    return;
+  }
   if (d.todo) {
     const t = todos().find((x) => x.id === d.todo);
     if (t && ctx.openTodoForm) ctx.openTodoForm(t);

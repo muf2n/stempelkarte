@@ -20,6 +20,7 @@ function seed({ now, running = false, dashboard = null }) {
     todos: [
       { id: "t1", kind: "termin", title: "Zahnarzt", date: "2026-11-10", time: "15:30", created: 1 },
       { id: "t2", title: "Werkzeug zurückgeben", date: "2026-11-09", created: 2 },
+      { id: "t4", title: "Zimmer aufräumen", created: 4 },
       { id: "t3", kind: "geburtstag", title: "Oma Test", bday: "11-10", created: 3 },
     ],
     days: {}, rev: Date.now(),
@@ -83,6 +84,10 @@ function seed({ now, running = false, dashboard = null }) {
   ok((await page.textContent(".dash-ctx")).includes("Dein Tag"), "Kontext-Label „Dein Tag“");
   ok((await page.textContent('[data-w="agenda"]')).includes("Zahnarzt"), "Nächster Termin aus echten Daten");
   ok((await page.textContent('[data-w="agenda"]')).includes("Werkzeug zurückgeben"), "Aufgabe heute");
+  ok((await page.textContent('[data-w="agenda"]')).includes("Zimmer aufräumen"), "Aufgabe ohne Datum (To-do-Liste)");
+  await page.click('[data-w="agenda"] [data-tick="t4"]');
+  await page.waitForFunction(() => !document.querySelector('[data-w="agenda"]').textContent.includes("Zimmer aufräumen"), null, { timeout: 5000 });
+  ok(true, "Aufgabe im Dashboard abgehakt → verschwindet");
   ok((await page.textContent('[data-w="calendar"]')).includes("Morgen"), "Kalender-Vorschau zeigt Morgen");
   ok((await page.textContent('[data-w="reminders"]')).includes("Oma Test"), "Geburtstag morgen in Erinnerungen");
   ok((await page.textContent('[data-w="site"]')).includes("Baustelle Hauptstraße"), "Letzte Baustelle");
