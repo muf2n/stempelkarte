@@ -1,0 +1,132 @@
+/* Update 10b – Smart Dashboard im Reiter Heute (js/views/dashboard.js). Nur bestehende Farb-Tokens (Akzent, hell/dunkel). */
+.dash { display: flex; flex-direction: column; gap: 12px; min-width: 0; }
+.dash[hidden] { display: none; }
+.dash-head { display: flex; align-items: center; gap: 8px 10px; flex-wrap: wrap; }
+.dash-title { margin: 0; font-family: var(--f-display); font-size: 1.15rem; font-weight: 700; color: var(--ink); }
+.dash-ctx {
+  font-size: .78rem; font-weight: 600; color: var(--accent);
+  background: color-mix(in srgb, var(--accent) 12%, transparent);
+  padding: 3px 10px; border-radius: 999px; white-space: nowrap;
+}
+.dash-editbtn { margin-left: auto; }
+.dash-grid { display: grid; grid-template-columns: minmax(0, 1fr); gap: 10px; }
+.dash-grid[hidden] { display: none; }
+.dash-none { margin: 0; color: var(--muted); font-size: .92rem; text-align: center; padding: 14px 8px; }
+
+/* Widget-Karte */
+.dw {
+  position: relative; min-width: 0;
+  background: var(--card); color: var(--ink);
+  border: 1px solid color-mix(in srgb, var(--line) 70%, transparent);
+  border-radius: 18px; box-shadow: var(--shadow);
+  padding: 12px 14px 13px;
+  overflow-wrap: anywhere;
+}
+.dw::before { /* zarter Akzentstreifen links */
+  content: ""; position: absolute; left: 0; top: 14px; bottom: 14px; width: 3px; border-radius: 0 3px 3px 0;
+  background: color-mix(in srgb, var(--accent) 55%, transparent);
+}
+.dw-h { display: flex; align-items: center; gap: 8px; margin-bottom: 6px; }
+.dw-h h3 { margin: 0; font-size: .95rem; font-weight: 700; flex: 1; min-width: 0; }
+.dw-e { font-size: 1.15rem; line-height: 1; }
+.dw-more {
+  border: 0; background: transparent; color: var(--accent); font: inherit; font-size: .82rem; font-weight: 600;
+  padding: 6px 4px; margin: -6px -4px -6px 0; min-height: 32px; cursor: pointer; border-radius: 8px; white-space: nowrap;
+}
+.dw-more:hover { text-decoration: underline; }
+.dw-b { display: flex; flex-direction: column; gap: 6px; font-size: .92rem; }
+.dw-b p { margin: 0; }
+.dw-empty { color: var(--muted); }
+.dw-note { color: var(--muted); font-size: .85rem; }
+.dw-sub { font-size: .78rem; font-weight: 700; text-transform: uppercase; letter-spacing: .04em; color: var(--muted); margin-top: 2px; display: flex; align-items: center; gap: 6px; }
+.dw-count { background: var(--soft); color: var(--accent); border-radius: 999px; padding: 0 7px; font-size: .75rem; letter-spacing: 0; }
+.dw-big { font-family: var(--f-mono); font-size: 1.7rem; font-weight: 600; line-height: 1.1; }
+.dw-big.plus, .dw-kv b.plus { color: var(--run); }
+.dw-big.minus, .dw-kv b.minus { color: var(--danger); }
+.dw-kv { display: flex; justify-content: space-between; gap: 10px; align-items: baseline; }
+.dw-kv span { color: var(--muted); }
+.dw-kv b { font-variant-numeric: tabular-nums; text-align: right; }
+
+.dw-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 4px; }
+.dw-list li { display: flex; align-items: baseline; gap: 8px; min-width: 0; }
+.dw-list li > span:nth-child(2) { flex: 1; min-width: 0; }
+.dw-list small { color: var(--muted); white-space: nowrap; }
+.dw-list li.hot small, .dw-late { color: var(--pause) !important; font-weight: 600; }
+.dw-more-n { color: var(--muted); font-size: .82rem; }
+.dw-row {
+  display: flex; align-items: baseline; gap: 8px; width: 100%; text-align: left;
+  border: 0; background: transparent; color: inherit; font: inherit; padding: 3px 0; cursor: pointer; border-radius: 8px;
+}
+.dw-row > span:nth-child(2) { flex: 1; min-width: 0; }
+.dw-row:hover b, .dw-row:hover span:nth-child(2) { color: var(--accent); }
+.dw-next { flex-direction: column; gap: 1px; padding: 8px 10px; background: var(--soft); border-radius: 12px; }
+.dw-when { font-size: .8rem; font-weight: 700; color: var(--accent); }
+
+.dw-days { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 7px; }
+.dw-days li { display: grid; grid-template-columns: 74px minmax(0, 1fr); gap: 8px; align-items: start; }
+.dw-day { font-weight: 700; font-size: .85rem; padding-top: 3px; }
+.dw-chips { display: flex; flex-wrap: wrap; gap: 4px; min-width: 0; }
+.dw-chip {
+  display: inline-flex; align-items: baseline; gap: 5px; max-width: 100%;
+  background: color-mix(in srgb, var(--accent) 9%, var(--card)); border: 1px solid color-mix(in srgb, var(--line) 70%, transparent);
+  border-radius: 10px; padding: 3px 8px; font-size: .84rem;
+}
+.dw-chip small { color: var(--muted); font-family: var(--f-mono); font-size: .76rem; }
+.dw-chip[data-type="geburtstag"] { background: color-mix(in srgb, var(--k-krank) 10%, var(--card)); }
+.dw-chip[data-type="schule"] { background: color-mix(in srgb, var(--t2) 12%, var(--card)); }
+.dw-chip[data-type="feiertag"] { background: color-mix(in srgb, var(--k-feiertag) 12%, var(--card)); }
+
+.dw-place { display: flex; flex-direction: column; gap: 1px; }
+.dw-live { color: var(--run); font-size: .82rem; font-weight: 600; }
+.dw-pill { align-self: flex-start; background: var(--soft); color: var(--accent); border-radius: 999px; padding: 3px 10px; font-size: .84rem; font-weight: 600; }
+.dw-lock { font-weight: 700; font-size: 1rem; }
+
+.dw-bar { height: 8px; border-radius: 999px; background: color-mix(in srgb, var(--line) 80%, transparent); overflow: hidden; margin: 2px 0; }
+.dw-bar i { display: block; height: 100%; border-radius: inherit; background: var(--run); transition: width .4s ease; }
+.dw-budget[data-level="warn"] .dw-bar i { background: var(--pause); }
+.dw-budget[data-level="over"] .dw-bar i { background: var(--danger); }
+.dw-budget { display: flex; flex-direction: column; gap: 3px; }
+
+.dw-tips { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 6px; }
+.dw-tips li { display: flex; gap: 8px; align-items: baseline; background: var(--soft); border-radius: 12px; padding: 7px 10px; }
+.dw-sync { font-weight: 700; }
+.dw-sync[data-sync="off"] { color: var(--pause); }
+.dw-sync[data-sync="ok"] { color: var(--run); }
+
+/* Anpassen */
+.dash-edit { display: flex; flex-direction: column; gap: 10px; padding: 14px; }
+.dash-edit[hidden] { display: none; }
+.de-h { margin: 0; font-size: 1rem; }
+.de-auto small { color: var(--muted); font-weight: 400; }
+.dash-edit .note { margin: 0; }
+.de-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 6px; }
+.de-row {
+  display: flex; align-items: center; gap: 8px; padding: 6px 8px 6px 10px;
+  border: 1px solid color-mix(in srgb, var(--line) 80%, transparent); border-radius: 14px; background: var(--card);
+}
+.de-row.off { opacity: .6; }
+.de-on { display: flex; align-items: center; gap: 10px; flex: 1; min-width: 0; cursor: pointer; min-height: 40px; }
+.de-on input[type="checkbox"] { all: revert; width: 22px; height: 22px; margin: 0; accent-color: var(--accent); flex: none; cursor: pointer; }
+.de-t { min-width: 0; font-weight: 600; }
+.de-mv { display: flex; gap: 4px; }
+.de-btn {
+  width: 40px; height: 40px; border-radius: 12px; border: 1px solid var(--line); background: var(--card); color: var(--accent);
+  font-size: .85rem; cursor: pointer;
+}
+.de-btn:disabled { opacity: .35; cursor: default; }
+.de-btn:not(:disabled):hover { background: var(--soft); }
+.de-foot { display: flex; justify-content: space-between; gap: 8px; }
+
+/* PC – eigener Reiter Heute (760 px breit): zwei Spalten */
+@media (min-width: 1024px) {
+  body[data-route="heute"] .dash-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); align-items: start; }
+}
+/* PC – Kalender-Seite: Heute als rechte Spalte (420 px) → kompakt, Überstunden stehen schon darunter */
+body[data-route="eintraege"] #view-heute .dash-title { font-size: 1.05rem; }
+body[data-route="eintraege"] #view-heute .dw[data-w="balance"] { display: none; }
+body[data-route="eintraege"] #view-heute .dash-ctx { display: none; }
+
+/* „Einfacher bedienen“ (kompakt): wie Statistik und Liste ausgeblendet – nur das Wichtigste */
+html[data-compact="1"] #view-heute .dash { display: none; }
+
+@media (prefers-reduced-motion: reduce) { .dw-bar i { transition: none; } }

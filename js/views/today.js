@@ -7,6 +7,7 @@ import { readPlans, plansToday, dueTs, planKey } from "./plans.js";
 import { getFirebase } from "../firebase.js";
 import * as motion from "../motion.js";
 import * as myday from "./day.js";
+import * as dash from "./dashboard.js"; // Update 10b – Smart Dashboard
 import { peoplePicker, cleanPeople, peopleText, rememberPeople, privTripRow } from "./entries.js";
 import { mountPhotoBar } from "./gallery.js"; // Update 9 – Fotos
 import { mountTodayButton as mountMaterialBtn } from "../alltag/material.js"; // Update 9 – Material
@@ -310,6 +311,7 @@ export function mount(el, c) {
     <div class="stat stat-ico">${icon("chart", 24)}<span>Woche</span><strong data-r="s-week">0:00</strong></div>
     <div class="stat stat-ico">${icon("pie", 24)}<span>Monat</span><strong data-r="s-month">0:00</strong></div>
   </div>
+  <section data-r="dash"></section>
   <div class="card today-list" data-r="todaycard">
     <div class="section-h">
       <h2 class="h-ico">${icon("list", 24)}<span>Heute erfasst</span></h2>
@@ -320,6 +322,7 @@ export function mount(el, c) {
 </div>`;
 
   try { myday.mount($("myday"), ctx); } catch (e) { console.error(e); }
+  try { dash.mount($("dash"), ctx); } catch (e) { console.error(e); } // Update 10b
   try { // Update 9 – Privat / Arbeit
     privatUi.mount($("privat"), ctx, {
       clockOutNow: () => clockOutAt(Date.now()),
@@ -364,6 +367,7 @@ export function update(s) {
   snap = s;
   if (!root) return;
   try { myday.update(s); } catch (e) { console.error(e); }
+  try { dash.update(s); } catch (e) { console.error(e); }
   try { privatUi.update(s); } catch (e) { console.error(e); }
   try { if (photoBar) photoBar.update(s); } catch (e) { console.error(e); }
   if (s.running) {
@@ -1655,6 +1659,7 @@ export function tick() {
 export function onShow() {
   if (!root || !ctx) return;
   if (snap) renderAll();
+  try { dash.onShow(); } catch (e) { console.error(e); }
   refreshNear();
 }
 

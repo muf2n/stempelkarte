@@ -87,9 +87,10 @@ const CATS = [
         </label></div></div>
       <div class="sh-card"><div id="reminders-panel"></div></div>
       <div class="sh-card"><div id="lock-panel"></div></div>` },
-  { id: "aussehen", g: "app", e: "🎨", t: "Erscheinungsbild", k: "farbe akzent design dunkel hell dark mode schrift groß einfache ansicht bedienen",
+  { id: "aussehen", g: "app", e: "🎨", t: "Erscheinungsbild", k: "farbe akzent design dunkel hell dark mode schrift groß einfache ansicht bedienen dashboard überblick widgets heute",
     html: `<div class="sh-card"><div id="accent-panel"></div></div>
       <div class="sh-card"><div id="comfort-panel"></div></div>
+      <div class="sh-links"><button type="button" class="sh-row" data-sh-act="dashboard"><span class="sh-ic" aria-hidden="true">🧩</span><span class="sh-lb"><b>Heute-Überblick anpassen</b><small>Widgets ein/aus, Reihenfolge, automatisch sortieren</small></span><span class="sh-chev" aria-hidden="true">›</span></button></div>
       <p class="note sh-foot">🌙 Hell oder dunkel richtet sich nach deinem Gerät.</p>` },
   { id: "geraete", g: "app", e: "⌚", t: "Geräte", k: "uhr watch bangle smartwatch android app gerät",
     html: `<div class="sh-card" id="sh-android-card" hidden><div id="android-panel" hidden></div></div>
@@ -209,6 +210,7 @@ function onClick(ev) {
   else if (act === "leave") close(() => ctx.jump("leave-panel"));
   else if (act === "trips") close(() => ctx.jump("trips-panel"));
   else if (act === "places") close(() => ctx.go("orte"));
+  else if (act === "dashboard") close(() => { ctx.go("heute"); setTimeout(() => document.dispatchEvent(new CustomEvent("sk:dashboard-edit")), 80); });
   else if (act === "privat") {
     import("./privat-mode.js").then((m) => m.openSettings()).catch((err) => { console.error(err); ctx.ui.toast("Privat-Modus konnte nicht geladen werden."); });
   } else if (act === "geld" || act === "tresor" || act === "galerie" || act === "claude") {

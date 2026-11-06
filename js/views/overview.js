@@ -477,6 +477,18 @@ function renderBalance() {
 }
 
 /**
+ * Update 10b – Smart Dashboard: dieselben Zahlen wie das Überstundenkonto (gleiche Rechnung).
+ * → { total, week, month, start, text, weekText, monthText } oder null (noch nicht bereit).
+ */
+export function balanceSummary(s, c) {
+  if (!ctx) ctx = c;
+  if (s) snap = s;
+  if (!ctx || !snap || snap.ready === false) return null;
+  const b = balanceNumbers();
+  return { ...b, text: signed(b.total), weekText: signed(b.week), monthText: signed(b.month) };
+}
+
+/**
  * Kompakte Überstundenkonto-Karte (PC-Kalenderseite, rechte Spalte).
  * Wird von app.js bei jedem Snapshot in #rail-balance gerendert.
  */
