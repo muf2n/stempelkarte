@@ -3,6 +3,8 @@ import * as plans from "./plans.js";
 import { mountGallery } from "./gallery.js"; // Update 9 – Fotos
 import { mountPlaceMaterial } from "../alltag/material.js"; // Update 9 – Material
 import * as galleryAlbums from "../gallery-albums.js"; // Update 9 (Agent U) – Foto-Kategorie pro Ort
+import * as SC from "../site-core.js"; // Update 10d – Baustellen-Projektseiten
+import { showSite, closeSite, isOpen as siteOpen, injectSiteCSS } from "./site.js"; // Update 10d
 
 const LEAFLET_CSS = "https://unpkg.com/leaflet@1.9.4/dist/leaflet.css";
 const LEAFLET_JS = "https://unpkg.com/leaflet@1.9.4/dist/leaflet.js";
@@ -185,16 +187,49 @@ function renderList() {
     return;
   }
   const sums = monthHoursByPlace(snap.entries);
-  list.innerHTML = places.map((p) => {
+  const today = C.util.dayKey(Date.now());
+  // Update 10d – jede Zeile: bestehender Ort-Knopf (Bearbeiten) + Knopf zur Baustellen-Projektseite
+  const row = (p) => {
     const bits = [`Radius ${p.radius || 150} m`];
     if (sums[p.id]) bits.push(`${hm(Math.round(sums[p.id]))} h diesen Monat`);
     if (!hasCoords(p)) bits.push("keine Position");
-    return `<button type="button" class="place-item" data-id="${esc(p.id)}">` +
+    const st = SC.siteStatus(p, today);
+    if (st === "abgeschlossen" && p.siteEnd) bits.unshift(`✅ beendet ${SC.fmtKey(p.siteEnd)}`);
+    return `<div class="place-row" data-status="${st}">` +
+      `<button type="button" class="place-item" data-id="${esc(p.id)}">` +
       `<strong>${esc(p.name || "Ohne Namen")}</strong>` +
       (p.addr ? `<span class="note">${esc(p.addr)}</span>` : "") +
       `<span class="note">${esc(bits.join(" · "))}</span>` +
-      `</button>`;
-  }).join("");
+      `</button>` +
+      `<button type="button" class="site-go" data-site="${esc(p.id)}" aria-label="Baustellen-Seite ${esc(p.name || "")} öffnen">` +
+        `<span class="site-go-st" aria-hidden="true">${SC.STATUS_META[st].e}</span><span class="site-go-l">Projekt</span><span aria-hidden="true">›</span></button>` +
+      `</div>`;
+  };
+  const closed = SC.closedSites(places, today);
+  const openList = places.filter((p) => !closed.includes(p));
+  list.innerHTML = openList.map(row).join("") +
+    (closed.length ? `<details class="site-history"${list.querySelector(".site-history[open]") ? " open" : ""}><summary>✅ Abgeschlossene Baustellen (${closed.length})</summary>` +
+      `<div class="stack">${closed.map((p) => row(p).replace('<div class="place-row"', '<div class="place-row done"')).join("")}</div></details>` : "");
+}
+
+/* ---------- Update 10d: Hash-Router für die Projektseite (#orte/baustelle/<id>) ---------- */
+
+let siteNav = false; // Seite wurde in der App geöffnet (→ Zurück = history.back)
+export function openSite(id) {
+  if (!SC.ID_RE.test(String(id || ""))) return;
+  siteNav = true;
+  location.hash = SC.siteHash(id).slice(1);
+}
+function routeSite(ev) {
+  if (!C) return;
+  const id = SC.parseSiteHash(location.hash);
+  if (id && ev && ev.type === "hashchange") siteNav = true; // in der App hierher navigiert → Zurück = history.back
+  if (!id) { if (siteOpen()) closeSite({ fromHash: true }); siteNav = false; return; }
+  const s = C.store.get ? C.store.get() : null;
+  if (!s || !s.ready) return; // kommt mit dem nächsten update()
+  if (siteOpen(id)) return;
+  showSite(id, C, { pushed: siteNav });
+  siteNav = false;
 }
 
 /* ---------- Standort ---------- */
@@ -214,6 +249,7 @@ async function maybeLocate() {
 export function mount(el, ctx) {
   root = el;
   C = ctx;
+  try { injectSiteCSS(); } catch (err) { console.error(err); } // Update 10d
   el.innerHTML =
     `<div class="stack">` +
       `<div id="plans-panel" data-r="plans"></div>` +
@@ -243,6 +279,8 @@ export function mount(el, ctx) {
   });
 
   el.querySelector("[data-r=list]").addEventListener("click", (ev) => {
+    const sg = ev.target.closest(".site-go"); // Update 10d
+    if (sg) { openSite(sg.dataset.site); return; }
     const b = ev.target.closest(".place-item");
     if (!b) return;
     const p = ((snap && snap.places) || []).find((x) => x.id === b.dataset.id);
@@ -253,6 +291,8 @@ export function mount(el, ctx) {
 
   snap = ctx.store.get ? ctx.store.get() : null;
   if (snap) renderList();
+  window.addEventListener("hashchange", routeSite); // Update 10d
+  routeSite();
 }
 
 export function update(s) {
@@ -261,6 +301,7 @@ export function update(s) {
   if (!root) return;
   renderList();
   drawMap(false);
+  routeSite(); // Update 10d – Projektseite per Adresse/QR, sobald die Daten da sind
 }
 
 export function tick() {}
@@ -306,6 +347,7 @@ export function openPlaceForm(place, presetLoc, ctx) {
     (isNew ? "" : `<div data-r="photos" style="margin-top:14px"></div>`) +
     `<div class="stack" style="margin-top:14px">` +
       `<button type="button" class="btn primary" data-r="save">Speichern</button>` +
+      (isNew ? "" : `<button type="button" class="btn ghost" data-r="site">🏗️ Baustellen-Seite öffnen</button>`) + // Update 10d
       (isNew ? "" : `<button type="button" class="btn ghost" data-r="plan">Schicht planen</button>`) +
       (isNew ? "" : `<button type="button" class="btn danger" data-r="del">Ort löschen</button>`) +
     `</div>`;
@@ -433,6 +475,9 @@ export function openPlaceForm(place, presetLoc, ctx) {
           });
         } catch (err) { console.error(err); }
       }
+
+      const siteBtn = $("[data-r=site]"); // Update 10d
+      if (siteBtn) siteBtn.addEventListener("click", () => { close(); if (!siteOpen(place.id)) openSite(place.id); });
 
       const planBtn = $("[data-r=plan]");
       if (planBtn) planBtn.addEventListener("click", () => { close(); plans.openPlanForm(null, c, { placeId: place.id }); });

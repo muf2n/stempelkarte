@@ -73,6 +73,7 @@ function norm(p) {
     acc: fnum(p.acc),
     addr: String(p.addr || ""),
     albMig: !!p.albMig,
+    phase: p.phase === "vorher" || p.phase === "nachher" ? p.phase : null, // Update 10d – Vorher/Nachher (optional)
   };
 }
 function fnum(v) { return typeof v === "number" && Number.isFinite(v) ? v : null; }
@@ -332,7 +333,7 @@ export async function updateNote(id, note) {
 
 /* ---------- Update 9 – Galerie: Teil-Änderungen, Index, Einzel-Laden ---------- */
 
-const UPDATABLE = ["note", "albumIds", "lat", "lng", "acc", "addr", "albMig", "placeId", "place"];
+const UPDATABLE = ["note", "albumIds", "lat", "lng", "acc", "addr", "albMig", "placeId", "place", "phase"]; // Update 10d: phase (vorher/nachher)
 
 /**
  * Felder eines Fotos ändern (note, albumIds, lat, lng, acc, addr, albMig, placeId, place).
@@ -351,6 +352,7 @@ export async function updatePhoto(id, partial) {
   if ("albMig" in patch) patch.albMig = !!patch.albMig;
   if ("placeId" in patch) patch.placeId = patch.placeId ? String(patch.placeId) : null;
   if ("place" in patch) patch.place = String(patch.place || "");
+  if ("phase" in patch) patch.phase = patch.phase === "vorher" || patch.phase === "nachher" ? patch.phase : null; // Update 10d
   const base = mem.get(pid) || idx.get(pid) || null;
   let nextIdx = null;
   if (store.get().mode === "cloud") {

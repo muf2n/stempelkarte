@@ -155,7 +155,7 @@ export function mergePlan(items, fromId, intoId) {
 
 /* ---------- Index-Dokumente (nur Vorschaubild + Metadaten, nie das große Bild) ---------- */
 
-export const INDEX_FIELDS = ["id", "ts", "dayKey", "thumb", "albumIds", "addr", "placeId", "place", "note", "lat", "lng", "w", "h", "albMig"];
+export const INDEX_FIELDS = ["id", "ts", "dayKey", "thumb", "albumIds", "addr", "placeId", "place", "note", "lat", "lng", "w", "h", "albMig", "phase"]; // Update 10d: phase
 
 /** Foto (voll) → Index-Dokument. */
 export function indexDoc(p) {
@@ -176,6 +176,7 @@ export function indexDoc(p) {
     h: Number(p.h) || 0,
   };
   if (p.albMig) o.albMig = true;
+  if (p.phase === "vorher" || p.phase === "nachher") o.phase = p.phase; // Update 10d – Vorher/Nachher
   return o;
 }
 

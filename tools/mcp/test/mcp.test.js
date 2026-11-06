@@ -72,6 +72,8 @@ test("tools/list: alle Werkzeuge mit deutschen Beschreibungen und Schemas", asyn
     // Gmail (mails_suchen, mail_lesen) bewusst NICHT über /mcp (H1b) – nur im In-App-Chat
     // Update 9 – Budget: „Kann ich mir das leisten?“
     "leisten_pruefen",
+    // Update 10d – Baustellen-Projektseite
+    "baustelle_lesen",
   ].sort());
   for (const x of result.tools) {
     assert.equal(x.inputSchema.type, "object");

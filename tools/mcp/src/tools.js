@@ -25,6 +25,7 @@ import * as WT from "./worktime.js"; // Update 10c – Änderungsprotokoll (entr
 import { WRITE_TOOLS } from "./write.js"; // Update 9 – Claude darf (fast) alles ändern
 import { SETTINGS_TOOLS } from "./settings.js"; // Update 9 – Einstellungen nur mit Bestätigung
 import { GMAIL_TOOLS } from "./gmail.js"; // Gmail dauerhaft (nur lesen): mails_suchen, mail_lesen
+import { SITE_TOOLS } from "./baustelle.js"; // Update 10d – Baustellen-Projektseite (nur lesen)
 
 const ABS_KINDS = ["urlaub", "krank", "zeitausgleich", "schule", "feiertag"];
 const GRADE_NAMES = { 1: "Sehr gut", 2: "Gut", 3: "Befriedigend", 4: "Genügend", 5: "Nicht genügend" };
@@ -1686,6 +1687,9 @@ tool({
 
 /* ===== Update 9: weitere Lese-/Schreib-Werkzeuge, Einstellungen (zweistufig) ===== */
 for (const t of [...READ_TOOLS, ...WRITE_TOOLS, ...SETTINGS_TOOLS]) tool(t);
+
+/* ===== Update 10d: Baustellen-Projektseite (nur lesen) ===== */
+for (const t of SITE_TOOLS) tool(t);
 
 /* ===== Gmail (nur lesen, nur auf Nachfrage) ===== */
 for (const t of GMAIL_TOOLS) tool(t);

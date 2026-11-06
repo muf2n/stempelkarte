@@ -301,6 +301,8 @@ export function openTodoForm(todo = null, ctx = C, preset = null) {
     countdown: todo ? !!base.countdown : !!pre.countdown,
   };
   if (!REMIND_OPTS.some(([v]) => v === st.remindMin)) REMIND_OPTS.push([st.remindMin, `${st.remindMin} Min vorher`]);
+  const sitePlaces = ((c.store.get() || {}).places || []).filter((p) => p && p.id);
+  const sitePid = String(base.placeId || pre.placeId || "");
 
   const bodyHTML =
     `<div class="fields ag-form">` +
@@ -328,6 +330,11 @@ export function openTodoForm(todo = null, ctx = C, preset = null) {
         `</select></label>` +
         `<p class="hint" data-r="remhint" hidden></p>` +
       `</div>` +
+      // Update 10d – Aufgabe einer Baustelle zuordnen (optional, todo.placeId)
+      (sitePlaces.length || sitePid ? `<label>📍 Baustelle <small>(optional)</small><select data-r="placeid"><option value="">Keine</option>` +
+        sitePlaces.map((p) => `<option value="${esc(p.id)}"${p.id === sitePid ? " selected" : ""}>${esc(p.name || "Ohne Namen")}</option>`).join("") +
+        (sitePid && !sitePlaces.some((p) => p.id === sitePid) ? `<option value="${esc(sitePid)}" selected>(Ort gelöscht)</option>` : "") +
+      `</select></label>` : "") +
       `<label>Notiz<textarea data-r="note" rows="3" placeholder="optional">${esc(base.note || "")}</textarea></label>` +
     `</div>` +
     `<div class="stack" style="margin-top:14px">` +
@@ -432,6 +439,8 @@ export function openTodoForm(todo = null, ctx = C, preset = null) {
           done: !!base.done,
           doneAt: base.doneAt ?? null,
         };
+        const pidEl = $("placeid"); // Update 10d – Baustelle
+        if (pidEl) data.placeId = pidEl.value || null;
         c.ui.setBusy(saveBtn, true, "Speichert …");
         try {
           await c.store.saveTodo(data);

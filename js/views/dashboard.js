@@ -315,6 +315,11 @@ function wSite() {
         ${sum ? `<p class="dw-note">${esc(MAT.openCountText(sum))}</p>` : ""}<ul class="dw-list dw-mat">${lines}</ul>`;
     }
   }
+  // Update 10d – Baustellen-Projektseite: gespeicherter Ort → Seite öffnen, Material bleibt als eigener Knopf erreichbar
+  if (site.placeId) {
+    const matBtn = `<button type="button" class="dw-more dw-site-mat" data-hash="#alltag/material">🧰 Materialliste ›</button>`;
+    return card("site", `<div class="dw-place"><b>📍 ${esc(site.place)}</b>${sub}</div>${mat}${matBtn}`, { hash: "#orte/baustelle/" + site.placeId, more: "Baustelle" });
+  }
   return card("site", `<div class="dw-place"><b>📍 ${esc(site.place)}</b>${sub}</div>${mat}`, { hash: "#alltag/material", more: "Material" });
 }
 

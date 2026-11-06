@@ -30,6 +30,7 @@ on:
       - "js/trip-core.js"
       - "js/alltag/unterwegs-core.js"
       - "js/gallery-core.js"
+      - "js/site-core.js"
       - ".github/workflows/mcp-deploy.yml"
   workflow_dispatch:
 
