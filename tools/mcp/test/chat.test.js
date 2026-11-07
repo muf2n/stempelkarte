@@ -567,3 +567,45 @@ test("Ungültige Fotos werden abgelehnt", async () => {
   assert.equal((await post({ ...msg("x"), image: { type: "image/jpeg", data: "A".repeat(1_600_000) } })).status, 413);
   assert.equal((await post({ ...msg("x"), image: { type: "image/jpeg", data: "<script>" } })).status, 400);
 });
+
+test("Sensei-Modus: Japanisch-Tutor-Prompt, KEINE Werkzeuge, kein Nachhaken, Verbrauch wird gezählt", async () => {
+  const t = await setupChat({ script: [end("こんにちは (konnichiwa) – „Hallo“! Ich hab dir das gespeichert 😊"), end("Normal")] });
+  const res = await t.post({ ...msg("Wie sag ich Hallo?"), mode: "sensei" });
+  assert.equal(res.status, 200);
+  const out = await res.json();
+  assert.match(out.reply, /konnichiwa/);
+  assert.deepEqual(out.actions, []);
+  assert.ok(out.usage && out.usage.capUsd >= 0);
+  assert.equal(t.calls.length, 1, "kein Nachhaken im Sensei-Modus");
+  const b = t.calls[0].body;
+  assert.equal("tools" in b, false, "Sensei schickt keine Werkzeuge");
+  assert.match(b.system, /Sensei/);
+  assert.match(b.system, /Romaji/);
+  assert.match(b.system, /Deutsch/);
+  assert.match(b.system, /Rollenspiel/);
+  assert.match(b.system, /keinen Zugriff auf die App-Daten/);
+  assert.doesNotMatch(b.system, /Werkzeuge/);
+  // normaler Modus schickt weiterhin Werkzeuge
+  await t.post(msg("Hallo"));
+  assert.ok(Array.isArray(t.calls[1].body.tools) && t.calls[1].body.tools.length > 0);
+});
+
+test("Sensei-Modus mit Foto (Handschrift prüfen): Bildblock, keine Werkzeuge", async () => {
+  const png = "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==";
+  const { post, calls } = await setupChat({ script: [(body) => {
+    assert.equal(body.messages.at(-1).content[0].type, "image");
+    assert.equal("tools" in body, false);
+    return end("Schön geschrieben! あ passt 👍");
+  }] });
+  const r = await post({ ...msg("Prüf mein あ"), mode: "sensei", image: { type: "image/png", data: png } });
+  assert.equal(r.status, 200);
+  assert.equal(calls.length, 1);
+});
+
+test("chatMode/systemPrompt: \"sensei\" wird erkannt (nur exakt)", () => {
+  assert.deepEqual(chatMode({ mode: "sensei" }), { mode: "sensei", short: false, name: "" });
+  assert.deepEqual(chatMode({ mode: "Sensei" }), { mode: "text", short: false, name: "" });
+  assert.match(systemPrompt(NOW, { mode: "sensei" }), /Japanisch-Lehrer/);
+  assert.doesNotMatch(systemPrompt(NOW, { mode: "sensei" }), /Passwort-Tresor/);
+  assert.doesNotMatch(systemPrompt(NOW), /Japanisch-Lehrer/);
+});

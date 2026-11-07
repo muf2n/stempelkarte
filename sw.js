@@ -161,6 +161,17 @@ const SHELL = [
   "js/gallery-albums.js",
   "js/alltag/galerie.js",
   "css/alltag-galerie.css",
+  "js/alltag/japanisch.js", // Alltag › Japanisch
+  "js/alltag/jp-core.js",
+  "js/alltag/jp-data.js",
+  "js/alltag/jp-speech.js",
+  "js/alltag/jp-kana.js",
+  "js/alltag/jp-vocab.js",
+  "js/alltag/jp-practice.js",
+  "js/alltag/jp-write.js",
+  "js/alltag/jp-read.js",
+  "js/alltag/jp-sensei.js",
+  "css/alltag-japanisch.css",
   "js/gallery-active.js", // Update 9 (Agent U) – aktive Kategorie
   "css/gallery-active.css",
   "js/media-import-core.js", // Update 9 (Agent W3) – Kamera-Fotos übernehmen
