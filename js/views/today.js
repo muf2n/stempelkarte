@@ -12,6 +12,7 @@ import { peoplePicker, cleanPeople, peopleText, rememberPeople, privTripRow } fr
 import { mountPhotoBar } from "./gallery.js"; // Update 9 – Fotos
 import { mountTodayButton as mountMaterialBtn } from "../alltag/material.js"; // Update 9 – Material
 import * as privatUi from "./privat-mode.js"; // Update 9 – Privat / Arbeit
+import * as freizeit from "./freizeit.js"; // Update 10 – Freizeit-Stempeluhr (Sport/Zuhause)
 import * as privDrive from "../privat-drive.js";
 import * as WT from "../worktime-core.js"; // Update 10c – Änderungsprotokoll, GPS-Schutz, Pausenhinweis
 import { isPrivatNow } from "../privat.js";
@@ -271,6 +272,7 @@ export function mount(el, c) {
   el.innerHTML = `
 <div class="stack">
   <section data-r="privat"></section>
+  <section data-r="freizeit" hidden></section>
   <section data-r="myday"></section>
   <div class="card clock" data-r="clock">
     <div class="clock-deco" aria-hidden="true">${sparkles()}${leaves("left")}${leaves("right")}</div>
@@ -330,6 +332,7 @@ export function mount(el, c) {
       startWork: (place) => doClockIn(null, place),
     });
   } catch (e) { console.error(e); }
+  try { freizeit.mount($("freizeit"), ctx); } catch (e) { console.error(e); }
   try { photoBar = mountPhotoBar($("photo"), ctx); } catch (e) { console.error(e); }
   try { mountMaterialBtn($("photo")); } catch (e) { console.error(e); } // Update 9 – Material neben dem Foto-Knopf
   $("btns").addEventListener("click", onButton);
@@ -370,6 +373,7 @@ export function update(s) {
   try { myday.update(s); } catch (e) { console.error(e); }
   try { dash.update(s); } catch (e) { console.error(e); }
   try { privatUi.update(s); } catch (e) { console.error(e); }
+  try { freizeit.update(s); } catch (e) { console.error(e); }
   try { if (photoBar) photoBar.update(s); } catch (e) { console.error(e); }
   if (s.running) {
     done = null;              // neue/andere Schicht läuft
@@ -1656,6 +1660,7 @@ export function tick() {
   try { planTick(); } catch (e) { console.error(e); }
   try { driveWatchTick(); } catch (e) { console.error(e); }
   try { privatUi.tick(); privDrive.tick(ctx); } catch (e) { console.error(e); } // Update 9 – Privat
+  try { freizeit.update(null, true); } catch (e) { console.error(e); }
 }
 
 export function onShow() {

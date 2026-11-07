@@ -1,0 +1,32 @@
+/* Freizeit-Stempeluhr (Privat): js/views/freizeit.js */
+.fz { display: flex; flex-direction: column; gap: 12px; }
+.fz-head { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; flex-wrap: wrap; }
+.fz-head h2 { margin: 0; font-size: 1.1rem; }
+.fz-head small { color: var(--muted); }
+.fz-sub { font-size: .78rem; font-weight: 700; letter-spacing: .06em; text-transform: uppercase; color: var(--muted); }
+.fz-chips { display: flex; flex-wrap: wrap; gap: 8px; }
+.fz-chip { display: inline-flex; align-items: center; gap: 6px; padding: 9px 13px; border-radius: 999px; border: 1.5px solid var(--line); background: var(--soft); color: var(--ink); font: inherit; font-weight: 600; cursor: pointer; }
+.fz-chip span { font-size: 1.15rem; }
+.fz-chip:hover { border-color: var(--accent); }
+.fz-chip:focus-visible, .fz-del:focus-visible { outline: none; box-shadow: var(--ring); }
+.fz-ownbtn { align-self: flex-start; background: transparent; border-style: dashed; }
+.fz-own { display: flex; gap: 8px; flex-wrap: wrap; }
+.fz-own input { flex: 1 1 160px; min-width: 0; }
+.fz-run { display: flex; align-items: center; gap: 14px; padding: 14px; border-radius: 16px; background: var(--soft); }
+.fz-big { font-size: 2.4rem; line-height: 1; }
+.fz-run b { font-size: 1.1rem; }
+.fz-clock { font-size: 2rem; font-weight: 800; font-variant-numeric: tabular-nums; color: var(--accent); }
+.fz-btns { display: flex; gap: 8px; flex-wrap: wrap; }
+.fz-stop { display: flex; flex-direction: column; gap: 10px; }
+.fz-stop label { display: flex; flex-direction: column; gap: 4px; font-weight: 600; font-size: .9rem; }
+.fz-tiles { display: grid; grid-template-columns: repeat(auto-fit, minmax(96px, 1fr)); gap: 8px; margin-top: 8px; }
+.fz-tiles div { padding: 10px 12px; border-radius: 14px; background: var(--soft); display: flex; flex-direction: column; gap: 2px; }
+.fz-tiles span { font-size: .8rem; color: var(--muted); }
+.fz-tiles b { font-size: 1.15rem; font-variant-numeric: tabular-nums; }
+.fz-top, .fz-today { list-style: none; margin: 8px 0 0; padding: 0; display: flex; flex-direction: column; gap: 6px; }
+.fz-top li, .fz-today li { display: flex; align-items: center; gap: 8px; min-width: 0; }
+.fz-top li small, .fz-today li > small { margin-left: auto; color: var(--muted); font-variant-numeric: tabular-nums; white-space: nowrap; }
+.fz-today li > span:nth-child(2) { display: flex; flex-direction: column; min-width: 0; }
+.fz-today li > span small { color: var(--muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.fz-del { border: 0; background: none; cursor: pointer; padding: 6px; border-radius: 8px; font-size: 1rem; }
+.fz-del[data-armed] { background: color-mix(in srgb, #e5484d 18%, transparent); font-size: .8rem; font-weight: 700; color: var(--ink); }
