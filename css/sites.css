@@ -213,3 +213,10 @@ button.st-ev-b:focus-visible { outline: none; box-shadow: var(--ring); }
   .sr-h { border-bottom-color: #000; break-after: avoid; }
   .sr-foot { break-inside: avoid; }
 }
+
+/* Update 10 E – 👤 Kunde + 📎 Dokumente auf der Projektseite */
+.st-cust { display: flex; align-items: center; gap: 10px; padding: 8px; border-radius: 12px; color: var(--ink); text-decoration: none; background: color-mix(in srgb, var(--accent) 7%, transparent); }
+.st-cust > span:first-child { font-size: 1.6rem; }
+.st-cust b { display: block; }
+.st-cust small { color: var(--muted); }
+.st-docs { margin-top: 0; }

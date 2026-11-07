@@ -12,6 +12,7 @@ import { createSubs } from "./money-subs.js"; // Update 9 – Abos: Kündigen, F
 import { guard as lockGuard } from "./money-lock.js"; // Update 9 – Geld-Sperre (Fingerabdruck/PIN)
 import { createSavings } from "./money-savings.js"; // Update 9 – Sparziele: echtes Konto, Spar-Erinnerung, Aufrunden
 import { createBudgetGuard } from "./money-budget.js"; // Update 9 – Budget-Warnungen, „Kann ich mir das leisten?“
+import { createPlan } from "./money-plan.js"; // Update 10 E – Planen: Monatsende, Simulation, Jahreskosten, Wunschliste
 
 const TABS = [
   ["uebersicht", "Übersicht", "pie"],
@@ -19,6 +20,7 @@ const TABS = [
   ["budget", "Budget", "target"],
   ["ziele", "Sparziele", "piggy"],
   ["abos", "Abos", "repeat"],
+  ["planen", "Planen", "chart"], // Update 10 E
   ["teilen", "Teilen", "users"],
 ];
 const TAB_KEY = "stempelkarte.money.tab";
@@ -84,6 +86,7 @@ function mountMoney(el, ctx) {
     el, col, ui, cats: () => cats(), catOf: (id) => catOf(id), bankStatus: () => bk.status(), safeWrite: (p, m) => safeWrite(p, m),
     goBudget: () => { S.tab = "budget"; lsSet(TAB_KEY, S.tab); render(); window.scrollTo({ top: 0 }); },
   });
+  const fp = createPlan({ col, ui, render: () => queue(), safeWrite: (p, m) => safeWrite(p, m), cats: () => cats(), bankStatus: () => bk.status() }); // Update 10 E
   const ab = createSubs({ col, ui, render: () => queue(), catOf: (id) => catOf(id), cats: () => cats(), safeWrite: (p, m) => safeWrite(p, m), gmCardHTML: () => gm.cardHTML() });
 
   /* ---------- Daten-Hilfen ---------- */
@@ -159,7 +162,7 @@ function mountMoney(el, ctx) {
     fab.hidden = S.tab === "budget";
     if (allLoaded()) bg.check(); // Update 9: neue Buchung über 80/100 % → Banner
   }
-  const FAB_LABEL = { uebersicht: "Buchung hinzufügen", buchungen: "Buchung hinzufügen", ziele: "Sparziel hinzufügen", abos: "Abo hinzufügen", teilen: "Hinzufügen" };
+  const FAB_LABEL = { uebersicht: "Buchung hinzufügen", buchungen: "Buchung hinzufügen", ziele: "Sparziel hinzufügen", abos: "Abo hinzufügen", teilen: "Hinzufügen", planen: "Wunsch hinzufügen" };
 
   function monthNav() {
     const cur = M.monthOf(M.todayKey());
@@ -459,7 +462,7 @@ function mountMoney(el, ctx) {
     return "für " + f.map((id) => M.personName(g, id, { me: "dich" })).join(", ");
   }
 
-  const PAGES = { uebersicht: pageOverview, buchungen: pageTx, budget: pageBudget, ziele: pageGoals, abos: pageSubs, teilen: pageSplit };
+  const PAGES = { uebersicht: pageOverview, buchungen: pageTx, budget: pageBudget, ziele: pageGoals, abos: pageSubs, teilen: pageSplit, planen: () => fp.pageHTML() };
 
   /* ---------- Sheets ---------- */
 
@@ -921,6 +924,8 @@ function mountMoney(el, ctx) {
     if (bgT && el.contains(bgT) && bg.onClick(bgT)) return;
     const abT = ev.target.closest("[data-ab]");
     if (abT && el.contains(abT) && ab.onClick(abT)) return;
+    const fpT = ev.target.closest("[data-fp]"); // Update 10 E
+    if (fpT && el.contains(fpT) && fp.onClick(fpT)) return;
     const t = ev.target.closest("[data-tab], [data-mn]");
     if (!t || !el.contains(t)) return;
     if (t.classList.contains("mn-tab")) {
@@ -935,6 +940,7 @@ function mountMoney(el, ctx) {
       case "fab":
         if (S.tab === "ziele") openGoal();
         else if (S.tab === "abos") openSub();
+        else if (S.tab === "planen") fp.newWish(); // Update 10 E
         else if (S.tab === "teilen") { const g = S.group && col.split.get(S.group); if (g) openExpense(g); else openGroup(); }
         else openTx();
         break;
@@ -973,10 +979,11 @@ function mountMoney(el, ctx) {
   }
   function onInput(ev) {
     if (ev.target.id === "mn-q") { S.q = ev.target.value; render(); }
+    else fp.onInput(ev.target); // Update 10 E
   }
   el.addEventListener("click", onClick);
   el.addEventListener("input", onInput);
-  const onChange = (ev) => { if (ev.target && ev.target.dataset) sv.onChange(ev.target); }; // Update 9 – Sparziele (Aufrunden)
+  const onChange = (ev) => { if (ev.target && ev.target.dataset) { if (fp.onChange(ev.target)) return; sv.onChange(ev.target); } }; // Update 9 – Sparziele (Aufrunden)
   el.addEventListener("change", onChange);
   const onToggle = (ev) => { if (ev.target.classList && ev.target.classList.contains("gm-help")) gm.onToggleHelp(ev.target.open, ev.target); };
   el.addEventListener("toggle", onToggle, true);
@@ -991,6 +998,7 @@ function mountMoney(el, ctx) {
   return () => {
     alive = false;
     bg.destroy();
+    fp.destroy(); // Update 10 E
     offs.forEach((off) => off());
     el.removeEventListener("click", onClick);
     el.removeEventListener("input", onInput);

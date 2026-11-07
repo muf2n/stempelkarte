@@ -5,7 +5,7 @@
 //     meta: { settings: {…}, ical_feeds: {…}, money_lock: {…}, budget_alerts: {…} },
 //     counts: { entries: 12, … } }
 // Verschlüsselt: { format: "stempelkarte-backup-enc", v: 1, kdf: "PBKDF2-SHA256", iter, salt, iv, ct } (base64, AES-256-GCM).
-// NIE enthalten: Tresor (a_vault*, vault*), Bild-Bytes (photos, a_school_files, a_travel_images, Vorschaubilder im
+// NIE enthalten: Tresor (a_vault*, vault*), Bild-Bytes (photos, a_school_files, a_doc_files, a_travel_images, Vorschaubilder im
 // Foto-Index), Server-Dokumente in meta/ (KI-Deckel, Gmail-/Bank-Zugänge, Push-Geräte) und die Backups selbst.
 
 import { deriveKek, randomBytes, b64, unb64 } from "./alltag/vault-crypto.js";
@@ -38,9 +38,10 @@ export const ALLTAG = [
   "lap_cards", "lap_stats", "lap_exams", "lap_own", "jp_cards", "jp_stats", "trash",
   "haushalt", "habits", "routines", "goals", "notes", "ai_memory", "notfall", // Update 10 C
   "automations", "automation_log", // Update 10 – ⚡ Automationen
+  "dokumente", "vertraege", "inventar", "kontakte", "money_wishes", // Update 10 E (Datei-Inhalte a_doc_files bewusst nicht)
 ];
 /** Nie sichern/zurückspielen (exakt). */
-export const EXCLUDE_EXACT = ["a_school_files", "a_travel_images", "photos", "backups", "meta"];
+export const EXCLUDE_EXACT = ["a_school_files", "a_travel_images", "a_doc_files", "photos", "backups", "meta"];
 /** Nie sichern/zurückspielen (Anfang des Namens) – der Tresor hat seine eigene verschlüsselte Sicherung. */
 export const EXCLUDE_PREFIX = ["a_vault", "vault"];
 /** Felder, die nicht ins Backup kommen (Bild-Bytes). */

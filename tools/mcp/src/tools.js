@@ -29,6 +29,7 @@ import { SITE_TOOLS } from "./baustelle.js"; // Update 10d – Baustellen-Projek
 import { WEEKREPORT_TOOLS } from "./wochenbericht.js"; // Update 10 – Automatischer Wochenbericht (nur lesen)
 import { EINKAUF_TOOLS } from "./einkauf.js"; // Update 10 – Einkaufsliste (einkauf_lesen, einkauf_hinzufuegen)
 import { WERKZEUG_TOOLS } from "./werkzeug.js"; // Update 10 – Werkzeug-Register (werkzeug_lesen, nur lesen)
+import { KONTAKTE_TOOLS } from "./kontakte.js"; // Update 10 E – kontakte_lesen (RO, Notizen untrusted, Telefon/E-Mail nur auf Nachfrage)
 import { FAHRZEUG_TOOLS } from "./fahrzeuge.js"; // Update 10 – Fahrzeuge (fahrzeuge_lesen, nur lesen)
 import { MEMORY_TOOLS } from "./memory.js"; // Update 10 C – gedaechtnis_lesen (RO, untrusted), gedaechtnis_merken (WR), notfallkarte_lesen (RO, nur nach Freigabe)
 
@@ -1700,6 +1701,7 @@ for (const t of EINKAUF_TOOLS) tool(t); // Update 10 – einkauf_lesen (RO), ein
 for (const t of WERKZEUG_TOOLS) tool(t); // Update 10 – werkzeug_lesen (RO, Notizen als untrusted_content)
 for (const t of FAHRZEUG_TOOLS) tool(t); // Update 10 – fahrzeuge_lesen (RO, Notizen als untrusted_content)
 for (const t of MEMORY_TOOLS) tool(t); // Update 10 C – KI-Gedächtnis + Notfallkarte
+for (const t of KONTAKTE_TOOLS) tool(t); // Update 10 E – kontakte_lesen
 
 /* ===== Gmail (nur lesen, nur auf Nachfrage) ===== */
 for (const t of GMAIL_TOOLS) tool(t);

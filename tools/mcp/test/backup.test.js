@@ -27,6 +27,7 @@ function seed(g, base) {
   g.set(`${base}/vaultx/v2`, { ct: "GEHEIM" });
   g.set(`${base}/photos/ph1`, { data: "data:image/jpeg;base64,GROSS" });
   g.set(`${base}/a_school_files/s1`, { data: "BYTES" });
+  g.set(`${base}/a_doc_files/d1_0`, { id: "d1_0", data: "BYTES" }); // Update 10 E – Dokument-Inhalte
   g.set(`${base}/a_travel_images/i1`, { data: "BYTES" });
   g.set(`${base}/meta/settings`, { weeklyTarget: 38.5 });
   g.set(`${base}/meta/gmail_server`, { enc: "GEHEIM" });
@@ -43,12 +44,12 @@ async function readBack(t, date) {
   return { meta, backup: await B.unpackSnapshot(meta, chunks) };
 }
 
-test("Bereiche: ausgeschlossene Sammlungen sortiert, 8 Abfragen", () => {
+test("Bereiche: ausgeschlossene Sammlungen sortiert, 9 Abfragen (Update 10 E: + a_doc_files)", () => {
   const ex = excludedRanges().map((r) => r.from);
   assert.deepEqual(ex, [...ex].sort());
   assert.ok(ex.includes("a_vault") && ex.includes("photos") && ex.includes("meta") && ex.includes("backups"));
   const qs = rangeQueries("projects/p/databases/(default)/documents", "U");
-  assert.equal(qs.length, 8);
+  assert.equal(qs.length, 9);
   assert.ok(qs.every((q) => q.from[0].allDescendants && !q.from[0].collectionId));
 });
 

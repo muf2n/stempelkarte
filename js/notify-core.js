@@ -19,6 +19,9 @@ import { dueChores } from "./alltag/haushalt-core.js"; // Update 10 C
 import { habitsAtRisk } from "./alltag/habits-core.js"; // Update 10 C
 import { readVehicles, defaultVehicle } from "./trip-core.js";
 import { notifyItems as automationItems } from "./automation-core.js"; // Update 10 – ⚡ Automationen
+import { dueDocs } from "./alltag/dokumente-core.js"; // Update 10 E
+import { dueContracts } from "./alltag/vertraege-core.js"; // Update 10 E
+import { dueWarranties } from "./alltag/inventar-core.js"; // Update 10 E
 
 export const CATS = [
   { id: "aufgaben", e: "✅", t: "Fällige Aufgaben" },
@@ -36,6 +39,8 @@ export const CATS = [
   { id: "bericht", e: "📒", t: "Wochenbericht am Freitag" },
   { id: "backup", e: "💾", t: "Backup-Erinnerung" },
   { id: "automation", e: "⚡", t: "Hinweise deiner Automationen" },
+  { id: "vertraege", e: "📜", t: "Verträge & Kündigungsfristen" }, // Update 10 E
+  { id: "garantie", e: "🛡️", t: "Garantie läuft ab (Inventar)" }, // Update 10 E
 ];
 export const CAT_IDS = CATS.map((c) => c.id);
 
@@ -50,6 +55,9 @@ export const NEEDS = {
   haushalt: ["haushalt"], // Update 10 C
   gewohnheiten: ["habits"], // Update 10 C
   automation: ["automation_log"],
+  dokumente: ["dokumente"], // Update 10 E
+  vertraege: ["vertraege"], // Update 10 E
+  garantie: ["inventar"], // Update 10 E
 };
 
 const pad = (n) => String(n).padStart(2, "0");
@@ -257,6 +265,26 @@ export function collect(input = {}) {
     const tools = col("werkzeug");
     if (tools) for (const d of dueTools(tools, now)) {
       add({ id: `wz:${d.id}:${d.due}`, kind: "werkzeug", emoji: d.state === "ueber" ? "⏰" : "🔧", title: d.text.replace(/^\S+\s/, ""), when: now, prio: d.state === "ueber" ? 2 : 1, target: d.hash });
+    }
+  }
+
+  /* --- Update 10 E: 📁 Dokumente (Ablaufdatum), 📜 Verträge (Kündigungsfrist/Ende), 🛡️ Garantie (Inventar) – ohne Beträge --- */
+  if (on("dokumente")) {
+    const docs = col("dokumente");
+    if (docs) for (const d of dueDocs(docs, today)) {
+      add({ id: `dk:${d.id}:${d.expires}`, kind: "dokumente", emoji: d.state === "ab" ? "⌛" : "📄", title: d.title, sub: d.state === "ab" ? `Abgelaufen – ${rel(d.expires, today)}` : `Läuft ${rel(d.expires, today)} ab`, when: tsOf(d.expires), prio: d.state === "ab" || d.days <= 1 ? 2 : 1, target: d.hash });
+    }
+  }
+  if (on("vertraege")) {
+    const cs = col("vertraege");
+    if (cs) for (const d of dueContracts(cs, today)) {
+      add({ id: `vt:${d.id}:${d.kind}:${d.date}`, kind: "vertraege", emoji: d.days <= 3 ? "⏰" : d.e, title: d.name, sub: d.kind === "frist" ? `Kündigungsfrist endet ${rel(d.date, today)}` : `Vertrag endet ${rel(d.date, today)}`, when: tsOf(d.date), prio: d.days <= 3 ? 2 : 1, target: d.hash });
+    }
+  }
+  if (on("garantie")) {
+    const inv = col("inventar");
+    if (inv) for (const d of dueWarranties(inv, today)) {
+      add({ id: `gr:${d.id}:${d.due}`, kind: "garantie", emoji: "🛡️", title: d.name, sub: `Garantie endet ${rel(d.due, today)}`, when: tsOf(d.due), prio: d.days <= 3 ? 2 : 1, target: d.hash });
     }
   }
 

@@ -12,17 +12,29 @@ import * as galleryAlbums from "../gallery-albums.js";
 import { openViewer } from "./gallery.js";
 import { tripsBetween } from "../travel.js";
 import { icon } from "../icons.js";
+import { linkedDocsHTML, injectCSS as injectAktenCSS } from "../alltag/akten-ui.js"; // Update 10 E – 📎 Dokumente
+import { customerOfPlace, displayName, telHref, typeById, contactHash } from "../alltag/kontakte-core.js"; // Update 10 E – 👤 Kunde
 
 const ROOT_ID = "site-root";
 const REPORT_ID = "sr-root";
 let cur = null;       // { id, el, ctx, unsubs: [], pushed, prevFocus, prevOverflow, state }
 let report = null;
 
-let logCol = null, matCol = null;
+let logCol = null, matCol = null, ktCol = null, dkCol = null;
 const cols = () => {
-  if (!logCol) { logCol = collection("site_log"); matCol = collection("material_items"); }
-  return { log: logCol, mat: matCol };
+  if (!logCol) { logCol = collection("site_log"); matCol = collection("material_items"); ktCol = collection("kontakte"); dkCol = collection("dokumente"); }
+  return { log: logCol, mat: matCol, kt: ktCol, dk: dkCol };
 };
+
+/* Update 10 E – 👤 Kunde (Kontakte, optional place.customerId) + 📎 Dokumente */
+function customerHTML(place) {
+  const c = customerOfPlace(place, cols().kt.all());
+  if (!c) return `<section class="st-card" id="st-customer"><header class="st-h"><h2>👤 Kunde</h2><a class="btn sm ghost" href="#alltag/kontakte">Kontakte</a></header>
+    <p class="note">Noch kein Kunde verknüpft – in Alltag › 👤 Kunden &amp; Kontakte kannst du diese Baustelle einem Kontakt zuordnen.</p></section>`;
+  const tel = telHref(c.phone);
+  return `<section class="st-card" id="st-customer"><header class="st-h"><h2>👤 Kunde</h2>${tel ? `<a class="btn sm primary" href="${esc(tel)}">📞 Anrufen</a>` : ""}</header>
+    <a class="st-cust" href="${esc(contactHash(c.id))}"><span aria-hidden="true">${typeById(c.type).e}</span><span><b>${esc(displayName(c))}</b><small>${esc([c.person, c.phone].filter(Boolean).join(" · "))}</small></span></a></section>`;
+}
 
 const esc = (v) => String(v ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
 const todayKey = () => S.keyOf(Date.now());
@@ -224,7 +236,7 @@ function render() {
   const matHost = main.querySelector('[data-st-host="mat"]');
   main.innerHTML = heroHTML(place, d) + statsHTML(d) +
     `<div class="st-cols"><div class="st-col">${timelineHTML(d)}${todosHTML(d)}</div>` +
-    `<div class="st-col">${workHTML(d)}${matHTML(d)}${photosHTML(d)}${tripsHTML(d)}</div></div>`;
+    `<div class="st-col">${customerHTML(place)}${workHTML(d)}${matHTML(d)}${photosHTML(d)}${tripsHTML(d)}${linkedDocsHTML("place", place.id, { cls: "st-docs" })}</div></div>`;
   const newHost = main.querySelector('[data-st-host="mat"]');
   if (matHost && matHost.dataset.pid === place.id) newHost.replaceWith(matHost);
   else { newHost.dataset.pid = place.id; try { mountPlaceMaterial(newHost, place); } catch (e) { console.error(e); } }
@@ -590,6 +602,7 @@ export function showSite(id, ctx, { pushed = false } = {}) {
   if (cur && cur.id === id) { render(); return; }
   if (cur) closeSite({ fromHash: true });
   injectSiteCSS();
+  injectAktenCSS(); // Update 10 E – 📎 Dokumente
   const el = document.createElement("div");
   el.id = ROOT_ID;
   el.className = "rp st";
@@ -613,6 +626,8 @@ export function showSite(id, ctx, { pushed = false } = {}) {
   c.unsubs.push(ctx.store.subscribe(() => { if (cur === c) queueRender(); }));
   c.unsubs.push(cols().log.watch(() => { if (cur === c) queueRender(); }));
   c.unsubs.push(cols().mat.watch(() => { if (cur === c) queueRender(); }));
+  c.unsubs.push(cols().kt.watch(() => { if (cur === c) queueRender(); })); // Update 10 E
+  c.unsubs.push(cols().dk.watch(() => { if (cur === c) queueRender(); })); // Update 10 E
   c.unsubs.push(photos.onChange(() => { if (cur === c) { c.state.photosLoaded = false; loadPhotos(); } }));
   render();
   loadPhotos();

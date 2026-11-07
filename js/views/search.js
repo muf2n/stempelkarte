@@ -13,6 +13,11 @@ import * as FZ from "../alltag/fahrzeug-core.js"; // Update 10 – Fahrzeuge
 import * as HHC from "../alltag/haushalt-core.js"; // Update 10 C – Haushalt
 import * as HBC from "../alltag/habits-core.js"; // Update 10 C – Routinen & Ziele
 import * as NBC from "../alltag/notes-core.js"; // Update 10 C – Notizbuch
+import * as DKC from "../alltag/dokumente-core.js"; // Update 10 E
+import * as VTC from "../alltag/vertraege-core.js"; // Update 10 E
+import * as INC from "../alltag/inventar-core.js"; // Update 10 E
+import * as KTC from "../alltag/kontakte-core.js"; // Update 10 E
+import { prioById as wishPrio } from "../alltag/finanz-core.js"; // Update 10 E
 import { tripsBetween } from "../travel.js";
 import { fromLabel, toLabel, readVehicles } from "../trip-core.js";
 import { siteHash } from "../site-core.js";
@@ -22,8 +27,8 @@ const RECENT_KEY = "sk-search-recent";
 const PER_GROUP = 4;
 const COLS = ["material_items", "einkauf", "einkauf_lists", "photo_albums", "school_exams", "school_tasks", "school_timetable", "school_grades",
   "travel_trips", "travel_packing", "travel_places", "jp_cards", "berichtsheft", "werkzeug", "fahrzeug_info",
-  "haushalt", "habits", "goals", "notes", "ai_memory", "automations"]; // Update 10 C + Automationen
-const MONEY_COLS = ["money_tx", "money_subs"];
+  "haushalt", "habits", "goals", "notes", "ai_memory", "automations", "dokumente", "vertraege", "inventar", "kontakte"]; // Update 10 C + Automationen + E
+const MONEY_COLS = ["money_tx", "money_subs", "money_wishes"]; // Update 10 E: + Wunschliste
 const KIND = { termin: "📅 Termin", aufgabe: "✅ Aufgabe", geburtstag: "🎂 Geburtstag", einsatz: "🛠️ Einsatz" };
 const WD_L = ["So", "Mo", "Di", "Mi", "Do", "Fr", "Sa"];
 
@@ -364,6 +369,32 @@ function buildIndex() {
       sub: [n.coll && `📁 ${n.coll}`, n.tags.map((t) => "#" + t).join(" "), NBC.excerpt(n.text, 70)].filter(Boolean).join(" · "),
       text: [NBC.plain(n.text), n.tags.join(" "), n.coll].join(" "), ts: n.updated, boost: n.pinned ? 1 : 0, go: { t: "hash", h: NBC.noteHash(n.id) } });
   }
+  // Update 10 E – 📁 Dokumente, 📜 Verträge, 📦 Inventar, 👤 Kontakte (Ziele per Hash)
+  for (const x of D("dokumente")) {
+    const d = DKC.normDoc(x);
+    if (!d.id) continue;
+    add({ cat: "dokumente", id: d.id, emoji: d.fav ? "⭐" : DKC.folderOf(d.folder).e, title: d.title,
+      sub: [DKC.folderOf(d.folder).label, d.tags.map((t) => "#" + t).join(" "), d.expires ? `läuft ab ${SC.fmtKey(d.expires)}` : ""].filter(Boolean).join(" · "),
+      text: DKC.searchText(d), dates: [d.date, d.expires].filter(isKey), ts: d.updated || d.created, boost: d.fav ? 1 : 0, go: { t: "hash", h: DKC.docHash(d.id) } });
+  }
+  for (const x of D("vertraege")) {
+    const c = VTC.normContract(x);
+    if (!c.id || !c.name) continue;
+    add({ cat: "vertraege", id: c.id, emoji: VTC.kindById(c.kind).e, title: c.name, sub: [c.provider, VTC.statusLine(c, u.dayKey(Date.now()))].filter(Boolean).join(" · "),
+      text: VTC.searchText(c), ts: c.updated, go: { t: "hash", h: VTC.contractHash(c.id) } });
+  }
+  for (const x of D("inventar")) {
+    const it = INC.normItem(x);
+    if (!it.id || !it.name) continue;
+    add({ cat: "inventar", id: it.id, emoji: INC.catById(it.cat).e, title: it.name, sub: [it.brand, it.room, it.serial ? "SN " + it.serial : ""].filter(Boolean).join(" · "),
+      text: INC.searchText(it), dates: [it.boughtOn, it.warrantyUntil].filter(isKey), ts: it.updated, go: { t: "hash", h: INC.itemHash(it.id) } });
+  }
+  for (const x of D("kontakte")) {
+    const c = KTC.normContact(x);
+    if (!c.id || !KTC.displayName(c)) continue;
+    add({ cat: "kontakte", id: c.id, emoji: KTC.typeById(c.type).e, title: KTC.displayName(c), sub: [c.person, c.phone, c.email].filter(Boolean).join(" · "),
+      text: KTC.searchText(c), ts: c.updated, go: { t: "hash", h: KTC.contactHash(c.id) } });
+  }
   for (const x of D("ai_memory")) {
     const m = NBC.normMemory(x);
     if (!m.id || !m.text) continue;
@@ -413,6 +444,10 @@ function buildIndex() {
     for (const x of D("money_subs")) {
       if (!x || !s(x.name)) continue;
       add({ cat: "geld", id: "s_" + x.id, emoji: "🔁", title: s(x.name), sub: `Abo · ${eur(x.amount)}`, text: s(x.what), boost: 5, go: { t: "geld", tab: "abos" } });
+    }
+    for (const x of D("money_wishes")) { // Update 10 E – 🎁 Wunschliste
+      if (!x || !s(x.name)) continue;
+      add({ cat: "geld", id: "w_" + x.id, emoji: x.done ? "✅" : "🎁", title: s(x.name), sub: `Wunsch · ${wishPrio(x.prio).label} · ${eur(x.price)}`, text: [x.note, "Wunschliste Wunsch"].join(" "), go: { t: "geld", tab: "planen" } });
     }
   } else if (safeLoaded()) {
     add({ cat: "geld", id: "locked", emoji: "🔒", title: "Geld gesperrt – entsperren", sub: "Buchungen und Abos werden erst nach dem Entsperren durchsucht", text: "geld gesperrt entsperren buchung abo ausgabe einnahme konto budget", always: true, go: { t: "geld", tab: "" } });
