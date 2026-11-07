@@ -1,5 +1,17 @@
 // Alltag › Japanisch › 📖 Lesen: kurze, gestufte Texte/Dialoge mit Schaltern für Furigana, Romaji und Deutsch; antippen = vorlesen.
-import { READINGS } from "./jp-data.js";
+import { READINGS as BASE } from "./jp-data.js";
+
+// Weitere Texte (r11–r30) werden beim ersten Öffnen nachgeladen (./jp-data-read.js, Kompaktformat → Furigana-Teile).
+let READINGS = BASE;
+let more = null;
+function loadMore() {
+  more ||= Promise.all([import("./jp-data-read.js"), import("./jp-text.js")]).then(([d, t]) => {
+    READINGS = [...BASE, ...d.MORE_READINGS.map(([id, level, emoji, title, lines]) => ({
+      id, level, emoji, title, lines: lines.map(([who, src, ro, de]) => ({ who, ja: t.parseJa(src).ja, ro, de })),
+    }))];
+  }).catch((err) => { console.error(err); more = null; });
+  return more;
+}
 
 const lsGet = (k) => { try { return JSON.parse(localStorage.getItem(k) || "null"); } catch { return null; } };
 const lsSet = (k, v) => { try { localStorage.setItem(k, JSON.stringify(v)); } catch { /* egal */ } };
@@ -85,7 +97,7 @@ export function createRead(J) {
     }
   }
   return {
-    show(el) { page = el; page.addEventListener("click", onClick); render(); },
+    show(el) { page = el; page.addEventListener("click", onClick); render(); if (READINGS === BASE) loadMore().then(() => render()); },
     hide() { playing++; if (page) page.removeEventListener("click", onClick); page = null; },
   };
 }

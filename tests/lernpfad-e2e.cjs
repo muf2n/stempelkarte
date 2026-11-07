@@ -65,7 +65,7 @@ function fakes() {
       case "tf": await page.click(`.lp-opt[data-tf="${ex.answer !== wrong ? 1 : 0}"]`); await page.click(".lp-check"); break;
       case "tiles": {
         if (wrong) { await page.click('[data-tile="0"]'); if (ex.tiles[0] === ex.answer) await page.click('[data-tile="1"]'); }
-        else { const used = new Set(); for (const c of [...ex.answer]) { const i = ex.tiles.findIndex((t, k) => t === c && !used.has(k)); used.add(i); await page.click(`[data-tile="${i}"]`); } }
+        else { const used = new Set(); for (const c of ex.words || [...ex.answer]) { const i = ex.tiles.findIndex((t, k) => t === c && !used.has(k)); used.add(i); await page.click(`[data-tile="${i}"]`); } }
         await page.click(".lp-check");
         break;
       }
@@ -120,7 +120,7 @@ function fakes() {
   await page.evaluate(() => { location.hash = "#alltag/japanisch"; });
   await page.waitForSelector(".lp-path .lp-node", { timeout: 8000 });
   ok(await page.getAttribute('.jp-tab[data-tab="pfad"]', "aria-selected") === "true", "Japanisch: 🛤️ Lernpfad ist der erste Reiter und Standard");
-  ok((await page.$$(".jp-tab")).length === 8, "alle bisherigen Reiter bleiben (8 inkl. Lernpfad)");
+  ok((await page.$$(".jp-tab")).length === 9, "alle bisherigen Reiter bleiben (9 inkl. Lernpfad und Grammatik)");
   ok(await page.isHidden(".jp-head"), "klassische Kopfzeile im Lernpfad ausgeblendet (eigene Kopfzeile)");
   ok(await page.evaluate(() => !!document.getElementById("lp-css")), "Lernpfad-CSS geladen");
   const unitHead = await page.textContent(".lp-unit .lp-uhead");
@@ -335,6 +335,61 @@ function fakes() {
   await shot(page, "lp-jp-end-390-dark.png");
   await ctx.close();
   void tilesShot;
+
+  /* ================= 📐 Grammatik-Lektion im Pfad (390 hell + dunkel) ================= */
+  for (const scheme of ["light", "dark"]) {
+    ({ ctx, page } = await newPage(scheme));
+    // Basis-Wörter (Begrüßung, Zahlen) als geschafft markieren → erste Grammatik-Einheit ist dran
+    await page.evaluate(async () => {
+      const P = await import("/js/alltag/path-core.js");
+      const d = await import("/js/alltag/jp-data.js");
+      const g = await import("/js/alltag/jp-data-grammar.js");
+      const s = await import("/js/alltag/jp-data-sentences.js");
+      const c = await import("/js/alltag/jp-core.js");
+      const us = P.jpUnits({ groups: d.KANA_GROUPS, vocab: d.VOCAB, toKata: c.toKatakana, grammar: g.GRAMMAR, sentences: s.SENTENCES, order: g.PATH_ORDER });
+      const nodes = {};
+      for (const u of us) if (u.id === "jp-w0" || u.id === "jp-w1") for (const n of u.nodes) nodes[n.id] = { c: 1, n: 1, at: Date.now() };
+      localStorage.setItem("sk-a-learn_progress", JSON.stringify([{ id: "me", goal: "normal", gems: 0, hearts: { n: 5, at: 0 }, ach: { first: 1 } }, { id: "jp", nodes, xp: {} }]));
+    });
+    await page.reload(); await page.waitForTimeout(300);
+    await page.evaluate(() => { location.hash = "#alltag/japanisch"; });
+    await page.waitForSelector('[data-node="jp-g-desu-1"]', { timeout: 8000 });
+    ok(/is-(current|open)/.test(await page.getAttribute('[data-node="jp-g-desu-1"]', "class")), `${scheme}: nach den Basis-Wörtern ist 📐 Grammatik „です“ frei`);
+    ok(await page.$('[data-node="jp-w2-1"].is-locked') && await page.$('[data-node="jp-w2x-1"]') && await page.$('[data-node="jp-g-teiru-p"]'), "danach abwechselnd Wortschatz und Grammatik (alte IDs bleiben, Erweiterungen angehängt)");
+    await page.evaluate(() => document.querySelector('[data-node="jp-g-desu-1"]').scrollIntoView({ block: "center" }));
+    if (scheme === "light") await shot(page, "lp-jp-grammar-path-390-light.png");
+    await page.click('[data-node="jp-g-desu-1"]');
+    await page.click('.lp-pop [data-lp="start"]');
+    await page.waitForSelector(".lp-player .lp-ex");
+    ok(await page.isVisible(".lp-player details.lp-hint[open]"), "erste Übung zeigt die Regel 💡 (aufgeklappt)");
+    await shot(page, `lp-jp-grammar-hint-390-${scheme}.png`);
+    let sawGap = false, sawSentTiles = false;
+    const gres = await playToEnd(page, {
+      wrongAt: [5],
+      shots: { exercise: async () => {}, feedback: async () => { await shot(page, `lp-jp-grammar-feedback-390-${scheme}.png`); } },
+    });
+    void sawGap; void sawSentTiles;
+    ok(gres.types.includes("tiles") && gres.types.filter((t) => t === "mc").length >= 5, `Grammatik-Lektion: Lesen, Lücken & Satzbauen (${gres.types.join(",")})`);
+    await page.waitForSelector(".lp-end");
+    await page.click('[data-p="done"]');
+    const jpg = await lpDoc(page, "jp");
+    ok(jpg.nodes["jp-g-desu-1"] && /is-(current|open)/.test(await page.getAttribute('[data-node="jp-g-desu-2"]', "class")), "Grammatik-Lektion geschafft → „Üben“ freigeschaltet");
+    const gcards = await page.evaluate(() => JSON.parse(localStorage.getItem("sk-a-jp_cards") || "[]"));
+    ok(!gcards.some((c) => /^g_|^t\d/.test(c.id)), "Grammatik/Sätze landen nicht im Vokabel-SRS");
+    if (scheme === "dark") {
+      // Satzbau-Übung als Screenshot
+      await page.click('[data-node="jp-g-desu-2"]');
+      await page.click('.lp-pop [data-lp="start"]');
+      await page.waitForSelector(".lp-player .lp-ex");
+      for (let k = 0; k < 20; k++) { const ex = await curEx(page); if (ex.type === "tiles" && ex.kind === "sent") break; await answer(page); await page.click(".lp-cont"); }
+      const tx = await curEx(page);
+      ok(tx.type === "tiles" && tx.words.length >= 2 && tx.tiles.length > tx.words.length, "Satz aus Wort-Kacheln bauen (mit Ablenkern)");
+      await page.click('[data-tile="0"]');
+      await shot(page, "lp-jp-grammar-tiles-390-dark.png");
+      await page.keyboard.press("Escape");
+    }
+    await ctx.close();
+  }
 
   /* ================= Desktop 1440: Seitenleiste, Laden, Kacheln-Übung ================= */
   ({ ctx, page } = await newPage("light", { width: 1440, height: 900 }));

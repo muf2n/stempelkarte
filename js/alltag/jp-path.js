@@ -1,9 +1,12 @@
 // Update 10 – 🇯🇵 Japanisch › 🛤️ Lernpfad: Adapter für die gemeinsame Lernpfad-Oberfläche (./path-ui.js).
-// Einheiten: Hiragana-Reihen → Dakuten → Yōon → Katakana (gleich) → Wortschatz-Themen (alles aus ./jp-data.js).
+// Einheiten: Hiragana-Reihen → Dakuten → Yōon → Katakana (gleich) → Basis-Wörter → abwechselnd 📐 Grammatik und Wortschatz-Themen
+// (./jp-data.js, ./jp-data-grammar.js, ./jp-data-sentences.js).
 // Fehler landen im bestehenden SRS (jp_cards), damit Kana/Vokabeln/Hören weiter passen.
 import { createPath } from "./path-ui.js";
 import * as P from "./path-core.js";
 import { KANA_GROUPS, VOCAB } from "./jp-data.js";
+import { GRAMMAR, PATH_ORDER } from "./jp-data-grammar.js";
+import { SENTENCES } from "./jp-data-sentences.js";
 import { toKatakana, checkRomaji, compareSpeech } from "./jp-core.js";
 import { ttsSupported, srSupported, listenOnce, SR_ERRORS, stopSpeaking } from "./jp-speech.js";
 
@@ -11,9 +14,9 @@ export function createJpPath(J) {
   let cache = null, byId = null;
   const units = () => {
     if (!cache) {
-      cache = P.jpUnits({ groups: KANA_GROUPS, vocab: VOCAB, toKata: toKatakana, kanaId: J.kanaId });
-      byId = new Map();
-      for (const u of cache) for (const it of u.items) byId.set(it.id, it);
+      cache = P.jpUnits({ groups: KANA_GROUPS, vocab: VOCAB, toKata: toKatakana, kanaId: J.kanaId, grammar: GRAMMAR, sentences: SENTENCES, order: PATH_ORDER });
+      byId = new Map(); // nur Kana & Wörter landen im SRS (Grammatik/Sätze nicht – sonst zählen sie als „Wörter gelernt“)
+      for (const u of cache) for (const it of u.items) if (it.kind === "kana" || it.kind === "vocab") byId.set(it.id, it);
     }
     return cache;
   };

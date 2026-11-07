@@ -8,6 +8,7 @@
 //   me:    { id:"me", gems, hearts:{ n, at }, freezes, frozen:{ Tag:true }, goal, sound, ok, perfect, lessons, ach:{ id: ms }, last }
 // Unit-Tests: test/path-core.test.mjs
 import { dayKey, addDays, rng, shuffle, streak as srsStreak } from "./srs-core.js";
+import { parseJa, tileAnswers } from "./jp-text.js";
 
 export { rng, dayKey };
 
@@ -58,12 +59,21 @@ function finishUnit(unit, lessons) {
 }
 
 /* ================= Einheiten: 🇯🇵 Japanisch ================= */
+const JP_SEG = "📚 Wörter & Grammatik";
+/** Beispielsatz (Kompaktformat ./jp-text.js) → Lernobjekt fürs Hören/Lesen/Satzbauen. */
+export function jpSentence(id, src, ro, de, extra = {}) {
+  const p = parseJa(src);
+  const words = p.tokens.filter((x) => !x.punct).map((x) => x.r);
+  const heads = p.phrases.map((ph) => ph.find((x) => !x.punct)).filter(Boolean).map((x) => x.r);
+  return { id, kind: "sent", src, text: p.text, kana: p.kana, spaced: p.spaced, words, heads, answers: tileAnswers(p.phrases, { fixed: !!extra.fixed }), ro, de, ...extra };
+}
 /**
- * @param {{groups:Array, vocab:Array, toKata:(s:string)=>string, kanaId:(k:string)=>string, topics?:Array}} d
- *   groups = KANA_GROUPS, vocab = VOCAB (jp-data.js)
- * Reihenfolge: Hiragana (Grundreihe 1+2, Dakuten, Yōon) → Katakana (gleich) → Wortschatz-Themen.
+ * @param {{groups:Array, vocab:Array, toKata:(s:string)=>string, kanaId:(k:string)=>string, grammar?:Array, sentences?:Array, order?:string[]}} d
+ *   groups = KANA_GROUPS, vocab = VOCAB (jp-data.js), grammar = GRAMMAR / order = PATH_ORDER (jp-data-grammar.js), sentences = SENTENCES (jp-data-sentences.js)
+ * Reihenfolge: Hiragana (Grundreihe 1+2, Dakuten, Yōon) → Katakana (gleich) → Basis-Wörter → abwechselnd Grammatik und Wortschatz-Themen.
+ * IDs bleiben stabil: Kana "jp-hira-…", Themen "jp-w<Index>" (Erweiterungen alter Themen: "jp-w<Index>x"), Grammatik "jp-g-<id>".
  */
-export function jpUnits({ groups, vocab, toKata = (s) => s, kanaId = (k) => "k_" + k }) {
+export function jpUnits({ groups, vocab, toKata = (s) => s, kanaId = (k) => "k_" + k, grammar = [], sentences = [], order = [] }) {
   const units = [];
   let color = 0;
   const g = Object.fromEntries(groups.map(([id, name, rows]) => [id, { name, rows }]));
@@ -97,15 +107,44 @@ export function jpUnits({ groups, vocab, toKata = (s) => s, kanaId = (k) => "k_"
       units.push(finishUnit(unit, lessons));
     }
   }
-  // Wortschatz: je Thema eine Einheit, Lektionen zu ~6 Wörtern
+  const sents = sentences.map(([gid, topic, src, ro, de, fixed], i) => jpSentence("t" + i, src, ro, de, { g: gid, topic, fixed: !!fixed }));
+  // Wortschatz: je Thema eine Einheit (Lektionen zu ~6 Wörtern); Erweiterungen alter Themen (wave 2) als eigene Einheit
+  const later = new Map();
   const topics = [];
-  for (const v of vocab) { let t = topics.find((x) => x.topic === v.topic); if (!t) topics.push(t = { topic: v.topic, emoji: v.emoji, words: [] }); t.words.push(v); }
+  for (const v of vocab) { let t = topics.find((x) => x.topic === v.topic); if (!t) topics.push(t = { topic: v.topic, emoji: v.emoji, words: [], more: [], title2: "" }); (v.wave === 2 ? t.more : t.words).push(v); if (v.wave === 2 && v.unit) t.title2 = v.unit; }
+  const word = (v) => ({ id: "v_" + v.id, kind: "vocab", kana: v.kana, kanji: v.kanji || "", romaji: v.romaji, de: v.de, topic: v.topic });
   topics.forEach((t, ti) => {
-    const words = t.words.map((v) => ({ id: "v_" + v.id, kind: "vocab", kana: v.kana, kanji: v.kanji || "", romaji: v.romaji, de: v.de, topic: v.topic }));
-    const lessons = chunk(words, 6).map((items, i) => ({ type: "lesson", kind: "vocab", title: `${t.topic} ${i + 1}`, emoji: t.emoji, items, pool: words }));
-    const unit = { id: `jp-w${ti}`, seg: "📚 Wortschatz", title: t.topic, emoji: t.emoji, kind: "vocab", tag: "vocab", color: color++ % COLORS, items: words, pool: words };
-    units.push(finishUnit(unit, lessons));
+    const ts = sents.filter((x) => x.topic === t.topic).slice(0, 6);
+    for (const [list, key, id, title] of [[t.words, "w:", `jp-w${ti}`, t.topic], [t.more, "w+:", `jp-w${ti}x`, t.title2 || `${t.topic} 2`]]) {
+      if (!list.length) continue;
+      const words = list.map(word);
+      const lessons = chunk(words, 6).map((items, i) => ({ type: "lesson", kind: "vocab", title: `${title} ${i + 1}`, emoji: t.emoji, items, pool: words, sents: ts }));
+      const unit = { id, seg: JP_SEG, title, emoji: t.emoji, kind: "vocab", tag: "vocab", items: words, pool: words };
+      later.set(key + t.topic, [unit, lessons]);
+    }
   });
+  // 📐 Grammatik: je Lektion eine Einheit – „Kennenlernen“ (Beispiele + erste Übungen) und „Üben“ (Rest + Sätze)
+  for (const gr of grammar) {
+    const hint = { title: gr.title, short: gr.short, explain: gr.explain, table: gr.table };
+    const gx = gr.examples.map(([src, ro, de], i) => ({ ...jpSentence(`g_${gr.id}_x${i}`, src, ro, de), kind: "gx", g: gr.id }));
+    const gex = gr.ex.map((e, i) => ({ ...e, id: `g_${gr.id}_${i}`, kind: "gex", g: gr.id, ...(e.t === "build" ? { sent: jpSentence(`g_${gr.id}_${i}`, e.src, e.ro, e.de) } : {}) }));
+    const gs = sents.filter((x) => x.g === gr.id);
+    const half = Math.ceil(gex.length / 2);
+    const lessons = [
+      { type: "lesson", kind: "grammar", title: "Kennenlernen", emoji: gr.emoji, items: [...gx, ...gex.slice(0, half), ...gs.slice(0, 2)], hint, intro: true },
+      { type: "lesson", kind: "grammar", title: "Üben", emoji: gr.emoji, items: [...gex.slice(half), ...gs.slice(2)], hint },
+    ];
+    const items = [...gx, ...gex, ...gs];
+    const unit = { id: `jp-g-${gr.id}`, seg: JP_SEG, title: `📐 ${gr.title}`, emoji: gr.emoji, kind: "grammar", tag: "grammar", items, pool: items, hint };
+    later.set("g:" + gr.id, [unit, lessons]);
+  }
+  const keys = [...order.filter((k) => later.has(k)), ...[...later.keys()].filter((k) => !order.includes(k))];
+  for (const k of keys) {
+    const [unit, lessons] = later.get(k);
+    units.push(finishUnit({ ...unit, color: color++ % COLORS }, lessons));
+  }
+  // Prüfung einer Grammatik-Einheit: weiß, dass sie Grammatik ist
+  for (const u of units) if (u.kind === "grammar") { const c = u.nodes[u.nodes.length - 1]; c.kind = "grammar"; c.hint = u.hint; }
   return number(units);
 }
 
@@ -276,6 +315,57 @@ function matchEx(rand, list, left, right, n, kind) {
   return { type: "match", kind, q: "Finde die Paare 🔗", pairs: uniq, left: shuffle(uniq.map((p) => p.l), rand), right: shuffle(uniq.map((p) => p.r), rand) };
 }
 
+/* ---- Sätze & Grammatik ---- */
+const NOT_DISTRACT = new Set(["です", "ます", "ください", "じゃないです", "でした", "から", "まで"]);
+/** Andere deutsche Bedeutungen (Sätze) als falsche Antworten. */
+function otherDe(rand, s, pool, n = 3) { return distract(rand, pool.filter((x) => x.de), s, (x) => x.de, n).map((x) => x.de); }
+const sentEx = {
+  /** 🧩 Satz aus Wort-Kacheln (Kana) bauen; Satzglieder dürfen umgestellt werden (answers). */
+  tiles: (s, pool, rand, q) => {
+    const extra = [];
+    for (const o of shuffle(pool.filter((x) => x.heads && x.id !== s.id), rand)) {
+      for (const h of o.heads) if (h.length >= 2 && !s.words.includes(h) && !extra.includes(h) && !NOT_DISTRACT.has(h) && extra.length < 2) extra.push(h);
+      if (extra.length >= 2) break;
+    }
+    return { type: "tiles", ref: s.id, kind: "sent", q: q || `Bau den Satz: „${s.de}“ 🧩`, answer: s.words.join(""), answers: s.answers, words: s.words, show: s.spaced, tiles: shuffle([...s.words, ...extra], rand), jp: true, say: s.kana, e: s.ro };
+  },
+  /** 👂 Satz hören → Bedeutung wählen */
+  listen: (s, pool, rand) => ({ type: "mc", mode: "listen", ref: s.id, kind: "sent", q: "Hör zu – was bedeutet der Satz? 👂", say: s.kana, answer: s.de, options: opts(rand, s.de, otherDe(rand, s, pool)), e: `${s.spaced} · ${s.ro}` }),
+  /** 📖 Satz lesen → Bedeutung wählen */
+  read: (s, pool, rand) => ({ type: "mc", mode: "read", ref: s.id, kind: "sent", q: "Was bedeutet der Satz? 📖", big: s.spaced, sub: s.text !== s.kana ? s.text : "", say: s.kana, answer: s.de, options: opts(rand, s.de, otherDe(rand, s, pool)), e: s.ro }),
+  /** 🇩🇪 → 🇯🇵 richtigen Satz wählen */
+  pickja: (s, pool, rand) => ({ type: "mc", mode: "m2s", ref: s.id, kind: "sent", q: `Wie sagt man: „${s.de}“?`, answer: s.spaced, jp: true, options: opts(rand, s.spaced, distract(rand, pool.filter((x) => x.spaced), s, (x) => x.spaced, 3).map((x) => x.spaced)), e: s.ro }),
+};
+/** Grammatik-Übung aus jp-data-grammar.js → Übung für den Player. */
+function gramEx(e, pool, rand) {
+  if (e.t === "mc") return { type: "mc", mode: "gram", ref: e.id, kind: "gram", q: "Was passt in die Lücke? ✏️", big: e.s, sub: e.de, say: e.s.replace("＿", e.a), answer: e.a, jp: true, options: shuffle(e.opts, rand), e: `${e.s.replace("＿", e.a)} · ${e.ro}` };
+  if (e.t === "build") return sentEx.tiles(e.sent, pool, rand);
+  if (e.t === "pick") return { type: "mc", mode: "read", ref: e.id, kind: "gram", q: "Was bedeutet der Satz? 📖", big: e.s, say: e.s, answer: e.a, options: shuffle(e.opts, rand), e: e.ro };
+  return { type: "mc", mode: "m2s", ref: e.id, kind: "gram", q: `Wie sagt man: „${e.de}“?`, answer: e.a, jp: true, options: shuffle(e.opts, rand), e: e.ro };
+}
+/** 📐 Grammatik-Lektion: Beispiele lesen → Lücken/Kacheln → Sätze hören & bauen. Regel als 💡 an jeder Übung. */
+function grammarLesson(node, rand, { canListen = true, size = 12 } = {}, check = false) {
+  const items = node.items || [];
+  const gx = items.filter((x) => x.kind === "gx"), gex = items.filter((x) => x.kind === "gex"), ss = items.filter((x) => x.kind === "sent");
+  const pool = [...(node.pool || []), ...items].filter((x, i, a) => a.indexOf(x) === i);
+  const sentPool = pool.filter((x) => x.kind === "sent" || x.kind === "gx");
+  let ex;
+  if (check) {
+    const mix = [...shuffle(gex, rand).map((e) => gramEx(e, sentPool, rand))];
+    shuffle(ss, rand).slice(0, 6).forEach((s, i) => mix.push([sentEx.tiles, canListen ? sentEx.listen : sentEx.read, sentEx.pickja][i % 3](s, sentPool, rand)));
+    for (const s of shuffle(gx, rand).slice(0, 2)) mix.push(sentEx.read(s, sentPool, rand));
+    ex = shuffle(mix, rand).slice(0, 14);
+  } else {
+    const intro = gx.slice(0, 4).map((s) => sentEx.read(s, sentPool, rand));
+    const rest = gex.map((e) => gramEx(e, sentPool, rand));
+    ss.forEach((s, i) => rest.push(i % 3 === 0 ? sentEx.tiles(s, sentPool, rand) : i % 3 === 1 ? (canListen ? sentEx.listen : sentEx.read)(s, sentPool, rand) : sentEx.pickja(s, sentPool, rand)));
+    if (!node.intro) for (const s of shuffle(ss, rand).slice(0, 2)) rest.push(sentEx.tiles(s, sentPool, rand, `Nochmal bauen: „${s.de}“ 🧩`));
+    ex = [...intro, ...shuffle(rest, rand)].slice(0, size);
+  }
+  if (node.hint) ex = ex.map((e, i) => ({ ...e, hint: node.hint, hintOpen: !check && i === 0 }));
+  return ex;
+}
+
 function jpLesson(node, rand, { canListen = true, canSpeak = false, size = 12 } = {}) {
   const items = node.items || [];
   const pool = (node.pool && node.pool.length >= 4 ? node.pool : items);
@@ -301,6 +391,7 @@ function jpLesson(node, rand, { canListen = true, canSpeak = false, size = 12 } 
   for (const w of tileable.slice(0, 2)) extra.push(vocabEx.tiles(w, pool, rand));
   if (canListen && words[0]) extra.push(vocabEx.listen(words[words.length - 1], pool, rand));
   if (canSpeak && words[0]) extra.push(vocabEx.speak(words[0]));
+  if (node.sents && node.sents.length) extra.push(sentEx.tiles(pick(rand, node.sents), node.sents, rand));
   const m = matchEx(rand, [...items, ...pool.filter((p) => !items.includes(p))].slice(0, 8), (x) => x.kana, (x) => x.de, 5, "vocab");
   if (m) extra.push(m);
   const head = intro.slice(0, Math.min(intro.length, 6));
@@ -362,6 +453,7 @@ function lapLesson(node, rand, { makeProblem, size = 12, formulas: allF } = {}) 
 
 /** Einheiten-Prüfung: gemischt aus allen Inhalten der Einheit. */
 function checkLesson(node, rand, ctx, isJp) {
+  if (isJp && node.kind === "grammar") return grammarLesson(node, rand, ctx, true);
   const items = shuffle(node.items || [], rand);
   const size = 14;
   if (isJp) {
@@ -402,6 +494,7 @@ export function buildLesson(node, ctx = {}) {
     }
     return lapLesson({ kind: "cards", items: items.slice(0, 8), pairs: [], topic: null }, rand, { ...ctx, size: 10 });
   }
+  if (isJp && node.kind === "grammar") return grammarLesson(node, rand, ctx);
   return isJp ? jpLesson(node, rand, ctx) : lapLesson(node, rand, ctx);
 }
 
@@ -412,7 +505,7 @@ export function checkBasic(ex, value) {
   if (!ex) return false;
   if (ex.type === "mc") return norm(value) === norm(ex.answer);
   if (ex.type === "tf") return value === ex.answer || value === String(ex.answer);
-  if (ex.type === "tiles") return norm(Array.isArray(value) ? value.join("") : value) === norm(ex.answer);
+  if (ex.type === "tiles") { const v = norm(Array.isArray(value) ? value.join("") : value); return v === norm(ex.answer) || (ex.answers || []).some((a) => norm(a) === v); }
   if (ex.type === "match") return true; // Paare werden einzeln geprüft (matchPair)
   return false;
 }
@@ -424,7 +517,7 @@ export function solutionText(ex, fmtNum = (x) => String(x)) {
   if (ex.type === "tf") return ex.answer ? "Stimmt ✔️" : `Stimmt nicht – richtig: ${ex.right}`;
   if (ex.type === "num") return `${fmtNum(ex.answer, ex)} ${ex.unit}`;
   if (ex.type === "type" || ex.type === "speak") return `${ex.answer}${ex.big && ex.big !== ex.answer ? ` (${ex.big})` : ""}`;
-  return String(ex.answer);
+  return String(ex.show || ex.answer);
 }
 
 /* ================= Ablauf einer Lektion ================= */

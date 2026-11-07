@@ -342,13 +342,16 @@ export function createPath(M) {
     const jp = (s) => `<span class="jp-ja">${esc(s)}</span>`;
     const txt = (s) => (ex.jp ? jp(s) : esc(s));
     const sayBtn = ex.say && M.speak ? `<button type="button" class="lp-say" data-p="say" aria-label="Vorlesen">🔊</button>` : "";
-    const head = (label) => `<p class="lp-kind">${label}</p><h2 class="lp-q">${esc(ex.q)}</h2>`;
-    const big = ex.big ? `<div class="lp-big${ex.small ? " small" : [...String(ex.big)].length > 4 ? " long" : ""}${/[぀-ヿ一-鿿]/.test(ex.big) ? " jp-ja" : ""}">${esc(ex.big)}${sayBtn}</div>${ex.sub ? `<p class="lp-sub">${esc(ex.sub)}</p>` : ""}` : "";
+    const hint = ex.hint ? `<details class="lp-hint"${ex.hintOpen ? " open" : ""}><summary>💡 <b>${esc(ex.hint.title)}</b> <span class="jp-ja">${esc(ex.hint.short)}</span></summary>` +
+      ex.hint.explain.map((t) => `<p>${esc(t)}</p>`).join("") +
+      (ex.hint.table && ex.hint.table.length ? `<table>${ex.hint.table.map(([a, b]) => `<tr><td class="jp-ja">${esc(a)}</td><td>${esc(b)}</td></tr>`).join("")}</table>` : "") + `</details>` : "";
+    const head = (label) => hint + `<p class="lp-kind">${label}</p><h2 class="lp-q">${esc(ex.q)}</h2>`;
+    const big = ex.big ? `<div class="lp-big${ex.small ? " small" : [...String(ex.big)].length > 9 ? " sent" : [...String(ex.big)].length > 4 ? " long" : ""}${/[぀-ヿ一-鿿]/.test(ex.big) ? " jp-ja" : ""}">${esc(ex.big)}${sayBtn}</div>${ex.sub ? `<p class="lp-sub">${esc(ex.sub)}</p>` : ""}` : "";
     switch (ex.type) {
       case "mc": {
         const long = ex.options.some((o) => String(o).length > 18);
         const listen = ex.mode === "listen";
-        return head(listen ? "👂 Hören" : ex.mode === "formula" ? "📐 Formel" : ex.mode === "card" ? "🃏 Frage" : "✨ Wähle") +
+        return head(listen ? "👂 Hören" : ex.mode === "formula" ? "📐 Formel" : ex.mode === "card" ? "🃏 Frage" : ex.mode === "gram" ? "📐 Grammatik" : ex.mode === "read" ? "📖 Lesen" : "✨ Wähle") +
           (listen ? `<div class="lp-listen"><button type="button" class="lp-bigsay" data-p="say" aria-label="Nochmal anhören">🔊</button><button type="button" class="lp-slowsay" data-p="slow" aria-label="Langsam anhören">🐢</button></div>` : big) +
           `<div class="lp-opts${long ? " long" : ""}" role="radiogroup" aria-label="Antworten">` +
           ex.options.map((o, i) => `<button type="button" class="lp-opt" role="radio" aria-checked="${player.sel === o}" data-opt="${i}"><kbd>${i + 1}</kbd><span>${txt(o)}</span></button>`).join("") + `</div>`;
@@ -360,7 +363,7 @@ export function createPath(M) {
           `<button type="button" class="lp-opt no" role="radio" aria-checked="${player.sel === false}" data-tf="0"><kbd>2</kbd><span>✖️ Stimmt nicht</span></button></div>`;
       case "tiles": {
         const used = new Set(player.tiles);
-        return head("🧩 Bauen") + (ex.sub ? `<p class="lp-sub">Tipp: ${esc(ex.sub)}</p>` : "") +
+        return head("🧩 Bauen") + (ex.sub ? `<p class="lp-sub">Tipp: ${esc(ex.sub)}</p>` : "") + (ex.kind === "sent" && ex.say && M.speak ? `<div class="lp-center"><button type="button" class="lp-say inline" data-p="say" aria-label="Satz vorlesen">🔊</button></div>` : "") +
           `<div class="lp-answer" aria-label="Deine Antwort" aria-live="polite">${player.tiles.length ? player.tiles.map((i, k) => `<button type="button" class="lp-tile jp-ja" data-untile="${k}">${esc(ex.tiles[i])}</button>`).join("") : `<span class="lp-muted">Tipp die Kacheln unten an 👇</span>`}</div>` +
           `<div class="lp-bank">${ex.tiles.map((t, i) => `<button type="button" class="lp-tile jp-ja" data-tile="${i}" ${used.has(i) ? "disabled" : ""}>${esc(t)}</button>`).join("")}</div>`;
       }
@@ -399,7 +402,7 @@ export function createPath(M) {
   function footHTML(ex) {
     if (player.checked) {
       const c = player.checked;
-      const extra = c.ok ? (ex.e && ex.kind === "card" ? `<p class="lp-fb-e">💡 ${esc(ex.e)}</p>` : "") :
+      const extra = c.ok ? (ex.e && (ex.kind === "card" || ex.kind === "gram" || ex.kind === "sent") ? `<p class="lp-fb-e">💡 ${esc(ex.e)}</p>` : "") :
         (ex.type === "num" && ex.steps ? `<ol class="lp-fb-steps">${ex.steps.map((s) => `<li>${esc(s)}</li>`).join("")}</ol>` : ex.e ? `<p class="lp-fb-e">💡 ${esc(ex.e)}</p>` : "");
       return `<div class="lp-sheet ${c.ok ? "ok" : "no"}" role="status" aria-live="assertive">` +
         `<div class="lp-sheet-in"><div class="lp-fb-head"><span class="lp-fb-i" aria-hidden="true">${c.ok ? "✔" : "✖"}</span><div><b class="lp-fb-t">${c.ok ? esc(c.praise) : "Nicht ganz 💛"}</b>` +

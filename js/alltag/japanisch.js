@@ -22,6 +22,7 @@ const TABS = [
   ["pfad", "🛤️", "Lernpfad"], // Update 10 – wie Duolingo (./path-ui.js)
   ["kana", "🔤", "Kana"],
   ["vokabeln", "🃏", "Vokabeln"],
+  ["grammatik", "📐", "Grammatik"], // Update 10b – 20 Lektionen (./jp-grammar.js, nachgeladen)
   ["hoeren", "👂", "Hören"],
   ["sprechen", "🗣️", "Sprechen"],
   ["schreiben", "✍️", "Schreiben"],
@@ -51,6 +52,22 @@ function injectCSS() {
 
 /** ID für ein Kana-Zeichen (Firestore-taugliche ASCII-ID). */
 export const kanaId = (k) => "k_" + [...String(k)].map((c) => c.codePointAt(0).toString(16)).join("_");
+
+/** Bereich erst beim ersten Öffnen laden (spart Startzeit). */
+function lazySection(load) {
+  let inst = null, pending = null, cur = null;
+  return {
+    show(el) {
+      cur = el;
+      if (inst) { inst.show(el); return; }
+      el.innerHTML = `<div class="jp-card jp-center"><p class="jp-muted">⏳ Einen Moment …</p></div>`;
+      (pending ||= load()).then((s) => { inst = s; if (cur === el) { el.innerHTML = ""; inst.show(el); } })
+        .catch((err) => { console.error(err); if (cur === el) el.innerHTML = `<div class="jp-card"><p class="jp-muted">😕 Konnte nicht laden – bitte nochmal probieren.</p></div>`; pending = null; });
+    },
+    hide() { cur = null; if (inst && inst.hide) inst.hide(); },
+    destroy() { if (inst && inst.destroy) inst.destroy(); },
+  };
+}
 
 export function mount(el) {
   injectCSS();
@@ -135,6 +152,7 @@ export function mount(el) {
   const sections = {
     kana: createKana(J), vokabeln: createVocab(J), hoeren: createListen(J), sprechen: createSpeak(J),
     schreiben: createWrite(J), lesen: createRead(J), sensei: createSensei(J), pfad: createJpPath(J),
+    grammatik: lazySection(() => import("./jp-grammar.js").then((m) => m.createGrammar(J))),
   };
   let active = null;
 
