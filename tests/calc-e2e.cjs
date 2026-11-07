@@ -1,10 +1,10 @@
-// Playwright-Test Taschenrechner (lokaler Modus, Port 8891).
-//   cd <worktree> && python3 -m http.server 8891 &   then   node tests/privat-e2e.cjs [screenshot-dir]
+// Playwright-Test Taschenrechner (lokaler Modus, Port 8899).
+//   cd <worktree> && python3 -m http.server 8899 &   then   node tests/privat-e2e.cjs [screenshot-dir]
 // Fremde Domains werden abgefangen. Standort: navigator.geolocation wird per addInitScript ersetzt
 // (window.__geoPush(lat, lng) schickt eine Probe an alle watchPosition-Beobachter), Zeit per page.clock.
 const { chromium } = require("playwright");
 const path = require("path");
-const BASE = "http://localhost:8891/";
+const BASE = "http://localhost:8899/";
 const OUT = process.argv[2] || require("os").tmpdir();
 
 const BUERO = { lat: 47.0745, lng: 15.4010, addr: "Musterstraße 41, 8020 Musterstadt" };
