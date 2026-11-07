@@ -1,13 +1,14 @@
 // Alltag › LAP › 📝 Prüfungssimulation: 20 gemischte Multiple-Choice-Fragen mit Zeitlimit, Auswertung je Thema,
 // Durchsicht der Fehler (mit „🤖 Erklär mir das“), Verlauf der Versuche. Laufende Prüfung übersteht Neuladen (localStorage).
-import { CARDS, TOPICS, NORM_NOTE, topicOf } from "./lap-data.js";
-import { buildExam, scoreExam, examVerdict, EXAM_SIZE, EXAM_SECONDS, PASS_PCT } from "./lap-core.js";
+// Lehrjahr: gemischt aus dem gewählten Jahr und darunter. Bei Rechenfragen gibt's den 🧮 Taschenrechner zum Aufklappen.
+import { TOPICS, NORM_NOTE, topicOf } from "./lap-data.js";
+import { buildExam, scoreExam, examVerdict, filterYear, isNumericQuestion, normYear, EXAM_SIZE, EXAM_SECONDS, PASS_PCT } from "./lap-core.js";
+import { createCalc } from "./lap-calc.js";
 
 const RUN_KEY = "sk-lap-exam-run";
 const lsGet = (k) => { try { return JSON.parse(localStorage.getItem(k) || "null"); } catch { return null; } };
 const lsSet = (k, v) => { try { if (v == null) localStorage.removeItem(k); else localStorage.setItem(k, JSON.stringify(v)); } catch { /* egal */ } };
 const mmss = (s) => { s = Math.max(0, Math.round(s)); return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, "0")}`; };
-const card = (id) => CARDS.find((c) => c.id === id);
 
 export function createExam(L) {
   const { esc } = L;
@@ -17,6 +18,9 @@ export function createExam(L) {
   let shown = null; // Ergebnis-Dokument, das gerade angezeigt wird
   let timer = null;
   let armed = false;
+  const calc = createCalc();
+  const card = (id) => L.allCards().find((c) => c.id === id);
+  const yearText = (y) => (normYear(y) ? `bis zum ${normYear(y)}. Lehrjahr` : "aus allen Lehrjahren");
 
   const left = () => (run ? run.secs - (Date.now() - run.start) / 1000 : 0);
   const persist = () => lsSet(RUN_KEY, run);
@@ -28,7 +32,7 @@ export function createExam(L) {
     return `<div class="lap-card lap-examhero">` +
         `<div class="lap-emoji" aria-hidden="true">📝</div>` +
         `<h3 class="lap-h3">Prüfungssimulation</h3>` +
-        `<p class="lap-muted">${EXAM_SIZE} gemischte Fragen aus allen Themen · ${Math.round(EXAM_SECONDS / 60)} Minuten · Übungsziel ${PASS_PCT} %. ` +
+        `<p class="lap-muted">${EXAM_SIZE} gemischte Fragen ${yearText(L.year())} · ${Math.round(EXAM_SECONDS / 60)} Minuten · Übungsziel ${PASS_PCT} %. ` +
           `Fragen, die du falsch hast, landen automatisch in deinen Lernkarten 🃏</p>` +
         (weak.length ? `<p class="lap-muted">💪 Deine Übungsthemen (${weak.map((id) => (topicOf(id) || {}).emoji).join(" ")}) kommen etwas öfter dran.</p>` : "") +
         `<button type="button" class="btn primary" data-k="start">▶️ Prüfung starten</button>` +
@@ -56,6 +60,7 @@ export function createExam(L) {
       `<div class="lap-dots" role="group" aria-label="Fragen">${run.qs.map((x, i) => `<button type="button" class="lap-qdot${i === run.i ? " cur" : ""}${run.answers[x.id] != null ? " done" : ""}" data-go="${i}" aria-label="Frage ${i + 1}${run.answers[x.id] != null ? " (beantwortet)" : ""}">${i + 1}</button>`).join("")}</div>` +
       `<span class="lap-pill">${tp.emoji} ${esc(tp.name)}</span>` +
       `<p class="lap-q">${esc(q.q)}</p>` +
+      (isNumericQuestion(q) ? calc.html({ take: false }) : "") +
       `<div class="lap-opts" role="radiogroup" aria-label="Antworten">${q.options.map((o, i) => `<button type="button" role="radio" class="lap-opt" data-opt="${i}" aria-checked="${run.answers[q.id] === o}"><span class="lap-optk" aria-hidden="true">${"ABCD"[i]}</span><span>${esc(o)}</span></button>`).join("")}</div>` +
       `<div class="lap-row lap-wrap lap-examnav">` +
         `<button type="button" class="btn ghost" data-k="prev" ${run.i === 0 ? "disabled" : ""}>← Zurück</button><span class="lap-grow"></span>` +
@@ -112,7 +117,9 @@ export function createExam(L) {
 
   function start() {
     const weights = Object.fromEntries(L.weak().map((t) => [t, 2]));
-    run = { qs: buildExam(CARDS, { weights }), answers: {}, i: 0, start: Date.now(), secs: EXAM_SECONDS };
+    run = { qs: buildExam(filterYear(L.allCards(), L.year(), "upto"), { weights }), answers: {}, i: 0, start: Date.now(), secs: EXAM_SECONDS, year: L.year() };
+    calc.reset();
+    if (!run.qs.length) { run = null; L.ui.toast("Für dieses Lehrjahr gibt's noch keine Prüfungsfragen 🤔"); return; }
     shown = null; armed = false; persist(); render(); startTimer();
   }
   async function finish(timeout = false) {
@@ -134,6 +141,7 @@ export function createExam(L) {
 
   function onClick(ev) {
     if (!page) return;
+    if (calc.click(ev)) return;
     if (L.explain.click(ev)) return;
     const t = ev.target.closest("button");
     if (!t || !page.contains(t)) return;
@@ -165,7 +173,9 @@ export function createExam(L) {
       armed = false; L.clearExams().then(render);
     }
   }
+  function onInput(ev) { calc.input(ev); }
   function onKey(ev) {
+    if (calc.key(ev)) return;
     if (!run || !page || ev.target.matches("input, textarea")) return;
     const i = "abcd1234".indexOf(ev.key.toLowerCase());
     if (i >= 0) { const b = page.querySelector(`.lap-opt[data-opt="${i % 4}"]`); if (b) { ev.preventDefault(); b.click(); } }
@@ -176,11 +186,12 @@ export function createExam(L) {
   return {
     show(el) {
       page = el; armed = false;
-      page.addEventListener("click", onClick); document.addEventListener("keydown", onKey);
+      page.addEventListener("click", onClick); page.addEventListener("input", onInput); document.addEventListener("keydown", onKey);
       if (run && left() <= 0) { finish(true); return; }
       render(); startTimer();
     },
-    hide() { stopTimer(); if (page) page.removeEventListener("click", onClick); document.removeEventListener("keydown", onKey); page = null; },
+    hide() { stopTimer(); if (page) { page.removeEventListener("click", onClick); page.removeEventListener("input", onInput); } document.removeEventListener("keydown", onKey); page = null; },
+    onYear() { if (page && !run) render(); },
     onData() { if (page && !run && !shown) render(); },
     destroy() { stopTimer(); },
   };

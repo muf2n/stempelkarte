@@ -17,6 +17,8 @@ function fakes() {
   const errors = [];
   const ok = (cond, msg) => { if (!cond) throw new Error("FEHLER: " + msg); console.log("✓ " + msg); };
   const chatBodies = [];
+  let photoCalls = 0;
+  const PNG = Buffer.from("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==", "base64");
 
   async function newPage(scheme, { width = 390, height = 844 } = {}) {
     const ctx = await browser.newContext({ viewport: { width, height }, colorScheme: scheme, hasTouch: width < 800 });
@@ -33,6 +35,19 @@ function fakes() {
       const body = JSON.parse(route.request().postData() || "{}");
       chatBodies.push(body);
       await new Promise((r) => setTimeout(r, 150));
+      if (body.image) {
+        photoCalls++;
+        const reply = photoCalls === 1
+          ? "Gerne! 📚\n```json\n" + JSON.stringify({ cards: [
+              { q: "Wie heißt der grün-gelbe Leiter?", options: ["Neutralleiter", "Schutzleiter (PE)", "Außenleiter", "PEN-Leiter in blau"], correct: 1, e: "Grün-gelb ist nur für PE.", topic: "leit", year: 1 },
+              { front: "Was schützt ein LS-Schalter?", back: "Die Leitung vor Überlast und Kurzschluss", topic: "schutz" },
+              { q: "Wofür steht RCD?", a: "Fehlerstrom-Schutzeinrichtung", topic: "schutz", year: 2 },
+              { q: "", a: "kaputt" },
+            ] }) + "\n```"
+          : "Tut mir leid, das Foto ist leider zu unscharf.";
+        await route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({ reply, actions: [], usage: { usd: 0.02, capUsd: 3 } }) });
+        return;
+      }
       await route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({
         reply: "Gute Frage! ⚡ **Kurz gesagt:** Der FI vergleicht den Strom, der hinfließt, mit dem, der zurückkommt.\n- Fehlt etwas, fließt es woanders hin – z. B. über dich.\n- Denk an die 5 Sicherheitsregeln!",
         actions: [], usage: { usd: 0.01, capUsd: 3 } }) });
@@ -56,14 +71,15 @@ function fakes() {
   await page.waitForSelector(".lap-head .lap-stat", { timeout: 8000 });
   ok(/#alltag\/lap$/.test(page.url()), "Route #alltag/lap");
   ok(await page.evaluate(() => !!document.getElementById("lap-css")), "Modul-CSS geladen");
-  ok((await page.$$(".lap-tab")).length === 4, "4 Bereiche als Reiter");
+  ok((await page.$$(".lap-tab")).length === 5, "5 Bereiche als Reiter (inkl. 📷 Eigene)");
+  ok(await page.getAttribute('.lap-yearbar [data-year="0"]', "aria-pressed") === "true", "Lehrjahr-Auswahl da, Standard „Alle“");
   let h = await head(page);
   ok(/🔥 0/.test(h) && /0\/\d{3}/.test(h) && /📝 –/.test(h), "Kopfzeile: Serie 0, 0 Karten gelernt, noch keine Prüfung");
   ok(await page.isHidden(".lap-weak"), "noch keine Schwächen");
 
   // ---- Lernkarten ----
   await tab(page, "karten");
-  ok((await page.$$(".lap-topic")).length === 8, "8 Themen");
+  ok((await page.$$(".lap-topic")).length === 10, "10 Themen");
   ok(/Lernen \(10\)/.test(await page.textContent('[data-k="start"]')), "10 neue Karten für heute");
   await shot(page, "lap-cards-390-light.png");
   // nur Schutzmaßnahmen
@@ -110,7 +126,8 @@ function fakes() {
   await page.click('[data-k="list"]');
   await page.fill(".lap-search", "IP44");
   await page.waitForTimeout(300);
-  ok((await page.$$(".lap-item")).length === 2, "Suche „IP44“ findet 2 Karten");
+  const ip44 = (await page.$$(".lap-item")).length;
+  ok(ip44 >= 2 && ip44 <= 4, `Suche „IP44“ findet ${ip44} Karten`);
   await page.click(".lap-item summary >> text=IP44 ungefähr");
   ok(/Spritzwasser/.test(await page.textContent(".lap-item[open] .lap-a")), "Karte aufklappen zeigt Antwort");
   await page.click('[data-k="home"]');
@@ -171,6 +188,25 @@ function fakes() {
   ok(/Leider nicht/.test(await page.textContent(".lap-fb")), "falsche Antwort erkannt");
   await shot(page, "lap-calc-390-light.png");
   ok(/✅ 1 \/ 2/.test(await page.textContent(".lap-prob .lap-row")), "Zähler 1 / 2");
+  // 🧮 Taschenrechner
+  await page.click('[data-k="next"]');
+  ok(await page.isVisible(".lap-calcbox > summary") && !(await page.isVisible(".lap-keys")), "Taschenrechner zugeklappt da");
+  await page.click(".lap-calcbox > summary");
+  ok(await page.isVisible(".lap-keys"), "Taschenrechner aufgeklappt");
+  for (const k of ["2", "3", "0", "÷", "4", "6"]) await page.click(`.lap-key[data-ck="${k}"]`);
+  ok((await page.textContent(".lap-calc-res")).trim() === "= 5", "230 ÷ 46 = 5");
+  await page.click('.lap-key[data-ck="clear"]');
+  for (const k of ["√", "3", "×", "4", "0", "0", "×", "1", "0", "×", "0", ",", "8", "5"]) await page.click(`.lap-key[data-ck="${k}"]`);
+  ok(/5\.?888,97/.test(await page.textContent(".lap-calc-res")), `√3 · 400 · 10 · 0,85 (${(await page.textContent(".lap-calc-res")).trim()})`);
+  await page.click('.lap-key[data-ck="eq"]');
+  ok(/^5888,97/.test(await page.inputValue(".lap-calc-expr")), "„=“ übernimmt das Ergebnis in die Rechnung (ohne Tausenderpunkt)");
+  await page.click('[data-ck="take"]');
+  ok(/^5888,97/.test(await page.inputValue(".lap-ans")), "📥 Ergebnis übernehmen → Antwortfeld");
+  await page.fill(".lap-calc-expr", "2^3+1");
+  ok((await page.textContent(".lap-calc-res")).trim() === "= 9", "Tippen geht auch (2^3+1 = 9)");
+  await shot(page, "lap-calcpanel-390-light.png");
+  await page.click(".lap-ansform button[type=submit]");
+  ok(await page.isVisible(".lap-calcbox") && !(await page.$('[data-ck="take"]')), "nach dem Prüfen: Rechner ohne Übernehmen");
 
   // ---- Prüfung ----
   await tab(page, "pruefung");
@@ -180,7 +216,7 @@ function fakes() {
   ok((await page.$$(".lap-qdot")).length === 20 && (await page.$$(".lap-opt")).length === 4, "Prüfung: 20 Fragen, je 4 Antworten");
   ok(/29:5\d|30:00/.test(await page.textContent(".lap-time")), "Timer läuft ab 30:00");
   const run = await lsJson(page, "sk-lap-exam-run");
-  ok(run && run.qs.length === 20 && new Set(run.qs.map((q) => q.topic)).size === 8, "alle 8 Themen gemischt");
+  ok(run && run.qs.length === 20 && new Set(run.qs.map((q) => q.topic)).size === 10, "alle 10 Themen gemischt");
   // 14 richtig, 5 falsch, 1 offen
   for (let i = 0; i < 19; i++) {
     const q = run.qs[i];
@@ -233,6 +269,131 @@ function fakes() {
   ok(await page.getAttribute('.lap-topic[data-topic="mess"]', "aria-pressed") === "true" && await page.getAttribute('.lap-topic[data-topic="grund"]', "aria-pressed") === "false", "Tipp aufs Thema → Lernkarten nur Messtechnik");
   ok(await page.isVisible('.lap-topic.weak[data-topic="mess"]'), "Thema-Kachel als „üben“ markiert");
   await shot(page, "lap-weak-390-light.png");
+  await page.click('[data-k="all"]'); // wieder alle Themen
+
+  // ---- 🎓 Lehrjahre ----
+  const data = async () => page.evaluate(async () => { const m = await import("/js/alltag/lap-data.js"); const c = await import("/js/alltag/lap-core.js"); return { years: Object.fromEntries(m.CARDS.map((x) => [x.id, x.year])), num: m.CARDS.filter((x) => c.isNumericQuestion(x)).map((x) => x.id) }; });
+  const D = await data();
+  await page.click('.lap-yearbar [data-year="1"]');
+  await page.waitForTimeout(800);
+  ok(await page.getAttribute('.lap-yearbar [data-year="1"]', "aria-pressed") === "true", "1. Lehrjahr gewählt");
+  ok(/1\. Lj\./.test(await page.textContent(".lap-hero")), "Lernkarten zeigen „1. Lj.“");
+  ok(await page.isVisible('.lap-topic.empty[data-topic="motor"]') && !(await page.$('.lap-topic.empty[data-topic="grund"]')), "Motoren im 1. Lj. leer, Grundlagen voll");
+  let st = await lsJson(page, "sk-a-lap_stats");
+  ok(st[0].year === 1, "Lehrjahr pro Nutzer gespeichert (lap_stats.year)");
+  await page.click('[data-k="list"]');
+  const listIds = await page.$$eval(".lap-item .lap-ai", (els) => els.map((e) => e.dataset.aikey.slice(2)));
+  ok(listIds.length > 100 && listIds.every((id) => D.years[id] === 1), `Kartenliste nur 1. Lj. (${listIds.length})`);
+  await page.click('[data-k="home"]');
+  await page.click('[data-k="start"]');
+  const fid = await page.evaluate(() => document.querySelector(".lap-front .lap-q") && document.querySelector(".lap-flash"));
+  ok(fid !== null, "Lernrunde im 1. Lj. startet");
+  await page.click('[data-k="home"]');
+  await tab(page, "rechnen");
+  const chips = await page.$$eval(".lap-chips [data-pt]", (els) => els.map((e) => e.dataset.pt));
+  ok(chips.includes("ohm") && !chips.includes("du1") && !chips.includes("pac"), "Rechnen: nur Aufgaben fürs 1. Lj.");
+  await page.click('.lap-yearbar [data-year="3"]');
+  await page.waitForTimeout(200);
+  const chips3 = await page.$$eval(".lap-chips [data-pt]", (els) => els.map((e) => e.dataset.pt));
+  ok(chips3.join() === "mix,du1,du3,p3", `Rechnen 3. Lj.: Spannungsfall + Drehstrom (${chips3.join()})`);
+  ok(/Spannungsfall|Drehstrom/.test(await page.textContent(".lap-prob .lap-pill")), "Aufgabe passt zum 3. Lj.");
+  await page.click('.lap-yearbar [data-year="2"]');
+  await tab(page, "pruefung");
+  ok(/bis zum 2\. Lehrjahr/.test(await page.textContent(".lap-examhero")), "Prüfung: „bis zum 2. Lehrjahr“");
+  await page.click('[data-k="start"]');
+  const run2 = await lsJson(page, "sk-lap-exam-run");
+  ok(run2.qs.every((q) => D.years[q.id] <= 2) && run2.qs.some((q) => D.years[q.id] === 2), "Prüfung mischt 2. Lj. und darunter");
+  const numIdx = run2.qs.findIndex((q) => D.num.includes(q.id));
+  const txtIdx = run2.qs.findIndex((q) => !D.num.includes(q.id));
+  if (numIdx >= 0) {
+    await page.click(`.lap-qdot[data-go="${numIdx}"]`);
+    ok(await page.isVisible(".lap-exam .lap-calcbox") && !(await page.$('.lap-exam [data-ck="take"]')), "Rechenfrage in der Prüfung: 🧮 Rechner (ohne Übernehmen)");
+    await page.click(".lap-exam .lap-calcbox > summary");
+    await page.click('.lap-key[data-ck="7"]');
+    ok(await page.isVisible(".lap-exam .lap-keys"), "Rechner in der Prüfung bedienbar");
+    await shot(page, "lap-exam-calc-390-light.png");
+  } else console.log("ℹ️ keine Rechenfrage in dieser Prüfung gezogen");
+  await page.click(`.lap-qdot[data-go="${txtIdx}"]`);
+  ok(!(await page.$(".lap-exam .lap-calcbox")), "Textfrage ohne Rechner");
+  await page.evaluate(() => localStorage.removeItem("sk-lap-exam-run"));
+  await page.reload();
+  await page.waitForSelector(".lap-head .lap-stat", { timeout: 8000 });
+  await page.click('.lap-yearbar [data-year="0"]');
+
+  // ---- 📷 Eigene Karten: Aus Foto lernen ----
+  await tab(page, "eigene");
+  ok(/Aus Foto lernen/.test(await page.textContent(".lap-photohero")) && /Noch keine eigenen Karten/.test(await page.textContent(".lap-page")), "Eigene: Foto-Import + leere Liste");
+  await page.click('[data-iy="2"]');
+  await shot(page, "lap-own-390-light.png");
+  await page.setInputFiles(".lap-photo-in", { name: "arbeitsblatt.png", mimeType: "image/png", buffer: PNG });
+  await page.waitForSelector(".lap-busy .lap-typing", { timeout: 3000 });
+  ok(await page.isVisible(".lap-preview"), "Foto-Vorschau, während Claude liest");
+  await page.waitForSelector(".lap-owned", { timeout: 6000 });
+  const pb = chatBodies.at(-1);
+  ok(pb.mode === "lehrer" && pb.image && pb.image.type === "image/jpeg" && !/^data:/.test(pb.image.data) && /^[A-Za-z0-9+/]+=*$/.test(pb.image.data), "Foto als JPEG (base64 ohne Präfix) im Modus „lehrer“");
+  ok(/^LERNKARTEN AUS FOTO \(JSON\)/.test(pb.messages[0].content) && /2\. Lehrjahr/.test(pb.messages[0].content) && /nichts erfinden/.test(pb.messages[0].content), "Auftrag: JSON, nur Sichtbares, gewähltes Lehrjahr");
+  ok((await page.$$(".lap-owned")).length === 3, "3 Karten zur Durchsicht (kaputte weggelassen)");
+  ok(/1 unklare Karte/.test(await page.textContent(".lap-page")), "Hinweis auf weggelassene Karte");
+  ok(await page.inputValue('[data-i="0"][data-f="a"]') === "Schutzleiter (PE)" && await page.inputValue('[data-i="0"][data-f="x0"]') === "Neutralleiter", "MC: richtige Antwort + 3 falsche erkannt");
+  ok(await page.inputValue('[data-i="1"][data-f="year"]') === "2" && await page.inputValue('[data-i="1"][data-f="topic"]') === "schutz", "ohne Jahres-Schätzung → gewähltes 2. Lj.");
+  await shot(page, "lap-own-review-390-light.png", true);
+  // bearbeiten + löschen + Fehler
+  await page.fill('[data-i="0"][data-f="q"]', "Wie heißt der grün-gelbe Leiter in der Installation?");
+  await page.click('[data-k="drop"][data-i="2"]');
+  ok((await page.$$(".lap-owned")).length === 2 && /Übernehmen \(2\)/.test(await page.textContent('[data-k="save"]')), "Karte entfernt → 2 übrig");
+  await page.fill('[data-i="1"][data-f="x0"]', "Nur den FI");
+  await page.click('[data-k="save"]');
+  ok(await page.isVisible(".lap-owned.bad") && /genau 3 falsche/.test(await page.textContent(".lap-owned.bad")), "Unvollständige Falschantworten werden angemeckert");
+  await page.fill('[data-i="1"][data-f="x0"]', "");
+  await page.click('[data-k="save"]');
+  await page.waitForSelector(".lap-ownrow", { timeout: 3000 });
+  await page.waitForTimeout(300);
+  let own = await lsJson(page, "sk-a-lap_own");
+  ok(own.length === 2 && own.every((c) => c.source === "foto") && own.some((c) => /in der Installation/.test(c.q) && c.x.length === 3 && c.topic === "leit" && c.year === 1) && own.some((c) => c.x.length === 0 && c.year === 2), "✅ Übernehmen speichert 2 eigene Karten (lap_own, source foto)");
+  ok(/2 Karten sind jetzt/.test(await page.textContent(".lap-photohero")), "Erfolgsmeldung");
+  h = await head(page);
+  ok(/\/529/.test(h.replace(/\s/g, "")), "Kopfzeile zählt eigene Karten mit (529)");
+  await shot(page, "lap-own-list-390-light.png", true);
+  // bearbeiten
+  const lsId = own.find((c) => c.x.length === 0).id;
+  await page.click(`[data-k="edit"][data-id="${lsId}"]`);
+  await page.fill('[data-i="0"][data-f="a"]', "Die Leitung vor Überlast und Kurzschluss 🔌");
+  await page.click('[data-k="save"]');
+  await page.waitForTimeout(300);
+  own = await lsJson(page, "sk-a-lap_own");
+  ok(own.find((c) => c.id === lsId).a.includes("🔌") && own.length === 2, "✏️ Bearbeiten speichert in derselben Karte");
+  // in den Lernkarten sichtbar
+  await tab(page, "karten");
+  await page.click('[data-k="list"]');
+  await page.fill(".lap-search", "grün-gelbe Leiter in der Installation");
+  await page.waitForTimeout(300);
+  ok((await page.$$(".lap-item")).length === 1 && /eigene/.test(await page.textContent(".lap-item")), "eigene Karte in den Lernkarten (mit Kennzeichnung)");
+  await page.click('[data-k="home"]');
+  // löschen
+  await tab(page, "eigene");
+  await page.click(`[data-k="del"][data-id="${lsId}"]`);
+  ok(/Wirklich/.test(await page.textContent(`[data-k="del"][data-id="${lsId}"]`)), "Löschen fragt nach");
+  await page.click(`[data-k="del"][data-id="${lsId}"]`);
+  await page.waitForTimeout(300);
+  own = await lsJson(page, "sk-a-lap_own");
+  ok(own.length === 1 && (await page.$$(".lap-ownrow")).length === 1, "🗑️ Karte gelöscht");
+  // Fehlerfall: Claude liefert kein JSON
+  await page.setInputFiles(".lap-photo-in", { name: "unscharf.png", mimeType: "image/png", buffer: PNG });
+  await page.waitForSelector(".lap-photohero .lap-fb.no", { timeout: 6000 });
+  ok(/JSON|schärferen Foto/.test(await page.textContent(".lap-photohero .lap-fb.no")), "Kein JSON → freundliche Meldung");
+  // selbst schreiben
+  await page.click('[data-k="new"]');
+  await page.click('[data-k="save"]');
+  ok(/Frage fehlt/.test(await page.textContent(".lap-owned.bad")), "leere Karte → Hinweis");
+  await page.fill('[data-i="0"][data-f="q"]', "Wie viele Sicherheitsregeln gibt es?");
+  await page.fill('[data-i="0"][data-f="a"]', "5");
+  await page.selectOption('[data-i="0"][data-f="topic"]', "sich");
+  await page.click('[data-k="save"]');
+  await page.waitForTimeout(300);
+  own = await lsJson(page, "sk-a-lap_own");
+  ok(own.length === 2 && own.some((c) => c.source === "hand" && c.topic === "sich" && c.id.startsWith("sich-u")), "✍️ selbst geschriebene Karte gespeichert");
+  await tab(page, "karten");
+
   const sw = await page.evaluate(() => document.documentElement.scrollWidth);
   ok(sw <= 390, `kein waagrechtes Scrollen (${sw})`);
   const csp1 = await page.evaluate(() => window.__csp);
@@ -266,6 +427,14 @@ function fakes() {
   await page.click('[data-k="start"]');
   await page.click('.lap-opt[data-opt="1"]');
   await shot(page, "lap-exam-390-dark.png");
+  await tab(page, "rechnen");
+  await page.click('[data-k="next"]');
+  await page.click(".lap-calcbox > summary");
+  await page.click('.lap-key[data-ck="9"]');
+  await shot(page, "lap-calcpanel-390-dark.png");
+  await tab(page, "eigene");
+  await page.click('[data-k="new"]');
+  await shot(page, "lap-own-edit-390-dark.png", true);
   const sw2 = await page.evaluate(() => document.documentElement.scrollWidth);
   ok(sw2 <= 390, `dunkel: kein waagrechtes Scrollen (${sw2})`);
   await ctx.close();
@@ -279,6 +448,11 @@ function fakes() {
     await tab(page, "formeln");
     await page.click('.lap-formula[data-fid="du1"] [data-open]');
     await shot(page, `lap-formula-1440-${scheme}.png`);
+    await tab(page, "rechnen");
+    await page.click(".lap-calcbox > summary");
+    await shot(page, `lap-calc-1440-${scheme}.png`);
+    await tab(page, "eigene");
+    await shot(page, `lap-own-1440-${scheme}.png`);
     await tab(page, "pruefung");
     await page.click('[data-k="start"]');
     await shot(page, `lap-exam-1440-${scheme}.png`);

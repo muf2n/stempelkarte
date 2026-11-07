@@ -5,8 +5,10 @@ import assert from "node:assert/strict";
 import {
   fmt, fmtAuto, parseNum, checkAnswer, solveOhm, solvePUI, solvePI2R, wireR, seriesR, parallelR, voltageDrop, energyCost, power3,
   PROBLEM_TYPES, makeProblem, buildExam, scoreExam, examVerdict, topicStats, weakTopics, explainPrompt, EXAM_SIZE, PASS_PCT,
+  normYear, filterYear, learnPools, problemTypesFor, isNumericQuestion, cleanOwnCard, parseCardJSON, photoPrompt, OWN_LIMITS,
 } from "../js/alltag/lap-core.js";
-import { CARDS, TOPICS, FORMULAS, NORM_NOTE } from "../js/alltag/lap-data.js";
+import { CARDS, TOPICS, FORMULAS, NORM_NOTE, YEARS } from "../js/alltag/lap-data.js";
+import { evaluate } from "../js/alltag/calc-core.js";
 import * as srs from "../js/alltag/srs-core.js";
 import * as jp from "../js/alltag/jp-core.js";
 
@@ -108,8 +110,8 @@ test("Rechenaufgaben: jede Art erzeugt lösbare Aufgaben mit Lösungsweg, Ergebn
   assert.ok(PROBLEM_TYPES.some((t) => t.id === makeProblem("gemischt", srs.rng(1)).type), "unbekannt → zufällige Art");
 });
 
-test("Inhalte: ~200 Karten, alle Themen, eindeutige IDs, 3 eindeutige Falschantworten, Normhinweis-Themen", () => {
-  assert.ok(CARDS.length >= 190 && CARDS.length <= 230, `Anzahl ${CARDS.length}`);
+test("Inhalte: ~500 Karten, alle Themen, eindeutige IDs, 3 eindeutige Falschantworten, Normhinweis-Themen", () => {
+  assert.ok(CARDS.length >= 450 && CARDS.length <= 600, `Anzahl ${CARDS.length}`);
   assert.equal(new Set(CARDS.map((c) => c.id)).size, CARDS.length);
   for (const t of TOPICS) assert.ok(CARDS.filter((c) => c.topic === t.id).length >= 20, `Thema ${t.id}`);
   for (const c of CARDS) {
@@ -135,7 +137,7 @@ test("Prüfung: 20 Fragen, gemischte Themen, keine Doppelten, Auswertung inkl. T
   assert.equal(ex.length, EXAM_SIZE);
   assert.equal(new Set(ex.map((q) => q.id)).size, EXAM_SIZE);
   const topics = new Set(ex.map((q) => q.topic));
-  assert.equal(topics.size, TOPICS.length, "alle 8 Themen vertreten");
+  assert.equal(topics.size, TOPICS.length, "alle Themen vertreten");
   for (const q of ex) { assert.equal(q.options.length, 4); assert.ok(q.options.includes(q.a)); }
   const answers = {};
   ex.forEach((q, i) => { answers[q.id] = i < 15 ? q.a : q.options.find((o) => o !== q.a); });
@@ -149,7 +151,7 @@ test("Prüfung: 20 Fragen, gemischte Themen, keine Doppelten, Auswertung inkl. T
   assert.equal(scoreExam([], {}).pct, 0);
   assert.ok(PASS_PCT > 0 && /Geschafft/.test(examVerdict(PASS_PCT)));
   // nur gewählte Themen, kleiner Pool
-  const only = buildExam(CARDS, { rand, topics: ["sich"], n: 50 });
+  const only = buildExam(CARDS, { rand, topics: ["sich"], n: 200 });
   assert.equal(only.length, CARDS.filter((c) => c.topic === "sich").length);
   assert.ok(only.every((q) => q.topic === "sich"));
   // Gewichte: schwaches Thema kommt öfter dran
@@ -201,4 +203,146 @@ test("SRS wird wiederverwendet: srs-core und jp-core liefern dieselben Funktione
   assert.equal(jp.bump(null, T, "kana").goal, 20, "Japanisch behält seine Standardwerte");
   const q = srs.buildQueue(CARDS.slice(0, 30), new Map([["grund-01", { seen: 1, due: T }]]), T, { newLimit: 10 });
   assert.equal(q.due.length, 1); assert.equal(q.fresh.length, 10);
+});
+
+/* ===== Lehrjahre, Kartenprüfung, Taschenrechner, Fotos ===== */
+test("Karten-Struktur: eindeutige ids, Lehrjahr gesetzt, Thema gültig, genau eine richtige Antwort, keine doppelten Optionen", () => {
+  const ids = new Set(), qs = new Set();
+  const topicIds = new Set(TOPICS.map((t) => t.id));
+  assert.deepEqual(YEARS, [1, 2, 3]);
+  for (const c of CARDS) {
+    assert.ok(!ids.has(c.id), `doppelte id ${c.id}`); ids.add(c.id);
+    assert.match(c.id, /^[a-z]+-\d{2,3}$/, c.id);
+    assert.equal(c.id.split("-")[0], c.topic, `${c.id}: id-Präfix = Thema`);
+    assert.ok(topicIds.has(c.topic), `${c.id}: Thema`);
+    assert.ok([1, 2, 3].includes(c.year), `${c.id}: Lehrjahr ${c.year}`);
+    assert.ok(typeof c.q === "string" && c.q.length >= 8 && typeof c.a === "string" && c.a.length >= 1, `${c.id}: Frage/Antwort`);
+    const opts = [c.a, ...c.x];
+    // wie in der Prüfung: richtige Antwort = Index 0 der Optionen → im Bereich, genau einmal vorhanden
+    const idx = opts.indexOf(c.a);
+    assert.ok(idx >= 0 && idx < opts.length, `${c.id}: Antwort-Index im Bereich`);
+    assert.equal(opts.filter((o) => o.trim().toLowerCase() === c.a.trim().toLowerCase()).length, 1, `${c.id}: genau eine richtige Option`);
+    assert.equal(new Set(opts.map((o) => o.trim().toLowerCase())).size, opts.length, `${c.id}: keine doppelten Optionen`);
+    assert.ok(opts.every((o) => typeof o === "string" && o.trim()), `${c.id}: keine leeren Optionen`);
+    const qn = c.q.trim().toLowerCase();
+    assert.ok(!qs.has(qn), `${c.id}: Frage doppelt`); qs.add(qn);
+  }
+  // jedes Lehrjahr hat genug Stoff, Lehrjahr 1 deckt Grundlagen/Sicherheit ab, Drehstrom/Motoren/Bus sind Lehrjahr 3
+  for (const y of YEARS) assert.ok(CARDS.filter((c) => c.year === y).length >= 100, `Jahr ${y}`);
+  assert.ok(CARDS.filter((c) => c.topic === "sich").every((c) => c.year === 1), "Sicherheit = 1. Lj.");
+  assert.ok(CARDS.filter((c) => c.topic === "motor" || c.topic === "bus").every((c) => c.year >= 2), "Motoren/Bus ab 2. Lj.");
+  assert.equal(CARDS.find((c) => c.id === "ac-13").year, 3, "Drehrichtung Drehstrommotor = 3. Lj.");
+  assert.equal(CARDS.find((c) => c.id === "grund-05").year, 1, "Ohmsches Gesetz = 1. Lj.");
+  // Rechenkarten mit Erklärung: Zahl in der Antwort taucht in der Rechnung auf
+  for (const c of CARDS.filter((c) => c.topic === "mathe" && c.e && /=/.test(c.e) && !/^ca\./.test(c.a))) {
+    const n = (c.a.match(/\d[\d\s]*(?:,\d+)?/) || [""])[0].replace(/\s/g, "");
+    assert.ok(c.e.replace(/\s/g, "").includes(n), `${c.id}: ${n} in Rechnung „${c.e}“`);
+  }
+});
+
+test("Lehrjahre: normYear, filterYear exakt/bis, Lernpools, Aufgabenarten je Jahr", () => {
+  assert.equal(normYear(2), 2); assert.equal(normYear("3"), 3); assert.equal(normYear(0), 0); assert.equal(normYear("x"), 0); assert.equal(normYear(4), 0);
+  const list = [{ id: "a", year: 1 }, { id: "b", year: 2 }, { id: "c", year: 3 }, { id: "d" }];
+  assert.deepEqual(filterYear(list, 2).map((c) => c.id), ["b"]);
+  assert.deepEqual(filterYear(list, 2, "upto").map((c) => c.id), ["a", "b", "d"]);
+  assert.deepEqual(filterYear(list, 1).map((c) => c.id), ["a", "d"], "ohne year → 1. Lj.");
+  assert.equal(filterYear(list, 0).length, 4, "Alle");
+  const p = learnPools(CARDS, 2);
+  assert.ok(p.fresh.every((c) => c.year === 2) && p.review.every((c) => c.year <= 2));
+  assert.ok(p.review.length > p.fresh.length);
+  // SRS: Wiederholung aus dem 1. Lj. bleibt im 2. Lj. fällig, neue Karten nur aus dem 2.
+  const states = new Map([["grund-01", { id: "grund-01", seen: 1, reps: 1, due: "2026-01-01", interval: 1, ef: 2.5 }]]);
+  const due = srs.buildQueue(p.review, states, "2026-11-07").due.map((c) => c.id);
+  const fresh = srs.buildQueue(p.fresh, states, "2026-11-07", { newLimit: 10 }).fresh;
+  assert.deepEqual(due, ["grund-01"]);
+  assert.ok(fresh.length === 10 && fresh.every((c) => c.year === 2));
+  for (const y of YEARS) {
+    const types = problemTypesFor(y);
+    assert.ok(types.length >= 3 && types.every((t) => t.year === y), `Aufgaben Jahr ${y}`);
+    const rand = srs.rng(y);
+    for (let i = 0; i < 30; i++) { const got = makeProblem(null, rand, types).type; assert.ok(types.some((t) => t.id === got), `Gemischt bleibt im Jahr (${got})`); }
+  }
+  assert.equal(problemTypesFor(0).length, PROBLEM_TYPES.length);
+  assert.deepEqual(problemTypesFor(3).map((t) => t.id).sort(), ["du1", "du3", "p3"]);
+  // Prüfung „bis Lehrjahr 1“ enthält nur Fragen aus dem 1. Lj.
+  const ex = buildExam(filterYear(CARDS, 1, "upto"), { rand: srs.rng(5) });
+  assert.equal(ex.length, EXAM_SIZE);
+  assert.ok(ex.every((q) => CARDS.find((c) => c.id === q.id).year === 1));
+});
+
+test("Neue Rechenarten (2. Lj.): Wirkleistung, XL, Scheitelwert rechnen richtig", () => {
+  const r = srs.rng(11);
+  for (let i = 0; i < 20; i++) {
+    const a = makeProblem("pac", r);
+    const [U, I] = [...a.text.matchAll(/(\d+(?:,\d+)?) (V|A)\b/g)].map((m) => parseNum(m[1]));
+    const cos = parseNum(a.text.match(/cos φ = ([\d,]+)/)[1]);
+    near(a.answer, U * I * cos, 1e-9);
+    const x = makeProblem("xl", r);
+    const L = parseNum(x.text.match(/([\d,]+) H\b/)[1]);
+    near(x.answer, 2 * Math.PI * 50 * L, 1e-9);
+    const p = makeProblem("peak", r);
+    const v = parseNum(p.text.match(/von ([\d,]+) V/)[1]);
+    near(p.answer, p.ask === "Û" ? v * Math.SQRT2 : v / Math.SQRT2, 1e-9);
+  }
+});
+
+test("Rechenfrage erkennen (Taschenrechner in der Prüfung)", () => {
+  assert.equal(isNumericQuestion({ options: ["5 A", "0,2 A", "10 580 A", "50 A"] }), true);
+  assert.equal(isNumericQuestion({ options: ["ca. 1,5 mm²", "ca. 4,3 mm²", "ca. 1,0 mm²", "ca. 2,5 mm²"] }), true);
+  assert.equal(isNumericQuestion({ a: "3000 1/min", x: ["1500 1/min", "1000 1/min", "50 1/min"] }), true);
+  assert.equal(isNumericQuestion({ options: ["Freischalten", "Erden und Kurzschließen", "Abdecken", "Sichern"] }), false);
+  assert.equal(isNumericQuestion({ options: ["10⁶ = eine Million", "10³ = tausend"] }), false);
+  const n = CARDS.filter((c) => isNumericQuestion(c)).length;
+  assert.ok(n >= 30 && n < CARDS.length / 2, `Rechenfragen: ${n}`);
+  // der Rechner rechnet die Kartenbeispiele nach (calc-core, ohne eval)
+  near(evaluate("230 ÷ 46"), 5); near(evaluate("1,38^2 × π ÷ 4"), 1.4957, 1e-3); near(evaluate("√3 × 400 × 10 × 0,85"), 5889.0, 0.5);
+});
+
+test("Eigene Karten säubern: Pflichtfelder, 0 oder 3 eindeutige Falschantworten, Thema/Jahr", () => {
+  const topics = TOPICS.map((t) => t.id);
+  assert.equal(cleanOwnCard({ q: " ", a: "x" }, { topics }).ok, false);
+  assert.equal(cleanOwnCard({ q: "Frage?", a: "" }, { topics }).ok, false);
+  const ok = cleanOwnCard({ q: "  Was ist  PE? ", a: "Schutzleiter", topic: "nope", year: 7 }, { topics, defYear: 2 });
+  assert.deepEqual(ok, { ok: true, card: { q: "Was ist PE?", a: "Schutzleiter", x: [], e: "", topic: "grund", year: 2 } });
+  assert.equal(cleanOwnCard({ q: "F?", a: "A", x: ["B", "C"] }, { topics }).ok, false, "2 Falsche reichen nicht");
+  assert.equal(cleanOwnCard({ q: "F?", a: "A", x: ["B", "a", "C"] }, { topics }).ok, false, "Falsche = Richtige");
+  const mc = cleanOwnCard({ q: "F?", a: "A", x: ["B", "C", "D"], topic: "ac", year: 3 }, { topics });
+  assert.ok(mc.ok && mc.card.x.length === 3 && mc.card.topic === "ac" && mc.card.year === 3);
+  assert.equal(cleanOwnCard({ q: "x".repeat(999), a: "A" }, { topics }).card.q.length, OWN_LIMITS.q);
+});
+
+test("Foto-Antwort einlesen: Code-Zäune, Text drumherum, MC mit Index, Vorder-/Rückseite, kaputte Einträge, Fehler", () => {
+  const topics = TOPICS.map((t) => t.id);
+  const o = { topics, defYear: 1 };
+  const reply = 'Klar! Hier sind deine Karten:\n```json\n{"cards":[' +
+    '{"q":"Welche Farbe hat der PE?","options":["Blau","Grün-gelb","Braun","Schwarz"],"correct":1,"e":"Nur für PE.","topic":"leit","year":1},' +
+    '{"front":"Was misst ein Wattmeter?","back":"Die Wirkleistung","topic":"mess","year":"2"},' +
+    '{"q":"Doppelt?","options":["A","A","B","C"],"correct":0},' +
+    '{"q":"","a":"leer"},' +
+    '{"q":"Welche Farbe hat der PE?","a":"Grün-gelb"},' +
+    '{"q":"Thema falsch?","a":"ja","topic":"quatsch","year":9},' +
+  ']}\n```\nViel Spaß!';
+  const r = parseCardJSON(reply, o);
+  assert.equal(r.error, undefined);
+  assert.equal(r.cards.length, 4);
+  assert.deepEqual(r.cards[0], { q: "Welche Farbe hat der PE?", a: "Grün-gelb", x: ["Blau", "Braun", "Schwarz"], e: "Nur für PE.", topic: "leit", year: 1 });
+  assert.deepEqual(r.cards[1], { q: "Was misst ein Wattmeter?", a: "Die Wirkleistung", x: [], e: "", topic: "mess", year: 2 });
+  assert.deepEqual(r.cards[2], { q: "Doppelt?", a: "A", x: [], e: "", topic: "grund", year: 1 }, "kaputtes MC → als Vorder-/Rückseite gerettet");
+  assert.equal(r.cards[3].topic, "grund"); assert.equal(r.cards[3].year, 1);
+  assert.equal(r.dropped, 2, "leere + doppelte Frage verworfen");
+  // nacktes Array, korrekt als String-Index
+  assert.equal(parseCardJSON('[{"q":"F?","options":["a","b","c","d"],"correct":"3"}]', o).cards[0].a, "d");
+  // höchstens 15
+  const many = JSON.stringify({ cards: Array.from({ length: 20 }, (_, i) => ({ q: `Frage ${i}?`, a: "x" })) });
+  const m = parseCardJSON(many, o);
+  assert.equal(m.cards.length, 15); assert.equal(m.dropped, 5);
+  // Fehlerfälle freundlich
+  assert.match(parseCardJSON("Tut mir leid, das Foto ist unscharf.", o).error, /JSON/);
+  assert.match(parseCardJSON('{"cards":[],"error":"Foto ist zu dunkel"}', o).error, /zu dunkel/);
+  assert.match(parseCardJSON('{"foo":1}', o).error, /keine Karten/);
+  assert.equal(parseCardJSON("", o).cards.length, 0);
+  // Auftrag an Claude
+  const pr = photoPrompt({ year: 2, topics });
+  assert.match(pr, /^LERNKARTEN AUS FOTO \(JSON\)/); assert.match(pr, /NUR mit gültigem JSON/); assert.match(pr, /nichts erfinden/); assert.match(pr, /2\. Lehrjahr/);
+  assert.match(pr, /GENAU EINE/); assert.ok(topics.every((t) => pr.includes(t)));
 });

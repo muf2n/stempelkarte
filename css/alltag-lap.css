@@ -73,7 +73,7 @@
 }
 .lap-tab[aria-selected="true"] { background: var(--accent); border-color: var(--accent); color: var(--accent-ink); box-shadow: 0 6px 14px -8px var(--accent); }
 .lap-tab:focus-visible { outline: none; box-shadow: var(--ring); }
-@media (max-width: 420px) { .lap-tabs { margin: 0; padding: 2px 0 4px; display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 4px; } .lap-tab { flex-direction: column; gap: 0; padding: 6px 2px; border-radius: 14px; font-size: .78rem; min-height: 52px; justify-content: center; } .lap-tab span:first-child { font-size: 1.15rem; } }
+@media (max-width: 420px) { .lap-tabs { margin: 0; padding: 2px 0 4px; display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 4px; } .lap-tab { flex-direction: column; gap: 0; padding: 6px 2px; border-radius: 14px; font-size: .78rem; min-height: 52px; justify-content: center; } .lap-tab span:first-child { font-size: 1.15rem; } }
 @media (min-width: 900px) { .lap-tabs { margin: 0; padding: 0; } }
 
 /* Segment */
@@ -250,3 +250,51 @@
   .lap-flist { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); align-items: start; }
   .lap-formula.open { grid-column: 1 / -1; }
 }
+
+/* ---------- 🎓 Lehrjahr-Auswahl ---------- */
+.lap-yearbar { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; min-width: 0; }
+.lap-yearlabel { font-weight: 700; font-size: .9rem; color: var(--muted); }
+.lap-yearbar .lap-seg > button { min-width: 48px; padding: 6px 12px; }
+.lap-topic.empty { opacity: .5; }
+
+/* ---------- 🧮 Taschenrechner ---------- */
+.lap-calcbox { border: 1px solid var(--line); border-radius: 14px; background: color-mix(in srgb, var(--line) 18%, var(--card)); min-width: 0; }
+.lap-calcbox > summary { cursor: pointer; list-style: none; padding: 10px 14px; font-weight: 700; font-size: .92rem; display: flex; align-items: center; gap: 6px; border-radius: 14px; }
+.lap-calcbox > summary::-webkit-details-marker { display: none; }
+.lap-calcbox > summary::after { content: "▾"; margin-left: auto; color: var(--muted); transition: transform .15s; }
+.lap-calcbox[open] > summary::after { transform: rotate(180deg); }
+.lap-calcbox > summary:focus-visible { outline: none; box-shadow: var(--ring); }
+.lap-calc-in { display: flex; flex-direction: column; gap: 8px; padding: 0 12px 12px; max-width: 360px; }
+.lap-calc-screen { display: flex; flex-direction: column; gap: 2px; background: var(--card); border: 1px solid var(--line); border-radius: 12px; padding: 6px 10px; }
+.lap-calc-screen .lap-calc-expr { border: 0 !important; background: transparent !important; box-shadow: none !important; padding: 2px 0; min-height: 34px; font-size: 1.1rem; text-align: right; font-variant-numeric: tabular-nums; }
+.lap-calc-res { text-align: right; font-family: var(--f-display); font-weight: 700; font-size: 1.25rem; color: var(--accent); min-height: 1.5em; font-variant-numeric: tabular-nums; overflow-wrap: anywhere; }
+.lap-calc-res.soft { color: var(--muted); font-weight: 600; }
+.lap-keys { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 6px; }
+.lap-key { min-height: 42px; border-radius: 10px; border: 1px solid var(--line); background: var(--card); color: var(--ink); font: inherit; font-size: 1.05rem; font-weight: 650; cursor: pointer; touch-action: manipulation; }
+.lap-key.op { background: var(--lap-soft); color: var(--accent); }
+.lap-key.fn { color: var(--muted); }
+.lap-key.eq { background: var(--accent); border-color: var(--accent); color: var(--accent-ink); }
+.lap-key:active { transform: scale(.96); }
+.lap-key:focus-visible { outline: none; box-shadow: var(--ring); }
+
+/* ---------- 📷 Eigene Karten / Aus Foto lernen ---------- */
+.lap-photohero .lap-row { align-items: flex-start; }
+.lap-photohero .lap-row.lap-wrap { align-items: center; }
+.lap-photobtn { cursor: pointer; }
+.lap-preview { max-width: min(100%, 260px); max-height: 220px; border-radius: 12px; border: 1px solid var(--line); object-fit: contain; }
+.lap-busy { gap: 12px; }
+.lap-owned.bad { border-color: var(--lap-no); }
+.lap-owned textarea { min-height: 64px; }
+.lap-xset { border: 0; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 180px), 1fr)); gap: 6px; min-width: 0; }
+.lap-xset legend { font-size: .8rem; font-weight: 650; color: var(--muted); padding: 0; margin-bottom: 4px; }
+.lap-xset legend small, .lap-field small { font-weight: 500; }
+.lap-ownlist { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 6px; }
+.lap-ownrow { display: flex; gap: 8px; align-items: flex-start; padding: 10px 12px; border: 1px solid var(--line); border-radius: 12px; background: var(--card); min-width: 0; }
+.lap-ownmain { display: flex; flex-direction: column; gap: 2px; min-width: 0; flex: 1 1 auto; }
+.lap-ownq { font-weight: 650; overflow-wrap: anywhere; }
+.lap-owna { color: var(--lap-ok); font-size: .88rem; overflow-wrap: anywhere; }
+.lap-ownmeta { color: var(--muted); font-size: .76rem; }
+.lap-ownact { display: flex; gap: 4px; flex: none; }
+.lap-owntag { font-style: normal; font-size: .72rem; font-weight: 700; color: var(--muted); margin-left: 6px; white-space: nowrap; }
+.lap-pill.soft { background: color-mix(in srgb, var(--line) 45%, transparent); }
+.lap-stick { position: sticky; bottom: 8px; z-index: 2; }

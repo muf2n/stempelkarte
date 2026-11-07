@@ -121,24 +121,46 @@ const oneOf = (rand, arr) => arr[Math.floor(rand() * arr.length)];
 const u = (x, unit) => `${fmtAuto(x)} ${unit}`;
 
 export const PROBLEM_TYPES = [
-  { id: "ohm", name: "Ohmsches Gesetz", emoji: "⚡" },
-  { id: "power", name: "Leistung P = U · I", emoji: "💡" },
-  { id: "pi2r", name: "Leistung P = I² · R", emoji: "🔥" },
-  { id: "series", name: "Reihenschaltung", emoji: "➖" },
-  { id: "parallel", name: "Parallelschaltung", emoji: "🟰" },
-  { id: "wire", name: "Leitungswiderstand", emoji: "🧵" },
-  { id: "du1", name: "Spannungsfall 1-phasig", emoji: "📉" },
-  { id: "du3", name: "Spannungsfall Drehstrom", emoji: "🌀" },
-  { id: "energy", name: "Energie & Kosten", emoji: "💶" },
-  { id: "p3", name: "Drehstromleistung", emoji: "🏭" },
+  { id: "ohm", name: "Ohmsches Gesetz", emoji: "⚡", year: 1 },
+  { id: "power", name: "Leistung P = U · I", emoji: "💡", year: 1 },
+  { id: "pi2r", name: "Leistung P = I² · R", emoji: "🔥", year: 1 },
+  { id: "series", name: "Reihenschaltung", emoji: "➖", year: 1 },
+  { id: "parallel", name: "Parallelschaltung", emoji: "🟰", year: 1 },
+  { id: "wire", name: "Leitungswiderstand", emoji: "🧵", year: 1 },
+  { id: "du1", name: "Spannungsfall 1-phasig", emoji: "📉", year: 3 },
+  { id: "du3", name: "Spannungsfall Drehstrom", emoji: "🌀", year: 3 },
+  { id: "energy", name: "Energie & Kosten", emoji: "💶", year: 1 },
+  { id: "p3", name: "Drehstromleistung", emoji: "🏭", year: 3 },
+  { id: "pac", name: "Wirkleistung Wechselstrom", emoji: "🌊", year: 2 },
+  { id: "xl", name: "Blindwiderstand XL", emoji: "🌀", year: 2 },
+  { id: "peak", name: "Scheitelwert Û", emoji: "📈", year: 2 },
 ];
+
+/* ---------- Lehrjahre ---------- */
+/** Gespeicherten Wert auf 1|2|3 bringen – alles andere heißt „Alle“ (0). */
+export function normYear(v) { const n = Number(v); return n === 1 || n === 2 || n === 3 ? n : 0; }
+/** Karten (oder Aufgabenarten) nach Lehrjahr: mode "exact" = genau dieses Jahr, "upto" = dieses und darunter. year 0 = alle. */
+export function filterYear(list, year, mode = "exact") {
+  const y = normYear(year);
+  if (!y) return list.slice();
+  return list.filter((c) => { const cy = normYear(c && c.year) || 1; return mode === "upto" ? cy <= y : cy === y; });
+}
+/** Lernkarten: neue Karten nur aus dem gewählten Jahr, Wiederholungen aus diesem Jahr und darunter (damit nichts verloren geht). */
+export function learnPools(cards, year) { return { review: filterYear(cards, year, "upto"), fresh: filterYear(cards, year, "exact") }; }
+/** Aufgabenarten fürs gewählte Lehrjahr (0 = alle). */
+export const problemTypesFor = (year) => filterYear(PROBLEM_TYPES, year, "exact");
+/** „Rechenfrage“ in der Prüfung: alle Antworten sind Zahlen (z. B. „ca. 1,5 mm²“, „20 Ω“). */
+export function isNumericQuestion(q) {
+  const opts = (q && (q.options || [q.a, ...(q.x || [])])) || [];
+  return opts.length >= 2 && opts.every((o) => /^(ca\.\s*)?[-+]?\d[\d\s]*([.,]\d+)?\s*\S{0,6}$/u.test(String(o || "").trim()));
+}
 
 /**
  * Eine Rechenaufgabe mit Zufallswerten erzeugen.
  * @returns {{type, text, ask, unit, answer:number, tol:number, steps:string[]}}
  */
-export function makeProblem(type, rand = Math.random) {
-  const T = PROBLEM_TYPES.some((t) => t.id === type) ? type : oneOf(rand, PROBLEM_TYPES).id;
+export function makeProblem(type, rand = Math.random, pool = PROBLEM_TYPES) {
+  const T = PROBLEM_TYPES.some((t) => t.id === type) ? type : oneOf(rand, pool && pool.length ? pool : PROBLEM_TYPES).id;
   const A_LIST = [1.5, 2.5, 4, 6];
   switch (T) {
     case "ohm": {
@@ -225,6 +247,34 @@ export function makeProblem(type, rand = Math.random) {
       const r = energyCost({ P, h, days, priceCt: ct });
       return { type: T, text: `Ein ${dev} (${u(P, "W")}) läuft ${h} h pro Tag, ${days} Tage lang. Strom kostet ${ct} Cent/kWh. Was kostet das in Euro?`, ask: "Kosten", unit: "€", answer: r.euro, tol: 0.02,
         steps: ["Gesucht: Kosten in €", "Formel: W = P · t, Kosten = W · Preis", `Leistung in kW: ${u(P, "W")} = ${fmtAuto(P / 1000)} kW`, `Zeit: ${h} h · ${days} Tage = ${h * days} h`, `W = ${fmtAuto(P / 1000)} kW · ${h * days} h = ${u(r.kWh, "kWh")}`, `Kosten = ${fmtAuto(r.kWh)} kWh · ${fmt(ct / 100)} €/kWh`, `Ergebnis: ≈ ${fmt(r.euro, 2)} €`] };
+    }
+    case "pac": {
+      const U = 230;
+      const I = oneOf(rand, [2, 4, 5, 6, 8, 10]);
+      const cos = oneOf(rand, [0.7, 0.8, 0.85, 0.9, 0.95]);
+      const P = U * I * cos;
+      return { type: T, text: `Ein Wechselstrommotor an ${u(U, "V")} nimmt ${u(I, "A")} auf (cos φ = ${fmt(cos)}). Wie groß ist die aufgenommene Wirkleistung?`, ask: "P", unit: "W", answer: P, tol: 0.02,
+        steps: ["Gesucht: Wirkleistung P", "Formel: P = U · I · cos φ", `Einsetzen: P = ${u(U, "V")} · ${u(I, "A")} · ${fmt(cos)}`, `(Scheinleistung zum Vergleich: S = U · I = ${u(U * I, "VA")})`, `Ergebnis: P ≈ ${u(P, "W")}`] };
+    }
+    case "xl": {
+      const L = oneOf(rand, [0.05, 0.1, 0.2, 0.3, 0.5]);
+      const f = 50;
+      const XL = 2 * Math.PI * f * L;
+      return { type: T, text: `Eine Spule hat eine Induktivität von ${u(L, "H")}. Wie groß ist ihr induktiver Blindwiderstand bei ${u(f, "Hz")}?`, ask: "XL", unit: "Ω", answer: XL, tol: 0.02,
+        steps: ["Gesucht: induktiver Blindwiderstand XL", "Formel: XL = 2 · π · f · L", `Einsetzen: XL = 2 · 3,1416 · ${u(f, "Hz")} · ${u(L, "H")}`, `Ergebnis: XL ≈ ${u(XL, "Ω")}`] };
+    }
+    case "peak": {
+      const variant = oneOf(rand, ["peak", "eff"]);
+      if (variant === "peak") {
+        const U = oneOf(rand, [12, 24, 42, 48, 110, 230]);
+        const P = U * Math.SQRT2;
+        return { type: T, text: `Eine Sinusspannung hat einen Effektivwert von ${u(U, "V")}. Wie groß ist ihr Scheitelwert Û?`, ask: "Û", unit: "V", answer: P, tol: 0.02,
+          steps: ["Gesucht: Scheitelwert Û", "Formel: Û = U · √2", `Einsetzen: Û = ${u(U, "V")} · 1,414`, `Ergebnis: Û ≈ ${u(P, "V")}`] };
+      }
+      const Uh = oneOf(rand, [17, 34, 68, 141, 325]);
+      const U = Uh / Math.SQRT2;
+      return { type: T, text: `Eine Sinusspannung hat einen Scheitelwert von ${u(Uh, "V")}. Wie groß ist ihr Effektivwert?`, ask: "U", unit: "V", answer: U, tol: 0.02,
+        steps: ["Gesucht: Effektivwert U", "Formel: U = Û / √2", `Einsetzen: U = ${u(Uh, "V")} / 1,414`, `Ergebnis: U ≈ ${u(U, "V")}`] };
     }
     case "p3":
     default: {
@@ -326,4 +376,89 @@ export function explainPrompt({ topic, q, a, e, picked }) {
     ...(e ? [`Kurze Erklärung aus der Lernkarte: ${e}`] : []),
     ...(picked && picked !== a ? [`Ich hatte geantwortet: ${picked}`, "Erklär mir bitte, warum meine Antwort falsch ist und die richtige stimmt."] : ["Erklär mir das bitte einfach, mit einem Beispiel aus der Praxis."]),
   ].join("\n");
+}
+
+/* ---------- Eigene Karten & 📷 Fragen aus Fotos ---------- */
+export const OWN_LIMITS = { q: 300, a: 200, e: 400, max: 15 };
+const clip = (v, n) => String(v ?? "").replace(/\s+/g, " ").trim().slice(0, n);
+
+/**
+ * Eigene Karte prüfen und säubern. → { ok:true, card } oder { ok:false, error }
+ * Falschantworten: entweder keine (nur Vorder-/Rückseite) oder genau 3 verschiedene, die nicht der richtigen Antwort gleichen.
+ */
+export function cleanOwnCard(c, { topics = [], defYear = 1, defTopic = "grund" } = {}) {
+  const q = clip(c && c.q, OWN_LIMITS.q), a = clip(c && c.a, OWN_LIMITS.a), e = clip(c && c.e, OWN_LIMITS.e);
+  if (!q) return { ok: false, error: "Die Frage fehlt noch ✍️" };
+  if (!a) return { ok: false, error: "Die Antwort fehlt noch ✍️" };
+  const x = (Array.isArray(c && c.x) ? c.x : []).map((o) => clip(o, OWN_LIMITS.a)).filter(Boolean);
+  const low = (s) => s.toLowerCase();
+  if (x.length) {
+    if (x.length !== 3) return { ok: false, error: "Für Multiple Choice braucht's genau 3 falsche Antworten (oder gar keine)." };
+    if (new Set([a, ...x].map(low)).size !== 4) return { ok: false, error: "Die Antworten müssen alle verschieden sein." };
+  }
+  const topic = topics.includes(c && c.topic) ? c.topic : defTopic;
+  const year = normYear(c && c.year) || normYear(defYear) || 1;
+  return { ok: true, card: { q, a, x, e, topic, year } };
+}
+
+/** Auftrag an Claude (Modus "lehrer" + Foto): Lernkarten als striktes JSON. */
+export function photoPrompt({ year = 1, topics = [] } = {}) {
+  return [
+    "LERNKARTEN AUS FOTO (JSON):",
+    `Lies das Foto (Arbeitsblatt bzw. Buchseite, Elektrotechnik-Lehre in Österreich, ${normYear(year) || 1}. Lehrjahr) und mach daraus 5 bis 15 Lernkarten.`,
+    "Verwende NUR Fakten, die auf dem Foto sichtbar stehen – nichts erfinden, nichts ergänzen. Unleserliches lässt du weg.",
+    "Antworte NUR mit gültigem JSON, ohne Text davor oder danach, ohne Markdown, genau in dieser Form:",
+    '{"cards":[{"q":"Frage","a":"richtige Antwort","options":["A","B","C","D"],"correct":0,"e":"kurze Erklärung","topic":"grund","year":1}]}',
+    "Regeln: \"options\" + \"correct\" (Index 0–3 der richtigen Option) nur, wenn du 4 eindeutige Antworten bilden kannst, von denen GENAU EINE stimmt und die anderen plausibel, aber klar falsch sind – sonst lass \"options\" und \"correct\" weg (dann ist es eine Karte mit Vorder- und Rückseite).",
+    `"topic" ist eins von: ${topics.join(", ")}. "year" ist 1, 2 oder 3 (deine Schätzung). "e" darf leer sein.`,
+    'Ist auf dem Foto nichts Lernbares oder nichts lesbar, antworte nur: {"cards":[],"error":"kurzer Grund"}',
+  ].join("\n");
+}
+
+/**
+ * Claudes Antwort robust einlesen: Code-Zäune entfernen, erstes JSON-Objekt/-Array herausschneiden, Karten prüfen.
+ * Akzeptiert {cards:[…]} oder ein Array; je Karte q/a (oder front/back), optional options + correct (MC).
+ * @returns {{cards:{q,a,x,e,topic,year}[], dropped:number, error?:string}}
+ */
+export function parseCardJSON(text, { topics = [], defYear = 1, defTopic = "grund", max = OWN_LIMITS.max } = {}) {
+  let s = String(text || "").trim().replace(/^﻿/, "");
+  const fence = s.match(/```(?:json|JSON)?\s*([\s\S]*?)```/);
+  if (fence) s = fence[1].trim();
+  let data = null;
+  const tryParse = (t) => { try { return JSON.parse(t); } catch { return undefined; } };
+  data = tryParse(s);
+  if (data === undefined) {
+    const iO = s.indexOf("{"), iA = s.indexOf("[");
+    const starts = [iO, iA].filter((i) => i >= 0).sort((a, b) => a - b);
+    for (const st of starts) {
+      const close = s[st] === "{" ? "}" : "]";
+      const end = s.lastIndexOf(close);
+      if (end > st) { data = tryParse(s.slice(st, end + 1).replace(/,\s*([}\]])/g, "$1")); if (data !== undefined) break; }
+    }
+  }
+  if (data === undefined || data === null) return { cards: [], dropped: 0, error: "Claudes Antwort war kein lesbares JSON 🤔" };
+  const list = Array.isArray(data) ? data : Array.isArray(data.cards) ? data.cards : null;
+  if (!list) return { cards: [], dropped: 0, error: "In der Antwort waren keine Karten 🤔" };
+  const out = [], seen = new Set();
+  let dropped = 0;
+  for (const raw of list) {
+    if (!raw || typeof raw !== "object") { dropped++; continue; }
+    const q = raw.q ?? raw.question ?? raw.front ?? raw.frage;
+    let a = raw.a ?? raw.answer ?? raw.back ?? raw.antwort;
+    let x = [];
+    const opts = Array.isArray(raw.options) ? raw.options.map((o) => clip(o, OWN_LIMITS.a)) : null;
+    const ci = Number.isInteger(raw.correct) ? raw.correct : Number.isInteger(Number(raw.correct)) && String(raw.correct).trim() !== "" ? Number(raw.correct) : -1;
+    if (opts && opts.length === 4 && opts.every(Boolean) && new Set(opts.map((o) => o.toLowerCase())).size === 4 && ci >= 0 && ci < 4) {
+      a = opts[ci]; x = opts.filter((_, i) => i !== ci);
+    } else if (opts && !a && ci >= 0 && ci < opts.length) a = opts[ci]; // MC kaputt → als Vorder-/Rückseite retten
+    const r = cleanOwnCard({ q, a, x, e: raw.e ?? raw.explanation ?? raw.erklaerung, topic: raw.topic, year: raw.year }, { topics, defYear, defTopic });
+    if (!r.ok) { dropped++; continue; }
+    const key = r.card.q.toLowerCase();
+    if (seen.has(key)) { dropped++; continue; }
+    seen.add(key);
+    if (out.length >= max) { dropped++; continue; }
+    out.push(r.card);
+  }
+  const err = !out.length ? (clip(data && !Array.isArray(data) && data.error, 200) || "Auf dem Foto hab ich nichts Lernbares gefunden 🤔") : undefined;
+  return { cards: out, dropped, ...(err ? { error: err } : {}) };
 }

@@ -690,3 +690,31 @@ test("H1: einkauf_hinzufuegen ist ein Schreib-Werkzeug – nach Bank-Text in der
   assert.deepEqual(out.actions, []);
   assert.equal(t.g.list(`${t.base}/a_einkauf`).length, 0);
 });
+
+test("Lehrer-Modus mit Foto (Lernkarten aus Foto): Bildblock kommt an, keine Werkzeuge, mehr Token, JSON-Regeln im Prompt", async () => {
+  const png = "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAAABJRU5ErkJggg==";
+  const json = '{"cards":[{"q":"Welche Farbe hat der PE?","a":"Grün-gelb","topic":"leit","year":1}]}';
+  const t = await setupChat({ script: [(body) => {
+    const last = body.messages.at(-1);
+    assert.equal(last.content[0].type, "image", "Foto wird im Lehrer-Modus NICHT verworfen");
+    assert.equal(last.content[0].source.media_type, "image/jpeg");
+    assert.match(last.content[1].text, /LERNKARTEN AUS FOTO/);
+    assert.equal("tools" in body, false);
+    assert.ok(body.max_tokens >= 4096, "genug Platz für bis zu 15 Karten");
+    return end(json);
+  }] });
+  const res = await t.post({ ...msg("LERNKARTEN AUS FOTO (JSON):\nLies das Foto …"), mode: "lehrer", image: { type: "image/jpeg", data: png } });
+  assert.equal(res.status, 200);
+  const out = await res.json();
+  assert.equal(out.reply, json, "JSON-Antwort kommt unverändert zurück");
+  assert.deepEqual(out.actions, []);
+  assert.equal(t.calls.length, 1);
+  const b = t.calls[0].body;
+  assert.match(b.system, /NUR mit gültigem JSON/);
+  assert.match(b.system, /erfinde nichts/);
+  assert.match(b.system, /genau eine Option richtig/);
+  // ohne Foto bleibt das normale Token-Limit
+  const t2 = await setupChat({ script: [end("Kurz erklärt ⚡")] });
+  await t2.post({ ...msg("Erklär mir den FI"), mode: "lehrer" });
+  assert.ok(t2.calls[0].body.max_tokens <= 1024);
+});
