@@ -291,6 +291,28 @@ const PIN = "2580", PIN2 = "135790";
   await page.waitForSelector(".ml-lock");
   await shot("ml-lock-1440-dark.png");
 
+  /* ---------- M1 (Audit 2): Assistent bei aktiver Sperre ---------- */
+  const chatBodies = [];
+  await page.route("**/chat", async (route) => {
+    chatBodies.push(JSON.parse(route.request().postData() || "{}"));
+    await route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({ reply: "Geld ist gesperrt – entsperre es in der App.", actions: [], usage: { usd: 0.01, capUsd: 3 } }) });
+  });
+  await page.evaluate(() => {
+    window.__skAiTest = { token: "test" };
+    localStorage.setItem("stempelkarte.ai.history", JSON.stringify([
+      { role: "user", content: "Kontostand?" }, { role: "assistant", content: "Du hast 1.234,56 € am Konto.", money: true },
+      { role: "user", content: "Wetter?" }, { role: "assistant", content: "Sonnig." },
+    ]));
+    location.hash = "#alltag/claude";
+  });
+  await page.waitForSelector(".ai-log .ai-msg, .ai-msg", { timeout: 8000 });
+  const logText = await page.evaluate(() => document.querySelector(".ai-log") ? document.querySelector(".ai-log").textContent : document.body.textContent);
+  ok(!logText.includes("1.234,56") && /Geld ist gesperrt/.test(logText) && logText.includes("Sonnig"), "gesperrt: Geld-Antwort im Verlauf ausgeblendet, Hinweis sichtbar, Rest bleibt");
+  await page.fill(".ai-in", "Wie viel hab ich ausgegeben?");
+  await page.click(".ai-send");
+  await page.waitForFunction(() => /entsperre es in der App/.test(document.body.textContent));
+  ok(chatBodies.length === 1 && chatBodies[0].moneyLocked === true, "gesperrt: /chat bekommt moneyLocked: true");
+
   ok(errors.length === 0, "Keine Konsolenfehler" + (errors.length ? ": " + errors.join(" | ") : ""));
   await browser.close();
 })().catch((e) => { console.error(e); process.exit(1); });

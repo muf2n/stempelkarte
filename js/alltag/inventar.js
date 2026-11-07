@@ -63,7 +63,7 @@ export function mount(el) {
   function thumb(it, big = false) {
     if (it.photoId) {
       const img = cachedImage(it.photoId);
-      if (img) return `<img src="${img}" alt="" class="${big ? "ak-img-big" : ""}">`;
+      if (img) return `<img src="${esc(img)}" alt="" class="${big ? "ak-img-big" : ""}">`;
       getImage(it.photoId).then((v) => { if (v) queue(); }).catch(() => {});
     }
     return `<span class="ak-emo${big ? " big" : ""}" aria-hidden="true">${I.catById(it.cat).e}</span>`;
@@ -159,7 +159,7 @@ export function mount(el) {
         <div class="row2"><label>Garantie bis<input id="inv-f-wu" type="date" value="${esc(it.warrantyUntil)}"></label>
           <div class="inv-wq"><span class="note">Schnell:</span> <button type="button" class="chip" data-wm="12">1 Jahr</button><button type="button" class="chip" data-wm="24">2 Jahre</button><button type="button" class="chip" data-wm="36">3 Jahre</button></div></div>
         <label class="ak-check"><input id="inv-f-remind" type="checkbox"${it.remind ? " checked" : ""}> 🔔 Erinnern, bevor die Garantie endet</label>
-        <div class="inv-photo"><div class="inv-photo-prev">${it.photoId && cachedImage(it.photoId) ? `<img src="${cachedImage(it.photoId)}" alt="">` : ""}</div>
+        <div class="inv-photo"><div class="inv-photo-prev">${it.photoId && cachedImage(it.photoId) ? `<img src="${esc(cachedImage(it.photoId))}" alt="">` : ""}</div>
           <label class="btn ghost sm ak-filebtn">📷 <span>Foto</span><input type="file" accept="image/*" capture="environment" id="inv-f-photo"></label>
           ${it.photoId ? `<button type="button" class="btn ghost sm" data-nophoto>Foto entfernen</button>` : ""}</div>
         <label>Notizen<textarea id="inv-f-notes" rows="3" maxlength="4000">${esc(it.notes)}</textarea></label>
@@ -177,7 +177,7 @@ export function mount(el) {
         $("#inv-f-photo").addEventListener("change", async (ev) => {
           const f = ev.target.files && ev.target.files[0];
           if (!f) return;
-          try { const r = await shrinkImage(f, { maxSide: 900, maxBytes: 110 * 1024, quality: 0.75 }); photo = r.data; $(".inv-photo-prev").innerHTML = `<img src="${r.data}" alt="">`; }
+          try { const r = await shrinkImage(f, { maxSide: 900, maxBytes: 110 * 1024, quality: 0.75 }); photo = r.data; $(".inv-photo-prev").innerHTML = `<img src="${esc(r.data)}" alt="">`; }
           catch (err) { ui.toast(err && err.message || "Foto ging nicht."); }
         });
         const np = $("[data-nophoto]");
@@ -289,7 +289,7 @@ export function mount(el) {
     if (!it.photoId) { openForm(col.get(it.id)); return; }
     getImage(it.photoId).then((src) => {
       if (!src) { ui.toast("Foto konnte nicht geladen werden."); return; }
-      ui.openSheet({ title: `📷 ${it.name}`, bodyHTML: `<div class="ak-photo-big"><img src="${src}" alt="Foto: ${esc(it.name)}"></div>` });
+      ui.openSheet({ title: `📷 ${it.name}`, bodyHTML: `<div class="ak-photo-big"><img src="${esc(src)}" alt="Foto: ${esc(it.name)}"></div>` });
     });
   }
 

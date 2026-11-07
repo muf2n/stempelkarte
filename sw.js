@@ -304,6 +304,7 @@ const SHELL = [
   "js/alltag/elektro-symbols.js",
   "js/alltag/elektro.js",
   "css/elektro.css",
+  "js/signout-clean.js",
   "js/app.js"
 ];
 

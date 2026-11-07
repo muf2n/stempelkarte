@@ -7,6 +7,7 @@ import * as Sess from "./vault-session.js";
 import * as V from "./vault-crypto.js";
 import * as E from "./dokumente-crypt.js";
 import * as F from "./doc-files.js";
+import { safeType } from "./dokumente-core.js";
 
 let col = null;
 let cache = new Map();      // id → { sig, doc }
@@ -177,7 +178,7 @@ export async function blob(doc) {
     bytes = E.b64ToBytes(b64);
   }
   if (key && Sess.getKey() !== key) return null;
-  return new Blob([bytes], { type: doc.type || "application/octet-stream" });
+  return new Blob([bytes], { type: safeType(doc.type) }); // L1: nie text/html o. Ä.
 }
 
 /** Object-URL anlegen, die beim Sperren automatisch widerrufen wird. */

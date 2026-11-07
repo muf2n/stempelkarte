@@ -1,7 +1,9 @@
 // Firestore-Sicherheitsregeln für die Stempelkarte:
-// Nur DEIN Google-Konto (E-Mail unten) darf die App nutzen – und auch nur seinen eigenen Bereich.
-// Jeder andere wird abgewiesen, selbst wenn er sich mit Google anmeldet.
-// Willst du später z. B. ein zweites Konto erlauben, ergänze es in der Liste: ['a@gmail.com', 'b@gmail.com']
+// Nur DEIN Google-Konto (E-Mail unten) und freigeschaltete Zusatz-Konten dürfen die App nutzen – jedes nur
+// seinen eigenen Bereich. Jeder andere wird abgewiesen, selbst wenn er sich mit Google anmeldet.
+// Zusatz-Konten (z. B. Familie) stehen NICHT hier (öffentliches Repo), sondern als Dokumente allow/<e-mail>
+// in Firestore. Die legt nur der GitHub-Workflow „Zugänge synchronisieren“ aus dem Secret ALLOWED_EMAILS an;
+// die App kann allow/ weder lesen noch schreiben.
 //
 // Server-Dokumente (nur der Cloudflare-Worker schreibt sie, mit dem Firebase-Dienstkonto – das umgeht diese
 // Regeln): Die App darf sie LESEN, aber nicht anlegen, ändern oder löschen. Sonst könnte z. B. ein Skript im
@@ -14,7 +16,9 @@ service cloud.firestore {
     function istErlaubt() {
       return request.auth != null
         && request.auth.token.email_verified == true
-        && request.auth.token.email in ['lippa.florian@gmail.com', 'junkkr08@gmail.com'];
+        && request.auth.token.email is string
+        && (request.auth.token.email == 'lippa.florian@gmail.com'
+            || exists(/databases/$(database)/documents/allow/$(request.auth.token.email.lower())));
     }
 
     function eigen(uid) {
@@ -57,7 +61,7 @@ service cloud.firestore {
       allow read, write: if eigen(uid);
     }
 
-    // Alles andere: gesperrt
+    // Alles andere (auch allow/…): gesperrt
     match /{document=**} {
       allow read, write: if false;
     }

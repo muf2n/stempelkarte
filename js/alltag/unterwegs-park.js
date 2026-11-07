@@ -188,7 +188,7 @@ export function createPark({ col, ui, queue, isVisible }) {
       `<div class="uw-park-live">${liveHTML(rec)}</div>` +
       `<div class="uw-park-facts">${facts}</div>` +
       (rec.note ? `<p class="uw-park-note">${esc(rec.note)}</p>` : "") +
-      (img ? `<button type="button" class="uw-park-photo" data-pa="photo" data-id="${esc(rec.id)}"><img src="${img}" alt="Foto vom Parkplatz"></button>` : "") +
+      (img ? `<button type="button" class="uw-park-photo" data-pa="photo" data-id="${esc(rec.id)}"><img src="${esc(img)}" alt="Foto vom Parkplatz"></button>` : "") +
       timerHTML(rec) +
       `<div class="uw-park-act">` +
         `<a class="btn primary" href="${esc(hasLL(rec) ? C.mapsWalk(rec.lat, rec.lng) : C.mapsRoute(rec.addr))}" target="_blank" rel="noopener" data-pa="nav">${icon("pin", 20)} Navigation starten</a>` +
@@ -275,7 +275,7 @@ export function createPark({ col, ui, queue, isVisible }) {
         `<label>Notiz<input id="uw-p-note" maxlength="80" placeholder="z. B. neben dem Lift, gelbe Säule" value="${esc(rec.note || "")}"></label>` +
         `<div class="row"><label>Parkschein bis<input id="uw-p-until" type="time" value="${rec.until ? C.clock(rec.until) : ""}"></label>` +
         `<label>Erinnerung vorher (Min)<input id="uw-p-rem" type="number" inputmode="numeric" min="1" max="60" value="${Number(rec.remindMin) || REMIND_MIN}"></label></div>` +
-        `<div class="uw-photo-pick"><div class="uw-photo-prev">${cur ? `<img src="${cur}" alt="">` : "📷"}</div>` +
+        `<div class="uw-photo-pick"><div class="uw-photo-prev">${cur ? `<img src="${esc(cur)}" alt="">` : "📷"}</div>` +
           `<label class="btn ghost sm uw-file">Foto wählen<input id="uw-p-photo" type="file" accept="image/*" capture="environment" hidden></label>` +
           (rec.photoId ? `<button type="button" class="btn ghost sm" data-nophoto>Foto entfernen</button>` : "") + `</div>` +
       `</div>` +
@@ -285,7 +285,7 @@ export function createPark({ col, ui, queue, isVisible }) {
         sheet.querySelector("#uw-p-photo").addEventListener("change", async (ev) => {
           const f = ev.target.files && ev.target.files[0];
           if (!f) return;
-          try { const r = await shrinkImage(f, { maxSide: 640, maxBytes: 70 * 1024, quality: 0.72 }); photo = r.data; prev.innerHTML = `<img src="${r.data}" alt="">`; }
+          try { const r = await shrinkImage(f, { maxSide: 640, maxBytes: 70 * 1024, quality: 0.72 }); photo = r.data; prev.innerHTML = `<img src="${esc(r.data)}" alt="">`; }
           catch (err) { ui.toast(err.message || String(err), 3500); }
         });
         const np = sheet.querySelector("[data-nophoto]");
@@ -365,7 +365,7 @@ export function createPark({ col, ui, queue, isVisible }) {
         return true;
       case "photo": {
         const r = col.get(t.dataset.id); const img = r && cachedImage(r.photoId);
-        if (img) ui.openSheet({ title: "Parkplatz-Foto", bodyHTML: `<img src="${img}" alt="Foto vom Parkplatz" style="width:100%;border-radius:14px">` });
+        if (img) ui.openSheet({ title: "Parkplatz-Foto", bodyHTML: `<img src="${esc(img)}" alt="Foto vom Parkplatz" style="width:100%;border-radius:14px">` });
         return true;
       }
       case "del": {

@@ -48,6 +48,7 @@ export const TOOL_GEDAECHTNIS_LESEN = {
 
 export const TOOL_GEDAECHTNIS_MERKEN = {
   name: "gedaechtnis_merken",
+  mcp: false, // M3 (Audit 2): nicht über /mcp – dort gibt es keine Schreibsperre nach fremdem Text (dauerhafte Einträge)
   title: "Etwas merken",
   description: "Speichert einen kurzen Fakt in „Was Claude sich merkt“ (Alltag › 🧠 Notizbuch) – NUR wenn Florian ausdrücklich darum bittet („Merk dir, dass …“). " +
     `Ein Satz, höchstens ${N.MEMORY_MAX} Zeichen, Bereich: ${areaList}. NIE Passwörter, PINs, TANs, Zugangsdaten, IBAN oder Kartennummern speichern (wird abgelehnt – dafür gibt's den Tresor). Florian kann jeden Eintrag in der App ändern, sperren oder löschen.`,

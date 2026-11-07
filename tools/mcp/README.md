@@ -57,6 +57,11 @@ Insgesamt 49 Werkzeuge (verwandte Lese-Bereiche sind über `bereich`/`aktion` zu
 | `einstellung_aendern` → `einstellung_bestaetigen` | **zweistufig** – siehe unten |
 | `loeschen_vorschlagen` → `loeschen_bestaetigen`, `rueckgaengig` | **zweistufig** Löschen + Papierkorb |
 
+**Nur im In-App-Assistenten (nicht über `/mcp`):** `mails_suchen`, `mail_lesen` (H1b) sowie `einkauf_hinzufuegen`,
+`gedaechtnis_merken`, `app_wunsch_notieren` (M3, Audit 2) – `/mcp` hat keine Schreibsperre nach fremdem Text, und diese
+Werkzeuge schreiben dauerhafte Einträge. Bei aktiver Geld-Sperre (`moneyLocked: true` im `/chat`-Body) bietet der Server
+die Geld-Werkzeuge nicht an und `suche` lässt Buchungen/Abos weg.
+
 Jede Änderung antwortet mit einer kurzen deutschen Bestätigung; im In-App-Assistenten landet der Werkzeugname in `actions`
 (Löschen als `loeschen`, Einstellungen als `einstellung`).
 

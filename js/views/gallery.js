@@ -90,7 +90,7 @@ export function openCapture(file, ctx, meta = {}, opts = {}) {
       work.then((r) => {
         img = r;
         const box = $("prev");
-        box.innerHTML = `<img alt="Vorschau" src="${r.data}">`;
+        box.innerHTML = `<img alt="Vorschau" src="${esc(r.data)}">`;
         save.disabled = false;
       }).catch((e) => {
         $("prev").innerHTML = `<span class="note">${esc(errMsg(e, "Das Bild konnte nicht gelesen werden."))}</span>`;
@@ -377,7 +377,7 @@ export function mountGallery(host, ctx, q, opts = {}) {
     } else {
       grid.innerHTML = list.map((p, n) =>
         `<button type="button" class="ph-th" data-n="${n}" aria-label="${esc(p.note ? "Foto: " + p.note : "Foto " + clock(p.ts))}">` +
-        `<img src="${p.thumb || p.data}" alt="" loading="lazy" decoding="async">` +
+        `<img src="${esc(p.thumb || p.data)}" alt="" loading="lazy" decoding="async">` +
         (p.note ? `<span class="ph-th-n" aria-hidden="true">✎</span>` : "") + `</button>`).join("");
     }
     if (opts.onCount) { try { opts.onCount(list.length); } catch { /* egal */ } }
@@ -556,7 +556,7 @@ export function mountDayStrip(host, ctx) {
     host.innerHTML =
       `<button type="button" class="ph-strip-l" data-ps="all" aria-label="Alle Fotos von heute ansehen">${camIcon(16)}<span>${list.length} ${list.length === 1 ? "Foto" : "Fotos"}</span></button>` +
       `<div class="ph-strip-row">` +
-      shown.map((p, n) => `<button type="button" class="ph-th ph-th-s" data-ps="${off + n}" aria-label="Foto ${esc(clock(p.ts))}"><img src="${p.thumb || p.data}" alt="" decoding="async"></button>`).join("") +
+      shown.map((p, n) => `<button type="button" class="ph-th ph-th-s" data-ps="${off + n}" aria-label="Foto ${esc(clock(p.ts))}"><img src="${esc(p.thumb || p.data)}" alt="" decoding="async"></button>`).join("") +
       `</div>` +
       galleryBtn("ph-strip-gal", "Galerie", 16).replace("data-ph-gal", 'data-ps="gal"');
   }

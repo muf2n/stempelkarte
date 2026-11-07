@@ -252,7 +252,7 @@ export function mount(el, ctx) {
         `<p class="note uw-t-nights" aria-live="polite"></p>` +
         `<label>Budget (€, optional)<input id="uw-t-budget" inputmode="decimal" placeholder="z. B. 800" value="${esc(C.numIn(t.budget))}"></label>` +
         `<div><p class="lbl" style="margin-bottom:6px">Symbol</p><div class="chips uw-emos">${TRIP_EMOJI.map((e) => `<button type="button" class="chip sm" data-emo="${e}" aria-pressed="${e === (t.emoji || "✈️")}">${e}</button>`).join("")}</div></div>` +
-        `<div class="uw-photo-pick"><div class="uw-photo-prev wide">${cur ? `<img src="${cur}" alt="">` : "🖼️"}</div>` +
+        `<div class="uw-photo-pick"><div class="uw-photo-prev wide">${cur ? `<img src="${esc(cur)}" alt="">` : "🖼️"}</div>` +
           `<label class="btn ghost sm uw-file">${icon("upload", 16)} Titelbild wählen<input id="uw-t-img" type="file" accept="image/*" hidden></label>` +
           (t.imageId ? `<button type="button" class="btn ghost sm" data-noimg>Bild entfernen</button>` : "") +
           `<small class="note uw-img-info"></small></div>` +
@@ -282,7 +282,7 @@ export function mount(el, ctx) {
           try {
             const r = await shrinkImage(f, { maxSide: 1280, maxBytes: 300 * 1024 });
             image = r.data;
-            $(".uw-photo-prev").innerHTML = `<img src="${r.data}" alt="">`;
+            $(".uw-photo-prev").innerHTML = `<img src="${esc(r.data)}" alt="">`;
             $(".uw-img-info").textContent = `${r.w}×${r.h} px · ${Math.round(r.bytes / 1024)} kB`;
             $(".uw-img-info").dataset.w = r.w; $(".uw-img-info").dataset.h = r.h; $(".uw-img-info").dataset.bytes = r.bytes;
           } catch (err) { $(".uw-img-info").textContent = ""; ui.toast(err.message || String(err), 3500); }

@@ -268,7 +268,7 @@ function albumCard({ a, st }) {
   const selable = a.kind !== "virtual";
   const sel = S.aselecting && S.asel.has(a.id);
   return `<button type="button" class="gl-acard${sel ? " is-sel" : ""}" data-album="${esc(a.id)}"${S.aselecting && selable ? ` aria-pressed="${sel}"` : ""}>` +
-    `<span class="gl-acov">${cov ? `<img src="${cov}" alt="" loading="lazy" decoding="async" draggable="false">` : `<span class="gl-acov-e">${albumGlyph(a, 34)}</span>`}` +
+    `<span class="gl-acov">${cov ? `<img src="${esc(cov)}" alt="" loading="lazy" decoding="async" draggable="false">` : `<span class="gl-acov-e">${albumGlyph(a, 34)}</span>`}` +
       `<span class="gl-abadge">${albumGlyph(a, 16)}</span>` +
       (selable ? `<span class="gl-a-chk" aria-hidden="true">${icon("check", 16)}</span>` : "") + `</span>` +
     `<span class="gl-atxt"><b>${esc(a.name)}</b><small>${esc(nFotos(st.count))}${st.last ? ` · ${esc(fmtKey(toDayKey(st.last)))}` : ""}</small></span>` +
@@ -281,7 +281,7 @@ function albumRow({ a, st }) {
   const selable = a.kind !== "virtual";
   const sel = S.aselecting && S.asel.has(a.id);
   return `<button type="button" class="gl-arow${sel ? " is-sel" : ""}" data-album="${esc(a.id)}"${S.aselecting && selable ? ` aria-pressed="${sel}"` : ""}>` +
-    `<span class="gl-arow-th">${cov ? `<img src="${cov}" alt="" loading="lazy" decoding="async" draggable="false">` : albumGlyph(a, 20)}` +
+    `<span class="gl-arow-th">${cov ? `<img src="${esc(cov)}" alt="" loading="lazy" decoding="async" draggable="false">` : albumGlyph(a, 20)}` +
       (selable ? `<span class="gl-a-chk" aria-hidden="true">${icon("check", 14)}</span>` : "") + `</span>` +
     `<span class="gl-arow-t"><b>${a.emoji ? `${esc(a.emoji)} ` : ""}${esc(a.name)}</b><small>${esc(nFotos(st.count))}${st.last ? ` · ${esc(fmtKey(toDayKey(st.last)))}` : ""}</small></span>` +
     `<span class="gl-arow-go">${icon("chevron-right", 18)}</span>` +
@@ -307,7 +307,7 @@ function folderGroups() {
 function mosaicHTML(f, covers) {
   const n = Math.min(4, covers.filter((c) => c && c.thumb).length);
   if (!n) return `<span class="gl-fmos n0"><span class="gl-fmos-e" aria-hidden="true">${esc(f.emoji)}</span></span>`;
-  return `<span class="gl-fmos n${n}">${covers.filter((c) => c && c.thumb).slice(0, 4).map((c) => `<img src="${c.thumb}" alt="" loading="lazy" decoding="async" draggable="false">`).join("")}</span>`;
+  return `<span class="gl-fmos n${n}">${covers.filter((c) => c && c.thumb).slice(0, 4).map((c) => `<img src="${esc(c.thumb)}" alt="" loading="lazy" decoding="async" draggable="false">`).join("")}</span>`;
 }
 
 function folderMeta(st) {
@@ -430,7 +430,7 @@ function thumbHTML(it) {
   const sel = S.sel.has(it.id);
   const lab = (it.note ? `Foto: ${it.note}` : `Foto ${clock(it.ts)}`) + (it.addr ? `, ${it.addr}` : "");
   return `<button type="button" class="gl-th${sel ? " is-sel" : ""}" data-id="${esc(it.id)}" aria-label="${esc(lab)}"${S.selecting ? ` aria-pressed="${sel}"` : ""}>` +
-    (it.thumb ? `<img src="${it.thumb}" alt="" loading="lazy" decoding="async" draggable="false">` : `<span class="gl-th-x">${camIcon(22)}</span>`) +
+    (it.thumb ? `<img src="${esc(it.thumb)}" alt="" loading="lazy" decoding="async" draggable="false">` : `<span class="gl-th-x">${camIcon(22)}</span>`) +
     (it.note ? `<span class="gl-th-n" aria-hidden="true">✎</span>` : "") +
     (it.fav ? `<span class="gl-th-fav" aria-hidden="true">⭐</span>` : "") +
     `<span class="gl-th-chk" aria-hidden="true">${icon("check", 16)}</span>` +

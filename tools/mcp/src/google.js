@@ -124,8 +124,9 @@ export async function getAccessToken(acc, fetchImpl = fetch, now = Date.now()) {
 const uidCache = new Map();
 
 /**
- * Firebase-UID ermitteln: env STEMPEL_UID, sonst Identity Toolkit accounts:lookup per E-Mail,
- * sonst (Notlösung) die einzige Nutzer-ID unter users/ in Firestore.
+ * Firebase-UID ermitteln: env STEMPEL_UID, sonst Identity Toolkit accounts:lookup per (genau passender) E-Mail.
+ * L8 (Audit 2): KEINE Notlösung „einziger Nutzer unter users/“ mehr – mit dem Familienkonto könnte das sonst
+ * fremde Daten treffen. Ohne STEMPEL_UID und ohne Lookup-Rechte → Fehler (fail closed).
  */
 export async function resolveUid({ env, projectId, getToken, fetchImpl = fetch, fs }) {
   const fixed = String(env.STEMPEL_UID || "").trim();
@@ -143,15 +144,10 @@ export async function resolveUid({ env, projectId, getToken, fetchImpl = fetch, 
     });
     if (res.ok) {
       const data = await res.json();
-      const u = (data.users || []).find((x) => String(x.email || "").toLowerCase() === email) || (data.users || [])[0];
+      const u = (data.users || []).find((x) => String(x.email || "").toLowerCase() === email);
       if (u && u.localId) uid = u.localId;
     }
-  } catch { /* weiter mit Notlösung */ }
-  if (!uid && fs) {
-    // UNSICHER: Notlösung, falls das Dienstkonto keine Identity-Toolkit-Rechte hat.
-    const docs = await fs.list("users", { showMissing: true, mask: ["__none__"] }).catch(() => []);
-    if (docs.length === 1) uid = docs[0].id;
-  }
+  } catch { /* → Fehler unten */ }
   if (!uid) throw new Error(`Kein Firebase-Konto für ${email} gefunden. Bitte STEMPEL_UID als Secret setzen.`);
   uidCache.set(ck, uid);
   return uid;

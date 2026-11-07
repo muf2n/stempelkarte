@@ -14,6 +14,7 @@ const fmt = (ms) => { if (!ms) return ""; const x = new Date(ms); return `${Stri
 
 export const TOOL_WUNSCH_NOTIEREN = {
   name: "app_wunsch_notieren",
+  mcp: false, // M3 (Audit 2): nicht über /mcp – dort gibt es keine Schreibsperre nach fremdem Text (dauerhafte Einträge)
   title: "App-Wunsch notieren",
   description: "Notiert einen Änderungswunsch an der Stempelkarte-APP selbst (neue Funktion, anderes Aussehen, Fehler, Verbesserung) unter Einstellungen › 💡 App-Wünsche. " +
     "Du kannst die App NICHT selbst ändern – Florian lässt die Wünsche später von Claude Code umsetzen. Nur für Wünsche an die App, nicht für Aufgaben oder Termine (dafür todo_anlegen). " +

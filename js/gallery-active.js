@@ -254,7 +254,7 @@ export function openChangeSheet(photo, album, { created = false } = {}) {
         const f = fid === G.OHNE_KAT ? null : A.folderById(fid);
         const others = A.albums().filter((x) => x.id !== a.id).sort((x, y) => (y.created || 0) - (x.created || 0)).slice(0, 8);
         box.innerHTML =
-          `<div class="ga-cur">${photo.thumb ? `<img src="${photo.thumb}" alt="">` : ""}<span><small>Gespeichert in</small><b data-gc="dest">${esc(G.destLabel(a, f))}</b></span></div>` +
+          `<div class="ga-cur">${photo.thumb ? `<img src="${esc(photo.thumb)}" alt="">` : ""}<span><small>Gespeichert in</small><b data-gc="dest">${esc(G.destLabel(a, f))}</b></span></div>` +
           (created ? `<div class="ga-h">Neues Album <b>„${esc(a.name)}“</b> gehört zu …</div>` +
             `<div class="ga-fchips" role="group" aria-label="Kategorie des Albums">${[...fs, OHNE].map((x) => `<button type="button" class="ga-fchip" data-gcf="${esc(x.id)}" aria-pressed="${x.id === fid}" ${fst(x)}><span aria-hidden="true">${esc(x.emoji)}</span>${esc(x.name)}</button>`).join("")}</div>` : "") +
           `<div class="ga-h">Oder Foto in ein anderes Album:</div>` +

@@ -229,7 +229,7 @@ export function openQuickAdd(opts = {}) {
         prev.innerHTML = `<span class="note">Bild wird vorbereitet …</span>`;
         try {
           st.img = await photos.processImage(f);
-          prev.innerHTML = `<img alt="Vorschau" src="${st.img.thumb}"><button type="button" class="mt-x" data-m="rmimg" aria-label="Foto entfernen">✕</button>`;
+          prev.innerHTML = `<img alt="Vorschau" src="${esc(st.img.thumb)}"><button type="button" class="mt-x" data-m="rmimg" aria-label="Foto entfernen">✕</button>`;
         } catch (e) {
           st.img = null;
           prev.innerHTML = `<span class="note">${esc((e && e.message) || "Bild konnte nicht gelesen werden.")}</span>`;

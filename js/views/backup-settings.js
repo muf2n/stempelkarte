@@ -39,8 +39,9 @@ export function mount(el, c) {
     <div class="bk-status" id="bk-status" role="status"><span class="bk-dot" aria-hidden="true"></span><span><b>Letztes Backup:</b> <span id="bk-last">…</span></span></div>
 
     <h4 class="bk-h">📦 Jetzt sichern</h4>
-    <label class="switch"><input type="checkbox" id="bk-enc"><span>🔒 Mit Passwort verschlüsseln</span></label>
-    <div class="bk-pw" id="bk-pw" hidden>
+    <label class="switch"><input type="checkbox" id="bk-enc" checked><span>🔒 Mit Passwort verschlüsseln (empfohlen)</span></label>
+    <p class="note warn bk-nopw" id="bk-nopw" hidden>⚠️ Ohne Passwort kann jeder, der die Datei bekommt, alles darin lesen – Notfallkarte, Kontakte, Geld, Dokument-Texte. Kalender-Abo-Links und die Geld-Sperre werden deshalb weggelassen (nach dem Zurückspielen neu einrichten).</p>
+    <div class="bk-pw" id="bk-pw">
       <label>Passwort (mind. 8 Zeichen)<input type="password" id="bk-pw1" autocomplete="new-password" minlength="8"></label>
       <label>Passwort wiederholen<input type="password" id="bk-pw2" autocomplete="new-password" minlength="8"></label>
       <p class="note">Merk dir das Passwort gut – ohne kann niemand (auch du nicht) das Backup öffnen.</p>
@@ -57,7 +58,7 @@ export function mount(el, c) {
     <div id="bk-auto"></div>`;
 
   const $ = (s) => root.querySelector(s);
-  $("#bk-enc").addEventListener("change", () => { $("#bk-pw").hidden = !$("#bk-enc").checked; if ($("#bk-enc").checked) $("#bk-pw1").focus(); });
+  $("#bk-enc").addEventListener("change", () => { const on = $("#bk-enc").checked; $("#bk-pw").hidden = !on; $("#bk-nopw").hidden = on; if (on) $("#bk-pw1").focus(); });
   $("#bk-save").addEventListener("click", onSave);
   $("#bk-pick").addEventListener("click", () => { $("#bk-file").value = ""; $("#bk-file").click(); });
   $("#bk-file").addEventListener("change", onFile);
@@ -99,6 +100,8 @@ async function onSave() {
   ctx.ui.setBusy(btn, true, enc ? "🔒 Verschlüssle …" : "📦 Packe ein …");
   try {
     const backup = await BK.makeBackup("manual");
+    // L2 (Audit 2): unverschlüsselt ohne geheime Kalender-Abo-Links und ohne Geld-Sperre (PIN-Hash)
+    if (!enc && backup.meta) { delete backup.meta.ical_feeds; delete backup.meta.money_lock; }
     const r = await BK.saveFile(backup, { password: enc ? p1 : "" });
     await BK.noteManual(backup.created);
     root.querySelector("#bk-pw1").value = ""; root.querySelector("#bk-pw2").value = "";

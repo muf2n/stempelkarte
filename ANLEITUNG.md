@@ -91,7 +91,18 @@ Du musst **nicht programmieren können**. Du kopierst nur ein paar Werte und kli
 10. **„Veröffentlichen“** (*Publish*) klicken.
 
 > Diese Regeln sorgen dafür, dass **nur du** die App nutzen kannst: Erlaubt ist ausschließlich das Google-Konto **lippa.florian@gmail.com**. Meldet sich jemand anderes an, sieht er nichts und kann nichts speichern.
-> Willst du ein anderes Konto verwenden, ändere die E-Mail-Adresse in `firestore.rules` (Zeile mit `email in [...]`) und veröffentliche die Regeln erneut.
+> Willst du ein anderes Konto verwenden, ändere die E-Mail-Adresse in `firestore.rules` (Zeile mit `request.auth.token.email == '…'`) und veröffentliche die Regeln erneut.
+>
+> **Zusätzliche Konten (z. B. Familie)** stehen absichtlich **nicht** in `firestore.rules` (das Repo ist öffentlich), sondern als
+> Dokumente `allow/<e-mail>` in Firestore. Die App selbst kann diese Liste weder lesen noch ändern. So richtest du sie ein:
+> 1. GitHub → dein Repo → **Settings → Secrets and variables → Actions → New repository secret**:
+>    Name **`ALLOWED_EMAILS`**, Wert: die E-Mail-Adressen, mit Komma getrennt (z. B. `mama@gmail.com`). Deine eigene musst du nicht eintragen.
+> 2. GitHub → **Actions → „Zugänge synchronisieren (manuell)“ → Run workflow**. Im Protokoll steht nur „x neu, y unverändert, z entfernt“ – nie Adressen.
+> 3. Neue `firestore.rules` veröffentlichen (Schritte 7–10). **Reihenfolge wichtig:** erst Schritt 2, dann Schritt 3 – sonst ist das Familienkonto kurz ausgesperrt.
+> Jemanden entfernen: Adresse aus dem Secret löschen und den Workflow wieder starten (alle entfernen: Secret auf `keine` setzen).
+> Sicherheitsnetz bei Kosten: Ein Zusatz-Konto kann in **seinem eigenen** Bereich beliebig viele Daten anlegen (z. B. Dokumente bis 10 MB) –
+> das zahlt dein Firebase-Projekt. Für ein ehrliches Familienkonto ist das vernachlässigbar. Bleib im kostenlosen **Spark**-Tarif
+> (dann kann nichts kosten, es stoppt nur bei der Grenze) oder richte im Blaze-Tarif in der Google Cloud Console eine **Budget-Warnung** ein.
 > **Regeln geändert?** Immer wenn sich `firestore.rules` ändert (zuletzt: Server-Dokumente wie der KI-Kostendeckel `meta/ai_usage`, Gmail-/Bank-Rückrufe und Bestätigungs-Codes darf die App nur noch lesen, nicht mehr schreiben), die Schritte 7–10 wiederholen: Firestore Database → Regeln → alles ersetzen → **Veröffentlichen**. Die App selbst merkt davon nichts.
 
 ---
@@ -242,6 +253,7 @@ Wenn du eine neue Version einer Datei bekommst:
 ## 15. Kosten
 
 - **Firebase:** Der Tarif **„Spark“** ist **kostenlos**. Für eine Person bleibst du weit unter den Grenzen.
+  Mit Zusatz-Konten (Familie) zählt deren Speicher/Lesen mit – siehe Abschnitt 5 (Budget-Warnung, Spark-Tarif behalten).
   Du musst **keine Kreditkarte** hinterlegen.
 - **GitHub Pages:** **kostenlos**.
 - **Gut zu wissen:** Dein Repository ist öffentlich. Das heißt, **der Programmcode** ist für andere sichtbar –

@@ -7,21 +7,20 @@ const env = {
   FIREBASE_SERVICE_ACCOUNT: process.env.FIREBASE_SERVICE_ACCOUNT,
   STEMPEL_UID: process.env.STEMPEL_UID,
   STEMPEL_EMAIL: process.env.STEMPEL_EMAIL,
-  GOOGLE_OAUTH_CLIENT_ID: process.env.GOOGLE_OAUTH_CLIENT_ID,
-  GOOGLE_OAUTH_CLIENT_SECRET: process.env.GOOGLE_OAUTH_CLIENT_SECRET,
-  GMAIL_ENC_KEY: process.env.GMAIL_ENC_KEY,
 };
 const getData = makeDataFactory(env);
+const SKIP = new Set(["loeschen_vorschlagen", "einstellung_aendern"]);
 const ARGS = { abos_lesen: [{}, { alle: true }] };
 
 let bad = 0;
 for (const t of TOOLS) {
   if (!(t.annotations && t.annotations.readOnlyHint === true)) continue;
   if (/mail/.test(t.name)) continue; // Gmail nicht anfassen
+  if (SKIP.has(t.name)) continue; // als „nur lesen“ markiert, legen aber Vorschläge (pending-Dokumente) an
   for (const args of ARGS[t.name] || [{}]) {
     try {
       const d = await getData();
-      await t.run(args, d);
+      await t.run(args, d); // Ausgabe wird NIE gedruckt
       console.log(`ok    ${t.name}`);
     } catch (e) {
       const user = e && (e.constructor?.name === "UserError" || e.expose);
@@ -32,26 +31,5 @@ for (const t of TOOLS) {
     }
   }
 }
-// Gmail: nur Status/Hinweistext ausgeben, nie Mail-Inhalte
-{
-  const { TOOL_MAILS_SUCHEN } = await import("./src/gmail.js");
-  try {
-    const out = String(await TOOL_MAILS_SUCHEN.run({ suche: "Rechnung", max: 2 }, await getData()));
-    console.log(/Mail\(s\) zu/.test(out) ? "ok    mails_suchen (Treffer)" : /^Keine Mails/.test(out) ? "ok    mails_suchen (keine Treffer)" : "hint  mails_suchen: " + out.slice(0, 300));
-  } catch (e) {
-    bad++;
-    const frames = String((e && e.stack) || "").split("\n").filter((l) => /src\//.test(l)).slice(0, 4).map((l) => l.trim().replace(/^.*\/tools\/mcp\//, ""));
-    console.log(`FAIL  mails_suchen [${(e && e.name) || "?"}${e && e.status ? " " + e.status : ""}${e && e.code ? " " + e.code : ""}] ${frames.join(" <- ")}`);
-  }
-}
-// Planer-Struktur (nur Zahlen/Formen, keine Inhalte)
-try {
-  const all = await (await getData()).todos();
-  const kinds = {};
-  for (const t of all) kinds[t.kind || "?"] = (kinds[t.kind || "?"] || 0) + 1;
-  console.log("todos nach Art:", JSON.stringify(kinds));
-  for (const t of all.filter((x) => x.kind === "geburtstag")) {
-    console.log("geburtstag:", JSON.stringify({ bday: /^\d\d-\d\d$/.test(String(t.bday)) ? "MM-DD ok" : typeof t.bday + ":" + String(t.bday).length, byear: typeof t.byear, date: t.date === null ? "null" : typeof t.date, src: t.src, keys: Object.keys(t).sort().join(",") }));
-  }
-} catch (e) { console.log("todos FAIL", e && e.name); }
+// L4 (Audit 2): kein Gmail-Teil und keine Planer-Struktur mehr – das Log ist öffentlich, ausgegeben wird nur ok/hint/FAIL + Fehlerart.
 console.log(bad ? `${bad} Werkzeug(e) mit internem Fehler` : "alle Lese-Werkzeuge ok");

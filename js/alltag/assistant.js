@@ -8,6 +8,7 @@ import { esc } from "../util.js";
 import * as ui from "../ui.js";
 import { speakable } from "./voice-core.js";
 import * as voice from "./voice.js";
+import * as moneyLock from "./money-lock-state.js";
 
 const HIST_KEY = "stempelkarte.ai.history";
 const MAX_MSGS = 40;
@@ -23,6 +24,11 @@ const SUGGEST = [
 
 const lsGet = (k) => { try { return localStorage.getItem(k); } catch { return null; } };
 const lsSet = (k, v) => { try { localStorage.setItem(k, v); } catch { /* egal */ } };
+
+// M1 (Audit 2): bei aktiver Geld-Sperre Antworten mit Geld-Daten im Verlauf ausblenden.
+const MONEY_RE = /€|\bEUR\b|\d+,\d{2}\b/;
+const lockedNow = () => { try { return moneyLock.isLocked(); } catch { return false; } };
+const hideMoney = (m) => m.role === "assistant" && !m.err && (m.money || MONEY_RE.test(m.content));
 
 function loadHist() {
   try { const a = JSON.parse(lsGet(HIST_KEY) || "[]"); return Array.isArray(a) ? a.filter((m) => m && m.role && typeof m.content === "string") : []; }
@@ -123,8 +129,12 @@ export function mount(el, ctx) {
       log.innerHTML = `<div class="ai-empty"><div class="ai-badge">✨</div><h3>Frag ${nm}</h3>
         <p>${nm} kennt deine Zeiten, Termine, To-dos, Geld und Schule – und kann auch eintragen (z. B. „Trag mir morgen 7 Uhr Baustelle ein“).</p></div>`;
     } else {
-      log.innerHTML = hist.map((m) => m.role === "user"
-        ? `<div class="ai-msg me">${m.thumb && /^data:image\/jpeg;base64,[A-Za-z0-9+/=]+$/.test(m.thumb) ? `<img class="ai-thumb" src="${m.thumb}" alt="Foto">` : m.photo ? "📷 " : ""}${esc(m.content).replace(/\n/g, "<br>")}</div>`
+      const locked = lockedNow();
+      const hidden = locked && hist.some(hideMoney);
+      log.innerHTML = (hidden ? `<div class="ai-msg bot ai-locknote">🔒 Geld ist gesperrt – Antworten mit Beträgen sind ausgeblendet. Entsperre Geld in der App, um sie zu sehen.</div>` : "") + hist.map((m) => locked && hideMoney(m)
+        ? `<div class="ai-msg bot ai-hidden">🔒 Antwort ausgeblendet (Geld ist gesperrt)</div>`
+        : m.role === "user"
+        ? `<div class="ai-msg me">${m.thumb && /^data:image\/jpeg;base64,[A-Za-z0-9+/=]+$/.test(m.thumb) ? `<img class="ai-thumb" src="${esc(m.thumb)}" alt="Foto">` : m.photo ? "📷 " : ""}${esc(m.content).replace(/\n/g, "<br>")}</div>`
         : `<div class="ai-msg bot">${md(m.content)}${m.actions && m.actions.length ? `<div class="ai-acts">✓ ${m.actions.map(esc).join(", ")}</div>` : ""}</div>`).join("");
     }
     if (busy) log.insertAdjacentHTML("beforeend", `<div class="ai-msg bot ai-typing"><span></span><span></span><span></span></div>`);
@@ -144,7 +154,7 @@ export function mount(el, ctx) {
     if (busy) return { reply: "Moment, ich bin noch bei der letzten Frage.", actions: [], error: true };
     hist.push(image ? { role: "user", content: text, photo: true, thumb: image.thumb } : { role: "user", content: text });
     save(); busy = true; if (alive) render();
-    let reply, actions = [];
+    let reply, actions = [], money = false;
     try {
       const extra = { assistantName: voice.assistantName() };
       if (spoken) { extra.mode = "voice"; extra.short = voice.loadVoice().short; }
@@ -152,6 +162,7 @@ export function mount(el, ctx) {
       const data = await askClaude(hist.filter((m) => !m.err).map((m) => ({ role: m.role, content: m.content })), { body: extra });
       reply = data.reply;
       actions = data.actions;
+      money = !!(data.data && data.data.money);
       if (data.usage) {
         usageEl.textContent = `Diesen Monat: ${Number(data.usage.usd || 0).toFixed(2).replace(".", ",")} $ von ${data.usage.capUsd} $`;
       }
@@ -169,7 +180,7 @@ export function mount(el, ctx) {
       save(); busy = false; if (alive) render();
       return { reply: msg, actions: [], error: true };
     }
-    hist.push({ role: "assistant", content: reply, actions });
+    hist.push({ role: "assistant", content: reply, actions, ...(money ? { money: true } : {}) });
     save(); busy = false;
     if (alive) render();
     return { reply, actions };
@@ -330,10 +341,11 @@ export function mount(el, ctx) {
   });
 
   const off = store.subscribe(() => { if (alive && !busy) { render(); applyName(); } });
+  const offLock = moneyLock.onChange(() => { if (alive && !busy) render(); });
   render();
   applyName();
   return () => {
-    alive = false; off();
+    alive = false; off(); offLock();
     if (rec) { try { rec.stop(); } catch {} }
     if (conv) conv.stop("unmount");
     if (wake) wake.destroy();
