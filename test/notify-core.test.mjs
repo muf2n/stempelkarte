@@ -142,3 +142,15 @@ test("Gelesen / weggewischt / aufräumen", () => {
   assert.ok(!("alt:1" in st.read) && items[0].id in st.read);
   assert.deepEqual(N.normState({ read: { a: "x", b: 5 }, dismissed: [] }), { read: { b: 5 }, dismissed: {} });
 });
+
+test("Werkzeug- und Fahrzeug-Fälligkeiten erscheinen (und sind abschaltbar)", async () => {
+  const N = await import("../js/notify-core.js");
+  const now = new Date(2026, 10, 7, 12).getTime();
+  const base = { now, todos: [], cols: { werkzeug: [{ id: "t1", name: "Multimeter", cat: "mess", nextCheck: "2026-11-01" }], fahrzeug_info: [{ id: "v1", pickerl: { month: "2026-09" } }], travel_fuel: [] }, loaded: { werkzeug: true, fahrzeug_info: true, travel_fuel: true } };
+  const r = N.collect({ ...base, settings: { vehicles: [{ id: "v1", name: "Golf" }] } });
+  const w = r.find((x) => x.kind === "werkzeug"), f = r.find((x) => x.kind === "fahrzeug");
+  assert.ok(w && w.target === "#alltag/werkzeug/t1" && /Multimeter/.test(w.title));
+  assert.ok(f && /Pickerl/.test(f.title) && f.target.startsWith("#alltag/fahrzeuge"));
+  const off = N.collect({ ...base, settings: { vehicles: [{ id: "v1", name: "Golf" }], notify: { off: ["werkzeug", "fahrzeug"] } } });
+  assert.ok(!off.some((x) => x.kind === "werkzeug" || x.kind === "fahrzeug"));
+});

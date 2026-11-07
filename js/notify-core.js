@@ -13,6 +13,9 @@ import { budgetStatus, levelRank, eurS, eur, DEFAULT_CATS } from "./alltag/money
 import { missingStamps } from "./worktime-core.js";
 import { wantsFridayTip, weekKeyOf, mondayOfWeek } from "./weekreport-core.js";
 import { needsReminder } from "./backup-core.js";
+import { dueTools } from "./alltag/werkzeug-core.js";
+import { dueVehicles } from "./alltag/fahrzeug-core.js";
+import { readVehicles, defaultVehicle } from "./trip-core.js";
 
 export const CATS = [
   { id: "aufgaben", e: "✅", t: "Fällige Aufgaben" },
@@ -23,6 +26,8 @@ export const CATS = [
   { id: "arbeitszeit", e: "⏱️", t: "Vergessene Stempelungen" },
   { id: "schule", e: "🏫", t: "Prüfungen & Hausübungen" },
   { id: "material", e: "🧰", t: "Fehlendes Material" },
+  { id: "werkzeug", e: "🔧", t: "Werkzeug-Prüfungen" },
+  { id: "fahrzeug", e: "🚗", t: "Pickerl, Service & Versicherung" },
   { id: "bericht", e: "📒", t: "Wochenbericht am Freitag" },
   { id: "backup", e: "💾", t: "Backup-Erinnerung" },
 ];
@@ -33,6 +38,8 @@ export const NEEDS = {
   geld: ["money_subs", "money_budget"],
   schule: ["school_exams", "school_tasks"],
   material: ["material_items"],
+  werkzeug: ["werkzeug"],
+  fahrzeug: ["fahrzeug_info", "travel_fuel"],
   bericht: ["berichtsheft"],
 };
 
@@ -233,6 +240,28 @@ export function collect(input = {}) {
     const need = (items || []).filter((x) => x && (x.status || "brauche") === "brauche");
     if (need.length) {
       add({ id: `mat:${today}:${need.length}`, kind: "material", emoji: "🧰", title: need.length === 1 ? "1 Sache noch zu besorgen" : `${need.length} Sachen noch zu besorgen`, sub: need.slice(0, 3).map((x) => s(x.name)).filter(Boolean).join(", ") + (need.length > 3 ? " …" : ""), when: now, prio: 0, target: "#alltag/material" });
+    }
+  }
+
+  /* --- Werkzeug: Prüfung/Wartung bald oder überfällig --- */
+  if (on("werkzeug")) {
+    const tools = col("werkzeug");
+    if (tools) for (const d of dueTools(tools, now)) {
+      add({ id: `wz:${d.id}:${d.due}`, kind: "werkzeug", emoji: d.state === "ueber" ? "⏰" : "🔧", title: d.text.replace(/^\S+\s/, ""), when: now, prio: d.state === "ueber" ? 2 : 1, target: d.hash });
+    }
+  }
+
+  /* --- Fahrzeuge: Pickerl, Service, Versicherung --- */
+  if (on("fahrzeug")) {
+    const infos = col("fahrzeug_info");
+    const vehicles = readVehicles(input.settings || {});
+    if (infos && vehicles.length) {
+      const dv = defaultVehicle(input.settings || {});
+      const defaultId = dv ? dv.id : null;
+      for (const d of dueVehicles(vehicles, infos, col("travel_fuel") || [], now, { defaultId })) {
+        const urgent = d.state === "abgelaufen" || d.state === "ueber";
+        add({ id: `fz:${d.vehicleId || ""}:${d.kind}:${d.state}`, kind: "fahrzeug", emoji: d.e || "🚗", title: String(d.text || "").replace(/^\S+\s/, ""), when: now, prio: urgent ? 2 : 1, target: d.hash || "#alltag/fahrzeuge" });
+      }
     }
   }
 
