@@ -136,7 +136,7 @@ function seed({ now, running = false, dashboard = null }) {
   await page.waitForTimeout(200);
   await page.uncheck("#dash-auto");
   await page.waitForFunction(() => !document.querySelector('[data-mv="up"][data-id="sync"]').disabled);
-  for (let i = 0; i < 11; i++) { await page.click('[data-mv="up"][data-id="sync"]'); await page.waitForTimeout(60); } // Update 10: 12 Widgets (+ „Werkzeug & Auto fällig“, „Haushalt & Gewohnheiten“)
+  for (let i = 0; i < 12; i++) { await page.click('[data-mv="up"][data-id="sync"]'); await page.waitForTimeout(60); } // Update 10: 13 Widgets (+ Haushalt, Wetter)
   ok(await page.$eval(".de-list .de-row", (r) => r.dataset.id) === "sync", "Sync ganz nach oben verschoben");
   await page.click('[data-mv="down"][data-id="sync"]');
   await page.waitForTimeout(100);

@@ -84,18 +84,20 @@ const CATS = [
         <button type="button" class="sh-row" data-sh-act="places"><span class="sh-ic" aria-hidden="true">🗺️</span><span class="sh-lb"><b>Orte verwalten</b><small>Baustellen, Firma, Zuhause</small></span><span class="sh-chev" aria-hidden="true">›</span></button>
         <button type="button" class="sh-row" data-sh-act="trips"><span class="sh-ic" aria-hidden="true">🚗</span><span class="sh-lb"><b>Fahrten &amp; Fahrtenbuch</b><small>Karte in der Übersicht</small></span><span class="sh-chev" aria-hidden="true">›</span></button>
       </div>` },
-  { id: "benachrichtigungen", g: "app", e: "🔔", t: "Benachrichtigungen", k: "benachrichtigung benachrichtigungszentrale glocke mitteilungen erinnerung push pause pausen-erinnerung einstempeln ausstempeln sperrbildschirm",
+  { id: "benachrichtigungen", g: "app", e: "🔔", t: "Benachrichtigungen", k: "benachrichtigung benachrichtigungszentrale glocke mitteilungen erinnerung push pause pausen-erinnerung einstempeln ausstempeln sperrbildschirm automation automationen regeln wenn dann",
     html: `<div class="sh-card"><div class="fields"><label class="switch">
           <input type="checkbox" id="ov-pauserem">
           <span>Pausen-Hinweis in der App</span>
         </label><div id="wt-pause-settings"></div></div></div>
+      <div class="sh-links"><button type="button" class="sh-row" data-sh-act="automationen"><span class="sh-ic" aria-hidden="true">⚡</span><span class="sh-lb"><b>Automationen</b><small>Wenn → dann: eigene Regeln ohne Code</small></span><span class="sh-chev" aria-hidden="true">›</span></button></div>
       <div class="sh-card"><div id="notify-panel"></div></div>
       <div class="sh-card"><div id="reminders-panel"></div></div>
       <div class="sh-card"><div id="lock-panel"></div></div>` },
-  { id: "aussehen", g: "app", e: "🎨", t: "Erscheinungsbild", k: "farbe akzent design dunkel hell dark mode schrift groß einfache ansicht bedienen dashboard überblick widgets heute",
+  { id: "aussehen", g: "app", e: "🎨", t: "Erscheinungsbild", k: "farbe akzent design dunkel hell dark mode schrift groß einfache ansicht bedienen dashboard überblick widgets heute wetter ort stadt",
     html: `<div class="sh-card"><div id="accent-panel"></div></div>
       <div class="sh-card"><div id="comfort-panel"></div></div>
-      <div class="sh-links"><button type="button" class="sh-row" data-sh-act="dashboard"><span class="sh-ic" aria-hidden="true">🧩</span><span class="sh-lb"><b>Heute-Überblick anpassen</b><small>Widgets ein/aus, Reihenfolge, automatisch sortieren</small></span><span class="sh-chev" aria-hidden="true">›</span></button></div>
+      <div class="sh-links"><button type="button" class="sh-row" data-sh-act="dashboard"><span class="sh-ic" aria-hidden="true">🧩</span><span class="sh-lb"><b>Heute-Überblick anpassen</b><small>Widgets ein/aus, Reihenfolge, automatisch sortieren</small></span><span class="sh-chev" aria-hidden="true">›</span></button>
+        <button type="button" class="sh-row" data-sh-act="wetter"><span class="sh-ic" aria-hidden="true">🌦️</span><span class="sh-lb"><b>Wetter im Überblick</b><small>Standort oder Stadt – bleibt auf diesem Gerät</small></span><span class="sh-chev" aria-hidden="true">›</span></button></div>
       <p class="note sh-foot">🌙 Hell oder dunkel richtet sich nach deinem Gerät.</p>` },
   { id: "geraete", g: "app", e: "⌚", t: "Geräte", k: "uhr watch bangle smartwatch android app gerät",
     html: `<div class="sh-card" id="sh-android-card" hidden><div id="android-panel" hidden></div></div>
@@ -218,7 +220,9 @@ function onClick(ev) {
   else if (act === "dashboard") close(() => { ctx.go("heute"); setTimeout(() => document.dispatchEvent(new CustomEvent("sk:dashboard-edit")), 80); });
   else if (act === "privat") {
     import("./privat-mode.js").then((m) => m.openSettings()).catch((err) => { console.error(err); ctx.ui.toast("Privat-Modus konnte nicht geladen werden."); });
-  } else if (act === "geld" || act === "tresor" || act === "galerie" || act === "claude") {
+  } else if (act === "wetter") { // Update 10 – 🌦️ Wetter
+    import("../weather.js").then((m) => m.openSettings(ctx)).catch((err) => { console.error(err); ctx.ui.toast("Wetter konnte nicht geladen werden."); });
+  } else if (act === "geld" || act === "tresor" || act === "galerie" || act === "claude" || act === "automationen") {
     close(() => { location.hash = "#alltag/" + act; });
   }
 }

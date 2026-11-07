@@ -11,6 +11,7 @@ import * as store from "./store.js";
 import { getFirebase } from "./firebase.js";
 import { newId, dayKey as toDayKey } from "./util.js";
 import { indexDoc, indexDiffers, planBackfill, cleanIds } from "./gallery-core.js";
+import { cleanTags } from "./gallery-extras-core.js"; // Update 10 – Favoriten & Schlagwörter
 
 const MAX_SIDE = 1280;
 const THUMB_SIDE = 240;
@@ -74,6 +75,8 @@ function norm(p) {
     addr: String(p.addr || ""),
     albMig: !!p.albMig,
     phase: p.phase === "vorher" || p.phase === "nachher" ? p.phase : null, // Update 10d – Vorher/Nachher (optional)
+    fav: p.fav === true,          // Update 10 – ⭐ Favorit (optional)
+    tags: cleanTags(p.tags),      // Update 10 – Schlagwörter (optional)
   };
 }
 function fnum(v) { return typeof v === "number" && Number.isFinite(v) ? v : null; }
@@ -333,7 +336,7 @@ export async function updateNote(id, note) {
 
 /* ---------- Update 9 – Galerie: Teil-Änderungen, Index, Einzel-Laden ---------- */
 
-const UPDATABLE = ["note", "albumIds", "lat", "lng", "acc", "addr", "albMig", "placeId", "place", "phase"]; // Update 10d: phase (vorher/nachher)
+const UPDATABLE = ["note", "albumIds", "lat", "lng", "acc", "addr", "albMig", "placeId", "place", "phase", "fav", "tags"]; // Update 10d: phase (vorher/nachher); Update 10: fav, tags
 
 /**
  * Felder eines Fotos ändern (note, albumIds, lat, lng, acc, addr, albMig, placeId, place).
@@ -353,6 +356,8 @@ export async function updatePhoto(id, partial) {
   if ("placeId" in patch) patch.placeId = patch.placeId ? String(patch.placeId) : null;
   if ("place" in patch) patch.place = String(patch.place || "");
   if ("phase" in patch) patch.phase = patch.phase === "vorher" || patch.phase === "nachher" ? patch.phase : null; // Update 10d
+  if ("fav" in patch) patch.fav = patch.fav === true; // Update 10
+  if ("tags" in patch) patch.tags = cleanTags(patch.tags); // Update 10
   const base = mem.get(pid) || idx.get(pid) || null;
   let nextIdx = null;
   if (store.get().mode === "cloud") {

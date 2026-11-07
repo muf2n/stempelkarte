@@ -155,7 +155,7 @@ export function mergePlan(items, fromId, intoId) {
 
 /* ---------- Index-Dokumente (nur Vorschaubild + Metadaten, nie das große Bild) ---------- */
 
-export const INDEX_FIELDS = ["id", "ts", "dayKey", "thumb", "albumIds", "addr", "placeId", "place", "note", "lat", "lng", "w", "h", "albMig", "phase"]; // Update 10d: phase
+export const INDEX_FIELDS = ["id", "ts", "dayKey", "thumb", "albumIds", "addr", "placeId", "place", "note", "lat", "lng", "w", "h", "albMig", "phase", "fav", "tags"]; // Update 10d: phase; Update 10: fav, tags
 
 /** Foto (voll) → Index-Dokument. */
 export function indexDoc(p) {
@@ -177,6 +177,8 @@ export function indexDoc(p) {
   };
   if (p.albMig) o.albMig = true;
   if (p.phase === "vorher" || p.phase === "nachher") o.phase = p.phase; // Update 10d – Vorher/Nachher
+  if (p.fav === true) o.fav = true; // Update 10 – ⭐ Favorit
+  if (Array.isArray(p.tags) && p.tags.length) o.tags = p.tags.map(String).slice(0, 12); // Update 10 – Schlagwörter
   return o;
 }
 
@@ -187,7 +189,7 @@ export function indexDiffers(a, b) {
     const x = a[k], y = b[k];
     if (Array.isArray(x) || Array.isArray(y)) {
       if (JSON.stringify(cleanIds(x)) !== JSON.stringify(cleanIds(y))) return true;
-    } else if ((x ?? null) !== (y ?? null) && !(k === "albMig" && !x && !y)) return true;
+    } else if ((x ?? null) !== (y ?? null) && !((k === "albMig" || k === "fav") && !x && !y)) return true;
   }
   return false;
 }
@@ -291,7 +293,7 @@ export function filterItems(items, f = {}, albumsById = new Map(), folderIds = n
   if (words.length) {
     const get = (id) => (albumsById.get ? albumsById.get(id) : albumsById[id]);
     list = list.filter((it) => {
-      const hay = fold([it.note, it.addr, it.place, ...cleanIds(it.albumIds).map((id) => (get(id) || {}).name || "")].join(" "));
+      const hay = fold([it.note, it.addr, it.place, ...(Array.isArray(it.tags) ? it.tags.map((t) => "#" + t + " " + t) : []), ...cleanIds(it.albumIds).map((id) => (get(id) || {}).name || "")].join(" "));
       return words.every((w) => hay.includes(w));
     });
   }

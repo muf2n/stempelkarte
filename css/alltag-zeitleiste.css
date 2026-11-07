@@ -1,0 +1,58 @@
+/* Update 10 – Alltag › 🕰️ Zeitleiste (js/alltag/zeitleiste.js). Präfix .tl- */
+:root {
+  --tl-line: color-mix(in srgb, var(--accent) 30%, var(--line));
+  --tl-arbeit: #ea580c; --tl-schule: #5b7cfa; --tl-termine: #0891b2; --tl-baustelle: #b45309; --tl-fahrten: #2563eb;
+  --tl-fotos: #0284c7; --tl-aufgaben: #16a34a; --tl-reisen: #0d9488; --tl-freizeit: #db2777;
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    --tl-arbeit: #fb923c; --tl-schule: #93a8ff; --tl-termine: #67e8f9; --tl-baustelle: #fbbf24; --tl-fahrten: #93c5fd;
+    --tl-fotos: #7dd3fc; --tl-aufgaben: #86efac; --tl-reisen: #5eead4; --tl-freizeit: #f9a8d4;
+  }
+}
+.tl { display: flex; flex-direction: column; gap: 12px; max-width: 760px; margin: 0 auto; width: 100%; min-width: 0; padding-bottom: 40px; }
+.tl-head { display: flex; flex-direction: column; gap: 10px; }
+.tl-head .note { margin: 0; }
+.tl-chips { display: flex; gap: 6px; overflow-x: auto; scrollbar-width: none; margin: 0 calc(-1 * var(--side)); padding: 2px var(--side) 2px; }
+.tl-chips::-webkit-scrollbar { display: none; }
+.tl-chip { flex: none; min-height: 40px; padding: 6px 14px; }
+.tl-chip small { color: var(--muted); font-weight: 700; margin-left: 2px; }
+.tl-chip[aria-pressed="true"] small { color: inherit; opacity: .8; }
+
+.tl-feed { display: flex; flex-direction: column; gap: 6px; min-width: 0; }
+.tl-mh { margin: 14px 0 2px; font-family: var(--f-display); font-size: 1.15rem; }
+.tl-month:first-child .tl-mh { margin-top: 0; }
+.tl-dh { margin: 12px 0 6px; font-size: .8rem; text-transform: uppercase; letter-spacing: .06em; color: var(--muted); }
+.tl-list { list-style: none; margin: 0; padding: 0 0 0 18px; position: relative; display: flex; flex-direction: column; gap: 8px; }
+.tl-list::before { content: ""; position: absolute; left: 6px; top: 4px; bottom: 4px; width: 2px; border-radius: 2px; background: var(--tl-line); }
+.tl-item {
+  --c: var(--accent);
+  position: relative; width: 100%; display: flex; align-items: center; gap: 12px; text-align: left; cursor: pointer;
+  padding: 10px 12px; border-radius: var(--r); background: var(--card); border: 1px solid var(--line); color: var(--ink); font: inherit;
+  box-shadow: var(--shadow); min-width: 0;
+}
+.tl-item::before { content: ""; position: absolute; left: -16px; top: 50%; width: 10px; height: 10px; margin-top: -5px; border-radius: 50%; background: var(--c); box-shadow: 0 0 0 3px var(--bg); }
+.tl-item:active { transform: scale(.99); }
+.tl-item:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.tl-arbeit { --c: var(--tl-arbeit); } .tl-schule { --c: var(--tl-schule); } .tl-termine { --c: var(--tl-termine); }
+.tl-baustelle { --c: var(--tl-baustelle); } .tl-fahrten { --c: var(--tl-fahrten); } .tl-fotos { --c: var(--tl-fotos); }
+.tl-aufgaben { --c: var(--tl-aufgaben); } .tl-reisen { --c: var(--tl-reisen); } .tl-freizeit { --c: var(--tl-freizeit); }
+.tl-dot { flex: none; width: 38px; height: 38px; border-radius: 12px; display: grid; place-items: center; font-size: 1.2rem; background: color-mix(in srgb, var(--c) 14%, var(--card)); }
+.tl-tx { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+.tl-tx b { overflow-wrap: anywhere; font-size: .97rem; }
+.tl-tx small { color: var(--muted); font-size: .84rem; overflow-wrap: anywhere; }
+.tl-chev { flex: none; color: var(--muted); font-size: 1.3rem; }
+.tl-thumbs { display: flex; gap: 6px; margin-top: 6px; }
+.tl-thumbs img { width: 56px; height: 56px; object-fit: cover; border-radius: 10px; background: var(--soft); }
+@media (min-width: 700px) { .tl-thumbs img { width: 72px; height: 72px; } }
+
+.tl-more, .tl-load { display: flex; align-items: center; justify-content: center; gap: 10px; padding: 22px 0; color: var(--muted); }
+.tl-load { flex-direction: column; }
+.tl-end { text-align: center; padding: 18px 0; }
+.tl-spin { width: 18px; height: 18px; border-radius: 50%; border: 2.5px solid var(--line); border-top-color: var(--accent); animation: tl-spin .8s linear infinite; }
+@keyframes tl-spin { to { transform: rotate(360deg); } }
+@media (prefers-reduced-motion: reduce) { .tl-spin { animation: none; } }
+.tl-empty { display: flex; flex-direction: column; align-items: center; gap: 8px; text-align: center; padding: 36px 16px; border: 1.5px dashed var(--line); border-radius: var(--r); }
+.tl-empty-ic { font-size: 2.2rem; }
+.tl-empty p { margin: 0; }
+@media (min-width: 900px) { .tl-chips { flex-wrap: wrap; overflow: visible; margin: 0; padding: 0; } }

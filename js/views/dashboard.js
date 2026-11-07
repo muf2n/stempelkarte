@@ -19,6 +19,8 @@ import { readVehicles, defaultVehicle } from "../trip-core.js";
 import * as HH from "../alltag/haushalt-core.js"; // Update 10 C – Haushalt
 import * as HB from "../alltag/habits-core.js"; // Update 10 C – Gewohnheiten
 import * as lockState from "../alltag/money-lock-state.js";
+import * as WX from "../weather.js"; // Update 10 – 🌦️ Wetter
+import * as WXC from "../weather-core.js";
 
 let ctx = null;
 let root = null;
@@ -91,6 +93,7 @@ export function mount(el, c) {
   window.addEventListener("online", schedule);
   window.addEventListener("offline", schedule);
   try { lockState.onChange(() => schedule()); } catch (e) { console.error(e); }
+  try { WX.onChange(() => { lastSig = ""; schedule(); }); } catch (e) { console.error(e); } // Update 10 – Wetter
   document.addEventListener("sk:dashboard-edit", () => { setEditing(true); try { root.scrollIntoView({ block: "start", behavior: "smooth" }); } catch { /* egal */ } });
   setInterval(() => { if (viewVisible() && document.visibilityState !== "hidden") { lastSig = ""; schedule(); } }, 60000);
 }
@@ -153,6 +156,7 @@ function available(f) {
   if (col("einkauf").some((x) => x && !x.done) || col("material_items").some((x) => x && x.status === "brauche")) av.add("einkauf"); // Update 10
   if (dueItems().length) av.add("faellig"); // Update 10
   if (homeItems().chores.length || homeItems().habits.length) av.add("haushalt"); // Update 10 C
+  if (WX.prefs().src !== "off") av.add("weather"); // Update 10 – „Nein danke“ blendet es aus
   const hasSchool = !!(f.schoolToday || f.schoolTomorrow || (u().readSchool && u().readSchool(settings())));
   if (hasSchool || col("school_exams").length || col("school_tasks").length || !loaded("school_exams")) av.add("school");
   return av;
@@ -217,6 +221,7 @@ function widgetHTML(id, f) {
       case "einkauf": return wEinkauf();
       case "faellig": return wFaellig();
       case "haushalt": return wHaushalt();
+      case "weather": return wWeather(f);
       default: return "";
     }
   } catch (e) { console.error("Dashboard-Widget " + id, e); return ""; }
@@ -386,6 +391,38 @@ function wHaushalt() {
   const hb = habits.length ? `<p class="dw-note">🔥 ${habits.length === 1 ? `„${esc(habits[0].title)}“ ist heute noch offen` : `${habits.length} Gewohnheiten heute noch offen`}</p>` : "";
   return card("haushalt", (rows ? `<ul class="dw-list">${rows}</ul>` : "") + (chores.length > 3 ? `<p class="dw-note">+ ${chores.length - 3} weitere</p>` : "") + hb,
     { hash: chores.length ? "#alltag/haushalt" : "#alltag/routinen", more: chores.length ? "Haushalt" : "Abhaken" });
+}
+
+/* ---- 🌦️ Wetter (Update 10): heute + 3 Tage, Warnungen als Hinweise; Ort nur auf dem Gerät ---- */
+function wWeather(f) {
+  const p = WX.prefs();
+  if (p.src === "off") return "";
+  if (!p.src) {
+    return card("weather", `<p class="dw-note">Magst du hier das Wetter sehen? Dein Ort bleibt nur auf diesem Gerät 🔒</p>
+      <div class="dw-wx-ask"><button type="button" class="btn sm primary" data-wx="geo">📍 Standort</button><button type="button" class="btn sm ghost" data-wx="set">🏙️ Stadt</button><button type="button" class="btn sm ghost" data-wx="no">Nein danke</button></div>`);
+  }
+  WX.refresh();
+  const s = WX.state();
+  const gear = `<button type="button" class="dw-wx-gear" data-wx="set" aria-label="Wetter-Ort ändern" title="Ort ändern">⚙️</button>`;
+  if (!s.data) {
+    if (s.status === "error") return card("weather", `<p class="dw-note">${esc(s.error)}</p><div class="dw-wx-ask"><button type="button" class="btn sm ghost" data-wx="retry">↻ Nochmal</button>${gear}</div>`);
+    return card("weather", `<p class="dw-note">🌦️ Wetter wird geladen …</p>`);
+  }
+  const d = s.data;
+  const today = d.days[0];
+  const cur = d.current;
+  const place = p.src === "city" ? p.city : "Dein Standort";
+  const hints = WXC.hints(d, f.today);
+  const stand = `Stand ${u().clock(s.at)}${s.offline ? " · offline 📴" : ""}`;
+  return card("weather", `
+    <div class="dw-wx-now">
+      <span class="dw-wx-big" aria-hidden="true">${esc((cur || today).emoji)}</span>
+      <div class="dw-wx-t"><b class="dw-big" data-dv="wx-temp">${esc(WXC.tempText(cur ? cur.temp : today.max))}</b><small>${esc((cur || today).text)} · ${esc(place)}</small></div>
+      ${gear}
+    </div>
+    <ol class="dw-wx-days">${d.days.map((x) => `<li><span class="dw-wx-dn">${esc(WXC.dayName(x.date, f.today))}</span><span class="dw-wx-de" aria-hidden="true">${esc(x.emoji)}</span><span class="sr">${esc(x.text)}</span><b>${esc(WXC.tempText(x.max))}</b><small>${esc(WXC.tempText(x.min))}</small>${x.rainProb != null ? `<small class="dw-wx-rain">💧${Math.round(x.rainProb)} %</small>` : ""}</li>`).join("")}</ol>
+    ${hints.length ? `<ul class="dw-wx-warn">${hints.map((h) => `<li><span aria-hidden="true">${esc(h.e)}</span><span><b>${esc(h.when)}:</b> ${esc(h.t)}</span></li>`).join("")}</ul>` : ""}
+    <p class="dw-note dw-wx-src">${esc(stand)} · Open-Meteo</p>`);
 }
 
 /* ---- Finanzen (Geld-Sperre!) ---- */
@@ -582,6 +619,7 @@ function onClick(ev) {
   const b = ev.target.closest("button");
   if (!b || !root.contains(b)) return;
   const d = b.dataset;
+  if (d.wx) { Promise.resolve(WX.handle(d.wx, b)).catch((e) => console.error(e)); return; } // Update 10 – Wetter
   if (d.d === "edit") { setEditing(!editing); return; }
   if (d.d === "done") { setEditing(false); root.querySelector('[data-d="edit"]').focus(); return; }
   if (d.d === "wr") { // Update 10 – ✨ Wochenbericht

@@ -22,7 +22,7 @@ const RECENT_KEY = "sk-search-recent";
 const PER_GROUP = 4;
 const COLS = ["material_items", "einkauf", "einkauf_lists", "photo_albums", "school_exams", "school_tasks", "school_timetable", "school_grades",
   "travel_trips", "travel_packing", "travel_places", "jp_cards", "berichtsheft", "werkzeug", "fahrzeug_info",
-  "haushalt", "habits", "goals", "notes", "ai_memory"]; // Update 10 C
+  "haushalt", "habits", "goals", "notes", "ai_memory", "automations"]; // Update 10 C + Automationen
 const MONEY_COLS = ["money_tx", "money_subs"];
 const KIND = { termin: "📅 Termin", aufgabe: "✅ Aufgabe", geburtstag: "🎂 Geburtstag", einsatz: "🛠️ Einsatz" };
 const WD_L = ["So", "Mo", "Di", "Mi", "Do", "Fr", "Sa"];
@@ -382,7 +382,13 @@ function buildIndex() {
     const where = s(p.place) || s(p.addr);
     add({ cat: "fotos", id: p.id, emoji: "📷", thumb: p.thumb || "", photo: p, title: s(p.note) || where || "Foto",
       sub: [p.ts ? `${fmtKeyWd(p.dayKey || u.dayKey(p.ts))} ${u.clock(p.ts)}` : "", s(p.note) ? where : "", albums.join(", ")].filter(Boolean).join(" · "),
-      text: [p.addr, albums.join(" ")].join(" "), dates: isKey(p.dayKey) ? [p.dayKey] : [], ts: Number(p.ts) || 0, go: { t: "photo", id: p.id } });
+      text: [p.addr, albums.join(" "), ...(Array.isArray(p.tags) ? p.tags.map((x) => "#" + x + " " + x) : []), p.fav ? "favorit favoriten ⭐" : ""].join(" "), dates: isKey(p.dayKey) ? [p.dayKey] : [], ts: Number(p.ts) || 0, go: { t: "photo", id: p.id } });
+  }
+
+  // ⚡ Automationen (Update 10)
+  for (const r of D("automations")) {
+    if (!r || !s(r.name)) continue;
+    add({ cat: "automationen", id: "au_" + r.id, emoji: s(r.emoji) || "⚡", title: s(r.name), sub: r.enabled === false ? "💤 pausiert" : "aktiv", text: "automation regel wenn dann", go: { t: "hash", hash: "#alltag/automationen" } });
   }
 
   // 🚗 Fahrten
@@ -624,6 +630,7 @@ function pick(key) {
       case "place": location.hash = siteHash(g.id).slice(1); break;
       case "einkauf": lsSet("sk-ek-list", g.list || ""); toHash("#alltag/einkauf"); break;
       case "werkzeug": toHash(WZ.toolHash(g.id)); break; // Update 10
+      case "hash": toHash(g.hash); break; // Update 10 – z. B. Automationen
       case "fahrzeug": toHash(FZ.vehicleHash(g.id)); break; // Update 10
       case "hash": toHash(g.h); break; // Update 10 C
       case "rt": lsSet("sk-rt-tab", g.tab); toHash("#alltag/routinen"); break; // Update 10 C
