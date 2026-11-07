@@ -373,8 +373,16 @@ export function mount(el, ctx) {
     let id = ""; try { id = decodeURIComponent(m[2]); } catch { return; }
     pendingLink = { k: m[1], id };
     history.replaceState(history.state, "", location.href.replace(/\?neu=[^#]*$/, ""));
-    queueMicrotask(() => {
-      if (mode() !== "open") { ui.toast(mode() === "setup" ? "🔒 Richte zuerst das Tresor-Passwort ein." : "🔒 Entsperr zuerst deine Dokumente – dann kannst du verknüpfen."); pendingLink = null; return; }
+    queueMicrotask(linkSheet);
+  }
+  let linkWait = false; // gesperrt → Blatt nach dem Entsperren öffnen
+  function linkSheet() {
+    if (!pendingLink || !alive) return;
+    const m = mode();
+    if (m === "setup") { ui.toast("🔒 Richte zuerst das Tresor-Passwort ein – dann kannst du Dokumente ablegen.", 3500); pendingLink = null; return; }
+    if (m !== "open") { if (!linkWait) ui.toast("🔒 Entsperr kurz deine Dokumente – dann geht's mit der Verknüpfung weiter.", 3500); linkWait = true; return; }
+    linkWait = false;
+    {
       openSheet({
         title: "📎 Dokument verknüpfen",
         bodyHTML: `<p class="note">Neues Dokument für <b>${esc(linkLabel(pendingLink))}</b> – fotografieren oder Datei wählen:</p>
@@ -394,7 +402,7 @@ export function mount(el, ctx) {
           });
         },
       });
-    });
+    }
   }
 
   /* ---------- 🔒 Sperre / Einrichten / Umstellung ---------- */
@@ -472,6 +480,7 @@ export function mount(el, ctx) {
       listEl.innerHTML = m === "loading" ? `<p class="note">Lade …</p>` : "";
       return;
     }
+    if (linkWait && m === "open") queueMicrotask(linkSheet);
     const d = S.id ? byId(S.id) : null;
     if (S.id && !d) {
       home.hidden = true; detailEl.hidden = false;
