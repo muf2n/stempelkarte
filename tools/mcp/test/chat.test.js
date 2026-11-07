@@ -609,3 +609,31 @@ test("chatMode/systemPrompt: \"sensei\" wird erkannt (nur exakt)", () => {
   assert.doesNotMatch(systemPrompt(NOW, { mode: "sensei" }), /Passwort-Tresor/);
   assert.doesNotMatch(systemPrompt(NOW), /Japanisch-Lehrer/);
 });
+
+test("Lehrer-Modus (LAP Elektrotechnik): eigener Prompt, Sicherheitsregeln, KEINE Werkzeuge, kein Nachhaken", async () => {
+  const t = await setupChat({ script: [end("Das Ohmsche Gesetz: U = R · I ⚡ Ich hab das eingetragen!")] });
+  const res = await t.post({ ...msg("Erklär mir das Ohmsche Gesetz"), mode: "lehrer" });
+  assert.equal(res.status, 200);
+  const out = await res.json();
+  assert.match(out.reply, /Ohmsche/);
+  assert.deepEqual(out.actions, []);
+  assert.equal(t.calls.length, 1, "kein Nachhaken im Lehrer-Modus");
+  const b = t.calls[0].body;
+  assert.equal("tools" in b, false, "Lehrer schickt keine Werkzeuge");
+  assert.match(b.system, /Elektrotechnik-Lehrer/);
+  assert.match(b.system, /ÖVE\/ÖNORM E 8101/);
+  assert.match(b.system, /5 Sicherheitsregeln/);
+  assert.match(b.system, /Freischalten/);
+  assert.match(b.system, /NIEMALS Schritt-für-Schritt/);
+  assert.match(b.system, /unter Aufsicht/);
+  assert.match(b.system, /keinen Zugriff auf die App-Daten/);
+  assert.doesNotMatch(b.system, /Sensei/);
+});
+
+test("chatMode/systemPrompt: \"lehrer\" wird erkannt (nur exakt)", () => {
+  assert.deepEqual(chatMode({ mode: "lehrer" }), { mode: "lehrer", short: false, name: "" });
+  assert.deepEqual(chatMode({ mode: "Lehrer" }), { mode: "text", short: false, name: "" });
+  assert.match(systemPrompt(NOW, { mode: "lehrer" }), /Elektrotechnik-Lehrer/);
+  assert.doesNotMatch(systemPrompt(NOW, { mode: "lehrer" }), /Passwort-Tresor/);
+  assert.doesNotMatch(systemPrompt(NOW), /Elektrotechnik-Lehrer/);
+});
