@@ -1,5 +1,7 @@
-// Alltag › LAP › 🔢 Rechenaufgaben: Zufallsaufgaben aus den Formeln, Prüfung mit Toleranz, Lösungsweg Schritt für Schritt.
-import { PROBLEM_TYPES, makeProblem, checkAnswer, fmtAuto, fmt } from "./lap-core.js";
+// Alltag › LAP › 🔢 Rechenaufgaben: Zufallsaufgaben aus den Formeln, Prüfung mit Toleranz, Lösungsweg Schritt für Schritt,
+// passend zum gewählten Lehrjahr, mit 🧮 Taschenrechner zum Aufklappen („Ergebnis übernehmen“ → Antwortfeld).
+import { PROBLEM_TYPES, makeProblem, checkAnswer, fmtAuto, fmt, problemTypesFor } from "./lap-core.js";
+import { createCalc } from "./lap-calc.js";
 
 const TYPE_KEY = "sk-lap-ptype";
 const lsGet = (k) => { try { return localStorage.getItem(k); } catch { return null; } };
@@ -14,20 +16,30 @@ export function createPractice(L) {
   let result = null; // null | { ok, value, shown }
   let score = { n: 0, ok: 0 };
   let seq = 0;
+  let yearSeen = null;
+  const calc = createCalc({ onTake(text) {
+    if (!page || result) return;
+    input = text;
+    const i = page.querySelector(".lap-ans");
+    if (i) { i.value = text; i.focus({ preventScroll: true }); }
+    L.ui.toast("📥 Ergebnis übernommen – jetzt ✔️ Prüfen");
+  } });
+  const types = () => problemTypesFor(L.year());
 
   const fmtAns = (p) => (p.unit === "€" ? fmt(p.answer, 2) : fmtAuto(p.answer));
   function next() {
-    prob = makeProblem(type === "mix" ? null : type);
-    input = ""; result = null; seq++;
+    prob = makeProblem(type === "mix" ? null : type, Math.random, types());
+    input = ""; result = null; seq++; calc.reset();
   }
 
   function html() {
+    if (yearSeen !== L.year()) { yearSeen = L.year(); if (type !== "mix" && !types().some((t) => t.id === type)) type = "mix"; prob = null; }
     if (!prob) next();
     const tp = PROBLEM_TYPES.find((t) => t.id === prob.type);
     return `<div class="lap-card">` +
         `<div class="chips lap-chips" role="group" aria-label="Aufgabenart">` +
           `<button type="button" class="chip" data-pt="mix" aria-pressed="${type === "mix"}">🎲 Gemischt</button>` +
-          PROBLEM_TYPES.map((t) => `<button type="button" class="chip" data-pt="${t.id}" aria-pressed="${type === t.id}">${t.emoji} ${esc(t.name)}</button>`).join("") +
+          types().map((t) => `<button type="button" class="chip" data-pt="${t.id}" aria-pressed="${type === t.id}">${t.emoji} ${esc(t.name)}</button>`).join("") +
         `</div>` +
       `</div>` +
       `<div class="lap-card lap-prob">` +
@@ -38,6 +50,7 @@ export function createPractice(L) {
           `<label class="lap-field wide"><span>Dein Ergebnis für ${esc(prob.ask)}</span><span class="lap-inp lap-inp-big"><input inputmode="decimal" class="lap-ans" aria-label="Ergebnis" value="${esc(input)}" ${result ? "disabled" : ""} placeholder="z. B. 2,5"><i>${esc(prob.unit)}</i></span></label>` +
           (result ? "" : `<div class="lap-row lap-wrap"><button type="submit" class="btn primary">✔️ Prüfen</button><button type="button" class="btn ghost" data-k="show">👀 Lösung zeigen</button></div>`) +
         `</form>` +
+        calc.html({ take: !result }) +
         (result ? resultHTML() : `<p class="lap-muted">Tipp: Komma oder Punkt passt beides. Ein bisserl Rundung ist erlaubt (±${Math.round(prob.tol * 100)} %).</p>`) +
       `</div>`;
   }
@@ -71,6 +84,7 @@ export function createPractice(L) {
 
   function onClick(ev) {
     if (!page) return;
+    if (calc.click(ev)) return;
     if (L.explain.click(ev)) return;
     const t = ev.target.closest("button");
     if (!t || !page.contains(t)) return;
@@ -79,10 +93,12 @@ export function createPractice(L) {
     if (t.dataset.k === "next") { next(); render(); const i = page.querySelector(".lap-ans"); if (i) i.focus({ preventScroll: true }); }
   }
   function onSubmit(ev) { ev.preventDefault(); if (!result) check(); }
-  function onInput(ev) { if (ev.target.classList.contains("lap-ans")) input = ev.target.value; }
+  function onInput(ev) { if (calc.input(ev)) return; if (ev.target.classList.contains("lap-ans")) input = ev.target.value; }
+  function onKey(ev) { calc.key(ev); }
 
   return {
-    show(el) { page = el; page.addEventListener("click", onClick); page.addEventListener("submit", onSubmit); page.addEventListener("input", onInput); render(); },
-    hide() { if (page) { page.removeEventListener("click", onClick); page.removeEventListener("submit", onSubmit); page.removeEventListener("input", onInput); } page = null; },
+    show(el) { page = el; page.addEventListener("click", onClick); page.addEventListener("submit", onSubmit); page.addEventListener("input", onInput); page.addEventListener("keydown", onKey); render(); },
+    hide() { if (page) { page.removeEventListener("click", onClick); page.removeEventListener("submit", onSubmit); page.removeEventListener("input", onInput); page.removeEventListener("keydown", onKey); } page = null; },
+    onYear() { if (page) render(); },
   };
 }

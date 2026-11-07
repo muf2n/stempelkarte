@@ -1,6 +1,8 @@
 // Alltag › LAP › 🃏 Lernkarten: Karteikarten mit Wiederholung (SM-2 aus ./srs-core.js), Themenauswahl, Suche.
-import { CARDS, TOPICS, NORM_NOTE, topicOf } from "./lap-data.js";
+// Lehrjahr: neue Karten nur aus dem gewählten Jahr, Wiederholungen auch aus den Jahren davor. Eigene Karten (📷/✍️) lernen mit.
+import { TOPICS, NORM_NOTE, topicOf } from "./lap-data.js";
 import { buildQueue, review, GRADES, isLearned, shuffle } from "./srs-core.js";
+import { learnPools, filterYear, normYear } from "./lap-core.js";
 
 const TOPIC_KEY = "sk-lap-topics";
 const lsGet = (k) => { try { return JSON.parse(localStorage.getItem(k) || "null"); } catch { return null; } };
@@ -16,9 +18,14 @@ export function createLearn(L) {
   let sess = null; // { queue, i, flipped, right, total }
   let search = "";
 
-  const pool = () => CARDS.filter((c) => topics.includes(c.topic));
+  const yearCards = () => filterYear(L.allCards(), L.year(), "exact");
   const freshToday = () => ((L.stats().days || {})[L.today()] || {}).fresh || 0;
-  const queue = () => buildQueue(pool(), L.cards(), L.today(), { newLimit: L.stats().newPerDay || 10, newToday: freshToday() });
+  function queue() {
+    const p = learnPools(L.allCards().filter((c) => topics.includes(c.topic)), L.year());
+    const opts = { newLimit: L.stats().newPerDay || 10, newToday: freshToday() };
+    return { due: buildQueue(p.review, L.cards(), L.today(), opts).due, fresh: buildQueue(p.fresh, L.cards(), L.today(), opts).fresh };
+  }
+  const yLabel = () => (normYear(L.year()) ? `${normYear(L.year())}. Lj.` : "");
 
   const normNote = (ids) => (ids.some((id) => (topicOf(id) || {}).norm) ? `<p class="lap-norm">${esc(NORM_NOTE)}</p>` : "");
 
@@ -26,13 +33,14 @@ export function createLearn(L) {
     const q = queue();
     const cards = L.cards();
     const weak = L.weak();
-    const learnedAll = CARDS.filter((c) => isLearned(cards.get(c.id))).length;
+    const all = yearCards();
+    const learnedAll = all.filter((c) => isLearned(cards.get(c.id))).length;
     const total = q.due.length + q.fresh.length;
     const newPer = L.stats().newPerDay || 10;
     return `<div class="lap-card lap-hero">` +
         `<div class="lap-big"><b>${q.due.length}</b><span>heute fällig</span></div>` +
         `<div class="lap-big soft"><b>${q.fresh.length}</b><span>neue Karten</span></div>` +
-        `<div class="lap-big soft"><b>${learnedAll}<i>/${CARDS.length}</i></b><span>gelernt</span></div>` +
+        `<div class="lap-big soft"><b>${learnedAll}<i>/${all.length}</i></b><span>gelernt${yLabel() ? " · " + yLabel() : ""}</span></div>` +
         `<div class="lap-row lap-full lap-span">` +
           `<button type="button" class="btn primary" data-k="start" ${total ? "" : "disabled"}>${total ? `▶️ Lernen (${total})` : "🎉 Alles erledigt für heute"}</button>` +
         `</div>` +
@@ -41,13 +49,13 @@ export function createLearn(L) {
         `<div class="lap-row"><h3 class="lap-h3">📚 Themen</h3><span class="lap-grow"></span>` +
           `<button type="button" class="lap-link" data-k="all">${topics.length === TOPICS.length ? "keins" : "alle"}</button></div>` +
         `<div class="lap-topics">` + TOPICS.map((t) => {
-          const list = CARDS.filter((c) => c.topic === t.id);
+          const list = all.filter((c) => c.topic === t.id);
           const done = list.filter((c) => isLearned(cards.get(c.id))).length;
-          const pct = Math.round((done / list.length) * 100);
+          const pct = list.length ? Math.round((done / list.length) * 100) : 0;
           const isWeak = weak.includes(t.id);
-          return `<button type="button" class="lap-topic${isWeak ? " weak" : ""}" data-topic="${t.id}" aria-pressed="${topics.includes(t.id)}">` +
+          return `<button type="button" class="lap-topic${isWeak ? " weak" : ""}${list.length ? "" : " empty"}" data-topic="${t.id}" aria-pressed="${topics.includes(t.id)}">` +
             `<span class="lap-topic-e" aria-hidden="true">${t.emoji}</span><span class="lap-topic-n">${esc(t.name)}${isWeak ? ` <em>💪 üben</em>` : ""}${t.norm ? ` <em class="lap-tag-norm" title="Normwerte mit Berufsschul-Unterlagen abgleichen">📚</em>` : ""}</span>` +
-            `<small>${done}/${list.length}</small><span class="lap-bar"><span style="width:${pct}%"></span></span></button>`;
+            `<small>${list.length ? `${done}/${list.length}` : "–"}</small><span class="lap-bar"><span style="width:${pct}%"></span></span></button>`;
         }).join("") + `</div>` +
         `<div class="lap-row lap-mt lap-wrap"><button type="button" class="btn ghost sm" data-k="list">🔎 Alle Karten ansehen</button></div>` +
       `</div>` +
@@ -70,7 +78,7 @@ export function createLearn(L) {
       `<div class="lap-row"><button type="button" class="btn ghost sm" data-k="home">← Zurück</button><span class="lap-grow"></span>` +
         `<span class="lap-muted">${sess.i + 1} / ${sess.queue.length}</span></div>` +
       `<span class="lap-bar lap-bar-q"><span style="width:${pct}%"></span></span>` +
-      `<div class="lap-front"><span class="lap-pill">${tp.emoji} ${esc(tp.name)}${cur && cur.seen ? "" : " · neu ✨"}</span>` +
+      `<div class="lap-front"><span class="lap-pill">${tp.emoji} ${esc(tp.name)}${cur && cur.seen ? "" : " · neu ✨"}</span>${it.own ? `<span class="lap-pill soft">${it.source === "foto" ? "📷" : "✍️"} eigene Karte</span>` : ""}` +
         `<p class="lap-q">${esc(it.q)}</p></div>` +
       (sess.flipped
         ? `<div class="lap-back"><p class="lap-a">✅ ${esc(it.a)}</p>${it.e ? `<p class="lap-e">💡 ${esc(it.e)}</p>` : ""}${normNote([it.topic])}` +
@@ -93,7 +101,7 @@ export function createLearn(L) {
 
   function listHTML() {
     const s = search.trim().toLowerCase();
-    const list = CARDS.filter((c) => topics.includes(c.topic) && (!s || (c.q + " " + c.a + " " + c.e).toLowerCase().includes(s)));
+    const list = yearCards().filter((c) => topics.includes(c.topic) && (!s || (c.q + " " + c.a + " " + c.e).toLowerCase().includes(s)));
     const cards = L.cards();
     return `<div class="lap-card">` +
       `<div class="lap-row"><button type="button" class="btn ghost sm" data-k="home">← Zurück</button><span class="lap-grow"></span><span class="lap-muted">${list.length} Karten</span></div>` +
@@ -102,7 +110,7 @@ export function createLearn(L) {
     `</div>` +
     `<div class="lap-list">` + (list.length ? list.map((c) => {
       const tp = topicOf(c.topic);
-      return `<details class="lap-item"><summary><span class="lap-dot${isLearned(cards.get(c.id)) ? " ok" : ""}" aria-hidden="true"></span><span>${tp.emoji} ${esc(c.q)}</span></summary>` +
+      return `<details class="lap-item"><summary><span class="lap-dot${isLearned(cards.get(c.id)) ? " ok" : ""}" aria-hidden="true"></span><span>${tp.emoji} ${esc(c.q)}</span>${c.own ? `<em class="lap-owntag">${c.source === "foto" ? "📷" : "✍️"} eigene</em>` : ""}</summary>` +
         `<p class="lap-a">✅ ${esc(c.a)}</p>${c.e ? `<p class="lap-e">💡 ${esc(c.e)}</p>` : ""}` +
         L.explain.html("c-" + c.id, { topic: tp.name, q: c.q, a: c.a, e: c.e }) + `</details>`;
     }).join("") : `<p class="lap-muted lap-center">Nix gefunden 🤔 – probier ein anderes Wort.</p>`) + `</div>`;
@@ -187,5 +195,6 @@ export function createLearn(L) {
       page = null;
     },
     onData() { if (page && view === "home") render(); },
+    onYear() { if (page && view !== "review") { if (view === "done") { view = "home"; sess = null; } render(); } },
   };
 }

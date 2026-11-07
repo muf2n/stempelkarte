@@ -184,6 +184,8 @@ const SHELL = [
   "js/alltag/lap-formulas.js",
   "js/alltag/lap-practice.js",
   "js/alltag/lap-exam.js",
+  "js/alltag/lap-calc.js",
+  "js/alltag/lap-own.js",
   "css/alltag-lap.css",
   "js/gallery-active.js", // Update 9 (Agent U) – aktive Kategorie
   "css/gallery-active.css",
