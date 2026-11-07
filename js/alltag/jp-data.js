@@ -1,5 +1,6 @@
 // Alltag › Japanisch: Lerninhalte (statisch). Kana-Tabellen, Starter-Wortschatz, Lesetexte.
 // Reine Daten, keine DOM-Zugriffe – auch von jp-core.js und den Unit-Tests benutzt.
+import { MORE_TOPICS, OLD_VERBS, OLD_ADJ } from "./jp-data-vocab.js";
 
 /* ---------- Kana ---------- */
 // Jede Zeile: [Zeilen-ID, Anzeigename, [[hiragana, romaji], …]]. null = leeres Feld in der Tabelle.
@@ -228,14 +229,34 @@ const TOPICS = [
   ]),
 ];
 
-/** Starter-Deck: [{id, topic, emoji, kana, kanji, romaji, de}] – id ist stabil (Thema-Kürzel + Kana). */
+/**
+ * Deck: [{id, topic, emoji, kana, kanji, romaji, de, level, pos?, group?, dict?, dictRo?, masu?, masuRo?, wave}]
+ * id ist stabil: "s" + Themen-Index + "_" + laufende Nummer. Neue Wörter werden nur ANGEHÄNGT (Themen-Erweiterungen
+ * bekommen die nächsten Nummern ihres Themas, neue Themen den nächsten Index) – Lernstände bleiben gültig.
+ * wave 2 = Erweiterung eines alten Themas (eigene Lernpfad-Einheit, alte Lektionen bleiben unverändert).
+ */
 export const VOCAB = [];
-export const TOPIC_LIST = TOPICS.map((t) => ({ topic: t.topic, emoji: t.emoji, count: t.words.length }));
-for (const t of TOPICS) {
-  t.words.forEach(([kana, kanji, romaji, de], i) => {
-    VOCAB.push({ id: "s" + TOPICS.indexOf(t) + "_" + i, topic: t.topic, emoji: t.emoji, kana, kanji, romaji, de });
-  });
+const ALL_TOPICS = TOPICS.map((t) => ({ topic: t.topic, emoji: t.emoji, words: t.words.map((w) => ({ w, wave: 1 })) }));
+for (const t of MORE_TOPICS) {
+  let at = ALL_TOPICS.find((x) => x.topic === t.topic);
+  if (!at) ALL_TOPICS.push(at = { topic: t.topic, emoji: t.emoji, words: [] });
+  for (const w of t.words) at.words.push({ w, wave: t.ext ? 2 : 1, title: t.title });
 }
+export const TOPIC_LIST = ALL_TOPICS.map((t) => ({ topic: t.topic, emoji: t.emoji, count: t.words.length }));
+ALL_TOPICS.forEach((t, ti) => {
+  t.words.forEach(({ w, wave, title }, i) => {
+    const [kana, kanji, romaji, de, flags = "", masu, masuRo] = w;
+    const f = flags.split(/\s+/).filter(Boolean);
+    const v = { id: "s" + ti + "_" + i, topic: t.topic, emoji: t.emoji, kana, kanji, romaji, de, level: f.find((x) => /^N\d$/.test(x)) || "N5", wave };
+    if (title) v.unit = title;
+    const pos = f.includes("i") ? "i" : f.includes("na") ? "na" : OLD_ADJ[kana] || null;
+    if (pos) v.pos = pos;
+    const g = f.find((x) => /^g[123]$/.test(x));
+    if (g) { v.pos = "verb"; v.group = Number(g[1]); v.dict = kana; v.dictRo = romaji; v.masu = masu; v.masuRo = masuRo; }
+    else if (t.topic === "Verben" && OLD_VERBS[kana]) { const [d, dr, gg] = OLD_VERBS[kana]; Object.assign(v, { pos: "verb", group: Number(gg[1]), dict: d, dictRo: dr, masu: kana, masuRo: romaji }); }
+    VOCAB.push(v);
+  });
+});
 
 /* ---------- Lesetexte ---------- */
 // Jede Zeile: { who?, ja: [[text, lesung?], …], ro, de }. Lesung nur bei Kanji (→ Furigana).

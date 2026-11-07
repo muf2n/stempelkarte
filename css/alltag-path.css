@@ -255,6 +255,21 @@ html.lp-lock, html.lp-lock body { overflow: hidden; }
 }
 .lp-big.long { font-size: clamp(2rem, 9vw, 2.8rem); }
 .lp-big.small { font-size: 1.5rem; font-family: var(--f-mono); padding: 14px 20px; }
+/* Update 10b – 📐 Grammatik & Sätze */
+.lp-big.sent { font-size: clamp(1.25rem, 5.4vw, 1.6rem); line-height: 1.45; padding: 14px 18px; border-radius: 18px; }
+.lp-ex .lp-big.sent { font-size: clamp(1.25rem, 5.4vw, 1.6rem); }
+.lp-say.inline { width: 44px; height: 44px; }
+.lp-hint { border: 2px solid var(--line); border-radius: 16px; background: var(--soft); padding: 2px 14px; font-size: .92rem; line-height: 1.45; }
+.lp-hint summary { cursor: pointer; padding: 10px 0; list-style: none; display: flex; gap: 6px; flex-wrap: wrap; align-items: baseline; }
+.lp-hint summary::-webkit-details-marker { display: none; }
+.lp-hint summary::after { content: "▾"; margin-left: auto; color: var(--muted); }
+.lp-hint[open] summary::after { content: "▴"; }
+.lp-hint summary span { color: var(--muted); font-size: .88rem; }
+.lp-hint p { margin: 0 0 8px; }
+.lp-hint table { border-collapse: collapse; width: 100%; margin: 0 0 10px; font-size: .88rem; }
+.lp-hint td { padding: 4px 6px; border-top: 1px solid var(--line); vertical-align: top; }
+.lp-hint td:first-child { font-weight: 700; white-space: nowrap; }
+@media (max-width: 420px) { .lp-hint td:first-child { white-space: normal; } }
 .lp-ex[data-type="mc"] .lp-big:not(.jp-ja):not(.small), .lp-ex[data-type="type"] .lp-big:not(.jp-ja) { font-size: 2rem; }
 .lp-sub { margin: -6px 0 0; text-align: center; color: var(--muted); font-size: .95rem; }
 .lp-say { width: 48px; height: 48px; border-radius: 50%; border: 0; background: var(--soft); color: var(--accent); font-size: 1.3rem; cursor: pointer; flex: none; }

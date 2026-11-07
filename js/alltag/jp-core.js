@@ -177,3 +177,74 @@ export function meaningChoices(item, all, { n = 4, rand = Math.random } = {}) {
   for (const x of [...same, ...rest]) { if (picked.length >= n - 1) break; if (!seen.has(x.de)) { seen.add(x.de); picked.push(x.de); } }
   return shuffle([item.de, ...picked], rand);
 }
+
+/* ---------- Romaji-Kontrolle (Hepburn) ---------- */
+// Für die Inhalts-Selbstprüfung (test/jp-data.test.mjs): passt eine Romaji-Schreibung exakt zu einer Kana-Lesung?
+// Erlaubt: Längen mit Makron (ō = ou/oo, ū = uu, ā, ī, ē), Partikeln は/へ/を als wa/e/o, n' vor Vokal, Leerzeichen/Bindestriche/Satzzeichen.
+const ROMA_PUNCT = /[\s　、。！？!?,.・「」『』（）()\-–—~〜…:：;；"'’“”„]/g;
+/** Romaji → Vergleichsform (klein, Makron aufgelöst, ou → oo, ohne Leer-/Satzzeichen). */
+export function romajiKey(s) {
+  return String(s || "").normalize("NFC").toLowerCase()
+    .replace(/ā/g, "aa").replace(/ī/g, "ii").replace(/ū/g, "uu").replace(/ē/g, "ee").replace(/ō/g, "oo")
+    .replace(ROMA_PUNCT, "").replace(/ou/g, "oo");
+}
+/** Kana in Lautsilben mit erlaubten Romaji-Varianten zerlegen. */
+function kanaUnits(kana) {
+  const h = toHiragana(String(kana || "").normalize("NFKC")).replace(/[っッ](?=[、。！？!?…\s]|$)/g, "").replace(ROMA_PUNCT, ""); // えっ、 = kurzer Stopp
+  const units = [];
+  for (let i = 0; i < h.length; i++) {
+    const two = h.slice(i, i + 2);
+    let alts;
+    if (two.length === 2 && H2R.has(two) && /[ゃゅょぁぃぅぇぉ]/.test(two[1])) { alts = [H2R.get(two)]; i++; }
+    else {
+      const ch = h[i];
+      if (ch === "は") alts = ["ha", "wa"];
+      else if (ch === "へ") alts = ["he", "e"];
+      else if (ch === "を") alts = ["wo", "o"];
+      else if (ch === "ん") alts = ["n"];
+      else if (ch === "っ") alts = ["~"];
+      else if (ch === "ー") alts = ["-"];
+      else if (H2R.has(ch)) alts = [H2R.get(ch)];
+      else return null; // kein Kana (Kanji, Ziffer …)
+    }
+    units.push(alts);
+  }
+  // っ → Doppelkonsonant der nächsten Silbe (vor ch: t); ー → Vokal davor; う nach o → auch o (ou = ō)
+  const out = [];
+  for (let i = 0; i < units.length; i++) {
+    const u = units[i];
+    if (u[0] === "~") {
+      const nx = units[i + 1];
+      if (!nx) return null;
+      out.push(nx.map((a) => (a.startsWith("ch") ? "t" : a[0]) + a)); i++;
+      continue;
+    }
+    if (u[0] === "-") {
+      const prev = out[out.length - 1];
+      if (!prev) return null;
+      out.push([...new Set(prev.map((a) => a.slice(-1)))]);
+      continue;
+    }
+    const prev = out[out.length - 1];
+    if (u[0] === "u" && prev && prev.some((a) => a.endsWith("o"))) out.push(["u", "o"]);
+    else out.push(u);
+  }
+  return out;
+}
+/** true, wenn romaji eine korrekte Hepburn-Umschrift der Kana-Lesung ist. */
+export function romajiMatches(kana, romaji) {
+  const units = kanaUnits(kana);
+  if (!units || !units.length) return false;
+  const t = romajiKey(romaji);
+  let pos = new Set([0]);
+  for (const alts of units) {
+    const next = new Set();
+    for (const p of pos) for (const a of alts) {
+      const k = romajiKey(a);
+      if (t.startsWith(k, p)) next.add(p + k.length);
+    }
+    if (!next.size) return false;
+    pos = next;
+  }
+  return pos.has(t.length);
+}

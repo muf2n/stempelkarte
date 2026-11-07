@@ -174,8 +174,8 @@ test("Statistik: Tagesziel-Zähler, Serie 🔥 bis heute bzw. gestern, Begrenzun
   assert.equal(Object.keys(big.days).length, 400);
 });
 
-test("Inhalte: ~150 Wörter mit Kana/Romaji/Deutsch, eindeutige IDs, Lesetexte vollständig", () => {
-  assert.ok(VOCAB.length >= 140 && VOCAB.length <= 200, `Wörter: ${VOCAB.length}`);
+test("Inhalte: ~600 Wörter mit Kana/Romaji/Deutsch, eindeutige IDs, Lesetexte vollständig", () => {
+  assert.ok(VOCAB.length >= 580 && VOCAB.length <= 720, `Wörter: ${VOCAB.length}`);
   assert.equal(new Set(VOCAB.map((v) => v.id)).size, VOCAB.length);
   for (const v of VOCAB) {
     assert.ok(v.kana && v.romaji && v.de, v.id);

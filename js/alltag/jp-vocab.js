@@ -15,6 +15,12 @@ export function createVocab(J) {
   let topics = lsGet(TOPIC_KEY);
   const allTopics = [...TOPIC_LIST.map((t) => t.topic), "Eigene Wörter"];
   if (!Array.isArray(topics)) topics = allTopics.slice();
+  // neue Themen (Update 10b) automatisch dazunehmen, ohne abgewählte alte wieder einzuschalten
+  const known = lsGet(TOPIC_KEY + "-known");
+  if (Array.isArray(known)) { for (const t of allTopics) if (!known.includes(t) && !topics.includes(t)) topics.push(t); }
+  else if (Array.isArray(lsGet(TOPIC_KEY))) { for (const t of TOPIC_LIST.slice(10).map((x) => x.topic)) if (!topics.includes(t)) topics.push(t); }
+  if (Array.isArray(lsGet(TOPIC_KEY))) lsSet(TOPIC_KEY, topics);
+  lsSet(TOPIC_KEY + "-known", allTopics);
   let dir = lsGet(DIR_KEY) === "de" ? "de" : "ja";
   let sess = null; // { queue:[item], i, flipped, done, right, reps:{id:n} }
   let search = "";
@@ -79,6 +85,15 @@ export function createVocab(J) {
     return `<div class="jp-ja ${big ? "jp-cardkana" : ""}${sz}">${esc(main)}</div>` +
       (it.kanji ? `<div class="jp-ja jp-sub">${esc(it.kana)}</div>` : "");
   }
+  /** Wortart-Zusatz: い/な-Adjektiv, Verbgruppe mit Wörterbuch- und ます-Form. */
+  function wordInfo(it) {
+    const tags = [];
+    if (it.pos === "i") tags.push("い-Adjektiv");
+    else if (it.pos === "na") tags.push("な-Adjektiv");
+    else if (it.pos === "verb") tags.push(`Verb · Gruppe ${it.group}`, `${it.dict} ⇄ ${it.masu}`);
+    if (it.level && it.level !== "N5") tags.push(it.level === "N3" ? "Fachwort" : it.level);
+    return tags.length ? `<div class="jp-wtags">${tags.map((t) => `<span class="jp-wtag jp-ja">${esc(t)}</span>`).join("")}</div>` : "";
+  }
   function reviewHTML() {
     const it = sess.queue[sess.i];
     const card = J.card(it.id);
@@ -90,6 +105,7 @@ export function createVocab(J) {
       back = `<div class="jp-back">` +
         (dir === "ja" ? `<div class="jp-cardde">${esc(it.de)}</div>` : faceJa(it, true)) +
         `<div class="jp-roma">${esc(it.romaji || kanaToRomaji(it.kana))}</div>` +
+        wordInfo(it) +
       `</div>` +
       `<div class="jp-grades">` + GRADES.map((g) => {
         const nx = review(card || {}, g.q, J.today());

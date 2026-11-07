@@ -249,6 +249,12 @@ const SHELL = [
   "js/alltag/jp-write.js",
   "js/alltag/jp-read.js",
   "js/alltag/jp-sensei.js",
+  "js/alltag/jp-text.js", // Update 10b – Inhalte (Wortschatz, Grammatik, Sätze, Lesetexte)
+  "js/alltag/jp-data-vocab.js",
+  "js/alltag/jp-data-grammar.js",
+  "js/alltag/jp-data-sentences.js",
+  "js/alltag/jp-data-read.js",
+  "js/alltag/jp-grammar.js",
   "css/alltag-japanisch.css",
   "js/alltag/srs-core.js", // gemeinsames SRS (Japanisch, LAP)
   "js/alltag/lap.js", // Alltag › LAP Elektrotechnik

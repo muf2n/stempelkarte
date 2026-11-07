@@ -86,7 +86,7 @@ function fakes(opts) {
     await page.waitForTimeout(300);
     return { ctx, page };
   }
-  const shot = async (page, name) => { await page.waitForTimeout(300); await page.screenshot({ path: path.join(OUT, name), fullPage: false }); };
+  const shot = async (page, name, full = false) => { await page.waitForTimeout(300); await page.screenshot({ path: path.join(OUT, name), fullPage: full }); };
   const tab = async (page, id) => { await page.click(`.jp-tab[data-tab="${id}"]`); await page.waitForTimeout(120); };
   const lsJson = (page, k) => page.evaluate((k) => JSON.parse(localStorage.getItem(k) || "null"), k);
   const head = (page) => page.textContent(".jp-head");
@@ -100,7 +100,7 @@ function fakes(opts) {
   await page.waitForSelector(".jp-head .jp-stat", { timeout: 8000 });
   ok(/#alltag\/japanisch$/.test(page.url()), "Route #alltag/japanisch");
   ok(await page.evaluate(() => !!document.getElementById("jp-css")), "Modul-CSS geladen");
-  ok((await page.$$(".jp-tab")).length === 8, "8 Bereiche als Reiter (inkl. 🛤️ Lernpfad)");
+  ok((await page.$$(".jp-tab")).length === 9, "9 Bereiche als Reiter (inkl. 🛤️ Lernpfad und 📐 Grammatik)");
   ok(await page.isHidden(".jp-voicehint"), "japanische Stimme vorhanden → kein Hinweis");
 
   // ---- Kana ----
@@ -202,18 +202,18 @@ function fakes(opts) {
   ok((await head(page)).includes("/30"), "Tagesziel 30 übernommen");
   // eigenes Wort
   await page.click('[data-k="add"]');
-  await page.fill('.jp-addform [name="kana"]', "ねじ");
-  await page.fill('.jp-addform [name="de"]', "Schraube");
+  await page.fill('.jp-addform [name="kana"]', "かなづち");
+  await page.fill('.jp-addform [name="de"]', "Fäustel");
   await page.click('.jp-addform button[type="submit"]');
   await page.waitForTimeout(300);
   await page.click('[data-k="list"]');
-  await page.fill(".jp-search", "schraube");
+  await page.fill(".jp-search", "fäustel");
   await page.waitForTimeout(100);
   const li = await page.textContent(".jp-list");
-  ok(li.includes("ねじ") && li.includes("neji"), "Eigenes Wort gespeichert, Romaji automatisch (neji)");
+  ok(li.includes("かなづち") && li.includes("kanazuchi"), "Eigenes Wort gespeichert, Romaji automatisch (kanazuchi)");
   await page.click('.jp-li [data-del]'); await page.click('.jp-li [data-del]');
   await page.waitForTimeout(300);
-  ok(!(await page.textContent(".jp-list")).includes("ねじ"), "Eigenes Wort gelöscht (2 Tipps)");
+  ok(!(await page.textContent(".jp-list")).includes("かなづち"), "Eigenes Wort gelöscht (2 Tipps)");
   await page.click('[data-k="home"]');
 
   // ---- Hören ----
@@ -314,6 +314,45 @@ function fakes(opts) {
   ok((await page.evaluate(() => window.__tts.spoken.at(-1).text)) === "オーストリア人です。", "Satz antippen → vorlesen");
   await shot(page, "jp-read-390-light.png");
   await page.click('[data-k="done"]');
+  // weitere Texte werden nachgeladen
+  await page.waitForSelector('.jp-rtile[data-open="r30"]', { timeout: 5000 });
+  ok((await page.$$(".jp-rtile")).length === 30, "30 Lesetexte (r11–r30 nachgeladen)");
+  await page.click('.jp-rtile[data-open="r22"]');
+  ok((await page.$$(".jp-line")).length === 6 && await page.isVisible("ruby rt"), "neuer Text mit Furigana");
+  await page.click('[data-k="back"]');
+
+  // ---- 📐 Grammatik ----
+  await tab(page, "grammatik");
+  await page.waitForSelector(".jp-glist .jp-rtile", { timeout: 5000 });
+  ok((await page.$$(".jp-glist .jp-rtile")).length === 20, "Grammatik-Reiter: 20 Lektionen");
+  await shot(page, "jp-grammar-list-390-light.png");
+  await page.click('.jp-rtile[data-open="wo"]');
+  ok(/を/.test(await page.textContent(".jp-gtitle")) && (await page.$$(".jp-gtable tr")).length >= 3, "Lektion „を“: Erklärung + Tabelle");
+  await page.click('.jp-line[data-ex="0"]');
+  await page.waitForTimeout(60);
+  ok((await page.evaluate(() => window.__tts.spoken.at(-1).text)) === "パンをたべます。", "Beispiel antippen → vorlesen (Kana)");
+  await page.click('.jp-gquiz [data-k="quiz"]');
+  for (let k = 0; k < 8; k++) {
+    if (await page.$('.jp-gquiz [data-k="back"]')) break;
+    const ex = await page.evaluate(async (i) => { const m = await import("/js/alltag/jp-data-grammar.js"); return m.GRAMMAR.find((g) => g.id === "wo").ex[i]; }, k);
+    if (ex.t === "build") {
+      const bank = await page.$$eval(".jp-gbank .jp-gtile", (b) => b.map((x) => x.textContent));
+      const words = ex.src.split(/\s+/).filter((w) => w !== "/" && w !== "。");
+      const used = new Set();
+      for (const w of words) { const i = bank.findIndex((t, j) => t === w && !used.has(j)); used.add(i); await page.click(`.jp-gbank [data-b="${i}"]`); }
+      if (k === 3) await shot(page, "jp-grammar-build-390-light.png");
+    } else {
+      const opts = await page.$$eval(".jp-gopt", (b) => b.map((x) => x.textContent));
+      await page.click(`.jp-gopt[data-o="${opts.indexOf(ex.a)}"]`);
+    }
+    await page.click('.jp-gquiz [data-k="check"]');
+    ok(await page.isVisible(".jp-gfb.ok"), `Mini-Quiz Aufgabe ${k + 1} (${ex.t}) richtig`);
+    if (k === 0) await shot(page, "jp-grammar-lesson-390-light.png");
+    await page.click('.jp-gquiz [data-k="next"]');
+  }
+  ok(/5 von 5 richtig/.test(await page.textContent(".jp-gquiz")), "Mini-Quiz: 5 von 5");
+  await page.click('.jp-gquiz [data-k="back"]');
+  ok(/1 \/ 20 geschafft/.test(await page.textContent(".jp-ghero")), "Lektion als geschafft gemerkt");
 
   // ---- Sensei ----
   await tab(page, "sensei");
@@ -369,6 +408,14 @@ function fakes(opts) {
   await shot(page, "jp-read-390-dark.png");
   await tab(page, "sensei");
   await shot(page, "jp-sensei-390-dark.png");
+  await tab(page, "grammatik");
+  await page.waitForSelector(".jp-glist .jp-rtile", { timeout: 5000 });
+  await page.click('.jp-rtile[data-open="iadj"]');
+  await page.click('.jp-gquiz [data-k="quiz"]');
+  await page.click('.jp-gopt[data-o="0"]');
+  await page.click('.jp-gquiz [data-k="check"]');
+  await shot(page, "jp-grammar-quiz-390-dark.png", true);
+  ok(await page.isVisible(".jp-gfb"), "dunkel: Grammatik-Quiz mit Rückmeldung");
   const sw = await page.evaluate(() => document.documentElement.scrollWidth);
   ok(sw <= 390, `kein waagrechtes Scrollen (${sw})`);
   await ctx.close();
@@ -381,6 +428,10 @@ function fakes(opts) {
     await shot(page, `jp-kana-1440-${scheme}.png`);
     await tab(page, "hoeren");
     await shot(page, `jp-listen-1440-${scheme}.png`);
+    await tab(page, "grammatik");
+    await page.waitForSelector(".jp-glist .jp-rtile", { timeout: 5000 });
+    await page.click('.jp-rtile[data-open="te"]');
+    await shot(page, `jp-grammar-1440-${scheme}.png`, true);
     await ctx.close();
   }
 
