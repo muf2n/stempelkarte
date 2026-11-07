@@ -8,6 +8,7 @@
 // Firebase-Anmeldung, damit Playwright /chat abfangen kann.
 import * as store from "../store.js";
 import { getFirebase } from "../firebase.js";
+import * as moneyLock from "./money-lock-state.js";
 
 export const URL_KEY = "stempelkarte.ai.url";
 export const DEFAULT_URL = "https://stempelkarte-mcp.lippa-florian.workers.dev";
@@ -66,6 +67,11 @@ const STATUS_MSG = {
   502: "Claude ist gerade nicht erreichbar. Bitte gleich nochmal probieren.",
 };
 
+/** true, wenn die Geld-Sperre gerade aktiv ist (gesperrt und nicht entsperrt). */
+export function moneyLockedNow() {
+  try { return !!moneyLock.isLocked(); } catch { return false; }
+}
+
 /**
  * Schickt einen Verlauf an den Claude-Server.
  * @param {{role:"user"|"assistant", content:string}[]} messages
@@ -98,6 +104,8 @@ export async function askClaude(messages, opts = {}) {
       headers: { "Content-Type": "application/json", Authorization: "Bearer " + token },
       body: JSON.stringify({
         ...(opts.body && typeof opts.body === "object" ? opts.body : {}),
+        // Geld-Sperre: der Server bietet dann keine Geld-Werkzeuge an (gilt für jeden /chat-Aufruf).
+        ...(moneyLockedNow() ? { moneyLocked: true } : {}),
         messages: (messages || []).map((m) => ({ role: m.role, content: String(m.content || "") })),
       }),
       signal: ctrl.signal,

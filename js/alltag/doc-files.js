@@ -6,7 +6,7 @@
 // Nicht im Backup (backup-core EXCLUDE_EXACT) – genau wie a_school_files. Bilder werden vor dem Speichern verkleinert.
 import * as store from "../store.js";
 import { getFirebase } from "../firebase.js";
-import { MAX_BYTES, splitChunks, fmtSize } from "./dokumente-core.js";
+import { MAX_BYTES, splitChunks, fmtSize, safeType } from "./dokumente-core.js";
 
 const COL = "a_doc_files";
 const IDB_NAME = "stempelkarte-docs";
@@ -107,7 +107,7 @@ export function b64ToBlob(b64, type) {
   const bin = atob(b64);
   const a = new Uint8Array(bin.length);
   for (let i = 0; i < bin.length; i++) a[i] = bin.charCodeAt(i);
-  return new Blob([a], { type: type || "application/octet-stream" });
+  return new Blob([a], { type: safeType(type) });
 }
 
 /* ---------- Dateien vorbereiten ---------- */
@@ -145,7 +145,7 @@ export async function prepareFile(file) {
   if (file.size > MAX_BYTES) throw new Error(`Die Datei ist ${fmtSize(file.size)} groß – erlaubt sind höchstens ${fmtSize(MAX_BYTES)}. Tipp: PDF verkleinern oder Seiten als Fotos speichern. 📸`);
   if (!file.size) throw new Error("Die Datei ist leer.");
   const data = await readDataURL(file);
-  return { data, type: file.type || "application/octet-stream", size: file.size };
+  return { data: data.replace(/^data:[^,]*,/, `data:${safeType(file.type)};base64,`), type: safeType(file.type), size: file.size }; // L1
 }
 
 /** Für „🤖 Text erkennen“: Bild auf ≤ 1600 px / ≈ 1 MB JPEG → { type, data (base64) } */

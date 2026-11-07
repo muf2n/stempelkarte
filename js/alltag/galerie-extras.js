@@ -149,7 +149,7 @@ export function openDuplicates(items, ctx, { onDeleted } = {}) {
       const draw = () => {
         host.innerHTML = `<p class="note">${groups.length} ${groups.length === 1 ? "Gruppe" : "Gruppen"} gefunden. Markiert (🗑️) sind die Kopien – das Foto mit ⭐/Notiz bzw. das älteste bleibt. Tipp auf ein Foto zum Umschalten.</p>
           <ol class="gx-groups">${groups.map((g, gi) => `<li class="gx-group"><b>Gruppe ${gi + 1}</b><div class="gx-gthumbs">${g.map((p) => `<button type="button" class="gx-gth${del.has(p.id) ? " del" : ""}" data-dp="${esc(p.id)}" aria-pressed="${del.has(p.id)}" aria-label="${del.has(p.id) ? "Wird gelöscht – tippen zum Behalten" : "Bleibt – tippen zum Löschen"}">
-              ${p.thumb ? `<img src="${p.thumb}" alt="">` : ""}<span class="gx-gth-b">${del.has(p.id) ? "🗑️" : "✔️ bleibt"}</span></button>`).join("")}</div></li>`).join("")}</ol>
+              ${p.thumb ? `<img src="${esc(p.thumb)}" alt="">` : ""}<span class="gx-gth-b">${del.has(p.id) ? "🗑️" : "✔️ bleibt"}</span></button>`).join("")}</div></li>`).join("")}</ol>
           <div class="row"><button type="button" class="btn ghost" data-dx="close">Fertig</button><button type="button" class="btn danger" data-dx="del"${del.size ? "" : " disabled"}>🗑️ ${del.size} ${del.size === 1 ? "Foto" : "Fotos"} löschen</button></div>`;
       };
       draw();

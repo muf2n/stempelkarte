@@ -314,13 +314,26 @@ async function doSignIn() {
 }
 
 async function doSignOut() {
+  const wasCloud = !!currentUid;
   safe(store.stop);
   currentUid = null;
   lsDel(FORCE_LOCAL_KEY);
+  let signedOut = false;
   try {
-    if (firebaseConfigured && authStarted) await authSignOut();
+    if (firebaseConfigured && authStarted) { await authSignOut(); signedOut = true; }
   } catch (e) {
     ui.toast("Abmelden fehlgeschlagen: " + errMsg(e), 4000);
+  }
+  // L3 (Audit 2): private Gerätedaten des Kontos entfernen (Chatverläufe, Wetter-Ort, Briefing, Suche, Tokens,
+  // Kalender-Kopien, Entsperr-Sitzungen, Firestore-Offline-Cache). Danach neu laden (Firestore ist beendet).
+  if (wasCloud && signedOut) {
+    let reload = false;
+    try {
+      const [{ clearPrivateDeviceData }, { getFirebase }] = await Promise.all([import("./signout-clean.js"), import("./firebase.js")]);
+      const r = await clearPrivateDeviceData(await getFirebase().catch(() => null));
+      reload = r.firestoreCleared;
+    } catch (e) { console.warn("Abmelden: Aufräumen unvollständig", e && e.name); }
+    if (reload) { location.reload(); return; }
   }
   if (firebaseConfigured) showLogin();
   else startLocalMode();

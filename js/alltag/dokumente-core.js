@@ -55,7 +55,7 @@ export function normDoc(x) {
   return {
     id: s(d.id), title: s(d.title).slice(0, 140) || s(d.name).slice(0, 140) || "Dokument",
     folder: s(d.folder) || "sonstiges", tags: cleanTags(d.tags), fav: !!d.fav,
-    type: s(d.type) || "application/octet-stream", size: Number(d.size) || 0, name: s(d.name).slice(0, 200),
+    type: safeType(s(d.type)), size: Number(d.size) || 0, name: s(d.name).slice(0, 200),
     chunks: Math.max(0, Math.round(Number(d.chunks) || 0)), thumb: typeof d.thumb === "string" && d.thumb.startsWith("data:image/") ? d.thumb : "",
     date: isKey(d.date) ? d.date : "", expires: isKey(d.expires) ? d.expires : "",
     remind: d.remind !== false, remindDays: Math.max(1, Math.min(365, Math.round(Number(d.remindDays) || DEFAULT_REMIND_DAYS))),
@@ -64,7 +64,22 @@ export function normDoc(x) {
   };
 }
 
-export const isImage = (d) => /^image\//.test(d.type || "");
+// L1 (Audit 2): nur bekannte, harmlose Dateitypen behalten – alles andere (HTML, SVG, XML, Skripte …) wird
+// application/octet-stream. Im Tab geöffnet werden nur PDFs und Fotos; alles andere wird heruntergeladen/geteilt.
+const SAFE_TYPES = new Set([
+  "application/pdf", "image/jpeg", "image/png", "image/webp", "text/plain", "text/csv",
+  "application/msword", "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+  "application/vnd.ms-excel", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+  "application/vnd.oasis.opendocument.text", "application/vnd.oasis.opendocument.spreadsheet",
+]);
+export const OCTET = "application/octet-stream";
+export function safeType(t) {
+  const x = String(t || "").toLowerCase().split(";")[0].trim();
+  return SAFE_TYPES.has(x) ? x : OCTET;
+}
+/** Darf im Browser angezeigt werden (Tab bzw. <img>)? Nur PDF und Fotos. */
+export const canOpen = (d) => isPdf(d) || isImage(d);
+export const isImage = (d) => /^image\/(jpeg|png|webp)$/.test(d.type || "");
 export const isPdf = (d) => d.type === "application/pdf";
 export const kindIcon = (d) => (isPdf(d) ? "📄" : isImage(d) ? "🖼️" : /word|document/.test(d.type || "") ? "📝" : /sheet|excel/.test(d.type || "") ? "📊" : "📎");
 export const fmtSize = (n) => (n >= 1024 * 1024 ? `${(n / 1024 / 1024).toFixed(1).replace(".", ",")} MB` : `${Math.max(1, Math.round((Number(n) || 0) / 1024))} kB`);

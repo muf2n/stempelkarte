@@ -719,7 +719,7 @@ const TOOL_SUCHE = {
     const limit = Math.max(1, Math.min(100, Math.round(Number(args.limit) || 40)));
     const A = (n) => d.alltag(n).catch(() => []);
     const [entries, todos, places, mat, tx, subs, tasks, exams, grades, projects, docs, tt, trips, uwPlaces, packing, albums, photos, settings] = await Promise.all([
-      d.entriesAll(), d.todos().catch(() => []), d.places(), A("material_items"), A("money_tx"), A("money_subs"), A("school_tasks"), A("school_exams"),
+      d.entriesAll(), d.todos().catch(() => []), d.places(), A("material_items"), (d.moneyLocked ? Promise.resolve([]) : A("money_tx")), (d.moneyLocked ? Promise.resolve([]) : A("money_subs")), A("school_tasks"), A("school_exams"),
       A("school_grades"), A("school_projects"), d.listMasked("a_school_docs", SCHOOL_DOC_MASK).catch(() => []), A("school_timetable"), A("travel_trips"),
       A("travel_places"), A("travel_packing"), A("photo_albums"), photoIndex(d).catch(() => []), d.settings(),
     ]);

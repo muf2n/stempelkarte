@@ -5083,3 +5083,4 @@ html.mm-mask .mm-amt::after, html.mm-mask [data-tg="tg"]::after, html.mm-mask [d
 .acc-sw.on { border-color: var(--sw); box-shadow: 0 0 0 3px color-mix(in srgb, var(--sw) 25%, transparent); }
 .acc-sw:focus-visible { outline: none; box-shadow: var(--ring); }
 .acc-ico { font-size: 1.3rem; }
+.ai-msg.ai-hidden, .ai-msg.ai-locknote { opacity:.7; font-style:italic; }

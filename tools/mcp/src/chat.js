@@ -108,8 +108,13 @@ export async function verifyIdToken(token, { projectId, email, fetchImpl, now })
 
 /* ---------- Anthropic ---------- */
 
-export function anthropicTools() {
-  const list = TOOLS.map((t) => ({ name: t.name, description: t.description, input_schema: t.inputSchema }));
+/** Geld-Werkzeuge: bei aktiver Geld-Sperre (body.moneyLocked) nicht angeboten (M1, Audit 2). */
+export const MONEY_TOOLS = new Set(["geld_lesen", "ausgabe_eintragen", "leisten_pruefen", "abos_lesen", "abo_bearbeiten", "geld_eintragen"]);
+export const MONEY_LOCKED_PROMPT = "GELD-SPERRE AKTIV: Der Geld-Bereich ist in der App gesperrt. Du hast keinen Zugriff auf Kontostand, Buchungen, Ausgaben, Budgets oder Abos. Fragt jemand danach, antworte freundlich: „Geld ist gesperrt – entsperre es in der App.“ Nenne keine Beträge aus früheren Nachrichten.";
+export const MONEY_LOCKED_MSG = "Geld ist gesperrt – entsperre es in der App.";
+
+export function anthropicTools({ moneyLocked = false } = {}) {
+  const list = TOOLS.filter((t) => !(moneyLocked && MONEY_TOOLS.has(t.name))).map((t) => ({ name: t.name, description: t.description, input_schema: t.inputSchema }));
   // Update 9: viele Werkzeuge → Werkzeug-Liste zwischenspeichern lassen (Prompt-Caching), spart in der Schleife Kosten.
   if (list.length) list[list.length - 1] = { ...list[list.length - 1], cache_control: { type: "ephemeral" } };
   return list;
@@ -347,7 +352,7 @@ export function claimsWrite(text) {
 const CLAIM_NUDGE = "[System] Du hast gerade geschrieben, dass etwas gespeichert/eingetragen/geändert wurde – in dieser Runde lief aber KEIN Schreib-Werkzeug. Ruf jetzt das passende Werkzeug auf. Falls dir Angaben fehlen, frag nach. Behaupte nie etwas als erledigt, das kein Werkzeug bestätigt hat.";
 
 /** Haupt-Ablauf (ohne HTTP-Details). → {reply, actions, usage} */
-export async function runChat({ env, fetchImpl, now, data, messages, image = false, mode = "text", short = true, name = "" }) {
+export async function runChat({ env, fetchImpl, now, data, messages, image = false, mode = "text", short = true, name = "", moneyLocked = false }) {
   const model = String(env.CLAUDE_MODEL || DEFAULT_MODEL);
   const cap = Number(env.AI_MONTHLY_USD ?? 3);
   const capUsd = Number.isFinite(cap) && cap >= 0 ? cap : 3;
@@ -364,8 +369,9 @@ export async function runChat({ env, fetchImpl, now, data, messages, image = fal
     };
   }
   const sensei = mode === "sensei" || mode === "lehrer" || mode === BERICHT_MODE || mode === BRIEFING_MODE; // ohne Werkzeuge (Sensei, Lehrer, Wochenbericht, Briefing)
-  const tools = sensei ? null : anthropicTools(); // keine Werkzeuge: günstiger, kein Datenzugriff
-  const system = systemPrompt(now, { mode, short, name });
+  const tools = sensei ? null : anthropicTools({ moneyLocked }); // keine Werkzeuge: günstiger, kein Datenzugriff
+  const system = systemPrompt(now, { mode, short, name }) + (moneyLocked ? "\n\n" + MONEY_LOCKED_PROMPT : "");
+  if (moneyLocked) data.moneyLocked = true; // suche lässt Buchungen/Abos weg
   const conv = messages.map((m) => ({ ...m }));
   const actions = [];
   const proposed = new Set();
@@ -373,7 +379,7 @@ export async function runChat({ env, fetchImpl, now, data, messages, image = fal
   let sawUntrusted = !!image; // Fotos können fremden Text enthalten (Zettel, Plakat …) → wie E-Mails behandeln
   let inTok = 0, outTok = 0, inEq = 0; // inEq: Eingabe gewichtet (Cache schreiben ×1,25, Cache lesen ×0,1)
   let reply = "";
-  let nudged = false, writeAttempted = false;
+  let nudged = false, writeAttempted = false, money = false;
   try {
     for (let i = 0; i < MAX_ITER; i++) {
       const res = await callAnthropic(env, fetchImpl, { model, max_tokens: mode === "lehrer" && image ? LEHRER_FOTO_MAX_TOKENS : MAX_TOKENS, system, ...(tools ? { tools } : {}), messages: conv });
@@ -403,6 +409,7 @@ export async function runChat({ env, fetchImpl, now, data, messages, image = fal
         if (t && !t.annotations.readOnlyHint) writeAttempted = true;
         let out, isError = false;
         if (!t) { out = `Unbekanntes Werkzeug: ${u.name}`; isError = true; }
+        else if (moneyLocked && MONEY_TOOLS.has(u.name)) { out = MONEY_LOCKED_MSG; isError = true; }
         else if (TWO_STEP[u.name] && proposed.has(TWO_STEP[u.name])) { out = u.name === "einstellung_bestaetigen" ? SAME_TURN_SETTINGS_MSG : SAME_TURN_MSG; isError = true; }
         else if (sawUntrusted && writeTools.has(u.name)) { out = UNTRUSTED_WRITE_MSG; isError = true; }
         else {
@@ -412,6 +419,7 @@ export async function runChat({ env, fetchImpl, now, data, messages, image = fal
           else {
             try {
               out = String(await t.run(args, data));
+              if (MONEY_TOOLS.has(u.name) || (u.name === "suche" && /\b(Geld|Abos)\b/.test(out))) money = true; // App blendet solche Antworten bei Sperre aus
               if (t.untrusted || hasUntrusted(out)) sawUntrusted = true;
               const act = t.action || t.name;
               if (!t.annotations.readOnlyHint && !actions.includes(act)) actions.push(act);
@@ -449,7 +457,7 @@ export async function runChat({ env, fetchImpl, now, data, messages, image = fal
       }
     }
   }
-  return { reply: reply || "Erledigt.", actions, usage: { month, ...usage, capUsd } };
+  return { reply: reply || "Erledigt.", actions, usage: { month, ...usage, capUsd }, ...(money ? { money: true } : {}) };
 }
 
 /** HTTP-Handler für /chat. */
@@ -487,7 +495,7 @@ export async function handleChat(request, env, { fetchImpl = (...a) => fetch(...
   const data = new Data(fs, who.uid, now);
   data.env = env; data.fetchImpl = fetchImpl; // für mails_suchen/mail_lesen (Gmail-Secrets)
   try {
-    const out = await runChat({ env, fetchImpl, now, data, messages, image: !!image, ...chatMode(body) });
+    const out = await runChat({ env, fetchImpl, now, data, messages, image: !!image, ...chatMode(body), moneyLocked: !!(body && body.moneyLocked === true) });
     return json(out.limited ? 429 : 200, out.limited ? { ...out, error: out.reply } : out);
   } catch (e) {
     if (e instanceof HttpError) return json(e.status, { error: e.message });

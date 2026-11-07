@@ -150,3 +150,24 @@ test("Kleinkram: Dateiname, „vor X Tagen“, Erinnerung", () => {
   assert.equal(B.needsReminder(d - 15 * 86400e3, d), true);
   assert.equal(B.sizeText(2048), "2 KB");
 });
+
+test("L6 Audit 2: __proto__/constructor/prototype werden auf allen Ebenen verworfen", () => {
+  const text = JSON.stringify({ format: B.FORMAT, v: B.VERSION, created: Date.UTC(2026, 10, 1), collections: {
+    todos: [{ id: "t1", title: "x", __proto__x: 1, nested: { deep: [{ ok: 1 }] } }],
+  }, meta: { settings: { a: 1 } } })
+    .replace('"__proto__x":1', '"__proto__":{"polluted":true},"constructor":{"prototype":{"bad":1}},"prototype":2,"__name__":3')
+    .replace('"deep":[{"ok":1}]', '"deep":[{"ok":1,"__proto__":{"evil":1}}],"__proto__":{"evil":2}')
+    .replace('"a":1', '"a":1,"__proto__":{"isAdmin":true}');
+  const { obj } = B.parseFile(text);
+  const { backup } = B.validateBackup(obj);
+  const t = backup.collections.todos[0];
+  assert.equal(Object.getPrototypeOf(t), Object.prototype);
+  assert.equal(t.polluted, undefined);
+  assert.ok(!Object.keys(t).some((k) => /proto|constructor|prototype|__name__/.test(k)), Object.keys(t).join());
+  assert.equal(Object.getPrototypeOf(t.nested), Object.prototype);
+  assert.equal(t.nested.evil, undefined);
+  assert.equal(t.nested.deep[0].evil, undefined);
+  assert.equal(t.nested.deep[0].ok, 1);
+  assert.equal(backup.meta.settings.isAdmin, undefined);
+  assert.equal(({}).polluted, undefined);
+});

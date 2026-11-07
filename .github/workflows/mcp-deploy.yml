@@ -118,6 +118,7 @@ jobs:
             require("fs").writeFileSync(process.env.RUNNER_TEMP + "/mcp-secrets.json", JSON.stringify(out), { mode: 0o600 });
             console.log("Secrets:", Object.keys(out).join(", ") || "keine");
             if (!out.STEMPEL_TOKEN) console.log("::warning title=MCP-Connector::STEMPEL_TOKEN fehlt – /mcp lehnt alle Anfragen ab.");
+            if (!out.STEMPEL_UID) console.log("::warning title=STEMPEL_UID::STEMPEL_UID fehlt – der Server rät die Nutzer-ID nicht mehr (Sicherheit). Bitte als Secret setzen.");
             if (!!out.ENABLEBANKING_APP_ID !== !!out.ENABLEBANKING_KEY) console.log("::warning title=Bankverbindung::Nur eines von ENABLEBANKING_APP_ID / ENABLEBANKING_KEY ist gesetzt – es braucht beide.");
             const gm = ["GOOGLE_OAUTH_CLIENT_ID", "GOOGLE_OAUTH_CLIENT_SECRET"].filter((n) => out[n]);
             if (gm.length === 1) console.log("::warning title=Gmail dauerhaft::Es braucht beide: GOOGLE_OAUTH_CLIENT_ID und GOOGLE_OAUTH_CLIENT_SECRET (GMAIL_ENC_KEY ist optional).");

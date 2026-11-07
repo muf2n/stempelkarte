@@ -5,6 +5,7 @@
 // Limit 700 kB pro Datei; Bilder werden vorher verkleinert (JPEG).
 import { getFirebase } from "../firebase.js";
 import { newId } from "./db.js";
+import { safeType, OCTET } from "./dokumente-core.js";
 import {
   col, safeWrite, esc, dot, todayKey, fmtDate, subjectColor, subjectInputHTML, wireSubjectChips, emptyHTML, armDelete, subjects,
 } from "./school-core.js";
@@ -100,15 +101,16 @@ export async function prepareFile(file) {
     throw new Error(`Die Datei ist ${kb(file.size)} groß – erlaubt sind höchstens 700 kB. Tipp: PDF verkleinern („PDF komprimieren“) oder die Seiten als Fotos speichern.`);
   }
   const data = await readDataURL(file);
-  return { data, type: file.type || "application/octet-stream", size: file.size };
+  return { data: data.replace(/^data:[^,]*,/, `data:${safeType(file.type)};base64,`), type: safeType(file.type), size: file.size }; // L1
 }
 function toBlob(dataURL) {
   const [head, b64] = dataURL.split(",");
-  const type = (/data:([^;]+)/.exec(head) || [])[1] || "application/octet-stream";
+  const type = safeType((/data:([^;]+)/.exec(head) || [])[1]); // L1: nie text/html, SVG o. Ä.
   const bin = atob(b64); const a = new Uint8Array(bin.length);
   for (let i = 0; i < bin.length; i++) a[i] = bin.charCodeAt(i);
   return new Blob([a], { type });
 }
+const SAFE_IMG = /^data:image\/(jpeg|png|webp);base64,[A-Za-z0-9+/=]+$/;
 function fileName(d) {
   if (d.name) return d.name;
   const ext = d.type === "application/pdf" ? ".pdf" : /^image\/jpeg/.test(d.type) ? ".jpg" : "";
@@ -205,9 +207,11 @@ export function openDoc(S, d) {
     </div>`,
     onMount(el, close) {
       wireSubjectChips(el);
-      if (/^image\//.test(d.type || "")) withFile(S, d, (data) => { const p = el.querySelector("#dv-prev"); if (p) p.innerHTML = `<img src="${data}" alt="${esc(d.title || "")}">`; });
+      if (/^image\//.test(d.type || "")) withFile(S, d, (data) => { const p = el.querySelector("#dv-prev"); if (p && SAFE_IMG.test(data)) p.innerHTML = `<img src="${esc(data)}" alt="${esc(d.title || "")}">`; });
       el.querySelector("#dv-open").addEventListener("click", () => withFile(S, d, (data) => {
         const blob = toBlob(data);
+        // L1 (Audit 2): nur PDFs und Fotos im Tab öffnen, alles andere herunterladen
+        if (!/^(application\/pdf|image\/(jpeg|png|webp))$/.test(blob.type)) { download(new Blob([blob], { type: OCTET }), fileName(d)); return; }
         const url = URL.createObjectURL(blob);
         const w = window.open(url, "_blank");
         if (!w) download(blob, fileName(d));

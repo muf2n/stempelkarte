@@ -68,6 +68,9 @@ const TMP = fs.mkdtempSync(path.join(require("os").tmpdir(), "bk-"));
   await shot("backup-390-dark.png");
 
   /* ---------- Sichern (JSON) ---------- */
+  ok(await page.$eval("#bk-enc", (e) => e.checked) && await page.isVisible("#bk-pw1"), "L2: Verschlüsseln ist standardmäßig an");
+  await page.click('label:has(#bk-enc)'); // bewusst „ohne Passwort“
+  ok(await page.isVisible("#bk-nopw"), "Ohne Passwort → Warnung sichtbar");
   const plain = await download(() => page.click("#bk-save"));
   ok(/^stempelkarte-backup-\d{4}-\d{2}-\d{2}-\d{4}\.json$/.test(plain.name), "Dateiname " + plain.name);
   const j = JSON.parse(plain.text);
@@ -77,6 +80,7 @@ const TMP = fs.mkdtempSync(path.join(require("os").tmpdir(), "bk-"));
   ok(j.collections.a_photo_index[0].dayKey === "2026-11-01" && !("thumb" in j.collections.a_photo_index[0]), "Foto-Index ohne Vorschaubild");
   ok(!plain.text.includes("TRESORGEHEIM") && !Object.keys(j.collections).some((k) => k.includes("vault")), "Tresor NICHT im Backup");
   ok(j.meta.settings.weeklyTarget === 38.5, "Einstellungen drin");
+  ok(!("ical_feeds" in j.meta) && !("money_lock" in j.meta), "L2: unverschlüsselt ohne Kalender-Abo-Links und Geld-Sperre");
   await page.waitForFunction(() => document.getElementById("bk-last").textContent.startsWith("heute"));
   ok(!(await page.$eval("#bk-status", (e) => e.classList.contains("warn"))), "Nach dem Sichern: „heute“, keine Warnung");
   await page.waitForFunction(() => (JSON.parse(localStorage.getItem("stempelkarte.local.v1")).settings.backup || {}).lastManual > Date.now() - 60000);
@@ -84,7 +88,7 @@ const TMP = fs.mkdtempSync(path.join(require("os").tmpdir(), "bk-"));
 
   /* ---------- Sichern (verschlüsselt) ---------- */
   await page.click('label:has(#bk-enc)');
-  ok(await page.isVisible("#bk-pw1"), "Passwortfelder erscheinen");
+  ok(await page.isVisible("#bk-pw1") && !(await page.isVisible("#bk-nopw")), "Passwortfelder erscheinen, Warnung weg");
   await page.fill("#bk-pw1", "kurz");
   await page.fill("#bk-pw2", "kurz");
   await page.click("#bk-save");

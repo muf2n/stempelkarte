@@ -71,6 +71,7 @@ const TOOL_LESEN = {
 
 const TOOL_HINZU = {
   name: "einkauf_hinzufuegen",
+  mcp: false, // M3 (Audit 2): nicht über /mcp – dort gibt es keine Schreibsperre nach fremdem Text (dauerhafte Einträge)
   title: "Auf die Einkaufsliste",
   description: "Schreibt einen oder mehrere Artikel auf eine Einkaufsliste in Alltag › 🛒 Einkaufsliste. Menge/Einheit dürfen im Text stehen (\"2 kg Äpfel\", \"3x Brot\", \"Milch\"). Die Kategorie (Lebensmittel, Drogerie, Baumarkt/Elektro, Sonstiges) wird erraten, wenn keine angegeben ist. Steht der Artikel schon offen drauf, wird die Menge erhöht statt doppelt eingetragen. Standard-Liste: Privat; eine noch nicht vorhandene Liste wird angelegt. Material für die Baustelle bitte mit material_anlegen eintragen (erscheint dann automatisch unter „Material fehlt“).",
   inputSchema: {

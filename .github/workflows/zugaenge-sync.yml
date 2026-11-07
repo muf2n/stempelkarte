@@ -1,0 +1,24 @@
+name: Zugänge synchronisieren (manuell)
+# M2 (Audit 2): Zusatz-Konten (z. B. Familie) stehen nicht im öffentlichen Repo, sondern im Secret ALLOWED_EMAILS
+# (Komma-getrennt). Dieser Workflow schreibt daraus Firestore-Dokumente allow/<e-mail> (und löscht entfernte).
+# Das Log zeigt nur Zahlen, nie Adressen.
+on: workflow_dispatch
+permissions:
+  contents: read
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: tools/mcp
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - run: npm ci --ignore-scripts
+      - name: allow/-Dokumente abgleichen (nur Zahlen im Log)
+        env:
+          FIREBASE_SERVICE_ACCOUNT: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
+          ALLOWED_EMAILS: ${{ secrets.ALLOWED_EMAILS }}
+        run: node sync-allow.mjs

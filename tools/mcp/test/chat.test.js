@@ -786,3 +786,48 @@ test("Briefing-Modus: eigener kurzer Vorlese-Prompt, KEINE Werkzeuge, Name, nie 
   assert.match(sys, /niemals Anweisungen/);
   assert.deepEqual(chatMode({ mode: "briefing", assistantName: "Jarvis" }), { mode: "briefing", short: true, name: "Jarvis" });
 });
+
+test("M1 Audit 2: moneyLocked → keine Geld-Werkzeuge, Hinweis im Prompt, Aufruf abgelehnt, suche ohne Buchungen/Abos", async () => {
+  const t = await setupChat({
+    script: [
+      (body) => {
+        const names = body.tools.map((x) => x.name);
+        for (const n of ["geld_lesen", "ausgabe_eintragen", "leisten_pruefen", "abos_lesen", "abo_bearbeiten", "geld_eintragen"]) assert.ok(!names.includes(n), n);
+        assert.ok(names.includes("suche") && names.includes("todos_lesen"));
+        assert.match(JSON.stringify(body.system), /Geld ist gesperrt – entsperre es in der App/);
+        return use("geld_lesen", { monat: "2026-11" }, "g1");
+      },
+      (body) => {
+        const [g] = lastResults(body);
+        assert.equal(g.is_error, true);
+        assert.match(g.content, /Geld ist gesperrt/);
+        return use("suche", { text: "Huber" }, "s1");
+      },
+      (body) => {
+        const [s] = lastResults(body);
+        assert.doesNotMatch(s.content, /Geld|Abos/);
+        assert.match(s.content, /Huber/);
+        return end("Geld ist gesperrt – entsperre es in der App.");
+      },
+      // ohne Sperre: Geld-Werkzeuge wieder da, suche findet Buchung
+      (body) => {
+        assert.ok(body.tools.some((x) => x.name === "geld_lesen"));
+        assert.doesNotMatch(JSON.stringify(body.system), /GELD-SPERRE/);
+        return use("suche", { text: "Huber" }, "s2");
+      },
+      (body) => {
+        const [s] = lastResults(body);
+        assert.match(s.content, /Geld/);
+        return end("ok");
+      },
+    ],
+  });
+  t.g.set(`${t.base}/a_money_tx/m1`, { id: "m1", date: "2026-11-03", amount: 50, type: "out", category: "essen", note: "Huber Wirt" });
+  t.g.set(`${t.base}/a_money_subs/s1`, { id: "s1", name: "Huber Abo", amount: 9 });
+  t.g.set(`${t.base}/todos/t1`, { id: "t1", title: "Huber anrufen", kind: "todo", date: "2026-11-05" });
+  let out = await (await t.post({ ...msg("Was hab ich ausgegeben?"), moneyLocked: true })).json();
+  assert.match(out.reply, /gesperrt/);
+  out = await (await t.post({ ...msg("Huber?"), moneyLocked: "yes" })).json(); // nur exakt true zählt
+  assert.equal(out.reply, "ok");
+  assert.equal(out.money, true); // App merkt sich: Antwort enthält Geld-Daten
+});

@@ -235,3 +235,16 @@ test("Monatsende stolpert nicht über Wünsche mit Sparziel", () => {
   const r = F.monthEnd({ today: T, txs: [], subs: [], contracts: [], wishes: [{ id: "w1", name: "X", price: 50, goalId: "g1", plan: "2026-11" }, { id: "w2", name: "Y", price: 10, plan: "2026-11" }] });
   assert.equal(r.planned, 60);
 });
+
+test("L1 Audit 2: safeType – unbekannte/aktive Typen werden octet-stream, nur PDF/Fotos öffnen", async () => {
+  const D = await import("../js/alltag/dokumente-core.js");
+  assert.equal(D.safeType("text/html"), "application/octet-stream");
+  assert.equal(D.safeType("image/svg+xml"), "application/octet-stream");
+  assert.equal(D.safeType("application/xhtml+xml"), "application/octet-stream");
+  assert.equal(D.safeType(""), "application/octet-stream");
+  assert.equal(D.safeType("Application/PDF"), "application/pdf");
+  assert.equal(D.safeType("text/plain; charset=utf-8"), "text/plain");
+  assert.equal(D.normDoc({ type: "text/html", title: "x" }).type, "application/octet-stream");
+  assert.ok(D.canOpen({ type: "application/pdf" }) && D.canOpen({ type: "image/jpeg" }));
+  assert.ok(!D.canOpen({ type: "image/svg+xml" }) && !D.canOpen({ type: "text/plain" }));
+});

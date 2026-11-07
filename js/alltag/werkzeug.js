@@ -91,7 +91,7 @@ export function mount(el) {
   function thumb(t, size = "") {
     if (t.photoId) {
       const img = cachedImage(t.photoId);
-      if (img) return `<img src="${img}" alt="" class="wz-img${size}">`;
+      if (img) return `<img src="${esc(img)}" alt="" class="wz-img${size}">`;
       getImage(t.photoId).then((v) => { if (v) queue(); });
     }
     return `<span class="wz-emo${size}" aria-hidden="true">${W.catById(t.cat).e}</span>`;
@@ -210,7 +210,7 @@ export function mount(el) {
         `<div class="lbl">Kategorie</div><div class="chips" data-r="cats">${W.CATS.map((c) => `<button type="button" class="chip" data-fcat="${c.id}" aria-pressed="${cat === c.id}">${c.e} ${esc(c.label)}</button>`).join("")}</div>` +
         `<div class="row"><label>Hersteller / Modell<input id="wz-f-brand" maxlength="60" placeholder="z. B. Marke Modell 123" value="${esc(t.brand)}"></label>` +
         `<label>Seriennummer<input id="wz-f-sn" maxlength="40" autocapitalize="characters" value="${esc(t.serial)}"></label></div>` +
-        `<div class="wz-photo-pick"><div class="wz-photo-prev">${cur ? `<img src="${cur}" alt="">` : "📷"}</div>` +
+        `<div class="wz-photo-pick"><div class="wz-photo-prev">${cur ? `<img src="${esc(cur)}" alt="">` : "📷"}</div>` +
           `<label class="btn ghost sm wz-file">Foto wählen<input id="wz-f-photo" type="file" accept="image/*" capture="environment" hidden></label>` +
           (t.photoId ? `<button type="button" class="btn ghost sm" data-nophoto>Foto entfernen</button>` : "") + `</div>` +
         `<div class="lbl">Standort</div><div class="chips" data-r="locs">${W.LOC_KINDS.map((k) => `<button type="button" class="chip" data-floc="${k.id}" aria-pressed="${lk === k.id}">${k.e} ${esc(k.label)}</button>`).join("")}</div>` +
@@ -249,7 +249,7 @@ export function mount(el) {
           const f = ev.target.files && ev.target.files[0];
           if (!f) return;
           prev.textContent = "⏳";
-          try { const r = await shrinkImage(f, { maxSide: 800, maxBytes: 90 * 1024, quality: 0.75 }); photo = r.data; prev.innerHTML = `<img src="${r.data}" alt="">`; }
+          try { const r = await shrinkImage(f, { maxSide: 800, maxBytes: 90 * 1024, quality: 0.75 }); photo = r.data; prev.innerHTML = `<img src="${esc(r.data)}" alt="">`; }
           catch (err) { prev.textContent = "📷"; ui.toast(err.message || "Foto ging nicht."); }
         });
         const np = $("[data-nophoto]");
@@ -378,7 +378,7 @@ export function mount(el) {
     if (!t.photoId) { openForm(byId(t.id)); return; }
     getImage(t.photoId).then((src) => {
       if (!src) { ui.toast("Foto konnte nicht geladen werden."); return; }
-      ui.openSheet({ title: `📷 ${t.name}`, bodyHTML: `<div class="wz-photo-big"><img src="${src}" alt="Foto: ${esc(t.name)}"></div>` });
+      ui.openSheet({ title: `📷 ${t.name}`, bodyHTML: `<div class="wz-photo-big"><img src="${esc(src)}" alt="Foto: ${esc(t.name)}"></div>` });
     });
   }
 

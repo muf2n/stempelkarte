@@ -1,7 +1,8 @@
 // Test-Hilfen: In-Memory-Firestore-Emulation (REST v1), Google-Token-/Identity-Toolkit-Attrappen,
 // lokal erzeugter RSA-Schlüssel, Aufruf des Worker-fetch-Handlers.
 import { encodeFields, decodeFields } from "../src/firestore.js";
-import { handle } from "../src/worker.js";
+import { handle, makeDataFactory } from "../src/worker.js";
+import { findTool, findMcpTool, UserError } from "../src/tools.js";
 import { clearCaches } from "../src/google.js";
 import { viennaToTs } from "../src/time.js";
 
@@ -299,6 +300,11 @@ export async function setup(opts = {}) {
     return res.json();
   };
   const tool = async (name, args = {}) => {
+    // Werkzeuge mit mcp:false (nur In-App-Chat) direkt ausführen – wie runChat es tut.
+    if (!findMcpTool(name) && findTool(name)) {
+      try { return { text: String(await findTool(name).run(args, await makeDataFactory(env, g.fetch, () => now)())), isError: false }; }
+      catch (e) { if (e instanceof UserError || (e && e.expose)) return { text: e.message, isError: true }; throw e; }
+    }
     const r = await rpc("tools/call", { name, arguments: args });
     if (r.error) throw new Error("RPC-Fehler: " + JSON.stringify(r.error));
     return { text: r.result.content[0].text, isError: !!r.result.isError };

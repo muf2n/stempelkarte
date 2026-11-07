@@ -73,7 +73,7 @@ export function mount(el, ctx) {
     return `<li><button type="button" class="tl-item tl-${x.cat}" data-item="${esc(x.id)}">
       <span class="tl-dot" aria-hidden="true">${esc(x.emoji)}</span>
       <span class="tl-tx"><b>${esc(x.title)}</b>${x.sub ? `<small>${esc(x.sub)}</small>` : ""}
-        ${thumbs.length ? `<span class="tl-thumbs">${thumbs.map((t) => `<img src="${t.thumb}" alt="" loading="lazy" decoding="async">`).join("")}</span>` : ""}</span>
+        ${thumbs.length ? `<span class="tl-thumbs">${thumbs.map((t) => `<img src="${esc(t.thumb)}" alt="" loading="lazy" decoding="async">`).join("")}</span>` : ""}</span>
       <span class="tl-chev" aria-hidden="true">›</span></button></li>`;
   }
 

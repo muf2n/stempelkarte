@@ -77,6 +77,8 @@ export function knownCollections(extra = []) {
 /* ---------- Werte säubern ---------- */
 
 /** Macht einen Wert JSON-tauglich: Firestore-Timestamps/Date → ms, Bytes/Referenzen weg, undefined weg. */
+/** Schlüssel, die nie übernommen werden: Prototyp-Fallen und von Firestore reservierte __name__-Felder. */
+export const BAD_KEY = /^(?:__proto__|constructor|prototype|__.*__)$/;
 export function sanitize(v, depth = 0) {
   if (depth > 40) return null;
   if (v === null || v === undefined) return v === null ? null : undefined;
@@ -101,6 +103,7 @@ export function sanitize(v, depth = 0) {
   }
   const out = {};
   for (const k of Object.keys(v)) {
+    if (BAD_KEY.test(k)) continue; // L6 (Audit 2): __proto__/constructor/prototype nie übernehmen (Prototyp-Manipulation)
     const x = sanitize(v[k], depth + 1);
     if (x !== undefined) out[k] = x;
   }

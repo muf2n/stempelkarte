@@ -228,6 +228,9 @@ export function mount(el, ctx) {
         return;
       }
       if (isAndroid()) { await share(d, blob); return; } // Android-WebView/PWA: Blob-Tabs gehen nicht zuverlässig → Teilen/Speichern
+      // L1 (Audit 2): nur PDFs im Tab öffnen – alles andere (Word, Text, Unbekanntes) herunterladen, nie als Seite anzeigen.
+      if (!D.isPdf(d)) { download(new Blob([blob], { type: D.OCTET }), fileName(d)); ui.toast("Wird heruntergeladen 📥"); return; }
+      blob = new Blob([blob], { type: "application/pdf" });
       DS.revoke(prevUrl);
       prevUrl = DS.url(blob);
       if (!prevUrl) return;
