@@ -303,6 +303,35 @@ function noSpeech() {
   await page.waitForFunction(() => !!window.__sr.wake(), null, { timeout: 3000 });
   ok(true, "wieder sichtbar → Weckwort-Erkennung an");
 
+  // --- Foto an Claude ---
+  {
+    const zlib = require("zlib");
+    const crc = (b) => { let c = ~0; for (const x of b) { c ^= x; for (let k = 0; k < 8; k++) c = (c >>> 1) ^ (0xEDB88320 & -(c & 1)); } return ~c >>> 0; };
+    const chunk = (t, d) => { const len = Buffer.alloc(4); len.writeUInt32BE(d.length); const td = Buffer.concat([Buffer.from(t), d]); const cr = Buffer.alloc(4); cr.writeUInt32BE(crc(td)); return Buffer.concat([len, td, cr]); };
+    const W = 600, H = 400, raw = Buffer.alloc((W * 3 + 1) * H, 0x7f);
+    for (let y = 0; y < H; y++) raw[y * (W * 3 + 1)] = 0;
+    const ihdr = Buffer.alloc(13); ihdr.writeUInt32BE(W, 0); ihdr.writeUInt32BE(H, 4); ihdr[8] = 8; ihdr[9] = 2;
+    const png = Buffer.concat([Buffer.from([137, 80, 78, 71, 13, 10, 26, 10]), chunk("IHDR", ihdr), chunk("IDAT", zlib.deflateSync(raw)), chunk("IEND", Buffer.alloc(0))]);
+    const n0 = chatBodies.length;
+    await page.setInputFiles(".ai-file", { name: "zettel.png", mimeType: "image/png", buffer: png });
+    await page.waitForSelector(".ai-att:not([hidden])");
+    ok(true, "Foto angehängt → Vorschau sichtbar");
+    await page.fill(".ai-in", "Was steht auf dem Zettel?");
+    await page.click(".ai-send");
+    for (let i = 0; i < 50 && chatBodies.length <= n0; i++) await page.waitForTimeout(100);
+    await page.waitForTimeout(400);
+    const bi = chatBodies[chatBodies.length - 1];
+    ok(bi.image && bi.image.type === "image/jpeg" && /^[A-Za-z0-9+/]+=*$/.test(bi.image.data) && bi.image.data.length < 900000, "/chat bekommt das verkleinerte Foto (JPEG, base64)");
+    ok(bi.messages.slice(-1)[0].content === "Was steht auf dem Zettel?", "Frage zum Foto mitgeschickt");
+    ok(await page.isHidden(".ai-att") && await page.isVisible(".ai-msg.me .ai-thumb"), "Vorschau weg, Mini-Foto im Verlauf");
+    const hist = await page.evaluate(() => Object.keys(localStorage).filter((k) => /ai/i.test(k)).map((k) => localStorage.getItem(k).length));
+    ok(Math.max(0, ...hist) < 60000, "Verlauf speichert nur ein Mini-Bild");
+    await page.fill(".ai-in", "Danke");
+    await page.click(".ai-send");
+    await page.waitForTimeout(600);
+    ok(!chatBodies[chatBodies.length - 1].image, "Nächste Frage ohne Foto");
+  }
+
   // --- eigener Name „Jarvis“ ---
   ok(chatBodies[chatBodies.length - 1].assistantName === "Claude", "/chat bekommt assistantName (Standard „Claude“)");
   await page.click(".ai-vset");

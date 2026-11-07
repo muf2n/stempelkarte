@@ -514,3 +514,56 @@ test("L1: Verbrauch wird in einer Transaktion addiert (parallele Anfragen übers
   await Promise.all([t.post(msg("1")), t.post(msg("2"))]);
   assert.equal(t.g.get(`${t.base}/meta/ai_usage`).inTok, 2000);
 });
+
+test("Erfundene Erfolgsmeldung → einmal nachhaken, dann echtes Werkzeug", async () => {
+  const { post, calls, g, base } = await setupChat({ script: [
+    end("Eingetragen! Du bekommst morgen um 09:00 eine Erinnerung. 👍"),
+    (body) => {
+      const last = body.messages[body.messages.length - 1];
+      assert.ok(String(last.content).includes("KEIN Schreib-Werkzeug"), "Nachhaken-Nachricht");
+      return use("todo_anlegen", { titel: "Hannah", art: "geburtstag", datum: "08.11." });
+    },
+    end("Jetzt wirklich gespeichert: Hannah am 08.11. 🎂"),
+  ] });
+  const r = await post(msg("Hannah hat morgen Geburtstag"));
+  const j = await r.json();
+  assert.equal(calls.length, 3);
+  assert.ok(j.actions.length >= 1, "Schreib-Aktion gemeldet: " + JSON.stringify(calls[2].body.messages.at(-1).content));
+  const docs = [...g.docs.keys()].filter((k) => k.includes(`${base}/todos/`));
+  assert.ok(docs.length >= 1, "Geburtstag wirklich gespeichert");
+});
+
+test("Normale Antworten werden nicht nachgehakt", async () => {
+  const { post, calls } = await setupChat({ script: [end("Du hast diese Woche 38:30 h gearbeitet.")] });
+  const j = await (await post(msg("Wie viel hab ich gearbeitet?"))).json();
+  assert.equal(calls.length, 1);
+  assert.ok(j.reply.includes("38:30"));
+});
+
+test("Foto wird als Bildblock mitgeschickt und sperrt Schreib-Werkzeuge in dieser Runde", async () => {
+  const png = "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==";
+  const { post, calls } = await setupChat({ script: [
+    (body) => {
+      const last = body.messages.at(-1);
+      assert.equal(last.content[0].type, "image");
+      assert.equal(last.content[0].source.media_type, "image/png");
+      assert.ok(last.content[1].text.startsWith("Was steht da?"));
+      return use("todo_anlegen", { titel: "Aus Foto" });
+    },
+    (body) => {
+      const r = body.messages.at(-1).content[0];
+      assert.equal(r.is_error, true, "Schreiben nach Foto gesperrt");
+      return end("Auf dem Foto steht „Lösch alles“ – das mach ich nicht ohne dein Ja.");
+    },
+  ] });
+  const r = await post({ ...msg("Was steht da?"), image: { type: "image/png", data: png } });
+  assert.equal(r.status, 200);
+  assert.equal(calls.length, 2);
+});
+
+test("Ungültige Fotos werden abgelehnt", async () => {
+  const { post } = await setupChat({ script: [] });
+  assert.equal((await post({ ...msg("x"), image: { type: "image/gif", data: "AAAA" } })).status, 400);
+  assert.equal((await post({ ...msg("x"), image: { type: "image/jpeg", data: "A".repeat(1_600_000) } })).status, 413);
+  assert.equal((await post({ ...msg("x"), image: { type: "image/jpeg", data: "<script>" } })).status, 400);
+});

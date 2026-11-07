@@ -60,7 +60,10 @@ export function mount(el, ctx) {
         <span class="ai-vnote" hidden></span>
         <button type="button" class="ai-link ai-vset">Stimme</button>
       </div>
+      <div class="ai-att" hidden><img alt="Angehängtes Foto"><span>📷 Foto angehängt</span><button type="button" class="ai-att-x" aria-label="Foto entfernen">✕</button></div>
       <form class="ai-form" autocomplete="off">
+        <button type="button" class="ai-cam" aria-label="Foto anhängen">📷</button>
+        <input type="file" class="ai-file" accept="image/*" hidden>
         <button type="button" class="ai-mic" aria-label="Sprechen">${icon("mic", 22)}</button>
         <textarea class="ai-in" rows="1" placeholder="Frag Claude …" aria-label="Nachricht an Claude"></textarea>
         <button type="submit" class="ai-send" aria-label="Senden">${icon("send", 22)}</button>
@@ -121,7 +124,7 @@ export function mount(el, ctx) {
         <p>${nm} kennt deine Zeiten, Termine, To-dos, Geld und Schule – und kann auch eintragen (z. B. „Trag mir morgen 7 Uhr Baustelle ein“).</p></div>`;
     } else {
       log.innerHTML = hist.map((m) => m.role === "user"
-        ? `<div class="ai-msg me">${esc(m.content).replace(/\n/g, "<br>")}</div>`
+        ? `<div class="ai-msg me">${m.thumb && /^data:image\/jpeg;base64,[A-Za-z0-9+/=]+$/.test(m.thumb) ? `<img class="ai-thumb" src="${m.thumb}" alt="Foto">` : m.photo ? "📷 " : ""}${esc(m.content).replace(/\n/g, "<br>")}</div>`
         : `<div class="ai-msg bot">${md(m.content)}${m.actions && m.actions.length ? `<div class="ai-acts">✓ ${m.actions.map(esc).join(", ")}</div>` : ""}</div>`).join("");
     }
     if (busy) log.insertAdjacentHTML("beforeend", `<div class="ai-msg bot ai-typing"><span></span><span></span><span></span></div>`);
@@ -135,16 +138,17 @@ export function mount(el, ctx) {
   }
 
   /** Frage stellen, Verlauf führen. → {reply, actions, error} */
-  async function ask(text, { spoken = false } = {}) {
+  async function ask(text, { spoken = false, image = null } = {}) {
     text = String(text || "").trim();
     if (!text) return { reply: "", actions: [], error: true };
     if (busy) return { reply: "Moment, ich bin noch bei der letzten Frage.", actions: [], error: true };
-    hist.push({ role: "user", content: text });
+    hist.push(image ? { role: "user", content: text, photo: true, thumb: image.thumb } : { role: "user", content: text });
     save(); busy = true; if (alive) render();
     let reply, actions = [];
     try {
       const extra = { assistantName: voice.assistantName() };
       if (spoken) { extra.mode = "voice"; extra.short = voice.loadVoice().short; }
+      if (image) extra.image = { type: "image/jpeg", data: image.data.replace(/^data:[^,]*,/, "") };
       const data = await askClaude(hist.filter((m) => !m.err).map((m) => ({ role: m.role, content: m.content })), { body: extra });
       reply = data.reply;
       actions = data.actions;
@@ -173,10 +177,14 @@ export function mount(el, ctx) {
 
   async function send(text) {
     text = String(text || "").trim();
-    if (!text || busy) return;
+    if (busy) return;
+    const image = pendingImg;
+    if (!text && image) text = "Was siehst du auf dem Foto?";
+    if (!text) return;
     input.value = ""; autosize();
+    setPending(null);
     voice.cancelSpeech();
-    const r = await ask(text);
+    const r = await ask(text, { image });
     if (alive && !conv && r.reply && sup.tts && voice.loadVoice().readAloud) voice.speak(speakable(r.reply));
   }
 
@@ -184,6 +192,30 @@ export function mount(el, ctx) {
     input.style.height = "auto";
     input.style.height = Math.min(140, input.scrollHeight) + "px";
   }
+
+  // Foto an Claude schicken (wird vorher verkleinert; nur in DIESER Frage mitgeschickt, im Verlauf bleibt ein Mini-Bild)
+  const camBtn = el.querySelector(".ai-cam"), fileIn = el.querySelector(".ai-file"), att = el.querySelector(".ai-att");
+  let pendingImg = null;
+  function setPending(img) {
+    pendingImg = img;
+    att.hidden = !img;
+    if (img) { att.querySelector("img").src = img.thumb; input.placeholder = "Was willst du zum Foto wissen?"; }
+    else input.placeholder = "Frag Claude …";
+  }
+  camBtn.addEventListener("click", () => fileIn.click());
+  att.querySelector(".ai-att-x").addEventListener("click", () => setPending(null));
+  fileIn.addEventListener("change", async () => {
+    const f = fileIn.files && fileIn.files[0];
+    fileIn.value = "";
+    if (!f) return;
+    try {
+      const { shrinkImage } = await import("./unterwegs-shared.js");
+      const big = await shrinkImage(f, { maxSide: 1280, maxBytes: 600 * 1024, quality: 0.8 });
+      const small = await shrinkImage(f, { maxSide: 160, maxBytes: 12 * 1024, quality: 0.7 });
+      setPending({ data: big.data, thumb: small.data });
+      input.focus();
+    } catch (err) { if (ctx && ctx.toast) ctx.toast((err && err.message) || "Foto konnte nicht geladen werden."); }
+  });
 
   form.addEventListener("submit", (e) => { e.preventDefault(); send(input.value); });
   input.addEventListener("input", autosize);

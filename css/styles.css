@@ -3828,6 +3828,13 @@ label[data-ph-cam] { position: relative; cursor: pointer; }
 .ai-send, .ai-mic { flex:0 0 auto; width:42px; height:42px; border-radius:50%; border:0; display:grid; place-items:center; cursor:pointer; }
 .ai-send { background:#d97757; color:#fff; }
 .ai-mic { background:transparent; color:inherit; opacity:.75; }
+.ai-cam { flex:0 0 auto; width:42px; height:42px; border-radius:50%; border:0; display:grid; place-items:center; cursor:pointer; background:transparent; font-size:1.25rem; opacity:.85; }
+.ai-cam:focus-visible, .ai-att-x:focus-visible { outline:none; box-shadow:var(--ring); }
+.ai-att { display:flex; align-items:center; gap:10px; padding:8px 10px; margin:0 0 8px; border-radius:14px; background:var(--soft); border:1px solid var(--line); font-weight:600; font-size:.92rem; }
+.ai-att img { width:44px; height:44px; object-fit:cover; border-radius:10px; }
+.ai-att span { flex:1; min-width:0; }
+.ai-att-x { border:0; background:none; color:inherit; cursor:pointer; padding:6px 8px; border-radius:8px; font-size:1rem; }
+.ai-thumb { display:block; max-width:140px; max-height:140px; border-radius:12px; margin:0 0 6px auto; object-fit:cover; }
 .ai-mic.on { background:#e5484d; color:#fff; opacity:1; animation:aiPulse 1.2s infinite; }
 @keyframes aiPulse { 50% { box-shadow:0 0 0 8px rgba(229,72,77,.15); } }
 .ai-foot { display:flex; justify-content:space-between; align-items:center; gap:8px; font-size:.8rem; opacity:.7; }
