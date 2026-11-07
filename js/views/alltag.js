@@ -50,7 +50,7 @@ async function renderModule(id) {
     `<div class="al-mod" style="--al-c:${esc(mod.color || "#4F46E5")}">` +
       `<div class="al-bar">` +
         `<a class="al-back" href="#alltag" aria-label="Zurück zu Alltag">${icon("chevron-left", 20)}<span>Alltag</span></a>` +
-        `<h2 class="al-title"><span class="al-title-ic">${icon(mod.icon, 20)}</span>${esc(mod.title)}</h2>` +
+        `<h2 class="al-title"><span class="al-title-ic">${icon(mod.icon, 20)}</span>${esc(mod.short || mod.title)}</h2>` +
       `</div>` +
       `<div class="al-body"><div class="al-loading">Lade …</div></div>` +
     `</div>`;

@@ -175,6 +175,16 @@ const SHELL = [
   "js/alltag/jp-read.js",
   "js/alltag/jp-sensei.js",
   "css/alltag-japanisch.css",
+  "js/alltag/srs-core.js", // gemeinsames SRS (Japanisch, LAP)
+  "js/alltag/lap.js", // Alltag › LAP Elektrotechnik
+  "js/alltag/lap-core.js",
+  "js/alltag/lap-data.js",
+  "js/alltag/lap-explain.js",
+  "js/alltag/lap-learn.js",
+  "js/alltag/lap-formulas.js",
+  "js/alltag/lap-practice.js",
+  "js/alltag/lap-exam.js",
+  "css/alltag-lap.css",
   "js/gallery-active.js", // Update 9 (Agent U) – aktive Kategorie
   "css/gallery-active.css",
   "js/media-import-core.js", // Update 9 (Agent W3) – Kamera-Fotos übernehmen

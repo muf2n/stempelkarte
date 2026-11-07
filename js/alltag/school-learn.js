@@ -288,6 +288,9 @@ export function renderLearn(body, S) {
           <p class="note">Balken = diese Woche.</p>`
         : `<p class="note">Starte den Timer – jede fertige Einheit wird hier pro Fach gezählt.</p>`}
     </section>
+    <section class="card ss-card ss-lap"><h3 class="ss-h">🎓 LAP-Vorbereitung</h3>
+      <p class="note">Lernkarten, Formelsammlung, Rechenaufgaben und Prüfungssimulation für Elektrotechnik ⚡</p>
+      <a class="btn" href="#alltag/lap">Zur LAP Elektrotechnik →</a></section>
   </div>`;
   const t = timerState();
   body.querySelector("#pm-set").addEventListener("click", () => openPomoSettings(S));

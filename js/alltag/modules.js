@@ -2,7 +2,7 @@
 //   export function mount(el, ctx) → cleanup-Funktion
 // el = leerer Container (Vollbild-Bereich unter der Kopfzeile „← Alltag · <Titel>“), ctx = App-Kontext (wie bei anderen Views: ctx.store, ctx.ui …).
 // Kacheln erscheinen in dieser Reihenfolge auf der Alltag-Seite.
-// Optional subFn() → Untertitel zur Laufzeit (z. B. eigener Name des Assistenten), sonst sub.
+// Optional subFn() → Untertitel zur Laufzeit (z. B. eigener Name des Assistenten), sonst sub. Optional short → kürzerer Titel in der Kopfzeile.
 import * as store from "../store.js";
 
 function aiName() {
@@ -21,6 +21,7 @@ export const MODULES = [
   { id: "material", title: "Material", sub: "Offen · vor Ort · verbaut · pro Baustelle", icon: "toolbox", color: "#ea580c", load: () => import("./material.js") },
   { id: "rechner", title: "🧮 Taschenrechner", sub: "Rechnen mit Prozent, Wurzel & Verlauf", icon: "hash", color: "#475569", load: () => import("./calc.js") },
   { id: "japanisch", title: "🇯🇵 Japanisch", sub: "Kana, Vokabeln, Hören, Sprechen, Schreiben – mit Sensei", icon: "torii", color: "#dc2626", load: () => import("./japanisch.js") },
+  { id: "lap", title: "🎓 LAP Elektrotechnik", short: "LAP Elektrotechnik", sub: "Lernkarten, Formeln, Rechnen, Prüfung – mit KI-Lehrer", icon: "bolt", color: "#ca8a04", load: () => import("./lap.js") },
   { id: "galerie", title: "Galerie", sub: "Fotos nach Baustelle & Adresse", icon: "image", color: "#0284c7", load: () => import("./galerie.js") },
   { id: "tresor", title: "Passwort-Tresor", sub: "Passwörter, PINs, WLAN, Notizen – verschlüsselt", icon: "lock", color: "#6b7280", load: () => import("./vault.js") },
 ];
