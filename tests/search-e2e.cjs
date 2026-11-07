@@ -223,7 +223,9 @@ const seed = () => {
   await shot("search-huber-1440-dark.png");
   await page.keyboard.press("Escape"); await page.keyboard.press("Escape");
   ok(!(await isOpen()), "Escape schließt am PC");
+  await page.waitForTimeout(400); // Schließ-Animation/History abwarten
   await page.keyboard.press("/");
+  await page.waitForTimeout(200);
   ok(await isOpen(), "„/“ öffnet");
   await page.mouse.click(20, 880);
   await page.waitForTimeout(200);
