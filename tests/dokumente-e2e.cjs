@@ -4,6 +4,9 @@
 // PDF mit eigenem Ordner, Favorit, Ansichten (Favoriten/Läuft ab), Suche, „🤖 Text erkennen“ (/chat gestubbt, erst nach Okay),
 // Öffnen (Blob-Tab), Teilen/Download, Bearbeiten, verknüpfte Liste auf der Baustellen-Projektseite, „＋ Dokument“ mit Vorbelegung,
 // Benachrichtigung „läuft ab“, globale Suche (auch im erkannten Text), Löschen (Datei weg), Desktop 1440 hell/dunkel.
+// 🔒 Update 10: Tresor-Passwort einrichten (aus Dokumente heraus), Umstellung eines alten Klartext-Dokuments, Sperren →
+// kein Titel/Text/Datei-Byte (auch nicht base64) in localStorage/IndexedDB/Cache, Object-URLs widerrufen, gesperrte Ansicht,
+// Benachrichtigung ohne Titel, Suche/Baustelle nur entsperrt, falsches Passwort, Auto-Sperre.
 const { chromium } = require("playwright");
 const path = require("path");
 const BASE = process.env.BASE || "http://localhost:9411/";
@@ -36,7 +39,7 @@ const PDF = Buffer.from("%PDF-1.4\n1 0 obj<</Type/Catalog/Pages 2 0 R>>endobj 2 
       if (u.hostname === "localhost" || u.hostname === "127.0.0.1") return route.continue();
       return route.abort();
     });
-    await ctx.addInitScript(() => { window.__skAiTest = { token: "test", url: location.origin }; });
+    await ctx.addInitScript(() => { window.__skAiTest = { token: "test", url: location.origin }; window.__tresorTest = { iter: 2000 }; });
     const page = await ctx.newPage();
     page.on("console", (msg) => {
       const t = msg.text();
@@ -69,18 +72,74 @@ const PDF = Buffer.from("%PDF-1.4\n1 0 obj<</Type/Catalog/Pages 2 0 R>>endobj 2 
     await p.click("#btn-local");
     await p.waitForTimeout(300);
   };
-  await boot(page);
 
-  /* ---------- Kachel + leer ---------- */
+  const MASTER = "Sonnenblume-Kaffee-42!";
+  const OLD_MARK = "ALTVERTRAG-ZK7731";
+  const OLD_PDF = Buffer.from(`%PDF-1.4\n% ${OLD_MARK} Mietvertrag Altbau Hauptstrasse\n1 0 obj<</Type/Catalog>>endobj\ntrailer<</Root 1 0 R>>\n%%EOF\n`);
+  const storageDump = (p = page) => p.evaluate(async () => {
+    const out = [];
+    for (let i = 0; i < localStorage.length; i++) { const k = localStorage.key(i); out.push(k, localStorage.getItem(k)); }
+    out.push(JSON.stringify(sessionStorage));
+    const dbs = indexedDB.databases ? await indexedDB.databases() : [];
+    for (const { name } of dbs) {
+      const db = await new Promise((res, rej) => { const r = indexedDB.open(name); r.onsuccess = () => res(r.result); r.onerror = () => rej(r.error); });
+      for (const st of db.objectStoreNames) {
+        const all = await new Promise((res) => { const r = db.transaction(st).objectStore(st).getAll(); r.onsuccess = () => res(r.result); r.onerror = () => res([]); });
+        for (const v of all) out.push(v instanceof Blob ? await v.text() : JSON.stringify(v));
+      }
+      db.close();
+    }
+    for (const k of await caches.keys()) {
+      const c = await caches.open(k);
+      for (const req of await c.keys()) { out.push(req.url); const r = await c.match(req); if (r && !/\.(png|jpg|webp|woff2?)$/.test(req.url)) out.push(await r.text()); }
+    }
+    return out.join("\n");
+  });
+  const b64Forms = (buf) => [0, 1, 2].map((o) => buf.subarray(o, o + Math.floor((buf.length - o) / 3) * 3).toString("base64")).filter((x) => x.length >= 16);
+  const leaksIn = (dump, needles) => needles.filter((n) => {
+    const b = Buffer.isBuffer(n) ? n : Buffer.from(n, "utf8");
+    return (!Buffer.isBuffer(n) && dump.includes(n)) || b64Forms(b).some((f) => dump.includes(f));
+  }).map((n) => (Buffer.isBuffer(n) ? `<${n.length} Bytes>` : n));
+  const idbKeys = (p = page) => p.evaluate(() => new Promise((res) => { const r = indexedDB.open("stempelkarte-docs", 1); r.onupgradeneeded = () => r.result.createObjectStore("chunks", { keyPath: "id" }); r.onsuccess = () => { const q = r.result.transaction("chunks").objectStore("chunks").getAllKeys(); q.onsuccess = () => { r.result.close(); res(q.result); }; }; }));
+
+  /* ---------- Altbestand: Klartext-Dokument (vor Update 10) ---------- */
+  const OLD = { id: "old1", title: "Mietvertrag Altbau", folder: "vertraege", tags: ["Wohnungsakte"], type: "application/pdf", size: OLD_PDF.length, name: "Mietvertrag.pdf", chunks: 1, date: inDays(-400), expires: inDays(5), remind: true, remindDays: 30, links: [{ k: "place", id: "p1" }], ocr: "", notes: "Kaution 3 Monatsmieten", created: 1, updated: 1 };
+  await boot(page, { "sk-a-dokumente": [OLD] });
+  await page.evaluate((b64) => new Promise((res, rej) => {
+    const r = indexedDB.open("stempelkarte-docs", 1);
+    r.onupgradeneeded = () => r.result.createObjectStore("chunks", { keyPath: "id" });
+    r.onsuccess = () => { const tx = r.result.transaction("chunks", "readwrite"); tx.objectStore("chunks").put({ id: "old1_0", n: 0, total: 1, data: b64 }); tx.oncomplete = () => { r.result.close(); res(); }; tx.onerror = () => rej(tx.error); };
+  }), OLD_PDF.toString("base64"));
+
+  /* ---------- Kachel + kein Tresor ---------- */
   await page.goto(BASE + "#alltag");
   await page.waitForSelector('.al-tile[data-id="dokumente"]');
   ok((await page.textContent('.al-tile[data-id="dokumente"]')).includes("Dokumente"), "Kachel „📁 Dokumente“");
   await page.click('.al-tile[data-id="dokumente"]');
-  await page.waitForSelector(".dk .ak-empty");
-  ok((await page.textContent(".dk .ak-empty")).includes("Noch keine Dokumente"), "Leerer Zustand mit Hinweis");
-  ok((await page.textContent(".dk .ak-foot")).includes("nicht verschlüsselt"), "Hinweis: nicht verschlüsselt → Tresor");
-  ok(await page.$eval('[data-dk-file="cam"]', (i) => i.getAttribute("capture") === "environment" && i.accept === "image/*"), "Foto-Knopf öffnet die Kamera (capture)");
-  await shot("dokumente-empty-390-light.png");
+  await page.waitForSelector(".dk .dk-setup");
+  ok((await page.textContent(".dk .dk-setup")).includes("Tresor-Passwort einrichten"), "Ohne Tresor: „🔒 Tresor-Passwort einrichten“");
+  ok(await page.isHidden('label:has([data-dk-file="file"])'), "Ohne Tresor: kein Hochladen (neue Dokumente brauchen das Passwort)");
+  ok((await page.textContent(".dk .ak-list")).includes("Mietvertrag Altbau"), "Alter Klartext-Bestand bleibt bis zur Umstellung sichtbar");
+  await shot("dokumente-setup-390-light.png");
+
+  /* ---------- Tresor einrichten → zurück → Umstellung ---------- */
+  await page.click('[data-dk="setup"]');
+  await page.waitForSelector(".tr-setup");
+  await page.fill("#tr-new", MASTER);
+  await page.fill("#tr-new2", MASTER);
+  await page.check("#tr-paper");
+  await page.click("[data-tr=create]");
+  await page.waitForFunction(() => location.hash === "#alltag/dokumente", null, { timeout: 15000 });
+  ok(true, "Nach dem Einrichten zurück zu Dokumente");
+  await page.waitForSelector(".dk .dk-bar", { timeout: 10000 });
+  await page.waitForFunction(() => { const a = JSON.parse(localStorage.getItem("sk-a-dokumente") || "[]"); return a.length === 1 && a[0].enc === 1 && !a[0].oldChunks; }, null, { timeout: 15000 });
+  let raw = await A("dokumente");
+  ok(!("title" in raw[0]) && !("notes" in raw[0]) && !("links" in raw[0]) && raw[0].folder === "vertraege" && raw[0].expires === OLD.expires && raw[0].fileId, "Altes Dokument umgestellt: nur Ordner/Ablauf/Größe im Klartext");
+  let keys = await idbKeys();
+  ok(!keys.includes("old1_0") && keys.some((k) => k.startsWith(raw[0].fileId + "_")), "Klartext-Datei gelöscht, verschlüsselte Stücke da");
+  await page.waitForSelector(".dk .ak-list");
+  ok((await page.textContent(".dk .ak-list")).includes("Mietvertrag Altbau"), "Entsperrt: umgestelltes Dokument lesbar");
+  ok(await page.isVisible('label:has([data-dk-file="file"])'), "Entsperrt: Hochladen möglich");
 
   /* ---------- Foto hochladen ---------- */
   await page.setInputFiles('[data-dk-file="file"]', { name: "Garantieschein.png", mimeType: "image/png", buffer: png() });
@@ -99,36 +158,37 @@ const PDF = Buffer.from("%PDF-1.4\n1 0 obj<</Type/Catalog/Pages 2 0 R>>endobj 2 
   await shot("dokumente-form-390-light.png");
   await page.click(`${sheet} [data-save]`);
   await page.waitForSelector(".dk .ak-det");
-  let docs = await A("dokumente");
-  const docs0 = docs[0];
-  ok(docs.length === 1 && docs[0].type === "image/jpeg" && docs[0].folder === "garantie" && docs[0].expires === exp && docs[0].chunks === 1, "Gespeichert als JPEG (verkleinert) mit Ordner, Ablauf, Stückzahl");
-  ok(JSON.stringify(docs[0].tags) === JSON.stringify(["Küche", "Garantie"]), "Tags bereinigt (ohne #, ohne Doppelte)");
-  ok(docs[0].links.length === 2 && docs[0].links[0].k === "place" && docs[0].links[1].k === "todo", "Verknüpfungen gespeichert (Baustelle, Aufgabe)");
-  ok(docs[0].thumb.startsWith("data:image/jpeg"), "Vorschaubild");
-  const id1 = docs[0].id;
+  raw = await A("dokumente");
+  const r1 = raw.find((d) => d.id !== "old1");
+  ok(raw.length === 2 && r1.enc === 1 && r1.folder === "garantie" && r1.expires === exp && r1.chunks === 1 && r1.iv && r1.ct, "Gespeichert verschlüsselt (Ordner, Ablauf, Stückzahl im Klartext)");
+  ok(!JSON.stringify(r1).includes("Garantie Waschmaschine") && !JSON.stringify(r1).includes("Küche") && !("thumb" in r1) && !("type" in r1), "Titel, Tags, Vorschau, Typ verschlüsselt");
+  const id1 = r1.id;
   ok((await page.evaluate(() => location.hash)) === "#alltag/dokumente/" + id1, "Detail-Route");
-  await page.waitForSelector("#dk-prev img:not(.is-thumb)");
-  ok(await page.$eval("#dk-prev img", (i) => i.src.startsWith("data:image/jpeg;base64,")), "Vorschau aus der Ablage (IndexedDB)");
+  await page.waitForSelector("#dk-prev img[src^='blob:']");
+  const prevSrc = await page.$eval("#dk-prev img", (i) => i.src);
+  ok(prevSrc.startsWith("blob:"), "Vorschau entschlüsselt als Object-URL (nur im Speicher)");
   ok((await page.textContent(".ak-hero")).includes("läuft in 10 Tagen ab"), "Ablauf-Abzeichen");
   ok((await page.textContent(".ak-det")).includes("Baustelle Muster") && (await page.textContent(".ak-det")).includes("Garantie einlösen"), "Verknüpfungs-Chips");
+  const D_tags = await page.textContent(".ak-tagrow");
+  ok(D_tags.includes("#Küche") && D_tags.includes("#Garantie") && !D_tags.includes("#küche"), "Tags bereinigt (ohne #, ohne Doppelte)");
   await shot("dokumente-detail-390-light.png");
 
   /* ---------- 🤖 Text erkennen ---------- */
   await page.click('[data-dk="ocr"]');
   await page.waitForSelector("#dk-ocr-in");
-  ok(chatBodies.length === 1 && chatBodies[0].mode === "lehrer" && chatBodies[0].image && chatBodies[0].image.type === "image/jpeg" && !chatBodies[0].image.data.startsWith("data:"), "/chat mit Bild (lehrer, base64 ohne Kopf)");
+  ok(chatBodies.length === 1 && chatBodies[0].mode === "lehrer" && chatBodies[0].image && chatBodies[0].image.type === "image/jpeg" && !chatBodies[0].image.data.startsWith("data:"), "/chat mit Bild (lehrer, base64 ohne Kopf) – nur entsperrt");
   ok((await page.inputValue("#dk-ocr-in")).startsWith("RECHNUNG Nr. 4711"), "Erkannter Text ohne Markdown-Zaun");
-  ok(!(await A("dokumente"))[0].ocr, "Noch nicht gespeichert – erst nach Okay");
   await shot("dokumente-ocr-390-light.png");
+  const ctBefore = (await A("dokumente")).find((d) => d.id === id1).ct;
   await page.click('[data-dk="ocrok"]');
-  await page.waitForTimeout(250);
-  ok((await A("dokumente"))[0].ocr.includes("QX-998877"), "Text nach Bestätigung gespeichert");
   await page.waitForSelector(".dk-ocr");
+  raw = await A("dokumente");
+  ok(raw.find((d) => d.id === id1).ct !== ctBefore && !JSON.stringify(raw).includes("QX-998877"), "Erkannter Text verschlüsselt gespeichert");
 
-  /* ---------- Großansicht + Teilen ---------- */
+  /* ---------- Großansicht ---------- */
   await page.click('[data-dk="view"]');
-  await page.waitForSelector(`${sheet} .ak-photo-big img`);
-  ok(true, "Großansicht des Fotos");
+  await page.waitForSelector(`${sheet} .ak-photo-big img[src^='blob:']`);
+  ok(true, "Großansicht des Fotos (Object-URL)");
   await page.click(`${sheet} .close`);
 
   /* ---------- PDF mit eigenem Ordner ---------- */
@@ -142,30 +202,31 @@ const PDF = Buffer.from("%PDF-1.4\n1 0 obj<</Type/Catalog/Pages 2 0 R>>endobj 2 
   await page.check("#dk-f-fav");
   await page.click(`${sheet} [data-save]`);
   await page.waitForSelector(".dk .ak-det");
-  docs = await A("dokumente");
-  const pdf = docs.find((d) => d.type === "application/pdf");
-  ok(pdf && pdf.folder === "Auto" && pdf.fav === true && pdf.size === PDF.length, "PDF gespeichert (eigener Ordner, Favorit, Originalgröße)");
+  raw = await A("dokumente");
+  const pdf = raw.find((d) => d.id !== id1 && d.id !== "old1");
+  ok(pdf && pdf.folder === "eigen" && pdf.size === PDF.length && !JSON.stringify(pdf).includes("Auto"), "PDF gespeichert (eigener Ordner-Name verschlüsselt, Originalgröße)");
   ok(!(await page.$('[data-dk="ocr"]')), "Kein „Text erkennen“ bei PDFs");
-  // window.open beobachten (headless Chromium lädt PDF-Blobs sonst als Download statt als Tab)
-  await page.evaluate(() => { window.__opened = []; const o = window.open; window.open = (u, t) => { window.__opened.push(String(u)); return { closed: false }; }; window.__restoreOpen = () => { window.open = o; }; });
+  await page.evaluate(() => { window.__opened = []; const o = window.open; window.open = (u) => { window.__opened.push(String(u)); return { closed: false }; }; window.__restoreOpen = () => { window.open = o; }; });
   await page.click('[data-dk="view"]');
   await page.waitForFunction(() => window.__opened.length > 0, null, { timeout: 4000 }).catch(() => {});
   const opened = await page.evaluate(() => { window.__restoreOpen(); return window.__opened; });
-  ok(opened.length === 1 && opened[0].startsWith("blob:"), "PDF öffnet als Blob-URL in neuem Tab (Desktop/Browser)");
+  ok(opened.length === 1 && opened[0].startsWith("blob:"), "PDF öffnet als Blob-URL in neuem Tab");
+  const pdfBytes = Buffer.from(await page.evaluate(async (u) => { const b = new Uint8Array(await (await fetch(u)).arrayBuffer()); return btoa(String.fromCharCode(...b)); }, opened[0]), "base64");
+  ok(pdfBytes.equals(PDF), "Entschlüsselte PDF-Bytes stimmen");
   const [dl] = await Promise.all([page.waitForEvent("download", { timeout: 4000 }).catch(() => null), page.click('[data-dk="share"]')]);
-  ok(dl && dl.suggestedFilename() === "Rechnung-Handy.pdf", "Teilen/Speichern → Download mit Dateinamen (ohne Web-Share)");
+  ok(dl && dl.suggestedFilename() === "Rechnung-Handy.pdf", "Teilen/Speichern → Download mit Dateinamen");
 
   /* ---------- Liste: Ordner, Favoriten, Ablauf, Suche ---------- */
   await page.click('[data-dk="back"]');
   await page.waitForSelector(".dk .ak-list");
-  ok((await page.$$(".dk .ak-card")).length === 2, "Zwei Dokumente in der Liste");
+  ok((await page.$$(".dk .ak-card")).length === 3, "Drei Dokumente in der Liste");
   ok((await page.textContent(".dk .ak-card")).includes("Rechnung-Handy"), "Favorit steht oben");
-  ok(await page.$('.dk-folders [data-folder="Auto"]'), "Eigener Ordner als Chip");
+  ok(await page.$('.dk-folders [data-folder="Auto"]'), "Eigener Ordner als Chip (entsperrt mit Namen)");
   await page.click('.dk-folders [data-folder="garantie"]');
   ok((await page.$$(".dk .ak-card")).length === 1, "Ordner-Filter");
   await page.click('.dk-folders [data-folder=""]');
   await page.click('[data-view="ablauf"]');
-  ok((await page.$$(".dk .ak-card")).length === 1 && (await page.textContent(".dk .ak-card")).includes("Waschmaschine"), "Ansicht „Läuft ab“");
+  ok((await page.$$(".dk .ak-card")).length === 2, "Ansicht „Läuft ab“");
   await page.click('[data-view="fav"]');
   ok((await page.$$(".dk .ak-card")).length === 1 && (await page.textContent(".dk .ak-card")).includes("Rechnung"), "Ansicht „Favoriten“");
   await page.click('[data-view="alle"]');
@@ -185,62 +246,122 @@ const PDF = Buffer.from("%PDF-1.4\n1 0 obj<</Type/Catalog/Pages 2 0 R>>endobj 2 
   await page.waitForSelector("#dk-f-title");
   await page.fill("#dk-f-notes", "Original im Ordner Küche");
   await page.click(`${sheet} [data-save]`);
-  await page.waitForTimeout(250);
-  ok((await A("dokumente")).find((d) => d.id === id1).notes === "Original im Ordner Küche", "Bearbeiten speichert");
+  await page.waitForTimeout(300);
+  ok((await page.textContent(".ak-det")).includes("Original im Ordner Küche") && !JSON.stringify(await A("dokumente")).includes("Original im Ordner"), "Bearbeiten speichert (verschlüsselt)");
 
-  /* ---------- Baustellen-Projektseite: 📎 Dokumente + „＋ Dokument“ mit Vorbelegung ---------- */
+  /* ---------- Baustellen-Projektseite (entsperrt) ---------- */
   await page.goto(BASE + "#orte/baustelle/p1");
   await page.waitForSelector("#site-root .st-docs");
-  ok((await page.textContent("#site-root .st-docs")).includes("Garantie Waschmaschine"), "Projektseite zeigt verknüpfte Dokumente");
+  ok((await page.textContent("#site-root .st-docs")).includes("Garantie Waschmaschine") && (await page.textContent("#site-root .st-docs")).includes("Mietvertrag Altbau"), "Projektseite zeigt verknüpfte Dokumente (entsperrt)");
   await page.click("#site-root .st-docs .ak-linked-h a");
   await page.waitForSelector(`${sheet} [data-exlink]`);
   ok((await page.evaluate(() => location.hash)) === "#alltag/dokumente", "„＋ Dokument“ öffnet Dokumente (Hash bereinigt)");
-  ok((await page.textContent(sheet)).includes("Baustelle Muster"), "Blatt mit Vorbelegung (Baustelle)");
   await page.selectOption("#dk-ex", pdf.id);
   await page.click(`${sheet} [data-exlink]`);
-  await page.waitForTimeout(250);
-  ok((await A("dokumente")).find((d) => d.id === pdf.id).links.some((l) => l.k === "place" && l.id === "p1"), "Vorhandenes Dokument verknüpft");
-
-  /* ---------- Benachrichtigung + globale Suche ---------- */
-  await page.click("#btn-notify");
-  await page.waitForSelector("#notify-layer .nt-panel", { state: "visible" });
   await page.waitForTimeout(300);
-  ok((await page.textContent("#nt-body")).includes("Garantie Waschmaschine"), "Benachrichtigung „läuft ab“");
-  await page.keyboard.press("Escape");
-  await page.waitForTimeout(200);
+  await page.goto(BASE + "#orte/baustelle/p1");
+  await page.waitForSelector("#site-root .st-docs");
+  await page.waitForFunction(() => document.querySelector("#site-root .st-docs").textContent.includes("Rechnung-Handy"));
+  ok(true, "Vorhandenes Dokument verknüpft");
+
+  /* ---------- Globale Suche (entsperrt) ---------- */
+  await page.goto(BASE + "#alltag/dokumente");
+  await page.waitForSelector(".dk .ak-list");
   await page.click("#btn-search");
   await page.fill("#srch-q", "QX-998877");
   await page.waitForSelector('.srch-group[data-group="dokumente"]');
   ok((await page.textContent('.srch-group[data-group="dokumente"]')).includes("Garantie Waschmaschine"), "Globale Suche findet das Dokument (auch über OCR-Text)");
   await page.click('.srch-group[data-group="dokumente"] [data-key], .srch-group[data-group="dokumente"] button, .srch-group[data-group="dokumente"] a');
   await page.waitForFunction((id) => location.hash === "#alltag/dokumente/" + id, id1);
-  ok(true, "Treffer öffnet das Dokument");
+  await page.waitForSelector("#dk-prev img[src^='blob:']");
+  const prevSrc2 = await page.$eval("#dk-prev img", (i) => i.src);
+
+  /* ---------- 🔒 Sperren: nichts Lesbares mehr ---------- */
+  await page.click('[data-dk="lock"]');
+  await page.waitForSelector(".dk .dk-lock");
+  const vis = await page.textContent(".dk");
+  ok(!/Garantie Waschmaschine|Mietvertrag|Rechnung-Handy|Küche|Auto/.test(vis), "Gesperrt: keine Titel/Tags/Ordner-Namen im Bildschirm");
+  ok(vis.includes("3 Dokumente") && (await page.$('.dk-lfold [data-lfold="garantie"]')) && vis.includes("laufen bald ab"), "Gesperrt: Ordner + Anzahl + Ablauf-Abzeichen");
+  ok(!(await page.$(".sheet")) && !(await page.$("#dk-prev")), "Gesperrt: Vorschau/Blätter geschlossen");
+  const revoked = await page.evaluate(async (us) => { const r = []; for (const u of us) { try { await fetch(u); r.push(false); } catch { r.push(true); } } return r; }, [prevSrc, prevSrc2, opened[0]]);
+  ok(revoked.every(Boolean), "Object-URLs beim Sperren widerrufen");
+  await page.evaluate(() => localStorage.removeItem("sk-search-recent")); // eigene Suchbegriffe (Verlauf der Suche) – nicht Teil der Dokumente
+  const dump = await storageDump();
+  const leaks = leaksIn(dump, ["Garantie Waschmaschine", "Mietvertrag Altbau", "Rechnung-Handy", "QX-998877", "RECHNUNG Nr. 4711", "Original im Ordner Küche", "Kaution 3 Monatsmieten", "Wohnungsakte", OLD_MARK, OLD_PDF, PDF.subarray(0, 40), png().subarray(0, 40)]);
+  ok(leaks.length === 0, "localStorage/IndexedDB/Cache: kein Titel, kein Text, keine Datei-Bytes (auch nicht base64)" + (leaks.length ? " → " + leaks.join(", ") : ""));
+  await shot("dokumente-locked-390-light.png");
+
+  /* ---------- Gesperrt: Benachrichtigung ohne Titel, keine Suche, Baustelle mit Hinweis ---------- */
+  await page.goto(BASE + "#alltag/dokumente");
+  await page.waitForSelector(".dk .dk-lock");
+  await page.click("#btn-notify");
+  await page.waitForSelector("#notify-layer .nt-panel", { state: "visible" });
+  await page.waitForTimeout(300);
+  const nt = await page.textContent("#nt-body");
+  ok(nt.includes("Ein Dokument läuft bald ab – entsperren zum Ansehen") && !nt.includes("Garantie Waschmaschine") && !nt.includes("Mietvertrag"), "Benachrichtigung „läuft ab“ ohne Titel");
+  await page.keyboard.press("Escape");
+  await page.waitForTimeout(200);
+  await page.click("#btn-search");
+  await page.fill("#srch-q", "Garantie Waschmaschine");
+  await page.waitForTimeout(600);
+  ok(!(await page.$('.srch-group[data-group="dokumente"]')), "Globale Suche findet gesperrt nichts");
+  await page.keyboard.press("Escape");
+  await page.goto(BASE + "#orte/baustelle/p1");
+  await page.waitForSelector("#site-root .st-docs .ak-linked-lock");
+  ok(!(await page.textContent("#site-root .st-docs")).includes("Garantie"), "Baustelle: 🔒-Hinweis statt Titel");
+
+  /* ---------- Entsperren in Dokumente (falsch, dann richtig) ---------- */
+  await page.click("#site-root .ak-linked-lock a");
+  await page.waitForSelector("#dk-pw");
+  await page.fill("#dk-pw", "falsch-falsch-falsch");
+  await page.click("[data-dk-unlock]");
+  await page.waitForSelector(".dk-err:not([hidden])");
+  ok((await page.textContent(".dk-err")).includes("Falsches Passwort"), "Falsches Passwort wird abgelehnt");
+  await page.fill("#dk-pw", MASTER);
+  await page.click("[data-dk-unlock]");
+  await page.waitForSelector(".dk .ak-list");
+  ok((await page.textContent(".dk .ak-list")).includes("Garantie Waschmaschine"), "Mit Tresor-Passwort entsperrt");
+
+  /* ---------- Auto-Sperre ---------- */
+  await page.evaluate(() => { window.__tresorTest.autoLockMs = 1200; });
+  await page.click(`.dk .ak-card[data-id="${id1}"]`); // Aktivität → Timer neu
+  await page.waitForSelector(".dk .dk-lock", { timeout: 6000 });
+  ok((await page.textContent(".dk .dk-lock")).includes("Automatisch gesperrt"), "Auto-Sperre wie im Tresor");
+  await page.evaluate(() => { delete window.__tresorTest.autoLockMs; });
+  await page.fill("#dk-pw", MASTER);
+  await page.click("[data-dk-unlock]");
+  await page.waitForSelector(".dk .ak-det");
+  ok(true, "Nach dem Entsperren wieder im Dokument (Route bleibt)");
 
   /* ---------- Löschen ---------- */
-  await page.waitForSelector('[data-dk="del"]');
+  const fileId1 = (await A("dokumente")).find((d) => d.id === id1).fileId;
   await page.click('[data-dk="del"]');
   await page.click('[data-dk="del"]');
   await page.waitForFunction(() => location.hash === "#alltag/dokumente");
   await page.waitForTimeout(300);
-  docs = await A("dokumente");
-  ok(docs.length === 1, "Dokument gelöscht (zweimal tippen)");
-  const left = await page.evaluate(() => new Promise((res) => { const r = indexedDB.open("stempelkarte-docs", 1); r.onsuccess = () => { const q = r.result.transaction("chunks").objectStore("chunks").getAllKeys(); q.onsuccess = () => res(q.result); }; }));
-  ok(left.length === 1 && left[0].startsWith(pdf.id), "Datei-Stücke mit gelöscht");
+  ok((await A("dokumente")).length === 2, "Dokument gelöscht (zweimal tippen)");
+  keys = await idbKeys();
+  ok(!keys.some((k) => k.startsWith(fileId1)), "Verschlüsselte Datei-Stücke mit gelöscht");
 
   /* ---------- Desktop + dunkel ---------- */
   for (const [scheme, w, h] of [["dark", 1440, 900], ["light", 1440, 900], ["dark", 390, 844]]) {
-    const p = await newPage(scheme, w, h);
-    await boot(p, { "sk-a-dokumente": [{ ...pdf, links: [{ k: "place", id: "p1" }, { k: "todo", id: "t1" }], tags: ["Handy", "Rechnung"], expires: inDays(-2) }, { ...docs0, id: "dimg" }] });
-    await p.goto(BASE + "#alltag/dokumente");
-    await p.waitForSelector(".dk .ak-list");
-    await shot(`dokumente-list-${w}-${scheme}.png`, p);
-    ok(await p.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth + 1), `Liste ohne waagrechtes Scrollen (${w} ${scheme})`);
-    await p.goto(BASE + "#alltag/dokumente/" + pdf.id);
-    await p.waitForSelector(".dk .ak-det");
-    await shot(`dokumente-detail-${w}-${scheme}.png`, p);
-    const over = await p.evaluate(() => document.documentElement.scrollWidth > window.innerWidth + 1);
-    ok(!over, `Kein waagrechtes Scrollen (${w} ${scheme})`);
-    await p.context().close();
+    await page.setViewportSize({ width: w, height: h });
+    await page.emulateMedia({ colorScheme: scheme });
+    await page.goto(BASE + "#alltag/dokumente");
+    await page.waitForSelector(".dk .ak-list");
+    await shot(`dokumente-list-${w}-${scheme}.png`);
+    ok(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth + 1), `Liste ohne waagrechtes Scrollen (${w} ${scheme})`);
+    await page.goto(BASE + "#alltag/dokumente/" + pdf.id);
+    await page.waitForSelector(".dk .ak-det");
+    await shot(`dokumente-detail-${w}-${scheme}.png`);
+    ok(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth + 1), `Kein waagrechtes Scrollen (${w} ${scheme})`);
+    await page.click('[data-dk="lock"]');
+    await page.waitForSelector(".dk .dk-lock");
+    await shot(`dokumente-locked-${w}-${scheme}.png`);
+    ok(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth + 1), `Gesperrt ohne waagrechtes Scrollen (${w} ${scheme})`);
+    await page.fill("#dk-pw", MASTER);
+    await page.click("[data-dk-unlock]");
+    await page.waitForSelector(".dk .ak-det");
   }
 
   ok(errors.length === 0, "Keine Konsolenfehler/CSP-Verstöße" + (errors.length ? ":\n" + errors.join("\n") : ""));

@@ -219,3 +219,23 @@
 @media (min-width: 760px) {
   .ak-chips { flex-wrap: wrap; overflow: visible; margin: 0; padding: 0; }
 }
+
+/* Update 10 – 🔒 verschlüsselte Dokumente: Einrichten, Sperre, Umstellung */
+.dk-sec:empty { display: none; }
+.dk-sec { display: grid; gap: 10px; }
+.dk-setup, .dk-lock { display: grid; gap: 10px; border-color: color-mix(in srgb, var(--ak-c) 35%, var(--line)); background: color-mix(in srgb, var(--ak-c) 6%, var(--card)); }
+.dk-setup h3, .dk-lock h3 { margin: 0; font-size: 1.05rem; }
+.dk-setup p, .dk-lock p { margin: 0; }
+.dk-setup .btn, .dk-lock .btn { justify-self: start; }
+.dk-pw-l { display: grid; gap: 6px; font-weight: 600; }
+.dk-pw-l input { width: 100%; max-width: 420px; min-height: 48px; box-sizing: border-box; padding: 10px 14px; border-radius: var(--r-sm); border: 1.5px solid var(--line); background: var(--card); color: var(--ink); font: inherit; font-size: 1rem; }
+.dk-pw-l input:focus { outline: none; border-color: var(--accent); }
+.dk-lsum { display: grid; gap: 8px; padding-top: 8px; border-top: 1px dashed var(--line); }
+.dk-lsum-n { margin: 0; font-weight: 600; }
+.dk-lfold .chip { cursor: default; }
+.dk-bar { display: flex; align-items: center; justify-content: space-between; gap: 10px; flex-wrap: wrap; padding: 6px 12px; border-radius: 999px; background: var(--ak-ok-bg); color: var(--ak-ok); font-size: .88rem; font-weight: 600; }
+.dk-bar .btn { color: var(--ink); }
+.dk-mig { display: grid; gap: 6px; }
+.dk-mig progress { width: 100%; height: 10px; accent-color: var(--accent); }
+.dk-mig-warn { margin: 0; }
+.ak-linked-lock a { font-weight: 600; }

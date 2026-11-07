@@ -1,10 +1,16 @@
 // Update 10 E – Alltag › 📁 Dokumente (#alltag/dokumente, Detail #alltag/dokumente/<id>, Neu mit Verknüpfung #alltag/dokumente?neu=<k>:<id>).
 // PDFs & Fotos (auch direkt mit der Kamera), Ordner (feste + eigene), Tags, Favoriten, Vorschau, Ablaufdatum mit Erinnerung
 // (Benachrichtigungszentrale „Ablaufende Dokumente“), Verknüpfungen zu Baustelle/Buchung/Aufgabe/Vertrag/Inventar/Kontakt,
-// optional „🤖 Text erkennen“ (nur Bilder, Text erst nach deinem Okay gespeichert). Unverschlüsselt – Geheimes gehört in den 🔐 Tresor.
-// Reine Logik: ./dokumente-core.js, Datei-Ablage: ./doc-files.js
+// optional „🤖 Text erkennen“ (nur Bilder, Text erst nach deinem Okay gespeichert).
+// 🔒 Update 10: Alles mit dem Tresor-Passwort verschlüsselt (Datei + Titel, Notizen, Tags, Text, Links, Vorschau) – siehe dokumente-crypt.js.
+//   Kein Tresor → „🔒 Tresor-Passwort einrichten“; gesperrt → nur Ordner + Anzahl + Ablauf-Abzeichen; alte Klartext-Dokumente
+//   werden nach dem ersten Entsperren automatisch umgestellt (mit Fortschritt).
+// Reine Logik: ./dokumente-core.js, Verschlüsselung: ./dokumente-crypt.js, entschlüsselter Stand: ./dokumente-store.js, Datei-Ablage: ./doc-files.js
 import { collection, newId } from "./db.js";
 import * as D from "./dokumente-core.js";
+import * as E from "./dokumente-crypt.js";
+import * as DS from "./dokumente-store.js";
+import * as Sess from "./vault-session.js";
 import * as F from "./doc-files.js";
 import * as A from "./akten-ui.js";
 import { askClaude, aiAvailable } from "./ai-client.js";
@@ -26,13 +32,14 @@ const moneyLocked = () => !!(lockMod && lockMod.isLocked());
 
 export function mount(el, ctx) {
   A.injectCSS();
-  const col = collection("dokumente");
+  const col = DS.coll();
   const other = { vertraege: collection("vertraege"), inventar: collection("inventar"), kontakte: collection("kontakte") };
   const S = { view: VIEWS.some((v) => v[0] === lsGet(VIEW_KEY)) ? lsGet(VIEW_KEY) : "alle", folder: "", tag: "", q: "", id: D.routeId(location.hash) };
   let alive = true, queued = false;
   const queue = () => { if (queued || !alive) return; queued = true; queueMicrotask(() => { queued = false; if (alive) render(); }); };
 
   el.innerHTML = `<div class="ak dk">
+      <div class="dk-sec"></div>
       <div class="ak-home">
         <div class="ak-top">
           <label class="ak-search"><span class="sr">Dokumente suchen</span><input id="dk-q" type="search" placeholder="🔎 Titel, Tag, erkannter Text …" autocomplete="off" enterkeyhint="search"></label>
@@ -45,7 +52,7 @@ export function mount(el, ctx) {
         <div class="ak-chips dk-folders" role="group" aria-label="Ordner"></div>
         <div class="ak-chips dk-tags" role="group" aria-label="Tags"></div>
         <div class="ak-list-wrap"></div>
-        <p class="note ak-foot">🔒 Dokumente hier sind <b>nicht verschlüsselt</b>. Ausweis-Kopien, PINs & Co. lieber in den 🔐 Passwort-Tresor.</p>
+        <p class="note ak-foot dk-foot"></p>
       </div>
       <div class="ak-detail-wrap" hidden></div>
     </div>`;
@@ -56,8 +63,18 @@ export function mount(el, ctx) {
   const tagsEl = el.querySelector(".dk-tags");
   const listEl = el.querySelector(".ak-list-wrap");
   const qIn = el.querySelector("#dk-q");
-  const all = () => col.all().map(D.normDoc).filter((d) => d.id);
-  const byId = (id) => { const x = col.get(id); return x ? D.normDoc(x) : null; };
+  const secEl = el.querySelector(".dk-sec");
+  const footEl = el.querySelector(".dk-foot");
+  const topEl = el.querySelector(".ak-top");
+  // 🔒 Zustand: loading | setup (noch kein Tresor) | locked | decrypt (entschlüsselt gerade) | open
+  const mode = () => (!Sess.metaLoaded() || !DS.loaded() ? "loading" : !Sess.hasVault() ? "setup" : !Sess.isUnlocked() ? "locked" : !DS.isReady() ? "decrypt" : "open");
+  const legacy = () => DS.raw().filter((r) => !E.isEnc(r)).map(E.legacyDoc).filter((d) => d.id);
+  const all = () => { const m = mode(); return m === "open" ? DS.docs() || [] : m === "setup" ? legacy() : []; };
+  const byId = (id) => all().find((d) => d.id === id) || null;
+  const sheets = new Set();
+  const openSheet = (opts) => { const sh = ui.openSheet(opts); sheets.add(sh); return sh; };
+  const closeSheets = () => { for (const sh of [...sheets]) { try { sh.close(); } catch { /* egal */ } } sheets.clear(); };
+  const saveOk = (p, msg) => A.safe(p, msg);
 
   /* ---------- Verknüpfungen ---------- */
 
@@ -132,7 +149,7 @@ export function mount(el, ctx) {
 
   /* ---------- Detail ---------- */
 
-  let prevUrl = null;
+  let prevUrl = null, prevImg = null;
   function renderDetail(d) {
     const today = A.todayKey();
     const x = D.expiryStatus(d, today);
@@ -162,24 +179,28 @@ export function mount(el, ctx) {
       ${d.notes ? `<section class="ak-card-s"><h3>📝 Notizen</h3><p class="ak-pre">${esc(d.notes)}</p></section>` : ""}
       <div class="ak-det-foot"><button type="button" class="btn danger sm" data-dk="del">Dokument löschen</button></div>
     </div>`;
-    if (D.isImage(d)) withB64(d, (b64) => {
+    if (mode() !== "open") detailEl.querySelectorAll('[data-dk="edit"],[data-dk="fav"],[data-dk="ocr"]').forEach((b) => { b.hidden = true; });
+    if (D.isImage(d)) withBlob(d, (b) => {
       const p = detailEl.querySelector("#dk-prev");
-      if (p && S.id === d.id) p.innerHTML = `<img src="data:${esc(d.type)};base64,${b64}" alt="Vorschau ${esc(d.title)}">`;
+      if (!p || S.id !== d.id) return;
+      DS.revoke(prevImg);
+      prevImg = DS.url(b);
+      if (prevImg) p.innerHTML = `<img src="${esc(prevImg)}" alt="Vorschau ${esc(d.title)}">`;
     }, true);
     const arm = detailEl.querySelector('[data-dk="del"]');
     ui.confirmButton(arm, "Wirklich löschen?", async () => {
-      F.delFile(d.id, d.chunks).catch((e) => console.warn("Datei löschen:", e));
-      await A.safe(col.remove(d.id), "Dokument gelöscht 🗑️");
+      await A.safe(DS.remove(d), "Dokument gelöscht 🗑️");
       A.go("#alltag/dokumente");
     });
   }
 
-  async function withB64(d, fn, quiet = false) {
+  async function withBlob(d, fn, quiet = false) {
     try {
-      const b64 = await F.getB64(d.id, d.chunks);
-      if (!b64) { if (!quiet) ui.toast("Datei nicht gefunden (evtl. noch nicht synchronisiert)."); return; }
-      await fn(b64);
+      const b = await DS.blob(d);
+      if (!b) { if (!quiet) ui.toast("Datei nicht gefunden (evtl. noch nicht synchronisiert)."); return; }
+      await fn(b);
     } catch (err) {
+      if (err && err.code === "locked") { if (!quiet) ui.toast(err.message); return; }
       console.error(err);
       if (!quiet) ui.toast(/offline|unavailable/i.test(String(err && err.message)) ? "Offline – Datei gerade nicht verfügbar." : "Datei konnte nicht geladen werden.");
     }
@@ -197,15 +218,19 @@ export function mount(el, ctx) {
     } else { download(blob, fileName(d)); ui.toast("Wird heruntergeladen 📥"); }
   }
   function view(d) {
-    withB64(d, async (b64) => {
-      const blob = F.b64ToBlob(b64, d.type);
+    withBlob(d, async (blob) => {
       if (D.isImage(d)) {
-        ui.openSheet({ title: `🖼️ ${d.title}`, bodyHTML: `<div class="ak-photo-big"><img src="data:${esc(d.type)};base64,${b64}" alt="${esc(d.title)}"></div>` });
+        const u = DS.url(blob);
+        if (!u) return;
+        const sh = openSheet({ title: `🖼️ ${d.title}`, bodyHTML: `<div class="ak-photo-big"><img src="${esc(u)}" alt="${esc(d.title)}"></div>` });
+        const obs = new MutationObserver(() => { if (!document.contains(sh.el)) { obs.disconnect(); sheets.delete(sh); DS.revoke(u); } });
+        obs.observe(sh.el.parentNode || document.body, { childList: true });
         return;
       }
       if (isAndroid()) { await share(d, blob); return; } // Android-WebView/PWA: Blob-Tabs gehen nicht zuverlässig → Teilen/Speichern
-      if (prevUrl) URL.revokeObjectURL(prevUrl);
-      prevUrl = URL.createObjectURL(blob);
+      DS.revoke(prevUrl);
+      prevUrl = DS.url(blob);
+      if (!prevUrl) return;
       const w = window.open(prevUrl, "_blank");
       if (!w) download(blob, fileName(d));
     });
@@ -218,7 +243,7 @@ export function mount(el, ctx) {
     box.innerHTML = `<p class="note">🤖 Claude liest den Text … (das dauert ein paar Sekunden)</p>`;
     try {
       let img = null;
-      await withB64(d, async (b64) => { img = await F.ocrImage(`data:${d.type};base64,${b64}`); });
+      await withBlob(d, async (b) => { const u = DS.url(b); try { if (u) img = await F.ocrImage(u); } finally { DS.revoke(u); } });
       if (!img) throw new Error("Bild konnte nicht geladen werden.");
       const out = await askClaude([{ role: "user", content: OCR_PROMPT }], { body: { mode: "lehrer", image: img }, timeoutMs: 60000 });
       const text = D.cleanOcr(out.reply);
@@ -250,7 +275,7 @@ export function mount(el, ctx) {
     const d = doc || D.normDoc({ title: origName.replace(/\.[^.]+$/, ""), folder: prepared && prepared.type === "application/pdf" && /rechnung|invoice/i.test(origName) ? "rechnungen" : "sonstiges", date: A.todayKey(), links: preLink ? [preLink] : [] });
     let links = d.links.slice();
     const kinds = Object.entries(D.LINK_KINDS).filter(([k]) => k !== "tx" || !moneyLocked());
-    ui.openSheet({
+    openSheet({
       title: doc ? "✏️ Dokument bearbeiten" : "📁 Dokument ablegen",
       bodyHTML: `<form class="fields ak-form" novalidate>
         ${prepared ? `<p class="note ak-fileinfo">✓ ${esc(origName || "Datei")} · ${esc(D.fmtSize(prepared.size))}</p>` : ""}
@@ -303,22 +328,22 @@ export function mount(el, ctx) {
           ui.setBusy(btn, true, "Speichert …");
           try {
             if (doc) {
-              await col.patch(doc.id, meta);
+              await DS.update(doc.id, meta);
               ui.toast("Gespeichert ✓");
               close();
               return;
             }
             const id = newId();
-            const r = await F.putFile(id, prepared.data);
+            const r = await DS.create({ ...meta, id, type: prepared.type, size: prepared.size, name: origName, thumb: prepared.thumb || "", ocr: "", created: Date.now() }, E.dataUrlBytes(prepared.data));
+            prepared.data = "";
             r.upload.catch((err) => { console.error(err); ui.toast("Datei-Upload fehlgeschlagen – bitte später nochmal öffnen."); });
-            await col.put({ ...meta, id, type: prepared.type, size: prepared.size, name: origName, chunks: r.chunks, thumb: prepared.thumb || "", ocr: "", created: Date.now() });
-            ui.toast("Dokument abgelegt 📁");
+            ui.toast("Dokument abgelegt & verschlüsselt 🔒📁");
             close();
             A.go(D.docHash(id));
           } catch (err) {
             console.error(err);
             ui.setBusy(btn, false);
-            ui.toast("Speichern fehlgeschlagen (Speicher voll?) 🙈");
+            ui.toast(err && err.code === "locked" ? err.message : "Speichern fehlgeschlagen (Speicher voll?) 🙈");
           }
         });
       },
@@ -329,6 +354,7 @@ export function mount(el, ctx) {
     const f = input.files && input.files[0];
     input.value = "";
     if (!f) return;
+    if (mode() !== "open") { ui.toast(mode() === "setup" ? "🔒 Richte zuerst das Tresor-Passwort ein – dann werden deine Dokumente verschlüsselt." : "🔒 Bitte zuerst entsperren."); return; }
     ui.toast("Datei wird vorbereitet … ⏳", 1500);
     try {
       const prepared = await F.prepareFile(f);
@@ -348,7 +374,8 @@ export function mount(el, ctx) {
     pendingLink = { k: m[1], id };
     history.replaceState(history.state, "", location.href.replace(/\?neu=[^#]*$/, ""));
     queueMicrotask(() => {
-      ui.openSheet({
+      if (mode() !== "open") { ui.toast(mode() === "setup" ? "🔒 Richte zuerst das Tresor-Passwort ein." : "🔒 Entsperr zuerst deine Dokumente – dann kannst du verknüpfen."); pendingLink = null; return; }
+      openSheet({
         title: "📎 Dokument verknüpfen",
         bodyHTML: `<p class="note">Neues Dokument für <b>${esc(linkLabel(pendingLink))}</b> – fotografieren oder Datei wählen:</p>
           <div class="row ak-acts"><label class="btn ghost ak-filebtn">📷 <span>Foto</span><input type="file" accept="image/*" capture="environment" data-pre></label>
@@ -362,7 +389,7 @@ export function mount(el, ctx) {
           if (b) b.addEventListener("click", async () => {
             const d = byId(sheet.querySelector("#dk-ex").value);
             if (!d) return;
-            await A.safe(col.patch(d.id, { links: D.cleanLinks([...d.links, link]), updated: Date.now() }), "Verknüpft 🔗");
+            await A.safe(DS.update(d.id, { links: D.cleanLinks([...d.links, link]) }), "Verknüpft 🔗");
             close();
           });
         },
@@ -370,8 +397,81 @@ export function mount(el, ctx) {
     });
   }
 
+  /* ---------- 🔒 Sperre / Einrichten / Umstellung ---------- */
+
+  let secMode = "";
+  function lockSummary() {
+    const today = A.todayKey();
+    const L = DS.lockedList();
+    const fc = D.folderCounts(L).filter((f) => f.n);
+    const st = L.map((d) => D.expiryStatus(d, today).state);
+    const nB = st.filter((x) => x === "bald").length, nA = st.filter((x) => x === "ab").length;
+    return `<p class="dk-lsum-n">📚 ${L.length} ${L.length === 1 ? "Dokument" : "Dokumente"}</p>` +
+      (fc.length ? `<div class="ak-chiprow dk-lfold">${fc.map((f) => `<span class="chip" data-lfold="${esc(f.id)}">${f.own ? "🗂️ Eigene Ordner" : `${f.e} ${esc(f.label)}`} <span class="ak-cn">${f.n}</span></span>`).join("")}</div>` : "") +
+      (nB || nA ? `<p class="ak-badges">${nB ? `<span class="ak-b ak-b-bald">⏰ ${nB} ${nB === 1 ? "läuft" : "laufen"} bald ab</span>` : ""}${nA ? `<span class="ak-b ak-b-ab">⌛ ${nA} abgelaufen</span>` : ""}</p>` : "");
+  }
+  function renderSec() {
+    const m = mode();
+    const showTop = m === "open";
+    topEl.hidden = !showTop && m !== "setup";
+    el.querySelectorAll("[data-dk-file]").forEach((i) => { i.closest("label").hidden = !showTop; });
+    if (m === "setup") {
+      if (secMode !== m) {
+        secEl.innerHTML = `<section class="ak-card-s dk-setup"><h3>🔒 Dokumente verschlüsseln</h3>
+          <p>Damit Rechnungen, Verträge & Co. nur für dich lesbar sind, werden sie mit deinem <b>Tresor-Passwort</b> verschlüsselt – Datei, Titel, Notizen, Tags und erkannter Text. Einmal einrichten, dann kann's losgehen. 😊</p>
+          <button type="button" class="btn primary" data-dk="setup">🔒 Tresor-Passwort einrichten</button></section>`;
+      }
+    } else if (m === "locked") {
+      if (secMode !== m) {
+        secEl.innerHTML = `<form class="ak-card-s dk-lock" novalidate><h3>🔒 Deine Dokumente sind gesperrt</h3>
+          <p class="note dk-reason"></p>
+          <label class="dk-pw-l">Tresor-Passwort<input id="dk-pw" type="password" autocomplete="current-password" autocapitalize="off" spellcheck="false" enterkeyhint="go"></label>
+          <p class="ak-err dk-err" role="alert" hidden></p>
+          <button type="submit" class="btn primary" data-dk-unlock>🔓 Entsperren</button>
+          <div class="dk-lsum"></div></form>`;
+        secEl.querySelector("form").addEventListener("submit", onUnlock);
+        setTimeout(() => { const i = secEl.querySelector("#dk-pw"); if (i && alive && !document.querySelector(".sheet")) try { i.focus({ preventScroll: true }); } catch { /* egal */ } }, 50);
+      }
+      secEl.querySelector(".dk-reason").textContent = Sess.lockReason() || "Gib dein Tresor-Passwort ein, um sie zu sehen. Ohne Entsperren siehst du nur Ordner, Anzahl und Ablauf-Hinweise.";
+      secEl.querySelector(".dk-lsum").innerHTML = lockSummary();
+    } else if (m === "open" || m === "decrypt") {
+      const g = DS.mig, bad = DS.brokenCount(), plain = DS.plainCount();
+      secEl.innerHTML = `<div class="dk-bar"><span class="dk-bar-t">🔓 Entsperrt – alles verschlüsselt gespeichert</span><button type="button" class="btn ghost sm" data-dk="lock">🔒 Sperren</button></div>` +
+        (m === "decrypt" ? `<p class="note">🔓 Entschlüssle deine Dokumente …</p>` : "") +
+        (g.running ? `<div class="ak-card-s dk-mig" role="status"><b>🔐 Verschlüssle deine Dokumente … ${g.done}/${g.total}</b><progress max="${g.total}" value="${g.done}"></progress><small class="note">Bitte die App kurz offen lassen – nichts geht verloren, falls sie zugeht.</small></div>`
+          : plain && (g.failed || g.missing) ? `<p class="note dk-mig-warn">⚠️ ${plain} ${plain === 1 ? "Dokument ist" : "Dokumente sind"} noch nicht verschlüsselt (Datei gerade nicht erreichbar). Ich probier's beim nächsten Entsperren wieder – das Original bleibt erhalten.</p>` : "") +
+        (bad ? `<p class="note ak-err">🔐 ${bad} ${bad === 1 ? "Dokument lässt" : "Dokumente lassen"} sich mit diesem Tresor nicht öffnen (anderer Tresor-Schlüssel?).</p>` : "");
+    } else secEl.innerHTML = "";
+    secMode = m;
+    footEl.innerHTML = m === "setup" ? "🔒 Neue Dokumente brauchen ein Tresor-Passwort – dann ist alles verschlüsselt." : "🔒 Datei, Titel, Notizen, Tags, Verknüpfungen und erkannter Text sind mit deinem Tresor-Passwort verschlüsselt. Ohne Entsperren sichtbar: nur Ordner, Datum, Ablauf und Größe.";
+  }
+  async function onUnlock(ev) {
+    ev.preventDefault();
+    const f = ev.currentTarget, inp = f.querySelector("#dk-pw"), err = f.querySelector(".dk-err"), btn = f.querySelector("[data-dk-unlock]");
+    if (!inp.value) { err.textContent = "Bitte Tresor-Passwort eingeben."; err.hidden = false; return; }
+    ui.setBusy(btn, true, "Entsperre …");
+    try {
+      await Sess.unlock(inp.value);
+      inp.value = "";
+      ui.toast("Entsperrt 🔓");
+    } catch (e) {
+      inp.value = "";
+      err.textContent = e && e.code === "wrong-password" ? `Falsches Passwort.${e.fails >= 3 ? ` (${e.fails} Fehlversuche)` : ""}` : (e && e.message) || "Entsperren fehlgeschlagen.";
+      err.hidden = false;
+      if (alive) { ui.setBusy(btn, false); try { inp.focus(); } catch { /* egal */ } }
+    }
+  }
+
   function render() {
+    renderSec();
+    const m = mode();
     S.id = D.routeId(location.hash);
+    if (m === "locked" || m === "decrypt" || m === "loading") {
+      home.hidden = false; detailEl.hidden = true; detailEl.innerHTML = "";
+      viewsEl.innerHTML = foldersEl.innerHTML = tagsEl.innerHTML = "";
+      listEl.innerHTML = m === "loading" ? `<p class="note">Lade …</p>` : "";
+      return;
+    }
     const d = S.id ? byId(S.id) : null;
     if (S.id && !d) {
       home.hidden = true; detailEl.hidden = false;
@@ -395,20 +495,22 @@ export function mount(el, ctx) {
     const d = S.id ? byId(S.id) : null;
     switch (b.dataset.dk) {
       case "open": A.go(D.docHash(b.dataset.id)); break;
+      case "setup": try { sessionStorage.setItem("sk-dk-return", "1"); } catch { /* egal */ } A.go("#alltag/tresor"); break;
+      case "lock": Sess.lock("Gesperrt – bis gleich! 🔒"); break;
       case "back": A.go("#alltag/dokumente"); break;
-      case "fav": if (d) A.safe(col.patch(d.id, { fav: !d.fav, updated: Date.now() }), d.fav ? "Favorit entfernt" : "Als Favorit gemerkt ⭐"); break;
+      case "fav": if (d) saveOk(DS.update(d.id, { fav: !d.fav }), d.fav ? "Favorit entfernt" : "Als Favorit gemerkt ⭐"); break;
       case "view": if (d) view(d); break;
-      case "share": if (d) withB64(d, (b64) => share(d, F.b64ToBlob(b64, d.type))); break;
+      case "share": if (d) withBlob(d, (b) => share(d, b)); break;
       case "edit": if (d) openForm({ doc: d }); break;
       case "link": if (d) { const l = d.links[Number(b.dataset.i)]; if (l) openLink(l); } break;
       case "ocr": if (d) runOcr(d); break;
       case "ocrok": {
         const ta = detailEl.querySelector("#dk-ocr-in");
-        if (d && ta) A.safe(col.patch(d.id, { ocr: D.cleanOcr(ta.value), updated: Date.now() }), "Text gespeichert – jetzt auch durchsuchbar 🔎");
+        if (d && ta) saveOk(DS.update(d.id, { ocr: D.cleanOcr(ta.value) }), "Text verschlüsselt gespeichert – jetzt auch durchsuchbar 🔎");
         break;
       }
       case "ocrno": { const box = detailEl.querySelector(".dk-ocr-box"); if (box) { box.hidden = true; box.innerHTML = ""; } break; }
-      case "ocrdel": if (d) A.safe(col.patch(d.id, { ocr: "", updated: Date.now() }), "Text entfernt"); break;
+      case "ocrdel": if (d) saveOk(DS.update(d.id, { ocr: "" }), "Text entfernt"); break;
       default: break;
     }
   }
@@ -419,7 +521,7 @@ export function mount(el, ctx) {
   qIn.addEventListener("input", () => { S.q = qIn.value; renderHome(); });
   el.addEventListener("click", onClick);
   el.addEventListener("change", onChange);
-  const offs = [col.watch(queue), ...Object.values(other).map((c) => c.watch(queue))];
+  const offs = [DS.watch(queue), Sess.onChange(() => { if (!Sess.isUnlocked()) { closeSheets(); prevUrl = prevImg = null; } queue(); }), ...Object.values(other).map((c) => c.watch(queue))];
   const offRoute = A.onRoute((h) => { if (/^#alltag\/dokumente/.test(h)) { if (/[?&]neu=/.test(h)) readNew(); queue(); window.scrollTo(0, 0); } });
   readNew();
   render();
@@ -427,14 +529,16 @@ export function mount(el, ctx) {
     alive = false;
     offs.forEach((o) => o());
     offRoute();
-    if (prevUrl) { const u = prevUrl; setTimeout(() => URL.revokeObjectURL(u), 60000); }
+    closeSheets();
+    DS.revoke(prevImg);
+    if (prevUrl) { const u = prevUrl; setTimeout(() => DS.revoke(u), 60000); }
     el.removeEventListener("click", onClick);
     el.removeEventListener("change", onChange);
     el.innerHTML = "";
   };
 }
 
-/** Für Benachrichtigungen/Dashboard: bald ablaufende Dokumente. */
+/** Für Benachrichtigungen/Dashboard: bald ablaufende Dokumente (verschlüsselte ohne Titel). */
 export async function dueDocs(today = A.todayKey()) {
   const col = collection("dokumente");
   await A.whenLoaded(col);

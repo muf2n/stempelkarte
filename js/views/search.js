@@ -14,6 +14,7 @@ import * as HHC from "../alltag/haushalt-core.js"; // Update 10 C – Haushalt
 import * as HBC from "../alltag/habits-core.js"; // Update 10 C – Routinen & Ziele
 import * as NBC from "../alltag/notes-core.js"; // Update 10 C – Notizbuch
 import * as DKC from "../alltag/dokumente-core.js"; // Update 10 E
+import * as DKS from "../alltag/dokumente-store.js"; // Update 10 – 🔒 entschlüsselte Dokumente
 import * as VTC from "../alltag/vertraege-core.js"; // Update 10 E
 import * as INC from "../alltag/inventar-core.js"; // Update 10 E
 import * as KTC from "../alltag/kontakte-core.js"; // Update 10 E
@@ -371,8 +372,8 @@ function buildIndex() {
       text: [NBC.plain(n.text), n.tags.join(" "), n.coll].join(" "), ts: n.updated, boost: n.pinned ? 1 : 0, go: { t: "hash", h: NBC.noteHash(n.id) } });
   }
   // Update 10 E – 📁 Dokumente, 📜 Verträge, 📦 Inventar, 👤 Kontakte (Ziele per Hash)
-  for (const x of D("dokumente")) {
-    const d = DKC.normDoc(x);
+  // 🔒 Update 10: nur der entschlüsselte Stand (Tresor entsperrt) – gesperrt werden keine Dokumente durchsucht.
+  for (const d of DKS.docs() || []) {
     if (!d.id) continue;
     add({ cat: "dokumente", id: d.id, emoji: d.fav ? "⭐" : DKC.folderOf(d.folder).e, title: d.title,
       sub: [DKC.folderOf(d.folder).label, d.tags.map((t) => "#" + t).join(" "), d.expires ? `läuft ab ${SC.fmtKey(d.expires)}` : ""].filter(Boolean).join(" · "),

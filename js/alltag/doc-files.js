@@ -1,5 +1,7 @@
-// Update 10 E – 📁 Dokumente: Ablage der Datei-Inhalte (NICHT verschlüsselt – wie die Schul-Dokumente, nie gemischt mit dem Tresor).
-//   Cloud → users/{uid}/a_doc_files/{docId}_{n} = { id, n, total, data }   (base64-Stücke ≤ 700 000 Zeichen, einzeln gelesen, kein Listener)
+// Update 10 E – 📁 Dokumente: Ablage der Datei-Inhalte.
+//   🔒 Neu (verschlüsselt): Cloud → users/{uid}/a_doc_files/{fileId}_{n} = { id, n, total, iv, ct }  (putEnc/getEnc/delEnc;
+//      Chiffretext aus vault-crypto.encryptFile, fileId zufällig). Klartext-Bytes landen hier nie mehr.
+//   Alt (Klartext, nur noch lesen + löschen für die Umstellung): {docId}_{n} = { id, n, total, data } (base64-Stücke)
 //   lokal → IndexedDB „stempelkarte-docs“, Store „chunks“ (gleiches Format)
 // Nicht im Backup (backup-core EXCLUDE_EXACT) – genau wie a_school_files. Bilder werden vor dem Speichern verkleinert.
 import * as store from "../store.js";
@@ -44,7 +46,29 @@ async function cloud() {
 }
 const chunkId = (id, n) => `${id}_${n}`;
 
-/** dataURL speichern → Anzahl Stücke. Cloud: lokal sofort zurück, Upload läuft im Hintergrund (offline: später). */
+/* ---------- 🔒 verschlüsselte Stücke ---------- */
+const encClean = (c) => ({ id: String(c.id), n: c.n, total: c.total, iv: String(c.iv), ct: String(c.ct) });
+/** Verschlüsselte Stücke speichern (nur Ausgaben von vault-crypto.encryptFile). Cloud: { upload } läuft im Hintergrund. */
+export async function putEnc(chunks) {
+  if (isLocal()) { await idbTx("readwrite", (os) => { for (const c of chunks) os.put(encClean(c)); }); return { upload: Promise.resolve() }; }
+  const { db, fs, uid } = await cloud();
+  return { upload: Promise.all(chunks.map((c) => fs.setDoc(fs.doc(db, "users", uid, COL, c.id), encClean(c)))) };
+}
+/** → Stücke (Chiffretext) oder null, wenn welche fehlen. */
+export async function getEnc(fileId, total) {
+  const n = Math.max(1, Number(total) || 1);
+  if (isLocal()) {
+    const got = await idbTx("readonly", (os, out) => { for (let i = 0; i < n; i++) { const r = os.get(chunkId(fileId, i)); r.onsuccess = () => { out[i] = r.result; }; } });
+    return got.length < n || got.some((x) => !x || !x.ct) ? null : got;
+  }
+  const { db, fs, uid } = await cloud();
+  const snaps = await Promise.all(Array.from({ length: n }, (_, i) => fs.getDoc(fs.doc(db, "users", uid, COL, chunkId(fileId, i)))));
+  if (snaps.some((x) => !x.exists())) return null;
+  return snaps.map((x) => x.data());
+}
+export const delEnc = (fileId, total) => (fileId ? delFile(fileId, total) : Promise.resolve());
+
+/** ALT (Klartext) – nur noch für Tests/Altbestand. dataURL speichern → Anzahl Stücke. Cloud: lokal sofort zurück, Upload läuft im Hintergrund (offline: später). */
 export async function putFile(id, dataURL) {
   const b64 = String(dataURL).slice(String(dataURL).indexOf(",") + 1);
   const parts = splitChunks(b64);

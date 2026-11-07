@@ -12,7 +12,7 @@ import * as galleryAlbums from "../gallery-albums.js";
 import { openViewer } from "./gallery.js";
 import { tripsBetween } from "../travel.js";
 import { icon } from "../icons.js";
-import { linkedDocsHTML, injectCSS as injectAktenCSS } from "../alltag/akten-ui.js"; // Update 10 E – 📎 Dokumente
+import { linkedDocsHTML, watchDocs, injectCSS as injectAktenCSS } from "../alltag/akten-ui.js"; // Update 10 E – 📎 Dokumente
 import { customerOfPlace, displayName, telHref, typeById, contactHash } from "../alltag/kontakte-core.js"; // Update 10 E – 👤 Kunde
 
 const ROOT_ID = "site-root";
@@ -628,6 +628,7 @@ export function showSite(id, ctx, { pushed = false } = {}) {
   c.unsubs.push(cols().mat.watch(() => { if (cur === c) queueRender(); }));
   c.unsubs.push(cols().kt.watch(() => { if (cur === c) queueRender(); })); // Update 10 E
   c.unsubs.push(cols().dk.watch(() => { if (cur === c) queueRender(); })); // Update 10 E
+  c.unsubs.push(watchDocs(() => { if (cur === c) queueRender(); })); // Update 10 – 🔒 Entsperren/Sperren
   c.unsubs.push(photos.onChange(() => { if (cur === c) { c.state.photosLoaded = false; loadPhotos(); } }));
   render();
   loadPhotos();

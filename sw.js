@@ -196,6 +196,9 @@ const SHELL = [
   // Update 10 E – Dokumente, Verträge, Inventar, Kontakte, Finanz-Planung
   "js/alltag/dokumente.js",
   "js/alltag/dokumente-core.js",
+  "js/alltag/dokumente-crypt.js", // Update 10 – 🔒
+  "js/alltag/dokumente-store.js",
+  "js/alltag/vault-session.js",
   "js/alltag/doc-files.js",
   "js/alltag/akten-ui.js",
   "js/alltag/vertraege.js",
