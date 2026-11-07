@@ -12,8 +12,10 @@ export const GROUPS = Object.freeze([
   ["orte", "📍", "Orte & Baustellen"],
   ["einkauf", "🛒", "Einkauf"],
   ["material", "🧰", "Material"],
+  ["werkzeug", "🧰", "Werkzeug"], // Update 10 – Werkzeug-Register
   ["fotos", "📷", "Fotos & Alben"],
   ["fahrten", "🚗", "Fahrten"],
+  ["fahrzeuge", "🚙", "Fahrzeuge"], // Update 10 – Fahrzeuge
   ["geld", "💶", "Geld & Abos"],
   ["schule", "🎒", "Schule"],
   ["unterwegs", "🧳", "Unterwegs"],

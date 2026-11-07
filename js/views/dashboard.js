@@ -13,6 +13,9 @@ import { collection } from "../alltag/db.js";
 import * as MAT from "../alltag/material-core.js";
 import * as WRC from "../weekreport-core.js"; // Update 10 – Wochenbericht-Tipp
 import * as MON from "../alltag/money-core.js";
+import * as WZ from "../alltag/werkzeug-core.js"; // Update 10 – fällige Prüfungen
+import * as FZ from "../alltag/fahrzeug-core.js"; // Update 10 – Pickerl/Service/Versicherung
+import { readVehicles, defaultVehicle } from "../trip-core.js";
 import * as lockState from "../alltag/money-lock-state.js";
 
 let ctx = null;
@@ -31,6 +34,7 @@ const NEEDS = {
   school: ["school_exams", "school_tasks"],
   tip: ["school_exams"],
   einkauf: ["einkauf", "material_items"], // Update 10 – Einkaufsliste
+  faellig: ["werkzeug", "fahrzeug_info", "travel_fuel"], // Update 10 – Werkzeug & Fahrzeuge
 };
 
 function u() { return ctx.util; }
@@ -144,6 +148,7 @@ function available(f) {
   if (sitePlace()) av.add("site");
   av.add("money");
   if (col("einkauf").some((x) => x && !x.done) || col("material_items").some((x) => x && x.status === "brauche")) av.add("einkauf"); // Update 10
+  if (dueItems().length) av.add("faellig"); // Update 10
   const hasSchool = !!(f.schoolToday || f.schoolTomorrow || (u().readSchool && u().readSchool(settings())));
   if (hasSchool || col("school_exams").length || col("school_tasks").length || !loaded("school_exams")) av.add("school");
   return av;
@@ -206,6 +211,7 @@ function widgetHTML(id, f) {
       case "tip": return wTip(f);
       case "sync": return wSync();
       case "einkauf": return wEinkauf();
+      case "faellig": return wFaellig();
       default: return "";
     }
   } catch (e) { console.error("Dashboard-Widget " + id, e); return ""; }
@@ -337,6 +343,28 @@ function wEinkauf() {
   return card("einkauf", `<div class="dw-big">${open.length} <small class="dw-note">offen</small></div>` +
     (names ? `<ul class="dw-list">${names}</ul>` : "") +
     (mat ? `<p class="dw-note">🧰 ${mat} Material fehlt noch</p>` : ""), { hash: "#alltag/einkauf", more: "Liste" });
+}
+
+/* ---- Werkzeug & Auto fällig (Update 10) ---- */
+function dueItems() {
+  const out = [];
+  const now = Date.now();
+  if (loaded("werkzeug")) for (const t of WZ.dueTools(col("werkzeug"), now)) out.push({ e: t.state === "ueber" ? "⛔" : t.e, text: t.text, hash: t.hash, bad: t.state === "ueber" });
+  if (loaded("fahrzeug_info") && loaded("travel_fuel")) {
+    const s = settings();
+    const dv = defaultVehicle(s);
+    for (const v of FZ.dueVehicles(readVehicles(s), col("fahrzeug_info"), col("travel_fuel"), now, { defaultId: dv ? dv.id : null })) {
+      out.push({ e: v.e, text: v.text.replace(/^\S+\s/, ""), hash: v.hash, bad: ["abgelaufen", "ueber", "toleranz"].includes(v.state) });
+    }
+  }
+  return out.sort((a, b) => b.bad - a.bad);
+}
+function wFaellig() {
+  const list = dueItems();
+  if (!list.length) return "";
+  const first = list[0];
+  return card("faellig", `<ul class="dw-list">${list.slice(0, 4).map((x) => `<li><span aria-hidden="true">${x.e}</span><span>${esc(x.text)}</span></li>`).join("")}</ul>` +
+    (list.length > 4 ? `<p class="dw-note">+ ${list.length - 4} weitere</p>` : ""), { hash: first.hash, more: list.length === 1 ? "Ansehen" : "Erstes ansehen" });
 }
 
 /* ---- Finanzen (Geld-Sperre!) ---- */

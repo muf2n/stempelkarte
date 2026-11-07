@@ -163,6 +163,13 @@ const SHELL = [
   "js/alltag/einkauf.js",
   "js/alltag/einkauf-core.js",
   "css/alltag-einkauf.css",
+  // Update 10 – Werkzeug-Register & Fahrzeuge
+  "js/alltag/werkzeug.js",
+  "js/alltag/werkzeug-core.js",
+  "css/alltag-werkzeug.css",
+  "js/alltag/fahrzeuge.js",
+  "js/alltag/fahrzeug-core.js",
+  "css/alltag-fahrzeuge.css",
   // Update 9 – Material
   "js/alltag/material.js",
   "js/alltag/material-core.js",

@@ -1,12 +1,14 @@
 // Unterwegs › Tanken & Fahrtkosten: Tankungen (Datum, Liter, Betrag, km-Stand, Tankstelle, voll getankt),
 // Verbrauch l/100 km zwischen Volltankungen, €/km, Monatskosten, SVG-Diagramme (ohne Bibliothek),
 // optional Buchung in Geld (money_tx, Kategorie „Auto & Tanken“), Fahrtenbuch-km aus js/travel.js nur zur Info.
-// Sammlung travel_fuel: { id, date, liters, total, km, station, full, booked }
+// Sammlung travel_fuel: { id, date, liters, total, km, station, full, booked, vehicleId? }
+// Update 10: vehicleId (settings.vehicles) – ohne Angabe zählt die Tankung zum Standard-Fahrzeug (Alltag › 🚗 Fahrzeuge).
 import * as C from "./unterwegs-core.js";
 import { icon } from "../icons.js";
 import { esc } from "../util.js";
 import * as store from "../store.js";
 import { kmBetween } from "../travel.js";
+import { readVehicles, defaultVehicle } from "../trip-core.js"; // Update 10 – Fahrzeuge: Tankung je Fahrzeug
 import { bookMoney, unbookMoney, safeWrite } from "./unterwegs-shared.js";
 
 const BOOK_KEY = "sk-uw-fuel-book";
@@ -125,10 +127,14 @@ export function createFuel({ col, ui, queue }) {
     `</div>`;
   }
 
-  function openFill(fill = null) {
+  function openFill(fill = null, preset = {}) {
     const isNew = !fill;
-    const last = fills()[0];
-    const f = fill || { date: C.todayKey(), liters: "", total: "", km: "", station: last ? last.station : "", full: true, booked: lsGet(BOOK_KEY) === "1" };
+    let vs = [], dv = null;
+    try { const st = store.get().settings; vs = readVehicles(st); dv = defaultVehicle(st); } catch { /* egal */ }
+    const presetV = preset && preset.vehicleId ? preset.vehicleId : null;
+    const last = fills().find((x) => !presetV || (x.vehicleId || (dv && dv.id)) === presetV) || fills()[0];
+    const f = fill || { date: C.todayKey(), liters: "", total: "", km: "", station: last ? last.station : "", full: true, booked: lsGet(BOOK_KEY) === "1", vehicleId: presetV || (last && last.vehicleId) || null };
+    const vSel = f.vehicleId || (dv ? dv.id : "");
     ui.openSheet({
       title: isNew ? "Tankung eintragen" : "Tankung bearbeiten",
       bodyHTML: `<div class="fields">` +
@@ -137,6 +143,7 @@ export function createFuel({ col, ui, queue }) {
         `<div class="row"><label>Liter<input id="uw-f-l" inputmode="decimal" placeholder="38,5" value="${esc(C.numIn(f.liters))}"></label>` +
         `<label>Betrag (€)<input id="uw-f-e" inputmode="decimal" placeholder="62,30" value="${esc(C.numIn(f.total))}"></label></div>` +
         `<p class="note uw-f-ppl" aria-live="polite"></p>` +
+        (vs.length > 1 || (vs.length === 1 && f.vehicleId && f.vehicleId !== vs[0].id) ? `<label>Fahrzeug<select id="uw-f-veh">${vs.map((v) => `<option value="${esc(v.id)}"${v.id === vSel ? " selected" : ""}>🚗 ${esc(v.plate ? `${v.name} (${v.plate})` : v.name)}</option>`).join("")}</select></label>` : "") +
         `<label>Tankstelle<input id="uw-f-st" maxlength="40" placeholder="z. B. OMV Wels" value="${esc(f.station || "")}"></label>` +
         `<label class="uw-switch"><input id="uw-f-full" type="checkbox"${f.full ? " checked" : ""}><span>Voll getankt</span><small>Nötig für die Verbrauchsberechnung</small></label>` +
         `<label class="uw-switch"><input id="uw-f-book" type="checkbox"${f.booked ? " checked" : ""}><span>In Geld buchen</span><small>Als Ausgabe „Auto &amp; Tanken“</small></label>` +
@@ -159,7 +166,9 @@ export function createFuel({ col, ui, queue }) {
           const booked = $("#uw-f-book").checked;
           lsSet(BOOK_KEY, booked ? "1" : "0");
           const station = $("#uw-f-st").value.trim();
-          const item = { ...(fill || {}), date, liters: Math.round(liters * 100) / 100, total: C.round2(total), km: Math.round(km), station, full: $("#uw-f-full").checked, booked };
+          const vEl = $("#uw-f-veh");
+          const vehicleId = vEl ? vEl.value || null : (vs.length === 1 ? vs[0].id : (fill && fill.vehicleId) || null);
+          const item = { ...(fill || {}), vehicleId, date, liters: Math.round(liters * 100) / 100, total: C.round2(total), km: Math.round(km), station, full: $("#uw-f-full").checked, booked };
           close();
           mk = C.monthOf(date);
           const id = await col.put(item);
@@ -189,5 +198,5 @@ export function createFuel({ col, ui, queue }) {
     return true;
   }
 
-  return { html, onClick, openNew: () => openFill() };
+  return { html, onClick, openNew: (preset) => openFill(null, preset), openEdit: (f) => openFill(f) };
 }
