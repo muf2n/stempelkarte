@@ -3,6 +3,7 @@
 // Echte Ereignisse aus Arbeit, Schule, Terminen, Baustellen-Tagebuch, Fotos (Vorschaubilder), erledigten Aufgaben, Reisen,
 // Freizeit; Tagesüberschriften, Filter-Chips, Nachladen Monat für Monat beim Scrollen, Tipp → Eintrag/Fotos/Baustelle, 1440 dunkel.
 const { chromium } = require("playwright");
+const _d = new Date(); _d.setDate(_d.getDate() - ((_d.getDay() + 4) % 7)); const FIXED_NOW = new Date(_d.getFullYear(), _d.getMonth(), _d.getDate(), 14, 0).getTime(); // letzter Mittwoch 14:00 – Test braucht einen Werktag
 const path = require("path");
 const BASE = process.env.BASE || "http://localhost:8976/";
 const OUT = process.argv[2] || require("os").tmpdir();
@@ -19,6 +20,7 @@ const OUT = process.argv[2] || require("os").tmpdir();
       return route.abort();
     });
     const page = await ctx.newPage();
+    await page.clock.setFixedTime(FIXED_NOW); // feste Tageszeit (14:00), damit „heute 7:00“ nie in der Zukunft liegt
     page.on("console", (msg) => {
       const t = msg.text();
       if (/Content Security Policy|Refused to/.test(t)) errors.push("CSP: " + t);
@@ -30,7 +32,7 @@ const OUT = process.argv[2] || require("os").tmpdir();
   const page = await newPage("light", 390, 844);
   const shot = async (name, p = page, full = true) => { await p.waitForTimeout(350); return p.screenshot({ path: path.join(OUT, name), fullPage: full }); };
 
-  const now = new Date();
+  const now = new Date(FIXED_NOW);
   const at = (dDays, h, m = 0) => { const d = new Date(now.getFullYear(), now.getMonth(), now.getDate() + dDays, h, m); return d.getTime(); };
   const key = (ts) => { const d = new Date(ts); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`; };
   // Schicht heute in der Vergangenheit (vor „jetzt“)
