@@ -1,0 +1,39 @@
+/* Update 10 – Alltag › 🆘 Notfallkarte (js/alltag/notfall.js). Präfix .nf- */
+:root { --nf-c: #dc2626; --nf-c2: #b91c1c; --nf-ink: #fff; --nf-warn-bg: #fff1f1; --nf-warn: #b91c1c; }
+@media (prefers-color-scheme: dark) { :root { --nf-c: #ef4444; --nf-c2: #991b1b; --nf-ink: #fff; --nf-warn-bg: rgba(239, 68, 68, .14); --nf-warn: #fca5a5; } }
+.nf { display: flex; flex-direction: column; gap: 12px; min-width: 0; max-width: 720px; margin: 0 auto; width: 100%; padding-bottom: 40px; }
+.nf-empty { text-align: center; display: flex; flex-direction: column; align-items: center; gap: 8px; }
+.nf-empty-emo { font-size: 2.8rem; }
+.nf-card { border-radius: var(--r-sm); overflow: hidden; background: var(--card); border: 2px solid var(--nf-c); box-shadow: var(--shadow); }
+.nf-head { display: flex; align-items: center; gap: 12px; padding: 14px 16px; background: linear-gradient(135deg, var(--nf-c), var(--nf-c2)); color: var(--nf-ink); }
+.nf-head > span { font-size: 2rem; line-height: 1; }
+.nf-head > div:not(.nf-blood) { flex: 1; min-width: 0; }
+.nf-head h3 { margin: 0; font-size: 1.25rem; color: var(--nf-ink); }
+.nf-head small { opacity: .9; }
+.nf-blood { flex: none; display: flex; flex-direction: column; align-items: center; padding: 6px 12px; border-radius: 12px; background: rgba(255, 255, 255, .18); }
+.nf-blood small { font-size: .68rem; font-weight: 700; text-transform: uppercase; letter-spacing: .04em; }
+.nf-blood b { font-size: 1.6rem; line-height: 1.1; }
+.nf-dl { margin: 0; padding: 4px 16px; }
+.nf-r { display: grid; grid-template-columns: minmax(120px, 34%) 1fr; gap: 10px; padding: 10px 0; border-bottom: 1px solid color-mix(in srgb, var(--line) 60%, transparent); }
+.nf-r:last-child { border-bottom: 0; }
+.nf-r dt { color: var(--muted); font-size: .88rem; font-weight: 600; }
+.nf-r dd { margin: 0; min-width: 0; overflow-wrap: anywhere; line-height: 1.5; font-weight: 600; }
+.nf-warn { background: var(--nf-warn-bg); margin: 0 -16px; padding: 10px 16px; }
+.nf-warn dt, .nf-warn dd { color: var(--nf-warn); }
+.nf-contacts { padding: 4px 16px 10px; border-top: 1px solid var(--line); }
+.nf-contacts h4 { margin: 10px 0 6px; }
+.nf-contacts ul { list-style: none; margin: 0; padding: 0; display: grid; gap: 8px; }
+.nf-contacts li { display: flex; align-items: center; gap: 10px; }
+.nf-k { flex: 1; min-width: 0; display: flex; flex-direction: column; }
+.nf-k small { color: var(--muted); font-size: .84rem; }
+.nf-ph { font-variant-numeric: tabular-nums; }
+.nf-call { flex: none; min-height: 44px; }
+.nf-foot { padding: 8px 16px; font-size: .82rem; font-weight: 700; color: var(--nf-warn); background: var(--nf-warn-bg); text-align: center; }
+.nf-actions { display: flex; flex-wrap: wrap; gap: 8px; }
+.nf-actions .btn { flex: 1 1 150px; justify-content: center; min-height: 44px; }
+.nf-priv, .nf-tip { padding: 10px 14px; }
+.nf-priv .note, .nf-tip .note { margin: 4px 0 0; }
+.nf-kf { border: 1px solid var(--line); border-radius: var(--r-sm); padding: 8px 12px 12px; margin: 0 0 10px; display: flex; flex-direction: column; gap: 10px; }
+.nf-kf legend { font-size: .84rem; color: var(--muted); padding: 0 4px; }
+.nf-form [hidden] { display: none; }
+@media (max-width: 420px) { .nf-r { grid-template-columns: 1fr; gap: 2px; } }

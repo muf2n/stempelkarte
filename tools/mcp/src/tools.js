@@ -30,6 +30,7 @@ import { WEEKREPORT_TOOLS } from "./wochenbericht.js"; // Update 10 – Automati
 import { EINKAUF_TOOLS } from "./einkauf.js"; // Update 10 – Einkaufsliste (einkauf_lesen, einkauf_hinzufuegen)
 import { WERKZEUG_TOOLS } from "./werkzeug.js"; // Update 10 – Werkzeug-Register (werkzeug_lesen, nur lesen)
 import { FAHRZEUG_TOOLS } from "./fahrzeuge.js"; // Update 10 – Fahrzeuge (fahrzeuge_lesen, nur lesen)
+import { MEMORY_TOOLS } from "./memory.js"; // Update 10 C – gedaechtnis_lesen (RO, untrusted), gedaechtnis_merken (WR), notfallkarte_lesen (RO, nur nach Freigabe)
 
 const ABS_KINDS = ["urlaub", "krank", "zeitausgleich", "schule", "feiertag"];
 const GRADE_NAMES = { 1: "Sehr gut", 2: "Gut", 3: "Befriedigend", 4: "Genügend", 5: "Nicht genügend" };
@@ -1698,6 +1699,7 @@ for (const t of WEEKREPORT_TOOLS) tool(t); // Update 10 – wochenbericht_lesen
 for (const t of EINKAUF_TOOLS) tool(t); // Update 10 – einkauf_lesen (RO), einkauf_hinzufuegen (WR → Untrusted-Sperre greift)
 for (const t of WERKZEUG_TOOLS) tool(t); // Update 10 – werkzeug_lesen (RO, Notizen als untrusted_content)
 for (const t of FAHRZEUG_TOOLS) tool(t); // Update 10 – fahrzeuge_lesen (RO, Notizen als untrusted_content)
+for (const t of MEMORY_TOOLS) tool(t); // Update 10 C – KI-Gedächtnis + Notfallkarte
 
 /* ===== Gmail (nur lesen, nur auf Nachfrage) ===== */
 for (const t of GMAIL_TOOLS) tool(t);

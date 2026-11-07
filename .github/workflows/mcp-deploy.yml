@@ -35,6 +35,8 @@ on:
       - "js/alltag/einkauf-core.js"
       - "js/alltag/werkzeug-core.js"
       - "js/alltag/fahrzeug-core.js"
+      - "js/alltag/notes-core.js"
+      - "js/alltag/notfall-core.js"
       - ".github/workflows/mcp-deploy.yml"
   workflow_dispatch:
 

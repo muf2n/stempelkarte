@@ -10,6 +10,9 @@ import * as lockState from "../alltag/money-lock-state.js";
 import * as EK from "../alltag/einkauf-core.js";
 import * as WZ from "../alltag/werkzeug-core.js"; // Update 10 – Werkzeug-Register
 import * as FZ from "../alltag/fahrzeug-core.js"; // Update 10 – Fahrzeuge
+import * as HHC from "../alltag/haushalt-core.js"; // Update 10 C – Haushalt
+import * as HBC from "../alltag/habits-core.js"; // Update 10 C – Routinen & Ziele
+import * as NBC from "../alltag/notes-core.js"; // Update 10 C – Notizbuch
 import { tripsBetween } from "../travel.js";
 import { fromLabel, toLabel, readVehicles } from "../trip-core.js";
 import { siteHash } from "../site-core.js";
@@ -18,7 +21,8 @@ import { searchIndex as settingsIndex } from "./settings-hub.js";
 const RECENT_KEY = "sk-search-recent";
 const PER_GROUP = 4;
 const COLS = ["material_items", "einkauf", "einkauf_lists", "photo_albums", "school_exams", "school_tasks", "school_timetable", "school_grades",
-  "travel_trips", "travel_packing", "travel_places", "jp_cards", "berichtsheft", "werkzeug", "fahrzeug_info"];
+  "travel_trips", "travel_packing", "travel_places", "jp_cards", "berichtsheft", "werkzeug", "fahrzeug_info",
+  "haushalt", "habits", "goals", "notes", "ai_memory"]; // Update 10 C
 const MONEY_COLS = ["money_tx", "money_subs"];
 const KIND = { termin: "📅 Termin", aufgabe: "✅ Aufgabe", geburtstag: "🎂 Geburtstag", einsatz: "🛠️ Einsatz" };
 const WD_L = ["So", "Mo", "Di", "Mi", "Do", "Fr", "Sa"];
@@ -331,6 +335,41 @@ function buildIndex() {
       text: [v.plate, v.plate.replace(/[^A-Z0-9]/g, ""), inf.make, inf.notes, inf.insurance.company, inf.insurance.policy, "Auto Fahrzeug Pickerl Service"].join(" "), go: { t: "fahrzeug", id: v.id } });
   }
 
+  // 🏡 Haushalt, 🎯 Routinen & Ziele, 🧠 Notizbuch (Update 10 C)
+  const tk = u.dayKey(Date.now());
+  for (const x of D("haushalt")) {
+    const t = HHC.normTask(x);
+    if (!t.id || !t.title) continue;
+    const st = HHC.taskStatus(t, tk);
+    add({ cat: "haushalt", id: t.id, emoji: t.kind === "wartung" ? "🛠️" : HHC.roomEmoji(t.room), title: t.title,
+      sub: [t.room, HHC.intervalLabel(t.unit, t.n), st.label].filter(Boolean).join(" · "), text: HHC.searchText(t), ts: Number(x.updated) || 0, go: { t: "hash", h: "#alltag/haushalt" } });
+  }
+  for (const x of D("habits")) {
+    const h = HBC.normHabit(x);
+    if (!h.id || !h.title || h.archived) continue;
+    const st = HBC.streak(h, tk);
+    add({ cat: "routinen", id: h.id, emoji: h.emoji, title: h.title, sub: `Gewohnheit · ${HBC.progressLabel(h, tk)}${st.current ? ` · 🔥 ${st.current} ${st.unit}` : ""}`,
+      text: "Gewohnheit Habit Streak", ts: Number(x.updated) || 0, go: { t: "rt", tab: "habits" } });
+  }
+  for (const x of D("goals")) {
+    const g = HBC.normGoal(x);
+    if (!g.id || !g.title) continue;
+    add({ cat: "routinen", id: g.id, emoji: g.emoji, title: g.title, sub: `Ziel · ${HBC.goalProgress(g)} %${g.due ? ` · bis ${SC.fmtKey(g.due)}` : ""}`,
+      text: [g.notes, g.milestones.map((m) => m.text).join(" "), "Ziel Meilenstein"].join(" "), dates: g.due ? [g.due] : [], ts: Number(x.updated) || 0, go: { t: "rt", tab: "goals" } });
+  }
+  for (const x of D("notes")) {
+    const n = NBC.normNote(x);
+    if (!n.id) continue;
+    add({ cat: "notizen", id: n.id, emoji: n.pinned ? "📌" : n.fav ? "⭐" : "📝", title: NBC.noteTitle(n),
+      sub: [n.coll && `📁 ${n.coll}`, n.tags.map((t) => "#" + t).join(" "), NBC.excerpt(n.text, 70)].filter(Boolean).join(" · "),
+      text: [NBC.plain(n.text), n.tags.join(" "), n.coll].join(" "), ts: n.updated, boost: n.pinned ? 1 : 0, go: { t: "hash", h: NBC.noteHash(n.id) } });
+  }
+  for (const x of D("ai_memory")) {
+    const m = NBC.normMemory(x);
+    if (!m.id || !m.text) continue;
+    add({ cat: "notizen", id: "mem_" + m.id, emoji: "🤖", title: m.text, sub: `Was Claude sich merkt · ${NBC.areaById(m.area).label}`, text: "Gedächtnis Claude merken", ts: m.updated, go: { t: "mem" } });
+  }
+
   // 📷 Fotos & Alben
   for (const a of D("photo_albums")) {
     if (!a || !s(a.name)) continue;
@@ -586,6 +625,9 @@ function pick(key) {
       case "einkauf": lsSet("sk-ek-list", g.list || ""); toHash("#alltag/einkauf"); break;
       case "werkzeug": toHash(WZ.toolHash(g.id)); break; // Update 10
       case "fahrzeug": toHash(FZ.vehicleHash(g.id)); break; // Update 10
+      case "hash": toHash(g.h); break; // Update 10 C
+      case "rt": lsSet("sk-rt-tab", g.tab); toHash("#alltag/routinen"); break; // Update 10 C
+      case "mem": lsSet("sk-nb-tab", "memory"); toHash("#alltag/notizen"); break; // Update 10 C
       case "material": lsSet("sk-mt-tab", g.status === "verbaut" ? "verbaut" : "offen"); toHash("#alltag/material"); break;
       case "album": location.hash = `alltag/galerie/a/${encodeURIComponent(g.id)}`; break;
       case "photo": {
