@@ -13,6 +13,7 @@ import { handleChat } from "./chat.js";
 import { handleBank, runBankCron } from "./bank.js";
 import { handleIcs } from "./ics.js";
 import { handleGmail, runGmailCron, GMAIL_CRON } from "./gmail.js";
+import { runBackupCron, BACKUP_CRON } from "./backup.js";
 import { rateOk, rateTake, retryAfter } from "./ratelimit.js";
 
 const CORS = {
@@ -143,12 +144,14 @@ export default {
       return json(500, { jsonrpc: "2.0", id: null, error: { code: -32603, message: "Interner Fehler." } });
     }
   },
-  // Cron (wrangler.toml [triggers]): Bankbuchungen abholen bzw. 1× täglich Gmail nach Abo-Mails durchsuchen.
+  // Cron (wrangler.toml [triggers]): Bankbuchungen abholen, 1× täglich Gmail nach Abo-Mails durchsuchen, sonntags Backup.
   // Nur Ergebnis-Art protokollieren, keine Inhalte.
   async scheduled(event, env, ctx) {
     const cron = event && event.cron;
     const jobs = [];
-    if (cron !== GMAIL_CRON) {
+    if (cron === BACKUP_CRON) { // Update 10 – wöchentliches Backup (eigener Lauf → eigenes Unteranfragen-Budget)
+      jobs.push(runBackupCron(env).then((r) => console.log("backup-cron:", r && (r.skipped || (r.error ? "error" : "ok")))).catch(() => console.log("backup-cron: error")));
+    } else if (cron !== GMAIL_CRON) {
       jobs.push(runBankCron(env).then((r) => console.log("bank-cron:", r && (r.skipped || (r.error ? "error" : "ok")))).catch(() => console.log("bank-cron: error")));
     }
     if (!cron || cron === GMAIL_CRON) {

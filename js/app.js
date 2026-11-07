@@ -15,6 +15,7 @@ import * as places from "./views/places.js";
 import * as agenda from "./views/agenda.js";
 import * as alltag from "./views/alltag.js";
 import * as search from "./views/search.js"; // Update 10 – Universale Suche
+let notifyMod = null; // Update 10 – Benachrichtigungszentrale (js/notify.js, dynamisch geladen)
 import { openEntryForm } from "./views/entries.js";
 import { openPlaceForm } from "./views/places.js";
 import { icon } from "./icons.js";
@@ -104,10 +105,13 @@ function mountViews() {
     if (el) safe(VIEWS[tab].mount, el, ctx);
   }
   safe(search.mount, ctx);
+  import("./notify.js").then((m) => { notifyMod = m; safe(m.mount, ctx); if (lastSnap) safe(m.update, lastSnap); })
+    .catch((err) => console.error("Mitteilungen:", err));
   store.subscribe((snap) => {
     lastSnap = snap;
     for (const tab of TABS) safe(VIEWS[tab].update, snap);
     safe(search.update);
+    if (notifyMod) safe(notifyMod.update, snap);
     if (railBalanceEl) safe(overview.renderBalanceCard, railBalanceEl, snap, ctx);
     renderTopbar();
     renderRunState();

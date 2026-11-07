@@ -159,10 +159,12 @@ export class FakeGoogle {
     if (op === "rollback") { const t = this.txs.get(req.transaction); if (t) t.done = true; return reply(200, {}); }
     if (op === "runQuery") return reply(200, this.runQuery(rel, req.structuredQuery));
     if (op === "commit") return this.commit(req, reply);
+    if (op === "batchGet") return reply(200, this.batchGet(req));
     return reply(400, { error: { status: "INVALID_ARGUMENT", message: "op " + op } });
   }
 
   runQuery(parent, q) {
+    if (q.from[0].allDescendants && !q.from[0].collectionId) return this.kindless(parent, q);
     const coll = q.from[0].collectionId;
     const base = `${parent}/${coll}`;
     let rows = [];
@@ -192,6 +194,41 @@ export class FakeGoogle {
     const readTime = new Date().toISOString();
     if (!rows.length) return [{ readTime }];
     return rows.map((p) => ({ document: this.docJson(p), readTime }));
+  }
+
+  /** Kindless-Abfrage über alle Unter-Sammlungen (nur __name__-Filter, wie bei Firestore). */
+  kindless(parent, q) {
+    const MIN = "__id-9223372036854775808__";
+    const segs = (name) => name.split("/");
+    const cmpSeg = (a, b) => (a === b ? 0 : a === MIN ? -1 : b === MIN ? 1 : a < b ? -1 : 1);
+    const cmp = (x, y) => {
+      const a = segs(x), b = segs(y);
+      for (let i = 0; i < Math.min(a.length, b.length); i++) { const c = cmpSeg(a[i], b[i]); if (c) return c; }
+      return a.length - b.length;
+    };
+    const filters = q.where ? (q.where.compositeFilter ? q.where.compositeFilter.filters : [q.where]) : [];
+    const pre = this.root() + "/";
+    const rows = [];
+    for (const [p] of this.docs) {
+      if (!p.startsWith(parent + "/")) continue;
+      const ok = filters.every((f) => {
+        const ff = f.fieldFilter;
+        if (ff.field.fieldPath !== "__name__") throw new Error("kindless: nur __name__");
+        const c = cmp(p, ff.value.referenceValue.slice(pre.length));
+        return ff.op === "GREATER_THAN_OR_EQUAL" ? c >= 0 : ff.op === "LESS_THAN" ? c < 0 : (() => { throw new Error("op " + ff.op); })();
+      });
+      if (ok) rows.push(p);
+    }
+    this.kindlessCalls = (this.kindlessCalls || 0) + 1;
+    const readTime = new Date().toISOString();
+    rows.sort(cmp);
+    if (!rows.length) return [{ readTime }];
+    return rows.map((p) => ({ document: this.docJson(p), readTime }));
+  }
+
+  batchGet(req) {
+    const pre = this.root() + "/";
+    return req.documents.map((n) => (this.docs.has(n.slice(pre.length)) ? { found: this.docJson(n.slice(pre.length)) } : { missing: n }));
   }
 
   commit(req, reply) {

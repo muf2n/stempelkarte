@@ -2196,6 +2196,19 @@ body::before {
     box-shadow: var(--shadow);
   }
   .pc-avatar:focus-visible { outline: none; box-shadow: var(--ring); }
+  /* Update 10 – 🔔 Glocke der Benachrichtigungszentrale (Rest in css/notify.css) */
+  .pc-bell {
+    position: relative; width: 46px; height: 46px; border-radius: 50%; padding: 0; display: grid; place-items: center; cursor: pointer;
+    border: 1px solid color-mix(in srgb, var(--line) 70%, transparent); background: var(--card); color: var(--accent); box-shadow: var(--shadow);
+  }
+  .pc-bell:focus-visible { outline: none; box-shadow: var(--ring); }
+  /* schmale Inhaltsspalte (z. B. Heute): Datum weg, Suche kompakter – sonst überdeckt die Leiste den Gruß */
+  #pc-top { container-type: inline-size; }
+  @container (max-width: 940px) {
+    .pc-date { display: none !important; }
+    .pc-search { min-width: 150px !important; }
+    .pc-search kbd { display: none; }
+  }
 
   /* Übersicht als Dashboard */
   .ov-dash { display: grid; grid-template-columns: minmax(0, 1fr) 360px; gap: 22px; align-items: start; }

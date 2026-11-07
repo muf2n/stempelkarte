@@ -1,0 +1,48 @@
+/* Update 10 – 💾 Backup & Daten (js/views/backup-settings.js). Präfix .bk- */
+.bk { display: flex; flex-direction: column; gap: 10px; }
+.bk [hidden] { display: none !important; }
+.bk-h { margin: 12px 0 0; font-size: .95rem; font-weight: 700; color: var(--ink); }
+.bk-status {
+  display: flex; align-items: center; gap: 10px; padding: 10px 12px; border-radius: 12px;
+  background: color-mix(in srgb, var(--run) 10%, var(--card)); border: 1px solid color-mix(in srgb, var(--run) 30%, var(--line));
+  font-size: .92rem;
+}
+.bk-status.warn { background: color-mix(in srgb, var(--pause) 12%, var(--card)); border-color: color-mix(in srgb, var(--pause) 40%, var(--line)); }
+.bk-dot { flex: none; width: 10px; height: 10px; border-radius: 50%; background: var(--run); }
+.bk-status.warn .bk-dot { background: var(--pause); }
+.bk-pw { display: grid; gap: 8px; }
+.bk-pw label, .bk-sheet label:not(.switch):not(.bk-mode) { display: grid; gap: 4px; font-size: .9rem; }
+.bk-go { width: 100%; justify-content: center; }
+.bk-fine { margin: 0; font-size: .82rem; }
+.bk-autos { list-style: none; margin: 4px 0 0; padding: 0; display: grid; gap: 8px; }
+.bk-autos li {
+  display: flex; align-items: center; gap: 8px; padding: 8px 10px; border-radius: 12px;
+  background: color-mix(in srgb, var(--accent) 5%, var(--card)); border: 1px solid var(--line);
+}
+.bk-ad { flex: 1; min-width: 0; display: flex; flex-direction: column; }
+.bk-ad small { color: var(--muted); font-size: .8rem; }
+.bk-autos .btn { flex: none; }
+
+.bk-sheet { display: flex; flex-direction: column; gap: 12px; }
+.bk-meta { display: flex; flex-direction: column; gap: 2px; padding: 10px 12px; border-radius: 12px; background: color-mix(in srgb, var(--accent) 8%, var(--card)); }
+.bk-meta b { word-break: break-all; }
+.bk-meta span { color: var(--muted); font-size: .85rem; }
+.bk-secs { list-style: none; margin: 0; padding: 0; border: 1px solid var(--line); border-radius: 12px; overflow: hidden; }
+.bk-secs li { display: flex; align-items: center; gap: 10px; padding: 8px 12px; font-size: .92rem; }
+.bk-secs li + li { border-top: 1px solid var(--line); }
+.bk-secs li span:nth-child(2) { flex: 1; min-width: 0; }
+.bk-secs b { font-family: var(--f-mono); color: var(--accent); }
+.bk-modes { border: 0; margin: 0; padding: 0; display: grid; gap: 8px; }
+.bk-modes legend { font-weight: 700; margin-bottom: 6px; padding: 0; }
+.bk-mode { display: flex; gap: 10px; align-items: flex-start; padding: 10px 12px; border-radius: 12px; border: 1px solid var(--line); cursor: pointer; background: var(--card); }
+.bk-mode:has(input:checked) { border-color: var(--accent); background: color-mix(in srgb, var(--accent) 8%, var(--card)); }
+.bk-mode input[type="radio"] {
+  -webkit-appearance: radio; appearance: auto; flex: none; width: 18px; height: 18px; min-width: 0; min-height: 0;
+  margin: 3px 0 0; padding: 0; border: 0; background: none; box-shadow: none; accent-color: var(--accent);
+}
+.bk-mode span { min-width: 0; }
+.bk-mode span { display: flex; flex-direction: column; gap: 2px; }
+.bk-mode small { color: var(--muted); font-size: .84rem; line-height: 1.35; }
+.bk-confirm { padding: 10px 12px; border-radius: 12px; background: color-mix(in srgb, var(--danger) 9%, var(--card)); border: 1px solid color-mix(in srgb, var(--danger) 35%, var(--line)); }
+.bk-confirm p { margin: 0 0 8px; font-size: .9rem; }
+.bk-sheet .row .btn { flex: 1; justify-content: center; }

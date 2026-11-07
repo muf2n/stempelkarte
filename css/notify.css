@@ -1,0 +1,90 @@
+/* Update 10 – 🔔 Benachrichtigungszentrale (js/notify.js). Präfix .nt- · Glocke #btn-notify / #pc-notify */
+.nt-bell { position: relative; }
+.nt-badge {
+  position: absolute; top: -3px; right: -3px; min-width: 19px; height: 19px; padding: 0 5px; box-sizing: border-box;
+  border-radius: 999px; display: grid; place-items: center;
+  background: var(--accent); color: var(--accent-ink); border: 2px solid var(--bg);
+  font: 700 .68rem/1 var(--f-body); letter-spacing: 0; pointer-events: none;
+}
+.nt-badge.hot { background: var(--danger); color: #fff; }
+.nt-badge[hidden] { display: none; }
+
+body.nt-open { overflow: hidden; }
+.nt[hidden], .nt [hidden] { display: none !important; }
+.nt { position: fixed; inset: 0; z-index: 43; font-family: var(--f-body); color: var(--ink); }
+.nt-scrim { position: absolute; inset: 0; background: color-mix(in srgb, var(--ink) 28%, transparent); }
+.nt-panel {
+  position: absolute; inset: 0; display: flex; flex-direction: column; background: var(--bg);
+  animation: nt-in .18s ease-out;
+}
+.nt-panel:focus { outline: none; }
+@keyframes nt-in { from { opacity: 0; transform: translateY(-8px); } to { opacity: 1; transform: none; } }
+@media (prefers-reduced-motion: reduce) { .nt-panel { animation: none; } }
+
+.nt-head {
+  flex: none; display: flex; align-items: center; gap: 8px;
+  padding: calc(10px + env(safe-area-inset-top)) var(--side) 8px;
+}
+.nt-head h2 { flex: 1; min-width: 0; margin: 0; font-family: var(--f-display); font-weight: 800; font-size: 1.3rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.nt-all { flex: none; font-size: .82rem; padding: 6px 10px; min-height: 36px; }
+@media (max-width: 1023px) { .nt-head h2 { font-size: 1.15rem; } }
+.nt-x {
+  flex: none; width: 40px; height: 40px; border-radius: 50%; border: 0; cursor: pointer; padding: 0;
+  display: grid; place-items: center; background: transparent; color: var(--muted); font-size: 1rem; line-height: 1;
+}
+.nt-back { font-size: 1.35rem; color: var(--ink); }
+.nt-x:hover { background: color-mix(in srgb, var(--accent) 10%, transparent); color: var(--ink); }
+.nt-x:focus-visible, .nt-go:focus-visible, .nt-link:focus-visible { outline: none; box-shadow: var(--ring); }
+
+.nt-body { flex: 1; min-height: 0; overflow-y: auto; overscroll-behavior: contain; padding: 0 var(--side) 16px; }
+.nt-gh { margin: 14px 4px 8px; font-size: .8rem; font-weight: 700; color: var(--muted); letter-spacing: .02em; }
+.nt-gh:first-child { margin-top: 4px; }
+.nt-list { list-style: none; margin: 0; padding: 0; background: var(--card); border-radius: 16px; overflow: hidden; border: 1px solid color-mix(in srgb, var(--line) 70%, transparent); }
+.nt-item { display: flex; align-items: center; gap: 2px; padding-right: 6px; transition: opacity .15s, transform .15s; }
+.nt-item + .nt-item { border-top: 1px solid var(--line); }
+.nt-item.gone { opacity: 0; transform: translateX(16px); }
+.nt-item.unread { background: color-mix(in srgb, var(--accent) 6%, var(--card)); }
+.nt-go {
+  flex: 1; min-width: 0; display: flex; align-items: center; gap: 12px; padding: 11px 6px 11px 14px; min-height: 58px;
+  border: 0; background: transparent; color: inherit; font: inherit; text-align: left; cursor: pointer; border-radius: 12px;
+}
+.nt-go:hover { background: color-mix(in srgb, var(--accent) 7%, transparent); }
+.nt-ic {
+  flex: none; width: 36px; height: 36px; border-radius: 11px; display: grid; place-items: center; font-size: 1.15rem; line-height: 1;
+  background: color-mix(in srgb, var(--accent) 13%, var(--card));
+}
+.nt-item.p3 .nt-ic { background: color-mix(in srgb, var(--danger) 14%, var(--card)); }
+.nt-item.p2 .nt-ic { background: color-mix(in srgb, var(--pause) 16%, var(--card)); }
+.nt-tx { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+.nt-tx b { font-weight: 600; font-size: .96rem; line-height: 1.3; overflow-wrap: anywhere; }
+.nt-tx small { color: var(--muted); font-size: .83rem; line-height: 1.3; overflow-wrap: anywhere; }
+.nt-item:not(.unread) .nt-tx b { font-weight: 500; }
+.nt-dot { flex: none; width: 9px; height: 9px; border-radius: 50%; background: var(--accent); }
+.nt-item.p3 .nt-dot { background: var(--danger); }
+
+.nt-empty { text-align: center; padding: 48px 16px; display: flex; flex-direction: column; align-items: center; gap: 6px; }
+.nt-empty-ic { font-size: 2.6rem; margin-bottom: 4px; }
+.nt-empty b { font-size: 1.1rem; }
+.nt-foot { flex: none; padding: 8px var(--side) calc(12px + env(safe-area-inset-bottom)); border-top: 1px solid var(--line); background: var(--bg); }
+.nt-link { border: 0; background: transparent; color: var(--accent); font: inherit; font-weight: 600; cursor: pointer; padding: 8px 4px; border-radius: 8px; }
+
+/* PC: kleines Fenster unter der Glocke */
+@media (min-width: 1024px) {
+  .nt-scrim { background: color-mix(in srgb, var(--ink) 10%, transparent); }
+  .nt-panel {
+    inset: auto; top: 84px; right: 28px; width: 420px; max-height: calc(100vh - 110px);
+    border-radius: 22px; border: 1px solid color-mix(in srgb, var(--line) 80%, transparent);
+    box-shadow: 0 24px 60px -18px rgba(20, 20, 60, .35), var(--shadow); overflow: hidden;
+  }
+  .nt-head { padding: 14px 14px 8px 18px; }
+  .nt-back { display: none; }
+  .nt-head h2 { font-size: 1.15rem; }
+  .nt-body { padding: 0 14px 14px; }
+  .nt-foot { padding: 8px 14px; }
+}
+
+/* Einstellungs-Karte (js/views/notify-settings.js) */
+.nts { display: flex; flex-direction: column; gap: 10px; }
+.nts-grid { display: grid; gap: 4px; }
+.nts-row { padding: 6px 0; }
+#nts-open { align-self: flex-start; }

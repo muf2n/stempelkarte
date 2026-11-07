@@ -154,3 +154,6 @@ export function collection(name) {
 }
 
 export { newId };
+
+/** Update 10 – Backup: Namen aller in dieser Sitzung geöffneten Sammlungen (ohne „a_“). */
+export function openedNames() { return [...cols.keys()]; }

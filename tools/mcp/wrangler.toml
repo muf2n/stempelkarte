@@ -30,4 +30,5 @@ enabled = false
 # Viele Banken erlauben nur 4 automatische Abrufe pro Tag – nicht öfter einstellen.
 # Gmail-Abo-Scan 1× täglich 06:30 UTC ≈ 07:30 Wien (Winterzeit) – muss zu GMAIL_CRON in src/gmail.js passen.
 [triggers]
-crons = ["0 5,11,16,21 * * *", "30 6 * * *"]
+# Wochen-Backup sonntags 02:15 UTC ≈ 03:15 Wien – muss zu BACKUP_CRON in src/backup.js passen.
+crons = ["0 5,11,16,21 * * *", "30 6 * * *", "15 2 * * 0"]

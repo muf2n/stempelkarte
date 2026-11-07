@@ -9,6 +9,7 @@ import { esc } from "../util.js";
 import { ACCENTS, readAccent } from "../accent.js";
 import { readReminders } from "./reminders.js";
 import { isNative } from "../native.js";
+import { agoText, lastBackupAt } from "../backup-core.js"; // Update 10 – Backup
 
 let ctx = null;
 let hub = null;
@@ -34,6 +35,8 @@ const CATS = [
   { id: "konto", g: "konto", e: "👤", t: "Google-Konto", k: "konto google anmelden abmelden synchronisieren sync daten export csv excel",
     html: `<div class="sh-card"><div class="lbl">Konto</div><div id="ov-account"></div></div>
       <div class="sh-links"><button type="button" class="sh-row" data-sh-act="csv"><span class="sh-ic" aria-hidden="true">📊</span><span class="sh-lb"><b>Daten als CSV (Excel)</b><small>In der Übersicht unter Monat – Monat wählen und herunterladen</small></span><span class="sh-chev" aria-hidden="true">›</span></button></div>` },
+  { id: "backup", g: "konto", e: "💾", t: "Backup & Daten", k: "backup sicherung sichern export exportieren import importieren wiederherstellen zurückspielen daten datei json skbackup automatisch passwort verschlüsseln",
+    html: `<div class="sh-card"><div id="backup-panel"></div></div>` },
   { id: "arbeitszeit", g: "arbeit", e: "⏱️", t: "Arbeitszeit", k: "soll stunden woche arbeitstage feiertage österreich überstunden konto startsaldo saldo zählt ab pläne geplante schichten auto-stempeln soll je wochentag tagesstunden freitag urlaubsanspruch urlaub tage vergessen stempelung nachtragen",
     html: `<div class="sh-card"><div class="fields">
         <label>Soll-Stunden pro Woche
@@ -81,11 +84,12 @@ const CATS = [
         <button type="button" class="sh-row" data-sh-act="places"><span class="sh-ic" aria-hidden="true">🗺️</span><span class="sh-lb"><b>Orte verwalten</b><small>Baustellen, Firma, Zuhause</small></span><span class="sh-chev" aria-hidden="true">›</span></button>
         <button type="button" class="sh-row" data-sh-act="trips"><span class="sh-ic" aria-hidden="true">🚗</span><span class="sh-lb"><b>Fahrten &amp; Fahrtenbuch</b><small>Karte in der Übersicht</small></span><span class="sh-chev" aria-hidden="true">›</span></button>
       </div>` },
-  { id: "benachrichtigungen", g: "app", e: "🔔", t: "Benachrichtigungen", k: "benachrichtigung erinnerung push pause pausen-erinnerung einstempeln ausstempeln sperrbildschirm",
+  { id: "benachrichtigungen", g: "app", e: "🔔", t: "Benachrichtigungen", k: "benachrichtigung benachrichtigungszentrale glocke mitteilungen erinnerung push pause pausen-erinnerung einstempeln ausstempeln sperrbildschirm",
     html: `<div class="sh-card"><div class="fields"><label class="switch">
           <input type="checkbox" id="ov-pauserem">
           <span>Pausen-Hinweis in der App</span>
         </label><div id="wt-pause-settings"></div></div></div>
+      <div class="sh-card"><div id="notify-panel"></div></div>
       <div class="sh-card"><div id="reminders-panel"></div></div>
       <div class="sh-card"><div id="lock-panel"></div></div>` },
   { id: "aussehen", g: "app", e: "🎨", t: "Erscheinungsbild", k: "farbe akzent design dunkel hell dark mode schrift groß einfache ansicht bedienen dashboard überblick widgets heute",
@@ -366,6 +370,10 @@ export function update(s) {
   val("aussehen", ac ? ac.name : "");
   val("orte", set.autoLocate !== false ? "Standort an" : "Standort aus");
   val("hilfe", version());
+  let autoAt = 0;
+  try { autoAt = Number(JSON.parse(localStorage.getItem("stempelkarte.backup.auto") || "0")) || 0; } catch { /* egal */ }
+  const bk = lastBackupAt(set, [{ created: autoAt }]);
+  val("backup", bk ? agoText(bk) : "noch nie");
   hub.querySelector("#sh-signout").hidden = !(snap.mode === "cloud" && u);
 }
 

@@ -164,6 +164,16 @@ export class Firestore {
     return (Array.isArray(data) ? data : []).filter((r) => r && r.document).map((r) => Firestore.toDoc(r.document));
   }
 
+  /** Mehrere Dokumente auf einmal lesen (eine Anfrage) → Array in gleicher Reihenfolge, null = fehlt. */
+  async batchGet(paths) {
+    if (!paths.length) return [];
+    const names = paths.map((p) => this.name(p));
+    const data = await this.req("POST", `${this.base}:batchGet`, { documents: names });
+    const byName = new Map();
+    for (const r of Array.isArray(data) ? data : []) if (r && r.found) byName.set(r.found.name, Firestore.toDoc(r.found));
+    return names.map((n) => byName.get(n) || null);
+  }
+
   async beginTransaction() {
     const data = await this.req("POST", `${this.base}:beginTransaction`, { options: { readWrite: {} } });
     return data.transaction;

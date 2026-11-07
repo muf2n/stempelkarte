@@ -42,9 +42,12 @@ service cloud.firestore {
 
     // Dokumente direkt in einer Sammlung des Nutzers (users/{uid}/{coll}/{docId}),
     // z. B. entries/…, meta/settings, a_money_tx/… – Server-Dokumente nur lesen.
+    // Update 10: users/{uid}/backups/… (automatische Wochen-Backups) schreibt nur der Server –
+    // die App darf sie lesen und löschen, aber nie anlegen oder ändern.
     match /users/{uid}/{coll}/{docId} {
       allow read: if eigen(uid);
-      allow write: if eigen(uid) && !serverDok(coll, docId);
+      allow create, update: if eigen(uid) && !serverDok(coll, docId) && coll != 'backups';
+      allow delete: if eigen(uid) && !serverDok(coll, docId);
     }
 
     // Tiefer verschachtelte Unter-Sammlungen (users/{uid}/{coll}/{docId}/{sub}/…): wie bisher frei für dich.
