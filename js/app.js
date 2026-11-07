@@ -14,6 +14,7 @@ import * as overview from "./views/overview.js";
 import * as places from "./views/places.js";
 import * as agenda from "./views/agenda.js";
 import * as alltag from "./views/alltag.js";
+import * as search from "./views/search.js"; // Update 10 – Universale Suche
 import { openEntryForm } from "./views/entries.js";
 import { openPlaceForm } from "./views/places.js";
 import { icon } from "./icons.js";
@@ -102,9 +103,11 @@ function mountViews() {
     const el = document.getElementById("view-" + tab);
     if (el) safe(VIEWS[tab].mount, el, ctx);
   }
+  safe(search.mount, ctx);
   store.subscribe((snap) => {
     lastSnap = snap;
     for (const tab of TABS) safe(VIEWS[tab].update, snap);
+    safe(search.update);
     if (railBalanceEl) safe(overview.renderBalanceCard, railBalanceEl, snap, ctx);
     renderTopbar();
     renderRunState();

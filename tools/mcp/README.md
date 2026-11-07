@@ -50,6 +50,7 @@ Insgesamt 49 Werkzeuge (verwandte Lese-Bereiche sind über `bereich`/`aktion` zu
 | `geld_eintragen` | `aktion`: budget, sparziel, einzahlung, teilen (Ausgabe in einer Gruppe) |
 | `hausaufgabe_anlegen`, `pruefung_anlegen`, `schule_eintragen` | Schule; `schule_eintragen` `aktion`: note, stunde (Stundenplan), projekt_schritt |
 | `material_anlegen`, `material_status` | Material eintragen bzw. Status ändern (brauche → besorgt → baustelle → verbaut) |
+| `einkauf_lesen`, `einkauf_hinzufuegen` | 🛒 Einkaufslisten lesen (inkl. „Material fehlt“) bzw. Artikel auf eine Liste schreiben (Menge/Kategorie automatisch) |
 | `unterwegs_eintragen` | `aktion`: reise_anlegen, packliste_hinzufuegen, packliste_abhaken, parkplatz_merken (nach Adresse), tanken (optional in Geld buchen), adresse_speichern |
 | `berichtsheft_notiz` | Ergänzung zu einer Berichtsheft-Woche (`settings.apprentice.notes`) |
 | `galerie_bearbeiten` | `aktion`: album_umbenennen, album_kategorie, foto_notiz (schreibt nur `note` in Foto + Index) |

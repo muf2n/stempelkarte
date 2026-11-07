@@ -30,6 +30,7 @@ const NEEDS = {
   money: ["money_tx", "money_budget"],
   school: ["school_exams", "school_tasks"],
   tip: ["school_exams"],
+  einkauf: ["einkauf", "material_items"], // Update 10 – Einkaufsliste
 };
 
 function u() { return ctx.util; }
@@ -142,6 +143,7 @@ function available(f) {
   const av = new Set(["balance", "agenda", "calendar", "reminders", "tip", "sync"]);
   if (sitePlace()) av.add("site");
   av.add("money");
+  if (col("einkauf").some((x) => x && !x.done) || col("material_items").some((x) => x && x.status === "brauche")) av.add("einkauf"); // Update 10
   const hasSchool = !!(f.schoolToday || f.schoolTomorrow || (u().readSchool && u().readSchool(settings())));
   if (hasSchool || col("school_exams").length || col("school_tasks").length || !loaded("school_exams")) av.add("school");
   return av;
@@ -203,6 +205,7 @@ function widgetHTML(id, f) {
       case "reminders": return wReminders(f);
       case "tip": return wTip(f);
       case "sync": return wSync();
+      case "einkauf": return wEinkauf();
       default: return "";
     }
   } catch (e) { console.error("Dashboard-Widget " + id, e); return ""; }
@@ -322,6 +325,18 @@ function wSite() {
     return card("site", `<div class="dw-place"><b>📍 ${esc(site.place)}</b>${sub}</div>${mat}${matBtn}`, { hash: "#orte/baustelle/" + site.placeId, more: "Baustelle" });
   }
   return card("site", `<div class="dw-place"><b>📍 ${esc(site.place)}</b>${sub}</div>${mat}`, { hash: "#alltag/material", more: "Material" });
+}
+
+/* ---- 🛒 Einkauf (Update 10): offene Artikel aller Listen + fehlendes Material; nichts offen → ausgeblendet ---- */
+function wEinkauf() {
+  if (!loaded("einkauf")) return "";
+  const open = col("einkauf").filter((x) => x && !x.done && String(x.name || "").trim());
+  const mat = loaded("material_items") ? col("material_items").filter((x) => x && x.status === "brauche").length : 0;
+  if (!open.length && !mat) return "";
+  const names = open.slice().sort((a, b) => (a.created || 0) - (b.created || 0)).slice(0, 3).map((x) => `<li>${esc(String(x.name).trim())}</li>`).join("");
+  return card("einkauf", `<div class="dw-big">${open.length} <small class="dw-note">offen</small></div>` +
+    (names ? `<ul class="dw-list">${names}</ul>` : "") +
+    (mat ? `<p class="dw-note">🧰 ${mat} Material fehlt noch</p>` : ""), { hash: "#alltag/einkauf", more: "Liste" });
 }
 
 /* ---- Finanzen (Geld-Sperre!) ---- */

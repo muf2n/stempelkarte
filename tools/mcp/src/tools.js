@@ -27,6 +27,7 @@ import { SETTINGS_TOOLS } from "./settings.js"; // Update 9 – Einstellungen nu
 import { GMAIL_TOOLS } from "./gmail.js"; // Gmail dauerhaft (nur lesen): mails_suchen, mail_lesen
 import { SITE_TOOLS } from "./baustelle.js"; // Update 10d – Baustellen-Projektseite (nur lesen)
 import { WEEKREPORT_TOOLS } from "./wochenbericht.js"; // Update 10 – Automatischer Wochenbericht (nur lesen)
+import { EINKAUF_TOOLS } from "./einkauf.js"; // Update 10 – Einkaufsliste (einkauf_lesen, einkauf_hinzufuegen)
 
 const ABS_KINDS = ["urlaub", "krank", "zeitausgleich", "schule", "feiertag"];
 const GRADE_NAMES = { 1: "Sehr gut", 2: "Gut", 3: "Befriedigend", 4: "Genügend", 5: "Nicht genügend" };
@@ -1692,6 +1693,7 @@ for (const t of [...READ_TOOLS, ...WRITE_TOOLS, ...SETTINGS_TOOLS]) tool(t);
 /* ===== Update 10d: Baustellen-Projektseite (nur lesen) ===== */
 for (const t of SITE_TOOLS) tool(t);
 for (const t of WEEKREPORT_TOOLS) tool(t); // Update 10 – wochenbericht_lesen
+for (const t of EINKAUF_TOOLS) tool(t); // Update 10 – einkauf_lesen (RO), einkauf_hinzufuegen (WR → Untrusted-Sperre greift)
 
 /* ===== Gmail (nur lesen, nur auf Nachfrage) ===== */
 for (const t of GMAIL_TOOLS) tool(t);

@@ -32,6 +32,7 @@ on:
       - "js/gallery-core.js"
       - "js/site-core.js"
       - "js/weekreport-core.js"
+      - "js/alltag/einkauf-core.js"
       - ".github/workflows/mcp-deploy.yml"
   workflow_dispatch:
 

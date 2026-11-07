@@ -370,3 +370,6 @@ export function update(s) {
 }
 
 export function isOpen() { return open; }
+
+/** Update 10 – Universale Suche: Kategorien der Zentrale als Suchindex (id, Emoji, Titel, Suchwörter). */
+export function searchIndex() { return CATS.map(({ id, e, t, k }) => ({ id, e, t, k })); }

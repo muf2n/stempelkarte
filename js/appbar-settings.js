@@ -10,3 +10,7 @@ document.getElementById("btn-settings").addEventListener("click", function () {
   if (document.getElementById("settings-hub")) { window.dispatchEvent(new CustomEvent("sk:open-settings")); return; }
   if (location.hash !== "#uebersicht") location.hash = "#uebersicht";
 });
+// Update 10 – Lupe: öffnet die Universale Suche (js/views/search.js hört auf „sk:open-search“), sobald die App eingehängt ist.
+document.getElementById("btn-search").addEventListener("click", function () {
+  if (document.getElementById("search-layer")) window.dispatchEvent(new CustomEvent("sk:open-search"));
+});

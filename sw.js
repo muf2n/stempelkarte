@@ -67,6 +67,10 @@ const SHELL = [
   "js/views/accent-settings.js",
   "js/views/settings-hub.js",
   "css/settings-hub.css",
+  // Update 10 – Universale Suche
+  "js/search-core.js",
+  "js/views/search.js",
+  "css/search.css",
   "js/accent.js",
   "js/views/day.js",
   "js/views/dashboard.js",
@@ -155,6 +159,10 @@ const SHELL = [
   "js/alltag/unterwegs-fuel.js",
   "js/alltag/unterwegs-places.js",
   "css/alltag-unterwegs.css",
+  // Update 10 – Einkaufsliste
+  "js/alltag/einkauf.js",
+  "js/alltag/einkauf-core.js",
+  "css/alltag-einkauf.css",
   // Update 9 – Material
   "js/alltag/material.js",
   "js/alltag/material-core.js",
