@@ -364,6 +364,7 @@ export function closeReport(fromPop = false) {
 /** Berichtsheft (Ausbildungsnachweis) als Vollbild-Ansicht öffnen. */
 export function openReport(ctx, { weekStart } = {}) {
   if (cur) closeReport();
+  injectWrCSS();
   const ws = startOfWeek(weekStart ?? Date.now());
   const el = document.createElement("div");
   el.id = "rp-root";
@@ -376,6 +377,7 @@ export function openReport(ctx, { weekStart } = {}) {
     <div class="rp-bar">
       <button type="button" class="btn ghost sm rp-close" data-rp="close">${icon("chevron-left", 18)}<span>Zurück</span></button>
       <h2>Berichtsheft</h2>
+      <button type="button" class="btn sm rp-wr" data-rp="wr">✨ <span>Wochenbericht</span></button>
     </div>
     <div class="rp-nav">
       <button type="button" class="btn ghost sm rp-arrow" data-rp="prev" aria-label="Vorherige Woche">${icon("chevron-left", 20)}</button>
@@ -421,6 +423,12 @@ export function openReport(ctx, { weekStart } = {}) {
     else if (a === "prev") shiftWeek(-1);
     else if (a === "next") shiftWeek(1);
     else if (a === "now") shiftWeek(0);
+    else if (a === "wr") { // Update 10 – ✨ Automatischer Wochenbericht für diese Woche (ersetzt die Ansicht)
+      const ws = cur.ws;
+      closeReport(true);
+      import("./weekreport.js").then((m) => m.openWeekReport(ctx, { weekStart: ws, replace: true }))
+        .catch((err) => { console.error(err); ctx.ui.toast("Wochenbericht konnte nicht geladen werden."); });
+    }
     else if (a === "print") {
       await flushNote();
       el.querySelector(".rp-notes-print").textContent = el.querySelector("#rp-notes").value;
@@ -457,4 +465,13 @@ export function openReport(ctx, { weekStart } = {}) {
   }).catch((err) => console.warn("Material fürs Berichtsheft nicht geladen:", err));
   try { el.focus({ preventScroll: true }); } catch { /* egal */ }
   return { close: () => closeReport() };
+}
+
+/** Update 10: weekreport.css (✨ Wochenbericht + Startknopf) einmal einhängen. */
+function injectWrCSS() {
+  if (document.getElementById("wr-css")) return;
+  const l = document.createElement("link");
+  l.id = "wr-css"; l.rel = "stylesheet";
+  l.href = new URL("../../css/weekreport.css", import.meta.url).href;
+  document.head.appendChild(l);
 }

@@ -11,6 +11,7 @@ import { einsatzFor } from "../einsatz.js";
 import { balanceSummary } from "./overview.js";
 import { collection } from "../alltag/db.js";
 import * as MAT from "../alltag/material-core.js";
+import * as WRC from "../weekreport-core.js"; // Update 10 – Wochenbericht-Tipp
 import * as MON from "../alltag/money-core.js";
 import * as lockState from "../alltag/money-lock-state.js";
 
@@ -423,9 +424,32 @@ function wTip(f) {
     offline: typeof navigator !== "undefined" && navigator.onLine === false,
     openMaterial: site && loaded("material_items") ? siteOpen(site).length : 0,
     weekend: !f.workDays.includes(new Date(f.now).getDay()),
+    weekReportDue: weekReportDue(f.now),
   }, 2);
   if (!tips.length) return card("tip", empty("Gerade kein Tipp – du hast alles im Griff 😊"));
-  return card("tip", `<ul class="dw-tips">${tips.map((t) => `<li data-tip="${esc(t.id)}"><span aria-hidden="true">${t.e}</span><span>${esc(t.text)}</span></li>`).join("")}</ul>`);
+  return card("tip", `<ul class="dw-tips">${tips.map((t) => `<li data-tip="${esc(t.id)}"><span aria-hidden="true">${t.e}</span><span>${esc(t.text)}</span>${t.act === "wr" ? `<button type="button" class="btn ghost sm dw-tip-go" data-d="wr">Los geht's</button>` : ""}</li>`).join("")}</ul>`);
+}
+
+/** Update 10: Freitagnachmittag/Samstag, Woche mit Arbeitstagen, Wochenbericht noch nicht abgegeben. */
+function weekReportDue(now) {
+  try {
+    const today = ctx.util.dayKey(now);
+    const week = WRC.weekKeyOf(today);
+    const mon = WRC.mondayOfWeek(week);
+    const worked = new Set((snap.entries || []).filter((e) => e && (!e.kind || e.kind === "work") && !e.privateTrip)
+      .map((e) => ctx.util.dayKey(e.start)).filter((k) => k >= mon && k <= today)).size;
+    if (!WRC.wantsFridayTip(now, { workedDays: worked })) return false;
+    need(WRC.COLLECTION);
+    if (!loaded(WRC.COLLECTION)) return false;
+    const doc = col(WRC.COLLECTION).find((x) => x && x.id === week);
+    if (doc && doc.status === "abgegeben") return false;
+    if (!document.getElementById("wr-css")) { // Knopf-Stil (weekreport.css)
+      const l = document.createElement("link");
+      l.id = "wr-css"; l.rel = "stylesheet"; l.href = new URL("../../css/weekreport.css", import.meta.url).href;
+      document.head.appendChild(l);
+    }
+    return true;
+  } catch { return false; }
 }
 
 /* ---- Sync-Status ---- */
@@ -496,6 +520,10 @@ function onClick(ev) {
   const d = b.dataset;
   if (d.d === "edit") { setEditing(!editing); return; }
   if (d.d === "done") { setEditing(false); root.querySelector('[data-d="edit"]').focus(); return; }
+  if (d.d === "wr") { // Update 10 – ✨ Wochenbericht
+    import("./weekreport.js").then((m) => m.openWeekReport(ctx, {})).catch((err) => { console.error(err); ctx.ui.toast("Wochenbericht konnte nicht geladen werden."); });
+    return;
+  }
   if (d.d === "reset") { save({ order: D.DEFAULT_ORDER, hidden: [], auto: true }); return; }
   if (d.mv) { const c = cfg(); save({ ...c, order: D.moveWidget(c.order, d.id, d.mv === "up" ? -1 : 1) }); return; }
   if (d.tick) {

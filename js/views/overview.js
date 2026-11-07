@@ -70,6 +70,7 @@ export function mount(el, c) {
           <div class="kv"><span>Ist / Soll</span><b id="ov-week-ist"></b></div>
           <div class="progress"><div id="ov-week-prog"></div></div>
           <div class="kv"><span>Differenz</span><b id="ov-week-diff"></b></div>
+          <button type="button" class="btn ghost ov-wr" id="ov-wr">✨ <span>Wochenbericht fürs Berichtsheft</span></button>
         </div>
 
         <div class="panel card" id="month-panel">
@@ -157,6 +158,13 @@ export function mount(el, c) {
       .catch((err) => { console.error(err); ctx.ui.toast("Stundenzettel konnte nicht geladen werden."); });
   });
 
+  // Update 10 – ✨ Automatischer Wochenbericht für die gezeigte Woche
+  injectWrCSS();
+  $("#ov-wr").addEventListener("click", () => {
+    const { ws } = weekData(weekOffset);
+    import("./weekreport.js").then((m) => m.openWeekReport(ctx, { weekStart: ws }))
+      .catch((err) => { console.error(err); ctx.ui.toast("Wochenbericht konnte nicht geladen werden."); });
+  });
   try { reminders.mount($("#reminders-panel"), ctx); } catch (err) { console.error(err); }
   // Update 6: Fahrerkennung + Sperrbildschirm – Module werden dynamisch geladen
   for (const [mod, sel] of [["./drive-settings.js", "#drive-panel"], ["./lock-settings.js", "#lock-panel"], ["./school-settings.js", "#school-panel"], ["./apprentice.js", "#apprentice-panel"], ["./watch-settings.js", "#watch-panel"], ["./comfort-settings.js", "#comfort-panel"], ["./accent-settings.js", "#accent-panel"], ["./leave.js", "#leave-panel"], ["./worktime.js", "#worktime-panel"], ["./worktime-settings.js", "#wt-settings"], ["./trips.js", "#trips-panel"], ["./allowance-settings.js", "#allowance-panel"], ...(isNative() ? [["./android-settings.js", "#android-panel"]] : [])]) {
@@ -813,4 +821,13 @@ function renderAccount() {
       });
     }
   }
+}
+
+/** Update 10: weekreport.css (✨ Wochenbericht + Startknopf) einmal einhängen. */
+function injectWrCSS() {
+  if (document.getElementById("wr-css")) return;
+  const l = document.createElement("link");
+  l.id = "wr-css"; l.rel = "stylesheet";
+  l.href = new URL("../../css/weekreport.css", import.meta.url).href;
+  document.head.appendChild(l);
 }

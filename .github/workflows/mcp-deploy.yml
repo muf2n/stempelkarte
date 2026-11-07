@@ -31,6 +31,7 @@ on:
       - "js/alltag/unterwegs-core.js"
       - "js/gallery-core.js"
       - "js/site-core.js"
+      - "js/weekreport-core.js"
       - ".github/workflows/mcp-deploy.yml"
   workflow_dispatch:
 
