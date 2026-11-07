@@ -14,7 +14,7 @@ service cloud.firestore {
     function istErlaubt() {
       return request.auth != null
         && request.auth.token.email_verified == true
-        && request.auth.token.email in ['lippa.florian@gmail.com'];
+        && request.auth.token.email in ['lippa.florian@gmail.com', 'junkkr08@gmail.com'];
     }
 
     function eigen(uid) {

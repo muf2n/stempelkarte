@@ -33,7 +33,18 @@ export function serverUrl(snap = store.get()) {
 /** Kann Claude grundsätzlich gefragt werden? (Cloud-Anmeldung nötig – im lokalen Modus nicht.) */
 export function aiAvailable(snap = store.get()) {
   if (testHook()) return true;
-  return !!(snap && snap.mode && snap.mode !== "local");
+  return !!(snap && snap.mode && snap.mode !== "local") && isServerOwner(snap);
+}
+
+// Claude, Bank, Gmail laufen über den eigenen Server – der ist nur für das Konto des Besitzers eingerichtet.
+// Weitere Konten (z. B. Familie) nutzen die App ganz normal, nur ohne diese Server-Funktionen.
+export const OWNER_EMAIL = "lippa.florian@gmail.com";
+export function isServerOwner(snap = store.get()) {
+  const e = snap && snap.user && snap.user.email;
+  return !e || String(e).toLowerCase() === OWNER_EMAIL;
+}
+export function notOwnerText() {
+  return "Claude, Bank und Gmail sind nur für das Konto des App-Besitzers eingerichtet – alles andere kannst du ganz normal nutzen. 🙂";
 }
 
 function fail(code, msg) { const e = new Error(msg); e.code = code; return e; }
@@ -42,7 +53,7 @@ function fail(code, msg) { const e = new Error(msg); e.code = code; return e; }
 export async function idToken(snap = store.get()) {
   const hook = testHook();
   if (hook) return String(hook.token || "test");
-  if (!aiAvailable(snap)) throw fail("local", "Nur mit Google-Anmeldung möglich – im lokalen Modus geht das nicht.");
+  if (!aiAvailable(snap)) throw fail("local", isServerOwner(snap) ? "Nur mit Google-Anmeldung möglich – im lokalen Modus geht das nicht." : notOwnerText());
   const f = await getFirebase();
   const u = f && f.auth.currentUser;
   if (!u) throw fail("auth", "Bitte zuerst mit Google anmelden.");
@@ -66,7 +77,7 @@ const STATUS_MSG = {
 export async function askClaude(messages, opts = {}) {
   const snap = store.get();
   const hook = testHook();
-  if (!aiAvailable(snap)) throw fail("local", "Claude braucht die Anmeldung mit Google – im lokalen Modus geht das nicht.");
+  if (!aiAvailable(snap)) throw fail("local", isServerOwner(snap) ? "Claude braucht die Anmeldung mit Google – im lokalen Modus geht das nicht." : notOwnerText());
   let token;
   if (hook) token = String(hook.token || "test");
   else {

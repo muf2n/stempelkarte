@@ -2,7 +2,7 @@
 // Der Server prüft das Firebase-Anmelde-Token, ruft Claude auf und darf über Werkzeuge die App-Daten lesen/ändern.
 // Verlauf bleibt nur auf diesem Gerät (localStorage), max. 40 Nachrichten.
 import * as store from "../store.js";
-import { askClaude, serverUrl, aiAvailable, URL_KEY, DEFAULT_URL } from "./ai-client.js";
+import { askClaude, serverUrl, aiAvailable, isServerOwner, notOwnerText, URL_KEY, DEFAULT_URL } from "./ai-client.js";
 import { icon } from "../icons.js";
 import { esc } from "../util.js";
 import * as ui from "../ui.js";
@@ -113,7 +113,7 @@ export function mount(el, ctx) {
     if (blocked()) {
       vbar.hidden = true;
       log.innerHTML = `<div class="ai-empty"><div class="ai-badge">✨</div><h3>Claude-Assistent</h3>
-        <p>Der Assistent braucht die Anmeldung mit Google, weil er deine gespeicherten Daten liest. Im lokalen Modus geht das nicht.</p></div>`;
+        <p>${isServerOwner(snap) ? "Der Assistent braucht die Anmeldung mit Google, weil er deine gespeicherten Daten liest. Im lokalen Modus geht das nicht." : esc(notOwnerText())}</p></div>`;
       sugg.innerHTML = ""; form.hidden = true; return;
     }
     form.hidden = false;
