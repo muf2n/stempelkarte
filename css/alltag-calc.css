@@ -1,0 +1,26 @@
+/* 🧮 Taschenrechner – js/alltag/calc.js */
+.calc { display: grid; gap: 12px; max-width: 460px; margin: 0 auto; }
+@media (min-width: 900px) { .calc { max-width: 880px; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); align-items: start; } .calc-hist { grid-row: 1 / span 3; grid-column: 2; } }
+.calc-screen { background: var(--card); border: 1px solid var(--line); border-radius: 20px; padding: 16px 18px; text-align: right; min-width: 0; }
+.calc-expr { min-height: 1.4em; color: var(--muted); font-size: 1.05rem; overflow-wrap: anywhere; font-variant-numeric: tabular-nums; }
+.calc-out { font-size: clamp(2rem, 9vw, 2.8rem); font-weight: 800; font-variant-numeric: tabular-nums; overflow-wrap: anywhere; cursor: copy; line-height: 1.15; }
+.calc-out.dim { color: var(--muted); }
+.calc-extra { display: grid; grid-template-columns: repeat(5, 1fr); gap: 8px; }
+.calc-keys { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; }
+.calc-extra button, .calc-keys button { font: inherit; font-weight: 700; border: 1px solid var(--line); background: var(--card); color: var(--ink); border-radius: 16px; cursor: pointer; transition: transform .08s, background .15s; }
+.calc-extra button { padding: 10px 0; font-size: 1rem; background: var(--soft); }
+.calc-keys button { padding: 18px 0; font-size: 1.35rem; }
+.calc-keys button.fn { background: var(--soft); }
+.calc-keys button.op { background: color-mix(in srgb, var(--accent) 16%, var(--card)); color: var(--accent); }
+.calc-keys button.eq { background: var(--accent); color: #fff; border-color: transparent; }
+.calc-extra button:active, .calc-keys button:active { transform: scale(.95); }
+.calc-extra button:focus-visible, .calc-keys button:focus-visible, .calc-hist button:focus-visible { outline: none; box-shadow: var(--ring); }
+.calc-hist { background: var(--card); border: 1px solid var(--line); border-radius: 20px; padding: 14px 16px; min-width: 0; }
+.calc-hh { display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px; }
+.calc-link { border: 0; background: none; color: var(--accent); font: inherit; font-weight: 600; cursor: pointer; }
+.calc-hist ul { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 2px; max-height: 340px; overflow: auto; }
+.calc-hist li button { width: 100%; display: flex; justify-content: space-between; gap: 10px; padding: 8px 6px; border: 0; background: none; color: var(--ink); font: inherit; text-align: left; border-radius: 10px; cursor: pointer; font-variant-numeric: tabular-nums; }
+.calc-hist li button:hover { background: var(--soft); }
+.calc-hist li span { color: var(--muted); overflow-wrap: anywhere; min-width: 0; }
+.calc-empty { color: var(--muted); padding: 6px; }
+@media (prefers-reduced-motion: reduce) { .calc-keys button, .calc-extra button { transition: none; } }
