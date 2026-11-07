@@ -17,6 +17,7 @@ import { tripsBetween } from "../travel.js";
 import { fromLabel, toLabel, readVehicles } from "../trip-core.js";
 import { siteHash } from "../site-core.js";
 import { searchIndex as settingsIndex } from "./settings-hub.js";
+import * as PF from "../profiles-core.js"; // Update 10 F – Module ein/aus
 
 const RECENT_KEY = "sk-search-recent";
 const PER_GROUP = 4;
@@ -216,9 +217,9 @@ function startSources() {
   import("../photos.js").then((m) => m.listIndex()).then((list) => { if (!open) return; photoList = list || []; dirty = true; queueRender(); })
     .catch((err) => { console.warn("Suche: Fotos", err); photoList = []; dirty = true; queueRender(); });
   if (!statics) {
-    Promise.all([import("../alltag/jp-data.js"), import("../alltag/lap-data.js")])
-      .then(([jp, lap]) => { statics = { vocab: jp.VOCAB || [], cards: lap.CARDS || [], formulas: lap.FORMULAS || [] }; dirty = true; queueRender(); })
-      .catch((err) => { console.warn("Suche: Lerndaten", err); statics = { vocab: [], cards: [], formulas: [] }; });
+    Promise.all([import("../alltag/jp-data.js"), import("../alltag/lap-data.js"), import("../alltag/elektro-data.js").catch(() => ({}))])
+      .then(([jp, lap, el]) => { statics = { vocab: jp.VOCAB || [], cards: lap.CARDS || [], formulas: lap.FORMULAS || [], lex: el.LEXIKON || [] }; dirty = true; queueRender(); })
+      .catch((err) => { console.warn("Suche: Lerndaten", err); statics = { vocab: [], cards: [], formulas: [], lex: [] }; });
   }
   dirty = true;
 }
@@ -456,6 +457,7 @@ function buildIndex() {
   if (statics) {
     for (const v of statics.vocab) add({ cat: "lernen", id: "jv_" + v.id, emoji: "🇯🇵", title: `${v.kanji && v.kanji !== v.kana ? v.kanji + " · " : ""}${v.kana} – ${v.de}`, sub: `${v.romaji} · ${v.topic}`, text: v.romaji, boost: -4, go: { t: "jp" } });
     for (const c of statics.cards) add({ cat: "lernen", id: "lc_" + c.id, emoji: "⚡", title: c.q, sub: `LAP · ${c.a}`, text: c.e, boost: -6, go: { t: "lap", tab: "karten" } });
+    for (const x of statics.lex || []) add({ cat: "lernen", id: "el_" + x.id, emoji: "📖", title: x.t, sub: `Elektro-Lexikon · ${x.d}`, boost: -5, go: { t: "hash", hash: `#alltag/elektro?tab=lexikon&q=${encodeURIComponent(x.t.replace(/\s*\(.*$/, ""))}` } }); // Update 10 F
     for (const f of statics.formulas) add({ cat: "lernen", id: "lf_" + f.id, emoji: "📐", title: `${f.name}: ${f.f}`, sub: `LAP-Formel · ${f.units || ""}`, text: f.m, boost: -2, go: { t: "lap", tab: "formeln" } });
   }
   for (const x of D("jp_cards")) {
@@ -477,6 +479,9 @@ function buildIndex() {
     if (!s(txt)) continue;
     add({ cat: "bericht", id: "n_" + wk, emoji: "📝", title: s(txt), sub: `Ergänzung zur ${wk.replace(/^(\d{4})-W(\d{2})$/, "KW $2/$1")}`, go: { t: "bericht", week: wk } });
   }
+  // Update 10 F – ausgeschaltete Module nicht durchsuchen (Daten bleiben)
+  const pst = snap.settings || {};
+  if (PF.modulesOff(pst).size) { index = index.filter((it) => PF.searchAllowed(pst, it.go)); byKey = new Map(index.map((it) => [it.key, it])); }
   dirty = false;
 }
 

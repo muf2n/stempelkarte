@@ -258,6 +258,20 @@ const SHELL = [
   "js/freizeit-core.js",
   "js/views/freizeit.js",
   "css/freizeit.css",
+  "js/briefing-core.js",
+  "js/briefing.js",
+  "css/briefing.css",
+  "js/profiles-core.js",
+  "js/views/profiles.js",
+  "css/profiles.css",
+  "js/views/system-status.js",
+  "js/changelog.js",
+  "css/system-status.css",
+  "js/alltag/elektro-core.js",
+  "js/alltag/elektro-data.js",
+  "js/alltag/elektro-symbols.js",
+  "js/alltag/elektro.js",
+  "css/elektro.css",
   "js/app.js"
 ];
 
@@ -302,6 +316,18 @@ self.addEventListener("activate", (event) => {
 // Abwärtskompatibel: ältere Seiten schicken evtl. noch diese Nachricht
 self.addEventListener("message", (event) => {
   if (event.data && event.data.type === "SKIP_WAITING") self.skipWaiting();
+});
+
+// Update 10 F – 🖥️ System-Status: Version und Cache-Größe (nur Zahlen) an die Seite melden
+self.addEventListener("message", (event) => {
+  if (!event.data || event.data.type !== "sk-version") return;
+  const port = event.ports && event.ports[0];
+  if (!port) return;
+  event.waitUntil((async () => {
+    let entries = 0;
+    try { entries = (await (await caches.open(CACHE)).keys()).length; } catch (e) { /* egal */ }
+    port.postMessage({ version: VERSION, cache: CACHE, entries, shell: SHELL.length });
+  })());
 });
 
 self.addEventListener("fetch", (event) => {

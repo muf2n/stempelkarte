@@ -21,6 +21,9 @@ import * as HB from "../alltag/habits-core.js"; // Update 10 C – Gewohnheiten
 import * as lockState from "../alltag/money-lock-state.js";
 import * as WX from "../weather.js"; // Update 10 – 🌦️ Wetter
 import * as WXC from "../weather-core.js";
+import * as PF from "../profiles-core.js"; // Update 10 F – Profile & Module
+import * as BRF from "../briefing.js"; // Update 10 F – ☀️ Briefing-Angebot
+import * as BRC from "../briefing-core.js";
 
 let ctx = null;
 let root = null;
@@ -72,6 +75,11 @@ function ensureCss() {
   l.rel = "stylesheet";
   l.href = new URL("../../css/dashboard.css", import.meta.url).href;
   document.head.appendChild(l);
+  if (!document.getElementById("css-briefing")) { // Update 10 F – Chips & Briefing-Angebot
+    const b = document.createElement("link");
+    b.id = "css-briefing"; b.rel = "stylesheet"; b.href = new URL("../../css/briefing.css", import.meta.url).href;
+    document.head.appendChild(b);
+  }
 }
 
 export function mount(el, c) {
@@ -84,8 +92,11 @@ export function mount(el, c) {
     <div class="dash-head">
       <h2 class="dash-title">Dein Überblick <span aria-hidden="true">✨</span></h2>
       <span class="dash-ctx" data-d="ctx"></span>
+      <button type="button" class="dash-chipbtn" data-d="profile" aria-label="Profil wechseln"></button>
+      <button type="button" class="dash-chipbtn" data-d="brief">☀️ Briefing</button>
       <button type="button" class="btn sm ghost dash-editbtn" data-d="edit" aria-expanded="false">✏️ <span>Anpassen</span></button>
     </div>
+    <div class="dash-offer" data-d="offer" hidden></div>
     <div class="dash-grid" data-d="grid"></div>
     <div class="dash-edit card" data-d="editor" hidden></div>`;
   root.addEventListener("click", onClick);
@@ -94,6 +105,7 @@ export function mount(el, c) {
   window.addEventListener("offline", schedule);
   try { lockState.onChange(() => schedule()); } catch (e) { console.error(e); }
   try { WX.onChange(() => { lastSig = ""; schedule(); }); } catch (e) { console.error(e); } // Update 10 – Wetter
+  document.addEventListener("sk:briefing-closed", () => { lastSig = ""; schedule(); }); // Update 10 F
   document.addEventListener("sk:dashboard-edit", () => { setEditing(true); try { root.scrollIntoView({ block: "start", behavior: "smooth" }); } catch { /* egal */ } });
   setInterval(() => { if (viewVisible() && document.visibilityState !== "hidden") { lastSig = ""; schedule(); } }, 60000);
 }
@@ -180,7 +192,9 @@ function render() {
       if (on) need(n); else if (!usedElsewhere) drop(n);
     }
   }
-  const ids = D.arrange(c, context, available(f));
+  const modHidden = PF.hiddenWidgetsByModules(settings()); // Update 10 F – ausgeschaltete Module
+  const ids = D.arrange(c, context, available(f)).filter((id) => !modHidden.has(id));
+  renderChrome(now);
   const html = ids.map((id) => widgetHTML(id, f)).filter(Boolean).join("");
   const ctxEl = root.querySelector('[data-d="ctx"]');
   const label = c.auto ? D.CONTEXT_LABEL[context] : "📐 Eigene Reihenfolge";
@@ -194,6 +208,29 @@ function render() {
   }
   grid.hidden = editing;
   if (editing) renderEditor(c);
+}
+
+/** Update 10 F: Profil-Chip + Briefing-Angebot (einmal am Morgen bzw. Sonntag/Montag). */
+function renderChrome(now) {
+  const p = PF.profileById(PF.readProfiles(settings()).active);
+  const chip = root.querySelector('[data-d="profile"]');
+  const ct = `${p.e} ${p.t}`;
+  if (chip.textContent !== ct) { chip.textContent = ct; chip.title = `Profil: ${p.t} – tippen zum Wechseln`; }
+  let kind = null;
+  try { kind = BRF.offer(settings(), now); } catch { kind = null; }
+  const box = root.querySelector('[data-d="offer"]');
+  const bb = root.querySelector('[data-d="brief"]');
+  const label = kind === "weekly" || (kind !== "morning" && BRC.weeklyWindow(now)) ? "📅 Wochenrückblick" : "☀️ Briefing";
+  if (bb.textContent !== label) bb.textContent = label;
+  bb.dataset.kind = label.startsWith("📅") ? "weekly" : "morning";
+  if (box.dataset.kind === (kind || "")) return;
+  box.dataset.kind = kind || "";
+  box.hidden = !kind;
+  box.innerHTML = !kind ? "" : kind === "morning"
+    ? `<span class="dash-offer-e" aria-hidden="true">☀️</span><span class="dash-offer-t"><b>Guten Morgen!</b><small>Dein Briefing ist fertig – Wetter, Termine & Baustelle in 30 Sekunden.</small></span>
+       <span class="dash-offer-b"><button type="button" class="btn sm primary" data-d="brief-open" data-kind="morning">Ansehen</button><button type="button" class="btn sm ghost" data-d="brief-later" data-kind="morning">Später</button></span>`
+    : `<span class="dash-offer-e" aria-hidden="true">📅</span><span class="dash-offer-t"><b>Dein Wochenrückblick</b><small>Stunden, Erledigtes und was nächste Woche ansteht.</small></span>
+       <span class="dash-offer-b"><button type="button" class="btn sm primary" data-d="brief-open" data-kind="weekly">Ansehen</button><button type="button" class="btn sm ghost" data-d="brief-later" data-kind="weekly">Später</button></span>`;
 }
 
 function card(id, body, { go = "", hash = "", jump = "", more = "" } = {}) {
@@ -621,6 +658,9 @@ function onClick(ev) {
   const d = b.dataset;
   if (d.wx) { Promise.resolve(WX.handle(d.wx, b)).catch((e) => console.error(e)); return; } // Update 10 – Wetter
   if (d.d === "edit") { setEditing(!editing); return; }
+  if (d.d === "profile") { import("./profiles.js").then((m) => m.openSwitcher(ctx)).catch((err) => { console.error(err); ctx.ui.toast("Profile konnten nicht geladen werden."); }); return; } // Update 10 F
+  if (d.d === "brief" || d.d === "brief-open") { BRF.openBriefing(ctx, d.kind || "morning"); lastSig = ""; schedule(); return; } // Update 10 F
+  if (d.d === "brief-later") { BRF.markSeen(d.kind); lastSig = ""; schedule(); return; }
   if (d.d === "done") { setEditing(false); root.querySelector('[data-d="edit"]').focus(); return; }
   if (d.d === "wr") { // Update 10 – ✨ Wochenbericht
     import("./weekreport.js").then((m) => m.openWeekReport(ctx, {})).catch((err) => { console.error(err); ctx.ui.toast("Wochenbericht konnte nicht geladen werden."); });

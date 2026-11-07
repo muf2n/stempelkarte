@@ -29,6 +29,7 @@ export const MODULES = [
   { id: "rechner", title: "🧮 Taschenrechner", sub: "Rechnen mit Prozent, Wurzel & Verlauf", icon: "hash", color: "#475569", load: () => import("./calc.js") },
   { id: "japanisch", title: "🇯🇵 Japanisch", sub: "Kana, Vokabeln, Hören, Sprechen, Schreiben – mit Sensei", icon: "torii", color: "#dc2626", load: () => import("./japanisch.js") },
   { id: "lap", title: "🎓 LAP Elektrotechnik", short: "LAP Elektrotechnik", sub: "Lernkarten, Formeln, Rechnen, Prüfung – mit KI-Lehrer", icon: "bolt", color: "#ca8a04", load: () => import("./lap.js") },
+  { id: "elektro", title: "⚡ Elektro-Tools", short: "Elektro-Tools", sub: "Umrechnen, Farbcode, Lexikon, Schaltzeichen", icon: "bolt", color: "#d97706", load: () => import("./elektro.js") }, // Update 10 F
   { id: "automationen", title: "⚡ Automationen", short: "Automationen", sub: "Wenn → dann: die App erledigt Kleinkram für dich", icon: "bolt", color: "#7c3aed", load: () => import("./automationen.js") }, // Update 10
   { id: "zeitleiste", title: "🕰️ Zeitleiste", short: "Zeitleiste", sub: "Arbeit, Fotos, Termine & Erlebtes – alles chronologisch", icon: "clock", color: "#0891b2", load: () => import("./zeitleiste.js") }, // Update 10
   { id: "galerie", title: "Galerie", sub: "Fotos nach Baustelle & Adresse", icon: "image", color: "#0284c7", load: () => import("./galerie.js") },

@@ -3,6 +3,8 @@
 import { MODULES } from "../alltag/modules.js";
 import { icon } from "../icons.js";
 import { esc } from "../util.js";
+import * as store from "../store.js";
+import { modulesOff, toggleModule } from "../profiles-core.js"; // Update 10 F – Module ein/aus
 
 let C = null;
 let root = null;
@@ -23,7 +25,8 @@ function unmountModule() {
 }
 
 function gridHTML() {
-  const tiles = MODULES.map((m, i) =>
+  const off = modulesOff((store.get() || {}).settings);
+  const tiles = MODULES.filter((m) => !off.has(m.id)).map((m, i) =>
     `<a class="al-tile" href="#alltag/${esc(m.id)}" style="--al-c:${esc(m.color || "#4F46E5")};--i:${i}" data-id="${esc(m.id)}">` +
       `<span class="al-tile-ic">${icon(m.icon, 30) || icon("grid", 30)}</span>` +
       `<span class="al-tile-txt"><b>${esc(m.title)}</b><small>${esc((m.subFn && m.subFn()) || m.sub || "")}</small></span>` +
@@ -45,6 +48,7 @@ async function renderModule(id) {
   if (!mod) { renderGrid(); return; }
   if (current && current.id === id) return; // schon offen
   unmountModule();
+  if (modulesOff((store.get() || {}).settings).has(id)) { offHTML(mod); return; } // Update 10 F – ausgeschaltet (Daten bleiben)
   const token = ++routeToken;
   root.innerHTML =
     `<div class="al-mod" style="--al-c:${esc(mod.color || "#4F46E5")}">` +
@@ -76,6 +80,25 @@ async function renderModule(id) {
   }
 }
 
+/** Update 10 F: ausgeschaltetes Modul – freundlich erklären, mit einem Tipp wieder einschalten. */
+function offHTML(mod) {
+  root.innerHTML =
+    `<div class="al-mod" style="--al-c:${esc(mod.color || "#4F46E5")}">` +
+      `<div class="al-bar"><a class="al-back" href="#alltag" aria-label="Zurück zu Alltag">${icon("chevron-left", 20)}<span>Alltag</span></a>` +
+      `<h2 class="al-title"><span class="al-title-ic">${icon(mod.icon, 20)}</span>${esc(mod.short || mod.title)}</h2></div>` +
+      `<div class="al-body"><div class="empty al-off"><span class="al-off-e" aria-hidden="true" style="font-size:2.4rem">🙈</span><h3>Dieser Bereich ist ausgeschaltet</h3>` +
+      `<p>Deine Daten sind noch da – du hast ihn nur unter Einstellungen › Profile &amp; Module ausgeblendet.</p>` +
+      `<button type="button" class="btn primary" data-al-on="${esc(mod.id)}">✅ Wieder einschalten</button></div></div></div>`;
+  current = null;
+  const b = root.querySelector("[data-al-on]");
+  b.addEventListener("click", async () => {
+    try { await store.saveSettings({ modules: toggleModule((store.get() || {}).settings, mod.id, true) }); }
+    catch (e) { console.error(e); return; }
+    root.innerHTML = "";
+    renderModule(mod.id);
+  });
+}
+
 function route() {
   if (!root) return;
   const before = current ? current.id : (root.querySelector(".al-home") ? "" : null);
@@ -98,6 +121,11 @@ export function mount(el, ctx) {
   window.addEventListener("hashchange", route);
 }
 
-export function update() { /* Bereiche abonnieren ihre Daten selbst */ }
+let offSig = null;
+export function update(snap) { // Bereiche abonnieren ihre Daten selbst; hier nur: Update 10 F – Module ein/aus neu zeichnen
+  const sig = [...modulesOff((snap || store.get() || {}).settings)].sort().join(",");
+  if (offSig !== null && sig !== offSig && root && !current && root.querySelector(".al-home")) renderGrid();
+  offSig = sig;
+}
 
 export function onShow() { route(); }

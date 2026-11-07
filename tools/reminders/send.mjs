@@ -1,6 +1,6 @@
 // Verschickt fällige Erinnerungen per Firebase Cloud Messaging (läuft alle 15 min in GitHub Actions).
 // Benötigt das Secret FIREBASE_SERVICE_ACCOUNT (JSON des Dienstkonto-Schlüssels).
-import { decide, decideBudget, applyBudgetAlerts, dayKeyVienna, decideSavings, savingsWanted } from "./decide.mjs";
+import { decide, decideBudget, applyBudgetAlerts, dayKeyVienna, decideSavings, savingsWanted, decideBriefing, briefingDue } from "./decide.mjs";
 
 const raw = (process.env.FIREBASE_SERVICE_ACCOUNT || "").trim();
 if (!raw) {
@@ -209,6 +209,15 @@ for (const userRef of refs) {
       }
     } catch (e) {
       warn("Sparziele", e);
+    }
+    // Update 10 F – ☀️ Morgen-Briefing (nur wenn eingeschaltet; liest dann alle Planer-Einträge + Orte, protokolliert nichts davon)
+    if (briefingDue(now, settings, pushlog)) {
+      try {
+        const [allTodos, placeSnap] = await Promise.all([userRef.collection("todos").get(), userRef.collection("places").get()]);
+        due.push(...decideBriefing(now, settings, pushlog, allTodos.docs.map((d) => ({ ...d.data(), id: d.id })), placeSnap.docs.map((d) => ({ ...d.data(), id: d.id }))));
+      } catch (e) {
+        warn("Briefing", e);
+      }
     }
     if (logSnap.exists) await pruneLog(meta.doc("pushlog"), pushlog, todayKey);
     // Update 9 – Budget-Warnungen: nur lesen, wenn es überhaupt ein Budget gibt

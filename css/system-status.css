@@ -1,0 +1,22 @@
+/* Update 10 F – 🖥️ System-Status (js/views/system-status.js). Nur Farb-Tokens (Akzent, hell/dunkel). */
+.ss-grid { display: grid; grid-template-columns: minmax(0, 1fr); gap: 2px; }
+@media (min-width: 640px) { .ss-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); column-gap: 18px; } }
+.ss-kv { display: flex; justify-content: space-between; gap: 10px; align-items: baseline; padding: 7px 0; border-bottom: 1px solid color-mix(in srgb, var(--line) 60%, transparent); min-width: 0; }
+.ss-kv span { color: var(--muted); white-space: nowrap; }
+.ss-kv b { text-align: right; overflow-wrap: anywhere; font-variant-numeric: tabular-nums; min-width: 0; }
+.ss-list { list-style: none; margin: 6px 0; padding: 0; display: flex; flex-direction: column; gap: 4px; }
+.ss-list li { display: flex; justify-content: space-between; gap: 10px; flex-wrap: wrap; font-size: .9rem; }
+.ss-list li span { color: var(--muted); }
+.ss-list li b { overflow-wrap: anywhere; text-align: right; font-weight: 600; }
+.ss-bar { height: 10px; border-radius: 999px; background: var(--soft); overflow: hidden; margin: 6px 0; }
+.ss-bar[hidden] { display: none; }
+.ss-bar i { display: block; height: 100%; background: var(--accent); border-radius: 999px; }
+.ss-diag { max-height: 220px; overflow: auto; font-size: .75rem; background: var(--bg); border-radius: 12px; padding: 10px; white-space: pre-wrap; overflow-wrap: anywhere; }
+.ss-diag[hidden] { display: none; }
+.ss-danger { color: var(--danger); border-color: color-mix(in srgb, var(--danger) 40%, transparent); }
+.ss-log { margin: 6px 0 8px; padding-left: 0; list-style: none; display: flex; flex-direction: column; gap: 10px; }
+.ss-log > li[hidden] { display: none; }
+.ss-log > li > b { font-family: var(--f-mono); font-size: .85rem; color: var(--accent); }
+.ss-log ul { margin: 4px 0 0; padding-left: 18px; font-size: .9rem; }
+.ss-log ul li { margin: 2px 0; }
+.sh-card .btn + .btn { margin-left: 6px; }

@@ -99,6 +99,8 @@ const CATS = [
       <div class="sh-links"><button type="button" class="sh-row" data-sh-act="dashboard"><span class="sh-ic" aria-hidden="true">🧩</span><span class="sh-lb"><b>Heute-Überblick anpassen</b><small>Widgets ein/aus, Reihenfolge, automatisch sortieren</small></span><span class="sh-chev" aria-hidden="true">›</span></button>
         <button type="button" class="sh-row" data-sh-act="wetter"><span class="sh-ic" aria-hidden="true">🌦️</span><span class="sh-lb"><b>Wetter im Überblick</b><small>Standort oder Stadt – bleibt auf diesem Gerät</small></span><span class="sh-chev" aria-hidden="true">›</span></button></div>
       <p class="note sh-foot">🌙 Hell oder dunkel richtet sich nach deinem Gerät.</p>` },
+  { id: "profile", g: "app", e: "👤", t: "Profile & Module", k: "profil profile arbeit schule privat urlaub fokus modus module bereiche ein aus ausblenden kacheln alltag", // Update 10 F
+    html: `<div id="profiles-panel"></div>` },
   { id: "geraete", g: "app", e: "⌚", t: "Geräte", k: "uhr watch bangle smartwatch android app gerät",
     html: `<div class="sh-card" id="sh-android-card" hidden><div id="android-panel" hidden></div></div>
       <div class="sh-card"><div id="watch-panel"></div></div>` },
@@ -115,6 +117,8 @@ const CATS = [
   { id: "papierkorb", g: "mehr", e: "🗑️", t: "Papierkorb", k: "papierkorb gelöscht wiederherstellen claude",
     html: `<div class="sh-card"><p>Was Claude gelöscht hat, bleibt hier 30 Tage – du kannst es mit einem Tipp zurückholen.</p>
       <button type="button" class="btn ghost sm" id="ov-trash">🗑️ <span>Papierkorb (von Claude gelöscht)</span></button></div>` },
+  { id: "system", g: "mehr", e: "🖥️", t: "System-Status", k: "system status version änderungen changelog neu sync speicher cache leeren diagnose ki verbrauch kosten abmelden überall sitzungen geräte", // Update 10 F
+    html: `<div id="system-panel"></div>` },
   { id: "hilfe", g: "mehr", e: "💡", t: "Hilfe & Über", k: "hilfe über version app info tipps",
     html: `<div class="sh-card sh-about"><div class="sh-about-ic" aria-hidden="true">⏰</div><b>Stempelkarte</b><span class="note" data-sh="version"></span></div>
       <div class="sh-card"><div class="lbl">Kleine Tipps</div><ul class="sh-tips">
@@ -260,12 +264,24 @@ function select(id) {
   }
   cat = id;
   show();
+  lazyPanel(id); // Update 10 F
   const p = hub.querySelector(`.sh-page[data-page="${id}"]`);
   if (p) {
     p.scrollTop = 0;
     const back = p.querySelector(".sh-back");
     if (!wide() && back) { try { back.focus({ preventScroll: true }); } catch { /* egal */ } }
   }
+}
+
+/** Update 10 F: Profile & Module / System-Status erst beim Öffnen laden. */
+const lazyRender = {};
+function lazyPanel(id) {
+  const map = { profile: ["./profiles.js", "#profiles-panel"], system: ["./system-status.js", "#system-panel"] };
+  const m = map[id];
+  if (!m) return;
+  if (lazyRender[id]) { try { lazyRender[id](); } catch (e) { console.error(e); } return; }
+  import(m[0]).then((mod) => { lazyRender[id] = mod.mountPanel(hub.querySelector(m[1]), ctx) || null; })
+    .catch((err) => { console.error(err); ctx.ui.toast("Konnte nicht geladen werden."); });
 }
 
 function show() {
@@ -374,11 +390,13 @@ export function update(s) {
   val("aussehen", ac ? ac.name : "");
   val("orte", set.autoLocate !== false ? "Standort an" : "Standort aus");
   val("hilfe", version());
+  try { const pr = (set.profiles && set.profiles.active) || "standard"; val("profile", { standard: "🏠 Standard", arbeit: "💼 Arbeit", schule: "🎒 Schule", privat: "🏡 Privat", urlaub: "🌴 Urlaub", fokus: "🎯 Fokus" }[pr] || ""); } catch { /* egal */ } // Update 10 F
   let autoAt = 0;
   try { autoAt = Number(JSON.parse(localStorage.getItem("stempelkarte.backup.auto") || "0")) || 0; } catch { /* egal */ }
   const bk = lastBackupAt(set, [{ created: autoAt }]);
   val("backup", bk ? agoText(bk) : "noch nie");
   hub.querySelector("#sh-signout").hidden = !(snap.mode === "cloud" && u);
+  if (open && cat === "profile" && lazyRender.profile && !hub.querySelector("#profiles-panel").contains(document.activeElement)) { try { lazyRender.profile(); } catch { /* egal */ } } // Update 10 F
 }
 
 export function isOpen() { return open; }

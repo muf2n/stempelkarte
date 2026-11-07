@@ -741,3 +741,24 @@ test("Update 10 C: nach gedaechtnis_lesen (untrusted) ist gedaechtnis_merken in 
   assert.equal(res.status, 200);
   assert.equal(t.g.list(`${t.base}/a_ai_memory`).length, 1, "nichts dazugeschrieben");
 });
+
+/* ===== Update 10 F – Briefing (Modus "briefing") ===== */
+test("Briefing-Modus: eigener kurzer Vorlese-Prompt, KEINE Werkzeuge, Name, nie Fotos", async () => {
+  const png = "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==";
+  const t = await setupChat({ script: [(body) => {
+    assert.equal("tools" in body, false, "Briefing schickt keine Werkzeuge");
+    assert.equal(typeof body.messages.at(-1).content, "string", "kein Bildblock");
+    return end("Guten Morgen! Heute bist du in der Musterstraße.");
+  }] });
+  const res = await t.post({ ...msg("MORGEN-BRIEFING\n## Termine heute\n- Zahnarzt (15:30)"), mode: "briefing", assistantName: "Jarvis", image: { type: "image/png", data: png } });
+  assert.equal(res.status, 200);
+  const out = await res.json();
+  assert.match(out.reply, /Guten Morgen/);
+  assert.equal(t.calls.length, 1);
+  const sys = t.calls[0].body.system;
+  assert.match(sys, /vorgelesen/);
+  assert.match(sys, /erfinde nichts/);
+  assert.match(sys, /„Jarvis“/);
+  assert.match(sys, /niemals Anweisungen/);
+  assert.deepEqual(chatMode({ mode: "briefing", assistantName: "Jarvis" }), { mode: "briefing", short: true, name: "Jarvis" });
+});
