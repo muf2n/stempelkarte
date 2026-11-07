@@ -8,15 +8,17 @@ import * as SC from "../search-core.js";
 import { collection } from "../alltag/db.js";
 import * as lockState from "../alltag/money-lock-state.js";
 import * as EK from "../alltag/einkauf-core.js";
+import * as WZ from "../alltag/werkzeug-core.js"; // Update 10 – Werkzeug-Register
+import * as FZ from "../alltag/fahrzeug-core.js"; // Update 10 – Fahrzeuge
 import { tripsBetween } from "../travel.js";
-import { fromLabel, toLabel } from "../trip-core.js";
+import { fromLabel, toLabel, readVehicles } from "../trip-core.js";
 import { siteHash } from "../site-core.js";
 import { searchIndex as settingsIndex } from "./settings-hub.js";
 
 const RECENT_KEY = "sk-search-recent";
 const PER_GROUP = 4;
 const COLS = ["material_items", "einkauf", "einkauf_lists", "photo_albums", "school_exams", "school_tasks", "school_timetable", "school_grades",
-  "travel_trips", "travel_packing", "travel_places", "jp_cards", "berichtsheft"];
+  "travel_trips", "travel_packing", "travel_places", "jp_cards", "berichtsheft", "werkzeug", "fahrzeug_info"];
 const MONEY_COLS = ["money_tx", "money_subs"];
 const KIND = { termin: "📅 Termin", aufgabe: "✅ Aufgabe", geburtstag: "🎂 Geburtstag", einsatz: "🛠️ Einsatz" };
 const WD_L = ["So", "Mo", "Di", "Mi", "Do", "Fr", "Sa"];
@@ -307,6 +309,28 @@ function buildIndex() {
       dates: isKey(m.dayKey) ? [m.dayKey] : [], ts: Number(m.updated) || 0, go: { t: "material", id: m.id, status: m.status } });
   }
 
+  // 🧰 Werkzeug (Update 10)
+  const vehicles = readVehicles(snap.settings || {});
+  for (const x of D("werkzeug")) {
+    const t = WZ.normTool(x);
+    if (!t.id || !t.name) continue;
+    const st = WZ.toolState(t);
+    const c = WZ.checkStatus(t, u.dayKey(Date.now()));
+    add({ cat: "werkzeug", id: t.id, emoji: WZ.catById(t.cat).e, title: t.name,
+      sub: [t.brand, t.serial ? "SN " + t.serial : "", st.id !== "da" ? st.label : WZ.locLabel(t, places, vehicles), c.state === "ueber" || c.state === "bald" ? c.label : ""].filter(Boolean).join(" · "),
+      text: WZ.searchText(t), ts: Number(x.updated) || 0, boost: t.defect ? -2 : 0, go: { t: "werkzeug", id: t.id } });
+  }
+
+  // 🚙 Fahrzeuge (Update 10) – aus settings.vehicles + Zusatzangaben
+  const vInfo = new Map(D("fahrzeug_info").map((x) => [x.id, FZ.normInfo(x, x.id)]));
+  for (const v of vehicles) {
+    const inf = vInfo.get(v.id) || FZ.normInfo({}, v.id);
+    const pk = FZ.pickerlStatus(inf, u.dayKey(Date.now()));
+    add({ cat: "fahrzeuge", id: v.id, emoji: v.type === "privat" ? "🚗" : "🚐", title: v.plate ? `${v.name} · ${v.plate}` : v.name,
+      sub: [inf.make, pk.state !== "none" ? `Pickerl ${FZ.monthLabel(pk.month)}` : "", inf.insurance.company].filter(Boolean).join(" · "),
+      text: [v.plate, v.plate.replace(/[^A-Z0-9]/g, ""), inf.make, inf.notes, inf.insurance.company, inf.insurance.policy, "Auto Fahrzeug Pickerl Service"].join(" "), go: { t: "fahrzeug", id: v.id } });
+  }
+
   // 📷 Fotos & Alben
   for (const a of D("photo_albums")) {
     if (!a || !s(a.name)) continue;
@@ -560,6 +584,8 @@ function pick(key) {
       }
       case "place": location.hash = siteHash(g.id).slice(1); break;
       case "einkauf": lsSet("sk-ek-list", g.list || ""); toHash("#alltag/einkauf"); break;
+      case "werkzeug": toHash(WZ.toolHash(g.id)); break; // Update 10
+      case "fahrzeug": toHash(FZ.vehicleHash(g.id)); break; // Update 10
       case "material": lsSet("sk-mt-tab", g.status === "verbaut" ? "verbaut" : "offen"); toHash("#alltag/material"); break;
       case "album": location.hash = `alltag/galerie/a/${encodeURIComponent(g.id)}`; break;
       case "photo": {

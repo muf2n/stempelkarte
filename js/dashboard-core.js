@@ -11,6 +11,7 @@ export const WIDGETS = [
   { id: "money",     e: "💶", t: "Finanzen" },
   { id: "school",    e: "🎒", t: "Prüfungen & Hausaufgaben" },
   { id: "einkauf",   e: "🛒", t: "Einkauf" }, // Update 10 – Einkaufsliste
+  { id: "faellig",   e: "🧰", t: "Werkzeug & Auto fällig" }, // Update 10 – Werkzeug-Register / Fahrzeuge
   { id: "reminders", e: "🔔", t: "Erinnerungen" },
   { id: "tip",       e: "💡", t: "Tipp" },
   { id: "sync",      e: "☁️", t: "Sync-Status" },
@@ -21,10 +22,10 @@ export const widgetById = (id) => WIDGETS.find((w) => w.id === id) || null;
 
 /** Reihenfolge je Kontext (Automatisch sortieren). */
 export const CONTEXT_ORDER = {
-  work:    ["site", "balance", "tip", "agenda", "calendar", "reminders", "school", "einkauf", "money", "sync"],
-  school:  ["school", "tip", "agenda", "calendar", "reminders", "balance", "einkauf", "money", "site", "sync"],
-  private: ["agenda", "calendar", "reminders", "einkauf", "money", "tip", "school", "balance", "site", "sync"],
-  day:     ["agenda", "site", "balance", "tip", "calendar", "einkauf", "school", "reminders", "money", "sync"],
+  work:    ["site", "balance", "tip", "agenda", "faellig", "calendar", "reminders", "school", "einkauf", "money", "sync"],
+  school:  ["school", "tip", "agenda", "calendar", "reminders", "balance", "einkauf", "faellig", "money", "site", "sync"],
+  private: ["agenda", "calendar", "reminders", "einkauf", "faellig", "money", "tip", "school", "balance", "site", "sync"],
+  day:     ["agenda", "site", "balance", "tip", "calendar", "faellig", "einkauf", "school", "reminders", "money", "sync"],
 };
 export const CONTEXT_LABEL = {
   work: "🔧 Arbeitsmodus",
