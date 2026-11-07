@@ -37,6 +37,7 @@ on:
       - "js/alltag/fahrzeug-core.js"
       - "js/alltag/notes-core.js"
       - "js/alltag/notfall-core.js"
+      - "js/alltag/app-wishes-core.js"
       - ".github/workflows/mcp-deploy.yml"
   workflow_dispatch:
 

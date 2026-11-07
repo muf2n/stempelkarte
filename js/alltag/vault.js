@@ -14,6 +14,7 @@ import { download } from "../export.js";
 import { createDocs } from "./vault-docs.js";            // Update 9 – Dokumente
 import * as F from "./vault-files.js";
 import { usedBytes, fmtSize, FREE_TIER } from "./vault-docs-core.js";
+import * as Sess from "./vault-session.js"; // Update 10 – 🔒 verschlüsselte 📁 Dokumente teilen sich den Schlüssel
 
 const META_ID = "main";
 const FAIL_KEY = "sk-tresor-fails";
@@ -356,9 +357,12 @@ export function mount(el, ctx) {
         await putMeta(meta);
         pw.value = pw2.value = "";
         S.key = key;
+        Sess.adopt(key, S.meta);
         resetFails();
         unlocked();
         ui.toast("Tresor angelegt 🔒");
+        let back = false; try { back = sessionStorage.getItem("sk-dk-return") === "1"; sessionStorage.removeItem("sk-dk-return"); } catch { /* egal */ }
+        if (back) { ui.toast("Tresor angelegt 🔒 – jetzt sind deine Dokumente verschlüsselt 📁", 3500); location.hash = "#alltag/dokumente"; }
       } catch (e) {
         console.warn("Tresor anlegen:", e);
         err.textContent = "Anlegen fehlgeschlagen: " + (e && e.message || e);
@@ -404,6 +408,7 @@ export function mount(el, ctx) {
         if (!alive || S.meta !== meta) return;
         inp.value = "";
         S.key = key;
+        Sess.adopt(key, meta);
         ok = true;
         resetFails();
         S.lockReason = "";
@@ -464,7 +469,7 @@ export function mount(el, ctx) {
       bodyHTML:
         `<div class="tr-warn danger">${icon("lock", 22)}<p>Das Master-Passwort kann <b>niemand</b> wiederherstellen – auch nicht der Entwickler. Ohne es sind die Einträge nicht lesbar.</p></div>` +
         `<p>Probier ruhig weiter (Groß-/Kleinschreibung, Tastatur-Sprache). Wenn du eine Sicherungsdatei mit einem anderen Passwort hast, kannst du den Tresor löschen und die Sicherung danach wiederherstellen.</p>` +
-        `<p class="note">Löschen entfernt alle ${colItems.all().length} verschlüsselten Einträge und Dokument-Dateien endgültig. Erinnerungen im Planer bleiben stehen.</p>` +
+        `<p class="note">Löschen entfernt alle ${colItems.all().length} verschlüsselten Einträge und Dokument-Dateien endgültig. Auch deine verschlüsselten 📁 Dokumente sind danach nicht mehr lesbar. Erinnerungen im Planer bleiben stehen.</p>` +
         `<div class="row"><button type="button" class="btn danger" data-del>Tresor endgültig löschen</button></div>`,
     });
     ui.confirmButton(s.el.querySelector("[data-del]"), "Wirklich alles löschen?", async () => {
@@ -492,7 +497,7 @@ export function mount(el, ctx) {
       `<div class="tr-grid"><aside class="tr-side"></aside><section class="tr-main" aria-live="polite"></section></div>` +
       `<button type="button" class="tr-fab" data-tr="new" aria-label="Eintrag hinzufügen">${icon("plus", 26)}</button>`;
     root.querySelector("#tr-q").addEventListener("input", (e) => { S.q = e.target.value; renderList(); });
-    root.querySelector("[data-tr=lock]").addEventListener("click", () => lock("Manuell gesperrt."));
+    root.querySelector("[data-tr=lock]").addEventListener("click", () => { lock("Manuell gesperrt."); Sess.lock("Manuell gesperrt."); });
     root.querySelector("[data-tr=settings]").addEventListener("click", openSettings);
     root.querySelector("[data-tr=new]").addEventListener("click", () => openEdit(null));
     root.querySelector(".tr-main").addEventListener("click", onListClick);
@@ -987,6 +992,7 @@ export function mount(el, ctx) {
           await putMeta(o.meta);
           n = o.entries.length;
           S.key = o.key;
+          Sess.adopt(o.key, S.meta);
           resetFails();
           unlocked();
         } else throw new Error("Bitte zuerst entsperren.");

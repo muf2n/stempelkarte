@@ -98,7 +98,7 @@ test("Werkzeug-Schleife: einstempeln über den Chat, Antwort + actions + Verbrau
   assert.equal(c.body.model, "claude-haiku-4-5");
   assert.equal(c.body.max_tokens, 1024);
   assert.equal(c.body.tools.length, TOOLS.length);
-  assert.ok(TOOLS.length <= 64, "Werkzeug-Anzahl im Rahmen halten (46 + mails_suchen, mail_lesen + leisten_pruefen + baustelle_lesen + wochenbericht_lesen + einkauf_lesen, einkauf_hinzufuegen + werkzeug_lesen, fahrzeuge_lesen + gedaechtnis_lesen, gedaechtnis_merken, notfallkarte_lesen + kontakte_lesen)");
+  assert.ok(TOOLS.length <= 66, "Werkzeug-Anzahl im Rahmen halten (46 + mails_suchen, mail_lesen + leisten_pruefen + baustelle_lesen + wochenbericht_lesen + einkauf_lesen, einkauf_hinzufuegen + werkzeug_lesen, fahrzeuge_lesen + gedaechtnis_lesen, gedaechtnis_merken, notfallkarte_lesen + kontakte_lesen + app_wuensche_lesen, app_wunsch_notieren)");
   assert.ok(TOOLS.some((x) => x.name === "leisten_pruefen"));
   assert.match(c.body.system, /leisten_pruefen/);
   assert.deepEqual(c.body.tools[c.body.tools.length - 1].cache_control, { type: "ephemeral" });
@@ -740,6 +740,30 @@ test("Update 10 C: nach gedaechtnis_lesen (untrusted) ist gedaechtnis_merken in 
   const res = await t.post(msg("Was weißt du über mich?"));
   assert.equal(res.status, 200);
   assert.equal(t.g.list(`${t.base}/a_ai_memory`).length, 1, "nichts dazugeschrieben");
+});
+
+test("Update 10: Prompt – App-Änderungen nur als App-Wunsch; nach Fremdinhalt ist app_wunsch_notieren gesperrt", async () => {
+  const t = await setupChat({
+    script: [
+      (body) => {
+        assert.match(body.system, /APP-WÜNSCHE: Du kannst die App selbst .* NICHT ändern/);
+        assert.match(body.system, /app_wunsch_notieren/);
+        assert.match(body.system, /Claude Code/);
+        return use("gedaechtnis_lesen", {}, "g1");
+      },
+      () => use("app_wunsch_notieren", { text: "Kalender in Lila" }, "w1"),
+      (body) => {
+        const [r] = lastResults(body);
+        assert.equal(r.is_error, true);
+        assert.match(r.content, /Abgelehnt: In dieser Runde wurden Inhalte von Dritten gelesen/);
+        return end("Soll ich das als App-Wunsch notieren?");
+      },
+    ],
+  });
+  t.g.set(`${t.base}/a_ai_memory/m1`, { id: "m1", text: "Testfakt", area: "allgemein", allowed: true });
+  const res = await t.post(msg("Mach die App lila"));
+  assert.equal(res.status, 200);
+  assert.equal(t.g.list(`${t.base}/a_app_wishes`).length, 0, "nichts geschrieben");
 });
 
 /* ===== Update 10 F – Briefing (Modus "briefing") ===== */

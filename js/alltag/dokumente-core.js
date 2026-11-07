@@ -1,7 +1,9 @@
 // Update 10 E – 📁 Dokumente: reine Logik ohne DOM (Node-testbar).
 // Metadaten in der Sammlung „dokumente“ (users/{uid}/a_dokumente), Dateiinhalt getrennt in Stücken (js/alltag/doc-files.js,
-// Cloud a_doc_files – NICHT im Backup, wie die Schul-Dateien). Unverschlüsselt – Geheimes gehört in den 🔐 Tresor.
+// Cloud a_doc_files – NICHT im Backup, wie die Schul-Dateien).
 //
+// 🔒 Update 10: Titel, Tags, Notizen, erkannter Text, Links, Vorschaubild, Dateiname/-typ und Datei-Inhalt sind mit dem Tresor-Schlüssel
+//   verschlüsselt (dokumente-crypt.js, dokumente-store.js) – die Funktionen hier arbeiten mit dem entschlüsselten Stand.
 // Felder: title, folder (Ordner-ID oder eigener Name), tags [], fav, type (MIME), size, name (Dateiname), chunks, thumb (kleines JPEG),
 //   date (JJJJ-MM-TT), expires (Ablaufdatum), remindDays (Vorlauf, Standard 30), remind (Standard an),
 //   links: [{ k: "place"|"tx"|"todo"|"vertrag"|"inventar"|"kontakt", id }], ocr (bestätigter erkannter Text), notes
@@ -78,12 +80,16 @@ export function expiryStatus(raw, today) {
 }
 
 /** Bald (innerhalb remindDays) oder seit höchstens 7 Tagen abgelaufene Dokumente – für die Benachrichtigungen. */
+// 🔒 Verschlüsselte Dokumente (enc: 1): Titel ist ohne Entsperren unbekannt → neutraler Text (auch in System-Benachrichtigungen).
+export const LOCKED_DUE = { bald: "Ein Dokument läuft bald ab – entsperren zum Ansehen", ab: "Ein Dokument ist abgelaufen – entsperren zum Ansehen" };
 export function dueDocs(list, today) {
-  return (list || []).map(normDoc).filter((d) => d.id && d.remind && d.expires)
-    .map((d) => ({ d, x: expiryStatus(d, today) }))
+  return (list || []).filter((r) => r && typeof r === "object").map((r) => ({ d: normDoc(r), enc: r.enc === 1 })).filter(({ d }) => d.id && d.remind && d.expires)
+    .map(({ d, enc }) => ({ d, enc, x: expiryStatus(d, today) }))
     .filter(({ x }) => x.state === "bald" || (x.state === "ab" && x.days >= -7))
     .sort((a, b) => a.x.days - b.x.days)
-    .map(({ d, x }) => ({ id: d.id, title: d.title, expires: d.expires, days: x.days, state: x.state, text: `${folderOf(d.folder).e} ${d.title} ${x.label}`, hash: docHash(d.id) }));
+    .map(({ d, enc, x }) => enc
+      ? { id: d.id, title: LOCKED_DUE[x.state], expires: d.expires, days: x.days, state: x.state, text: `📄 ${LOCKED_DUE[x.state]}`, hash: docHash(d.id), enc: true }
+      : { id: d.id, title: d.title, expires: d.expires, days: x.days, state: x.state, text: `${folderOf(d.folder).e} ${d.title} ${x.label}`, hash: docHash(d.id) });
 }
 
 /** Ordner mit Anzahl (feste zuerst, dann eigene alphabetisch). */

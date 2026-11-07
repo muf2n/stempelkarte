@@ -105,7 +105,16 @@ function png() { // 8×8 einfarbig
   await page.waitForTimeout(200);
   ok(!(await page.$("#wz-print-root")), "Druckbogen geschlossen");
 
-  /* ---------- Rechnung verknüpfen ---------- */
+  /* ---------- Rechnung verknüpfen (🔒 Update 10: Dokumente brauchen das Tresor-Passwort) ---------- */
+  await page.evaluate(() => { window.__tresorTest = { iter: 2000 }; location.hash = "#alltag/tresor"; });
+  await page.waitForSelector(".tr-setup");
+  await page.fill("#tr-new", "Sonnenblume-Kaffee-42!");
+  await page.fill("#tr-new2", "Sonnenblume-Kaffee-42!");
+  await page.check("#tr-paper");
+  await page.click("[data-tr=create]");
+  await page.waitForSelector(".tr-empty", { timeout: 10000 });
+  await page.evaluate((id) => { location.hash = "#alltag/inventar/" + id; }, id1);
+  await page.waitForSelector(".inv-docs .ak-linked-h a");
   await page.click(".inv-docs .ak-linked-h a");
   await page.waitForSelector(`${sheet} [data-pre]`);
   ok((await page.textContent(sheet)).includes("Waschmaschine"), "„＋ Dokument“ → Dokumente mit Vorbelegung Inventar");

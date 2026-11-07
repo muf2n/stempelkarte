@@ -4,7 +4,6 @@
 // Verlauf = Gespräche + Aufträge + Arbeitstage auf den Baustellen + Dokumente. Reine Logik: ./kontakte-core.js
 import { collection, newId } from "./db.js";
 import * as K from "./kontakte-core.js";
-import * as D from "./dokumente-core.js";
 import * as A from "./akten-ui.js";
 import * as store from "../store.js";
 import * as ui from "../ui.js";
@@ -61,7 +60,7 @@ export function mount(el) {
   function renderDetail(c) {
     const tel = K.telHref(c.phone), mail = K.mailHref(c.email);
     const sn = A.snap();
-    const docs = D.linkedTo(collection("dokumente").all(), "kontakt", c.id);
+    const docs = A.linkedDocs("kontakt", c.id) || []; // Update 10 – 🔒 nur entsperrt
     const hist = K.history(c, { entries: sn.entries || [], places: A.places(), docs });
     const tabs = [["verlauf", "📜 Verlauf"], ["gespraeche", `📞 Gespräche (${c.calls.length})`], ["auftraege", `🔨 Aufträge (${c.jobs.length})`]];
     detailEl.innerHTML = `<div class="ak-det">

@@ -1,6 +1,9 @@
 // Update 10 E – gemeinsame Bausteine für 📁 Dokumente, 📜 Verträge, 📦 Inventar, 👤 Kontakte (CSS css/alltag-akten.css, Präfix .ak-).
-// „📎 Dokumente“-Liste für verknüpfte Seiten (Baustelle, Vertrag, Inventar, Kontakt) – liest die Sammlung „dokumente“.
+// „📎 Dokumente“-Liste für verknüpfte Seiten (Baustelle, Vertrag, Inventar, Kontakt) – liest den entschlüsselten Stand
+// (dokumente-store.js, nur solange der Tresor entsperrt ist; gesperrt → nur Hinweis „🔒 entsperren“).
 import { collection } from "./db.js";
+import * as DS from "./dokumente-store.js"; // Update 10 – 🔒
+import { hasVault as hasVaultSafe } from "./vault-session.js";
 import * as D from "./dokumente-core.js";
 import * as store from "../store.js";
 import * as ui from "../ui.js";
@@ -51,18 +54,26 @@ export function linkHash(l) {
  * neu zeichnen, wenn sich watchDocs meldet. k/id = Verknüpfung (z. B. "inventar", "<id>").
  */
 export function linkedDocsHTML(k, id, { title = "📎 Dokumente", cls = "" } = {}) {
-  const col = collection("dokumente");
-  const list = D.linkedTo(col.all(), k, id).sort((a, b) => (b.date > a.date ? 1 : -1));
+  const open = linkedDocs(k, id);
+  const list = (open || []).sort((a, b) => (b.date > a.date ? 1 : -1));
   const add = `#alltag/dokumente?neu=${encodeURIComponent(k)}:${encodeURIComponent(id)}`;
+  const locked = !open && DS.raw().length;
   return `<section class="ak-linked ${cls}"><header class="ak-linked-h"><h3>${esc(title)}</h3><a class="btn ghost sm" href="${esc(add)}">＋ Dokument</a></header>` +
-    (list.length ? `<ul class="ak-linked-l">${list.map((d) =>
+    (locked ? `<p class="note ak-linked-lock">🔒 Deine Dokumente sind gesperrt – <a href="#alltag/dokumente">entsperren</a>, um die verknüpften zu sehen.</p>` : list.length ? `<ul class="ak-linked-l">${list.map((d) =>
       `<li><a class="ak-linked-i" href="${esc(D.docHash(d.id))}"><span class="ak-linked-ic">${d.thumb ? `<img src="${esc(d.thumb)}" alt="">` : `<span aria-hidden="true">${D.kindIcon(d)}</span>`}</span>` +
       `<span class="ak-linked-t"><b>${esc(d.title)}</b><small>${esc([D.folderOf(d.folder).label, fmtKey(d.date)].filter(Boolean).join(" · "))}</small></span></a></li>`).join("")}</ul>`
-      : `<p class="note">${col.loaded ? "Noch nichts verknüpft – Rechnung, Vertrag oder Foto hier ablegen. 📄" : "Lade …"}</p>`) +
+      : `<p class="note">${DS.loaded() ? "Noch nichts verknüpft – Rechnung, Vertrag oder Foto hier ablegen. 📄" : "Lade …"}</p>`) +
     `</section>`;
 }
-/** Bei Änderungen an „dokumente“ cb aufrufen → Abmelde-Funktion. */
-export const watchDocs = (cb) => collection("dokumente").watch(cb);
+/** Bei Änderungen an „dokumente“ (auch Entsperren/Sperren) cb aufrufen → Abmelde-Funktion. */
+export const watchDocs = (cb) => DS.watch(cb);
+/** Verknüpfte Dokumente (entschlüsselt) – oder null, solange gesperrt. Alte Klartext-Dokumente ohne Tresor: wie bisher. */
+export function linkedDocs(k, id) {
+  const open = DS.docs();
+  if (open) return D.linkedTo(open, k, id);
+  if (hasVaultSafe()) return null; // Tresor da, aber gesperrt (oder entschlüsselt gerade)
+  return D.linkedTo(DS.raw().filter((r) => r.enc !== 1), k, id); // noch kein Tresor: alte Klartext-Dokumente wie bisher
+}
 
 /** Leerer Zustand im gemütlichen Stil. */
 export const emptyHTML = (emo, title, text, btn = "", act = "") =>
