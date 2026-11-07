@@ -53,6 +53,8 @@ export function mount(el, c) {
 
         <div class="panel card" id="leave-panel"></div>
 
+        <div class="panel card" id="compare-panel"></div>
+
         <div class="panel card" id="stats-panel">
           <div class="nav">
             <button class="btn ghost sm" type="button" data-wk="-1" aria-label="Vorige Woche">${icon("chevron-left", 18)}</button>
@@ -167,7 +169,7 @@ export function mount(el, c) {
   });
   try { reminders.mount($("#reminders-panel"), ctx); } catch (err) { console.error(err); }
   // Update 6: Fahrerkennung + Sperrbildschirm – Module werden dynamisch geladen
-  for (const [mod, sel] of [["./drive-settings.js", "#drive-panel"], ["./lock-settings.js", "#lock-panel"], ["./school-settings.js", "#school-panel"], ["./apprentice.js", "#apprentice-panel"], ["./watch-settings.js", "#watch-panel"], ["./comfort-settings.js", "#comfort-panel"], ["./accent-settings.js", "#accent-panel"], ["./leave.js", "#leave-panel"], ["./worktime.js", "#worktime-panel"], ["./worktime-settings.js", "#wt-settings"], ["./trips.js", "#trips-panel"], ["./allowance-settings.js", "#allowance-panel"], ["./backup-settings.js", "#backup-panel"], ["./notify-settings.js", "#notify-panel"], ...(isNative() ? [["./android-settings.js", "#android-panel"]] : [])]) {
+  for (const [mod, sel] of [["./drive-settings.js", "#drive-panel"], ["./lock-settings.js", "#lock-panel"], ["./school-settings.js", "#school-panel"], ["./apprentice.js", "#apprentice-panel"], ["./watch-settings.js", "#watch-panel"], ["./comfort-settings.js", "#comfort-panel"], ["./accent-settings.js", "#accent-panel"], ["./leave.js", "#leave-panel"], ["./compare.js", "#compare-panel"], ["./worktime.js", "#worktime-panel"], ["./worktime-settings.js", "#wt-settings"], ["./trips.js", "#trips-panel"], ["./allowance-settings.js", "#allowance-panel"], ["./backup-settings.js", "#backup-panel"], ["./notify-settings.js", "#notify-panel"], ...(isNative() ? [["./android-settings.js", "#android-panel"]] : [])]) {
     import(mod).then((m) => { extraPanels.push(m); m.mount($(sel), ctx); if (lastSnapForExtras) m.update(lastSnapForExtras); })
       .catch((err) => console.error(err));
   }

@@ -36,6 +36,7 @@ export const ALLTAG = [
   "material_items", "material_catalog", "site_log", "einkauf", "einkauf_lists", "freizeit", "berichtsheft", "werkzeug", "fahrzeug_info",
   "photo_index", "photo_albums", "photo_folders", "photo_imports",
   "lap_cards", "lap_stats", "lap_exams", "lap_own", "jp_cards", "jp_stats", "trash",
+  "automations", "automation_log", // Update 10 – ⚡ Automationen
 ];
 /** Nie sichern/zurückspielen (exakt). */
 export const EXCLUDE_EXACT = ["a_school_files", "a_travel_images", "photos", "backups", "meta"];

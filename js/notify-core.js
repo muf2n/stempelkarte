@@ -16,6 +16,7 @@ import { needsReminder } from "./backup-core.js";
 import { dueTools } from "./alltag/werkzeug-core.js";
 import { dueVehicles } from "./alltag/fahrzeug-core.js";
 import { readVehicles, defaultVehicle } from "./trip-core.js";
+import { notifyItems as automationItems } from "./automation-core.js"; // Update 10 – ⚡ Automationen
 
 export const CATS = [
   { id: "aufgaben", e: "✅", t: "Fällige Aufgaben" },
@@ -30,6 +31,7 @@ export const CATS = [
   { id: "fahrzeug", e: "🚗", t: "Pickerl, Service & Versicherung" },
   { id: "bericht", e: "📒", t: "Wochenbericht am Freitag" },
   { id: "backup", e: "💾", t: "Backup-Erinnerung" },
+  { id: "automation", e: "⚡", t: "Hinweise deiner Automationen" },
 ];
 export const CAT_IDS = CATS.map((c) => c.id);
 
@@ -41,6 +43,7 @@ export const NEEDS = {
   werkzeug: ["werkzeug"],
   fahrzeug: ["fahrzeug_info", "travel_fuel"],
   bericht: ["berichtsheft"],
+  automation: ["automation_log"],
 };
 
 const pad = (n) => String(n).padStart(2, "0");
@@ -283,6 +286,9 @@ export function collect(input = {}) {
     const last = Number(input.lastBackupAt) || 0;
     add({ id: `backup:${last}`, kind: "backup", emoji: "💾", title: last ? "Zeit für ein Backup" : "Noch kein Backup 🙈", sub: last ? `Das letzte ist ${Math.floor((now - last) / 86400000)} Tage her` : "Ein Tipp – und alles ist sicher", when: now, prio: 1, target: "settings:backup" });
   }
+
+  /* --- ⚡ Automationen: Hinweise der letzten 3 Tage --- */
+  if (on("automation")) { const logs = col("automation_log"); if (logs) for (const x of automationItems(logs, now)) add(x); }
 
   return sortItems(out);
 }

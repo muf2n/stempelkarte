@@ -192,6 +192,7 @@ function onClick(ev) {
 function navigate(target) {
   const t = String(target || "");
   if (t.startsWith("#")) { if (location.hash !== t) location.hash = t; return; }
+  if (t.startsWith("jump:")) { if (ctx.jump) ctx.jump(t.slice(5)); return; } // Update 10 – Automationen (z. B. Monatsübersicht)
   if (t.startsWith("settings:")) { window.dispatchEvent(new CustomEvent("sk:open-settings", { detail: { cat: t.slice(9) } })); return; }
   if (t.startsWith("todo:")) {
     const todo = ((snap && snap.todos) || []).find((x) => x.id === t.slice(5));

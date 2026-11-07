@@ -107,6 +107,7 @@ function mountViews() {
   safe(search.mount, ctx);
   import("./notify.js").then((m) => { notifyMod = m; safe(m.mount, ctx); if (lastSnap) safe(m.update, lastSnap); })
     .catch((err) => console.error("Mitteilungen:", err));
+  import("./automation.js").then((m) => safe(m.start, ctx)).catch((err) => console.error("Automationen:", err)); // Update 10 – ⚡ Automationen
   store.subscribe((snap) => {
     lastSnap = snap;
     for (const tab of TABS) safe(VIEWS[tab].update, snap);

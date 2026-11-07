@@ -1,0 +1,22 @@
+/* Update 10 – 🌦️ Wetter-Widget im Heute-Überblick (js/views/dashboard.js → wWeather, js/weather.js). */
+:root { --wx-warn: #b45309; --wx-warn-bg: #fdefd3; }
+@media (prefers-color-scheme: dark) { :root { --wx-warn: #fcd34d; --wx-warn-bg: rgba(245, 158, 11, .16); } }
+.dw .sr { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+.dw-wx-ask { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 8px; align-items: center; }
+.dw-wx-now { display: flex; align-items: center; gap: 12px; min-width: 0; }
+.dw-wx-big { font-size: 2.4rem; line-height: 1; flex: none; }
+.dw-wx-t { display: flex; flex-direction: column; min-width: 0; flex: 1; }
+.dw-wx-t .dw-big { margin: 0; line-height: 1.1; }
+.dw-wx-t small { color: var(--muted); overflow-wrap: anywhere; }
+.dw-wx-gear { flex: none; margin-left: auto; width: 40px; height: 40px; border-radius: 50%; border: 1px solid var(--line); background: transparent; cursor: pointer; font-size: 1rem; }
+.dw-wx-days { list-style: none; margin: 12px 0 0; padding: 0; display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px; }
+.dw-wx-days li { display: flex; flex-direction: column; align-items: center; gap: 2px; padding: 8px 4px; border-radius: var(--r-sm); background: var(--soft); min-width: 0; }
+.dw-wx-days li:first-child { background: color-mix(in srgb, var(--accent) 12%, var(--soft)); }
+.dw-wx-dn { font-size: .78rem; font-weight: 700; color: var(--muted); }
+.dw-wx-de { font-size: 1.4rem; }
+.dw-wx-days small { color: var(--muted); font-size: .78rem; }
+.dw-wx-rain { white-space: nowrap; }
+.dw-wx-warn { list-style: none; margin: 10px 0 0; padding: 0; display: flex; flex-direction: column; gap: 6px; }
+.dw-wx-warn li { display: flex; gap: 8px; padding: 8px 10px; border-radius: var(--r-sm); background: var(--wx-warn-bg); color: var(--wx-warn); font-size: .88rem; }
+.dw-wx-src { margin: 8px 0 0; font-size: .75rem; }
+.wx-cur { margin: 0; font-weight: 700; }

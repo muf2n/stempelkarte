@@ -1,0 +1,30 @@
+/* Update 10 – 📊 Vergleichsmodus in der Übersicht (js/views/compare.js). Präfix .cmp- */
+:root { --cmp-good: #047857; --cmp-bad: #c81e1e; --cmp-prev: color-mix(in srgb, var(--muted) 55%, var(--line)); }
+@media (prefers-color-scheme: dark) { :root { --cmp-good: #6ee7b7; --cmp-bad: #fca5a5; } }
+.cmp { display: flex; flex-direction: column; gap: 10px; }
+.cmp-head { display: flex; align-items: center; justify-content: space-between; gap: 10px; flex-wrap: wrap; }
+.cmp-head h3 { margin: 0; font-size: 1.05rem; }
+.cmp-seg { display: inline-flex; padding: 3px; border-radius: 999px; background: var(--soft); border: 1px solid var(--line); }
+.cmp-seg button { min-height: 36px; padding: 4px 14px; border: 0; border-radius: 999px; background: transparent; color: var(--ink); font: inherit; font-weight: 600; cursor: pointer; }
+.cmp-seg button[aria-selected="true"] { background: var(--accent); color: var(--accent-ink); }
+.cmp-legend { display: flex; gap: 14px; flex-wrap: wrap; font-size: .8rem; color: var(--muted); }
+.cmp-legend span { display: inline-flex; align-items: center; gap: 6px; }
+.cmp-dot { display: inline-block; width: 10px; height: 10px; border-radius: 3px; }
+.cmp-dot.cur { background: var(--accent); }
+.cmp-dot.prev { background: var(--cmp-prev); }
+.cmp-rows { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 12px; }
+.cmp-row { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
+.cmp-rh { display: flex; align-items: baseline; gap: 8px; flex-wrap: wrap; }
+.cmp-t { font-weight: 600; font-size: .92rem; flex: 1 1 auto; min-width: 0; }
+.cmp-v { font-size: .9rem; white-space: nowrap; }
+.cmp-v small { color: var(--muted); }
+.cmp-d { font-size: .8rem; font-weight: 700; padding: 1px 8px; border-radius: 999px; background: var(--soft); color: var(--muted); white-space: nowrap; }
+.cmp-d.good { color: var(--cmp-good); background: color-mix(in srgb, var(--cmp-good) 14%, transparent); }
+.cmp-d.bad { color: var(--cmp-bad); background: color-mix(in srgb, var(--cmp-bad) 14%, transparent); }
+.cmp-svg { display: block; width: 100%; height: 22px; }
+.cmp-track { fill: var(--soft); }
+.cmp-cur { fill: var(--accent); }
+.cmp-prev { fill: var(--cmp-prev); }
+.cmp-cur.neg, .cmp-prev.neg { fill: var(--danger); opacity: .75; }
+.cmp-lock { margin: 0; }
+@media (min-width: 1024px) { .cmp-rows { display: grid; grid-template-columns: 1fr 1fr; gap: 14px 24px; } }

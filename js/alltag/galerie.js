@@ -15,6 +15,8 @@ import { esc, WD, clock, dayKey as toDayKey } from "../util.js";
 import { openViewer, openCapture, runningMeta, sharePhoto, camIcon } from "../views/gallery.js";
 import { mountActiveChip } from "../gallery-active.js"; // Update 9 (Agent U) – aktive Kategorie
 import * as MI from "../media-import.js"; // Update 9 (Agent W3) – Kamera-Fotos übernehmen
+import * as X from "../gallery-extras-core.js"; // Update 10 – ⭐ Favoriten, Schlagwörter, Duplikate
+import { viewerExtras, openDuplicates } from "./galerie-extras.js";
 
 const TABS = [["alben", "Alben", "grid"], ["alle", "Alle Fotos", "image"], ["karte", "Karte", "map"]];
 const TAB_KEY = "sk-gl-tab";
@@ -87,7 +89,7 @@ function freshState(el, ctx) {
     items: [], loaded: false, error: "",
     sel: new Set(), selecting: false,
     asel: new Set(), aselecting: false, // Alben-Auswahl
-    f: { folderId: "", albumId: "", from: "", to: "", q: "" },
+    f: { folderId: "", albumId: "", from: "", to: "", q: "", fav: false, tag: "" },
     limit: PAGE, ordered: [], io: null, unsubs: [], map: null, rT: 0,
   };
 }
@@ -430,6 +432,7 @@ function thumbHTML(it) {
   return `<button type="button" class="gl-th${sel ? " is-sel" : ""}" data-id="${esc(it.id)}" aria-label="${esc(lab)}"${S.selecting ? ` aria-pressed="${sel}"` : ""}>` +
     (it.thumb ? `<img src="${it.thumb}" alt="" loading="lazy" decoding="async" draggable="false">` : `<span class="gl-th-x">${camIcon(22)}</span>`) +
     (it.note ? `<span class="gl-th-n" aria-hidden="true">✎</span>` : "") +
+    (it.fav ? `<span class="gl-th-fav" aria-hidden="true">⭐</span>` : "") +
     `<span class="gl-th-chk" aria-hidden="true">${icon("check", 16)}</span>` +
   `</button>`;
 }
@@ -474,7 +477,7 @@ function watchMore() {
 function visibleList() {
   const m = amap();
   if (S.albumId) return G.itemsOfAlbum(S.items, S.albumId, m).sort((a, b) => b.ts - a.ts);
-  return G.filterItems(S.items, S.f, m, fids()).sort((a, b) => b.ts - a.ts);
+  return X.filterExtras(G.filterItems(S.items, S.f, m, fids()), S.f).sort((a, b) => b.ts - a.ts); // Update 10: ⭐/Schlagwort
 }
 
 function selectHead(n) {
@@ -491,6 +494,7 @@ function renderAll(soft) {
         `<label class="gl-search">${icon("search", 18)}<span class="sr">Suchen</span><input type="search" data-g="q" placeholder="Suchen: Notiz, Adresse, Ort …" autocomplete="off" value="${esc(S.f.q)}"></label>` +
         `<div class="gl-chips gl-fchips" data-g="fchips" role="group" aria-label="Kategorie-Filter"></div>` +
         `<div class="gl-chips" data-g="achips" role="group" aria-label="Album-Filter"></div>` +
+        `<div class="gl-chips gx-xchips" data-g="xchips" role="group" aria-label="Favoriten &amp; Schlagwörter"></div>` +
         `<div class="gl-range" role="group" aria-label="Zeitraum">` +
           `<label>Von<input type="date" data-g="from" value="${esc(S.f.from)}"></label>` +
           `<label>Bis<input type="date" data-g="to" value="${esc(S.f.to)}"></label>` +
@@ -521,8 +525,16 @@ function renderAll(soft) {
   pg.querySelector('[data-g="achips"]').innerHTML = chips.map((a) =>
     `<button type="button" class="gl-chip" data-fa="${esc(a.id)}" aria-pressed="${S.f.albumId === a.id}">${a.id ? albumGlyph(a, 15) : ""}<span>${esc(a.name)}</span></button>`).join("");
   if (S.f.albumId && S.f.albumId !== G.OHNE_ORT && !m.has(S.f.albumId)) S.f.albumId = "";
+  // Update 10 – ⭐ Favoriten, 🏷️ Schlagwörter, 🧹 Duplikate
+  const tagList = X.allTags(S.items);
+  if (S.f.tag && !tagList.some((x) => x.tag.toLowerCase() === S.f.tag.toLowerCase())) S.f.tag = "";
+  const favN = S.items.filter((x) => x.fav === true).length;
+  pg.querySelector('[data-g="xchips"]').innerHTML =
+    `<button type="button" class="gl-chip" data-xf aria-pressed="${!!S.f.fav}">⭐ <span>Favoriten${favN ? ` (${favN})` : ""}</span></button>` +
+    tagList.slice(0, 20).map((x) => `<button type="button" class="gl-chip" data-xt="${esc(x.tag)}" aria-pressed="${S.f.tag.toLowerCase() === x.tag.toLowerCase()}"><span>#${esc(x.tag)}</span></button>`).join("") +
+    (S.items.length > 1 ? `<button type="button" class="gl-chip gx-dupbtn" data-g="dups">🧹 <span>Duplikate prüfen</span></button>` : "");
   const list = visibleList();
-  const filtered = !!(S.f.folderId || S.f.albumId || S.f.from || S.f.to || S.f.q.trim());
+  const filtered = !!(S.f.folderId || S.f.albumId || S.f.from || S.f.to || S.f.q.trim() || S.f.fav || S.f.tag);
   pg.querySelector('[data-g="clear"]').hidden = !filtered;
   pg.querySelector('[data-g="count"]').textContent = S.loaded ? (filtered ? `${nFotos(list.length)} gefunden` : nFotos(list.length)) : "";
   pg.querySelector('[data-g="selhead"]').innerHTML = selectHead(list.length);
@@ -698,6 +710,10 @@ function wireGrid(root) {
     if (am) { S.amode = am.dataset.amode === "liste" ? "liste" : "karten"; lsSet(AMODE_KEY, S.amode); clearASel(); render(); return; }
     const ff = t.closest("[data-ff]");
     if (ff) { S.f.folderId = S.f.folderId === ff.dataset.ff ? "" : ff.dataset.ff; S.limit = PAGE; render(true); return; }
+    const xf = t.closest("[data-xf]"); // Update 10 – ⭐ Favoriten-Filter
+    if (xf) { S.f.fav = !S.f.fav; S.limit = PAGE; render(true); return; }
+    const xt = t.closest("[data-xt]"); // Update 10 – Schlagwort-Filter
+    if (xt) { S.f.tag = S.f.tag.toLowerCase() === xt.dataset.xt.toLowerCase() ? "" : xt.dataset.xt; S.limit = PAGE; render(true); return; }
     const fa = t.closest("[data-fa]");
     if (fa) { S.f.albumId = S.f.albumId === fa.dataset.fa ? "" : fa.dataset.fa; S.limit = PAGE; render(true); return; }
     const dsel = t.closest("[data-day]");
@@ -715,13 +731,14 @@ function wireGrid(root) {
       case "newfolder": folderSheet(null); break;
       case "aselect": clearSel(); S.aselecting = true; S.asel.clear(); render(true); break;
       case "aselall": { const ids = selectableAlbumIds(); const all = ids.every((id) => S.asel.has(id)); S.asel = new Set(all ? [] : ids); render(true); break; }
-      case "fphotos": { const fid = S.folderId; S.f = { folderId: fid, albumId: "", from: "", to: "", q: "" }; S.tab = "alle"; lsSet(TAB_KEY, "alle"); S.pushed = false; location.hash = "alltag/galerie"; break; }
+      case "fphotos": { const fid = S.folderId; S.f = { folderId: fid, albumId: "", from: "", to: "", q: "", fav: false, tag: "" }; S.tab = "alle"; lsSet(TAB_KEY, "alle"); S.pushed = false; location.hash = "alltag/galerie"; break; }
       case "afolder": { const a = curAlbum(); if (a) changeAlbumFolder([a.id]); break; }
       case "adel": { const a = curAlbum(); if (a && a.kind !== "virtual") deleteAlbumSheet(a); break; }
       case "pull": { const f = A.folderById(S.folderId); if (f) pullSheet(f); break; }
       case "select": S.selecting = true; S.sel.clear(); render(true); break;
       case "selall": { const ids = visibleList().map((x) => x.id); const all = ids.every((id) => S.sel.has(id)); S.sel = new Set(all ? [] : ids); render(true); break; }
-      case "clear": S.f = { folderId: "", albumId: "", from: "", to: "", q: "" }; S.limit = PAGE; render(false); break;
+      case "clear": S.f = { folderId: "", albumId: "", from: "", to: "", q: "", fav: false, tag: "" }; S.limit = PAGE; render(false); break;
+      case "dups": openDuplicates(S.items.map((x) => ({ ...x })), S.ctx, { onDeleted: () => { if (S) reload(false); } }); break; // Update 10
       case "amenu": albumMenu(); break;
       default: break;
     }
@@ -888,7 +905,8 @@ function viewerChips(p, host) {
     `<div class="gl-vchips" role="group" aria-label="Alben">` +
       ids.map((id) => { const a = m.get(id); return `<span class="gl-vchip">${albumGlyph(a, 14)}<button type="button" class="gl-vchip-go" data-va="${esc(id)}">${esc(a.name)}</button><button type="button" class="gl-vchip-x" data-vx="${esc(id)}" aria-label="Aus „${esc(a.name)}“ entfernen">✕</button></span>`; }).join("") +
       `<button type="button" class="gl-vchip gl-vchip-add" data-vadd>＋ Album</button>` +
-    `</div>`;
+    `</div><div data-gxh></div>`;
+  try { viewerExtras(p, host.querySelector("[data-gxh]"), S.ctx); } catch (e) { console.error(e); } // Update 10 – ⭐, 🏷️, Vorher/Nachher, 🤖
   host.onclick = async (ev) => {
     const x = ev.target.closest("[data-vx]");
     if (x) {
