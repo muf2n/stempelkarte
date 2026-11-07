@@ -44,4 +44,14 @@ for (const t of TOOLS) {
     console.log(`FAIL  mails_suchen [${(e && e.name) || "?"}${e && e.status ? " " + e.status : ""}${e && e.code ? " " + e.code : ""}] ${frames.join(" <- ")}`);
   }
 }
+// Planer-Struktur (nur Zahlen/Formen, keine Inhalte)
+try {
+  const all = await (await getData()).todos();
+  const kinds = {};
+  for (const t of all) kinds[t.kind || "?"] = (kinds[t.kind || "?"] || 0) + 1;
+  console.log("todos nach Art:", JSON.stringify(kinds));
+  for (const t of all.filter((x) => x.kind === "geburtstag")) {
+    console.log("geburtstag:", JSON.stringify({ bday: /^\d\d-\d\d$/.test(String(t.bday)) ? "MM-DD ok" : typeof t.bday + ":" + String(t.bday).length, byear: typeof t.byear, date: t.date === null ? "null" : typeof t.date, src: t.src, keys: Object.keys(t).sort().join(",") }));
+  }
+} catch (e) { console.log("todos FAIL", e && e.name); }
 console.log(bad ? `${bad} Werkzeug(e) mit internem Fehler` : "alle Lese-Werkzeuge ok");
