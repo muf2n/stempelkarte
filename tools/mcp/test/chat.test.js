@@ -98,7 +98,7 @@ test("Werkzeug-Schleife: einstempeln über den Chat, Antwort + actions + Verbrau
   assert.equal(c.body.model, "claude-haiku-4-5");
   assert.equal(c.body.max_tokens, 1024);
   assert.equal(c.body.tools.length, TOOLS.length);
-  assert.ok(TOOLS.length <= 55, "Werkzeug-Anzahl im Rahmen halten (46 + mails_suchen, mail_lesen + leisten_pruefen + baustelle_lesen + wochenbericht_lesen + einkauf_lesen, einkauf_hinzufuegen + werkzeug_lesen, fahrzeuge_lesen)");
+  assert.ok(TOOLS.length <= 60, "Werkzeug-Anzahl im Rahmen halten (46 + mails_suchen, mail_lesen + leisten_pruefen + baustelle_lesen + wochenbericht_lesen + einkauf_lesen, einkauf_hinzufuegen + werkzeug_lesen, fahrzeuge_lesen + gedaechtnis_lesen, gedaechtnis_merken, notfallkarte_lesen)");
   assert.ok(TOOLS.some((x) => x.name === "leisten_pruefen"));
   assert.match(c.body.system, /leisten_pruefen/);
   assert.deepEqual(c.body.tools[c.body.tools.length - 1].cache_control, { type: "ephemeral" });
@@ -717,4 +717,27 @@ test("Lehrer-Modus mit Foto (Lernkarten aus Foto): Bildblock kommt an, keine Wer
   const t2 = await setupChat({ script: [end("Kurz erklärt ⚡")] });
   await t2.post({ ...msg("Erklär mir den FI"), mode: "lehrer" });
   assert.ok(t2.calls[0].body.max_tokens <= 1024);
+});
+
+test("Update 10 C: nach gedaechtnis_lesen (untrusted) ist gedaechtnis_merken in derselben Runde gesperrt; Prompt erwähnt das Gedächtnis", async () => {
+  const t = await setupChat({
+    script: [
+      use("gedaechtnis_lesen", {}, "g1"),
+      (body) => {
+        assert.match(body.system, /gedaechtnis_lesen/);
+        assert.match(body.system, /NIE Passwörter/);
+        return use("gedaechtnis_merken", { fakt: "Test" }, "g2");
+      },
+      (body) => {
+        const [r] = lastResults(body);
+        assert.equal(r.is_error, true);
+        assert.match(r.content, /Abgelehnt: In dieser Runde wurden Inhalte von Dritten gelesen/);
+        return end("Soll ich mir das merken?");
+      },
+    ],
+  });
+  t.g.set(`${t.base}/a_ai_memory/m1`, { id: "m1", text: "Testfakt", area: "allgemein", allowed: true });
+  const res = await t.post(msg("Was weißt du über mich?"));
+  assert.equal(res.status, 200);
+  assert.equal(t.g.list(`${t.base}/a_ai_memory`).length, 1, "nichts dazugeschrieben");
 });

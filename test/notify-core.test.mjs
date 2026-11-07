@@ -154,3 +154,30 @@ test("Werkzeug- und Fahrzeug-Fälligkeiten erscheinen (und sind abschaltbar)", a
   const off = N.collect({ ...base, settings: { vehicles: [{ id: "v1", name: "Golf" }], notify: { off: ["werkzeug", "fahrzeug"] } } });
   assert.ok(!off.some((x) => x.kind === "werkzeug" || x.kind === "fahrzeug"));
 });
+
+test("Update 10 C: Haushalt (überfällig/heute/Wartung bald) und Gewohnheiten (Serie in Gefahr ab 18 Uhr)", () => {
+  const now = new Date(2026, 10, 7, 19, 0).getTime(); // Sa 07.11.2026, 19:00
+  const cols = {
+    haushalt: [
+      { id: "a", title: "Bad putzen", room: "Bad", unit: "w", n: 1, last: "2026-10-28" },
+      { id: "b", title: "Staubsaugen", unit: "w", n: 1, last: "2026-11-06" },
+      { id: "c", kind: "wartung", title: "Rauchmelder testen", unit: "m", n: 1, last: "2026-10-10" },
+    ],
+    habits: [{ id: "h1", title: "Lesen", emoji: "📖", log: { "2026-11-05": 1, "2026-11-06": 1 } }],
+  };
+  const loaded = { haushalt: true, habits: true };
+  const r = N.collect({ now, todos: [], cols, loaded });
+  const hh = r.filter((x) => x.kind === "haushalt");
+  assert.deepEqual(hh.map((x) => x.id).sort(), ["hh:a:2026-11-04", "hh:c:2026-11-10"]);
+  const a = hh.find((x) => x.id.startsWith("hh:a"));
+  assert.equal(a.prio, 2);
+  assert.equal(a.target, "#alltag/haushalt");
+  assert.match(a.title, /Bad putzen \(Bad\)/);
+  const hb = r.find((x) => x.kind === "gewohnheiten");
+  assert.ok(hb && /Lesen/.test(hb.title) && hb.target === "#alltag/routinen");
+  assert.ok(!N.collect({ now: new Date(2026, 10, 7, 9).getTime(), todos: [], cols, loaded }).some((x) => x.kind === "gewohnheiten"));
+  assert.ok(N.CAT_IDS.includes("haushalt") && N.CAT_IDS.includes("gewohnheiten"));
+  assert.deepEqual(N.NEEDS.haushalt, ["haushalt"]);
+  const off = N.collect({ now, todos: [], cols, loaded, settings: { notify: { off: ["haushalt", "gewohnheiten"] } } });
+  assert.ok(!off.some((x) => x.kind === "haushalt" || x.kind === "gewohnheiten"));
+});

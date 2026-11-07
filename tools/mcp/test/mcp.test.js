@@ -80,6 +80,8 @@ test("tools/list: alle Werkzeuge mit deutschen Beschreibungen und Schemas", asyn
     "einkauf_lesen", "einkauf_hinzufuegen",
     // Update 10 – Werkzeug-Register & Fahrzeuge (nur lesen)
     "werkzeug_lesen", "fahrzeuge_lesen",
+    // Update 10 C – KI-Gedächtnis & Notfallkarte
+    "gedaechtnis_lesen", "gedaechtnis_merken", "notfallkarte_lesen",
   ].sort());
   for (const x of result.tools) {
     assert.equal(x.inputSchema.type, "object");

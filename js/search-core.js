@@ -16,6 +16,9 @@ export const GROUPS = Object.freeze([
   ["fotos", "📷", "Fotos & Alben"],
   ["fahrten", "🚗", "Fahrten"],
   ["fahrzeuge", "🚙", "Fahrzeuge"], // Update 10 – Fahrzeuge
+  ["haushalt", "🏡", "Haushalt"], // Update 10 C
+  ["routinen", "🎯", "Routinen & Ziele"], // Update 10 C
+  ["notizen", "🧠", "Notizbuch"], // Update 10 C – Notizen + KI-Gedächtnis
   ["geld", "💶", "Geld & Abos"],
   ["schule", "🎒", "Schule"],
   ["unterwegs", "🧳", "Unterwegs"],

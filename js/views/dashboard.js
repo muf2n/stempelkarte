@@ -16,6 +16,8 @@ import * as MON from "../alltag/money-core.js";
 import * as WZ from "../alltag/werkzeug-core.js"; // Update 10 – fällige Prüfungen
 import * as FZ from "../alltag/fahrzeug-core.js"; // Update 10 – Pickerl/Service/Versicherung
 import { readVehicles, defaultVehicle } from "../trip-core.js";
+import * as HH from "../alltag/haushalt-core.js"; // Update 10 C – Haushalt
+import * as HB from "../alltag/habits-core.js"; // Update 10 C – Gewohnheiten
 import * as lockState from "../alltag/money-lock-state.js";
 
 let ctx = null;
@@ -35,6 +37,7 @@ const NEEDS = {
   tip: ["school_exams"],
   einkauf: ["einkauf", "material_items"], // Update 10 – Einkaufsliste
   faellig: ["werkzeug", "fahrzeug_info", "travel_fuel"], // Update 10 – Werkzeug & Fahrzeuge
+  haushalt: ["haushalt", "habits"], // Update 10 C – Haushalt & Gewohnheiten
 };
 
 function u() { return ctx.util; }
@@ -149,6 +152,7 @@ function available(f) {
   av.add("money");
   if (col("einkauf").some((x) => x && !x.done) || col("material_items").some((x) => x && x.status === "brauche")) av.add("einkauf"); // Update 10
   if (dueItems().length) av.add("faellig"); // Update 10
+  if (homeItems().chores.length || homeItems().habits.length) av.add("haushalt"); // Update 10 C
   const hasSchool = !!(f.schoolToday || f.schoolTomorrow || (u().readSchool && u().readSchool(settings())));
   if (hasSchool || col("school_exams").length || col("school_tasks").length || !loaded("school_exams")) av.add("school");
   return av;
@@ -212,6 +216,7 @@ function widgetHTML(id, f) {
       case "sync": return wSync();
       case "einkauf": return wEinkauf();
       case "faellig": return wFaellig();
+      case "haushalt": return wHaushalt();
       default: return "";
     }
   } catch (e) { console.error("Dashboard-Widget " + id, e); return ""; }
@@ -365,6 +370,22 @@ function wFaellig() {
   const first = list[0];
   return card("faellig", `<ul class="dw-list">${list.slice(0, 4).map((x) => `<li><span aria-hidden="true">${x.e}</span><span>${esc(x.text)}</span></li>`).join("")}</ul>` +
     (list.length > 4 ? `<p class="dw-note">+ ${list.length - 4} weitere</p>` : ""), { hash: first.hash, more: list.length === 1 ? "Ansehen" : "Erstes ansehen" });
+}
+
+/* ---- Haushalt & Gewohnheiten (Update 10 C) ---- */
+function homeItems() {
+  const now = Date.now();
+  const chores = loaded("haushalt") ? HH.dueChores(col("haushalt"), now) : [];
+  const habits = loaded("habits") ? HB.openHabits(col("habits"), HB.todayKey(now)) : [];
+  return { chores, habits };
+}
+function wHaushalt() {
+  const { chores, habits } = homeItems();
+  if (!chores.length && !habits.length) return "";
+  const rows = chores.slice(0, 3).map((x) => `<li><span aria-hidden="true">${x.state === "ueber" ? "⏰" : x.e}</span><span>${esc(x.text.replace(/^\S+\s/, ""))}</span></li>`).join("");
+  const hb = habits.length ? `<p class="dw-note">🔥 ${habits.length === 1 ? `„${esc(habits[0].title)}“ ist heute noch offen` : `${habits.length} Gewohnheiten heute noch offen`}</p>` : "";
+  return card("haushalt", (rows ? `<ul class="dw-list">${rows}</ul>` : "") + (chores.length > 3 ? `<p class="dw-note">+ ${chores.length - 3} weitere</p>` : "") + hb,
+    { hash: chores.length ? "#alltag/haushalt" : "#alltag/routinen", more: chores.length ? "Haushalt" : "Abhaken" });
 }
 
 /* ---- Finanzen (Geld-Sperre!) ---- */

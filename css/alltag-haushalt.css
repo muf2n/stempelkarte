@@ -1,0 +1,88 @@
+/* Update 10 – Alltag › 🏡 Haushalt (js/alltag/haushalt.js). Präfix .hh- */
+:root {
+  --hh-c: #0f766e;
+  --hh-ok: #047857; --hh-ok-bg: #d3f4e6;
+  --hh-warn: #b45309; --hh-warn-bg: #fdefd3;
+  --hh-bad: #c81e1e; --hh-bad-bg: #ffe1e1;
+  --hh-info: #1d4ed8; --hh-info-bg: #dde7ff;
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    --hh-c: #5eead4;
+    --hh-ok: #6ee7b7; --hh-ok-bg: rgba(16, 185, 129, .16);
+    --hh-warn: #fcd34d; --hh-warn-bg: rgba(245, 158, 11, .16);
+    --hh-bad: #fca5a5; --hh-bad-bg: rgba(239, 68, 68, .18);
+    --hh-info: #93c5fd; --hh-info-bg: rgba(59, 130, 246, .18);
+  }
+}
+.hh { display: flex; flex-direction: column; gap: 12px; min-width: 0; max-width: 900px; margin: 0 auto; width: 100%; padding-bottom: 40px; }
+.hh-sum { display: flex; align-items: center; gap: 14px; padding: 14px 16px;
+  background: linear-gradient(135deg, color-mix(in srgb, var(--hh-c) 14%, var(--card)), var(--card)); }
+.hh-sum-big { font-size: 2.2rem; line-height: 1; }
+.hh-sum-t { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.hh-sum-t b { font-size: 1.05rem; }
+.hh-sum-t small { color: var(--muted); }
+
+.hh-tabs { display: flex; gap: 6px; overflow-x: auto; scrollbar-width: none; }
+.hh-tabs::-webkit-scrollbar { display: none; }
+.hh-tab {
+  flex: 1 0 auto; display: inline-flex; align-items: center; justify-content: center; gap: 6px; min-height: 44px; padding: 8px 14px;
+  border-radius: 999px; border: 1px solid var(--line); background: var(--card); color: var(--ink);
+  font: inherit; font-size: .92rem; font-weight: 600; white-space: nowrap; cursor: pointer;
+}
+.hh-tab[aria-selected="true"] { background: var(--accent); border-color: var(--accent); color: var(--accent-ink); }
+.hh-tab-n { min-width: 22px; padding: 1px 7px; border-radius: 999px; font-size: .78rem; font-weight: 800; background: var(--hh-bad-bg); color: var(--hh-bad); }
+.hh-tab[aria-selected="true"] .hh-tab-n { background: color-mix(in srgb, var(--accent-ink) 25%, transparent); color: var(--accent-ink); }
+.hh-tab:focus-visible, .hh-card:focus-visible, .hh-tick:focus-visible { outline: none; box-shadow: var(--ring); }
+.hh-rooms:empty { display: none; }
+.hh-rooms .chips { flex-wrap: nowrap; overflow-x: auto; scrollbar-width: none; margin: 0 calc(-1 * var(--side)); padding: 2px var(--side); }
+.hh-rooms .chip { flex: none; white-space: nowrap; }
+
+.hh-head { display: flex; justify-content: flex-end; margin-bottom: 10px; }
+.hh-add { min-height: 44px; }
+.hh-list { list-style: none; margin: 0; padding: 0; display: grid; gap: 10px; }
+.hh-item { display: flex; align-items: stretch; border: 1px solid var(--line); border-radius: var(--r-sm); background: var(--card); box-shadow: var(--shadow); overflow: hidden; }
+.hh-item.is-ueber { border-color: color-mix(in srgb, var(--hh-bad) 45%, var(--line)); }
+.hh-item.is-heute { border-color: color-mix(in srgb, var(--hh-warn) 45%, var(--line)); }
+.hh-item.is-pause { opacity: .7; }
+.hh-card { flex: 1; min-width: 0; display: flex; align-items: center; gap: 12px; padding: 10px 12px; text-align: left; cursor: pointer;
+  border: 0; background: transparent; color: var(--ink); font: inherit; }
+.hh-emo { flex: none; width: 48px; height: 48px; border-radius: 14px; display: grid; place-items: center; font-size: 1.5rem;
+  background: color-mix(in srgb, var(--hh-c) 12%, var(--card)); }
+.hh-ct { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+.hh-ct b { font-size: 1rem; overflow-wrap: anywhere; }
+.hh-ct small { color: var(--muted); font-size: .82rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.hh-b { align-self: flex-start; margin-top: 3px; display: inline-flex; gap: 3px; padding: 2px 9px; border-radius: 999px; font-size: .76rem; font-weight: 700; white-space: nowrap;
+  background: color-mix(in srgb, var(--muted) 12%, transparent); color: var(--muted); }
+.hh-b-ok { background: var(--hh-ok-bg); color: var(--hh-ok); }
+.hh-b-bald, .hh-b-heute { background: var(--hh-warn-bg); color: var(--hh-warn); }
+.hh-b-ueber { background: var(--hh-bad-bg); color: var(--hh-bad); }
+.hh-tick { flex: none; width: 84px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 4px; cursor: pointer;
+  border: 0; border-left: 1px solid var(--line); background: color-mix(in srgb, var(--hh-ok) 6%, var(--card)); color: var(--hh-ok); font: inherit; }
+.hh-tick span { width: 30px; height: 30px; border-radius: 50%; border: 2.5px solid currentColor; display: grid; place-items: center; font-weight: 900; font-size: 1.05rem; }
+.hh-tick small { font-size: .74rem; font-weight: 700; }
+.hh-tick.is-done { background: var(--hh-ok-bg); }
+.hh-tick.is-done span { background: var(--hh-ok); color: var(--card); border-color: var(--hh-ok); }
+.hh-tick:active { transform: scale(.97); }
+
+.hh-empty { text-align: center; display: flex; flex-direction: column; align-items: center; gap: 8px; }
+.hh-empty-emo { font-size: 2.6rem; }
+.hh-presets { margin-top: 10px; width: 100%; }
+.hh-presets .chips { justify-content: center; }
+
+.hh-log { list-style: none; margin: 0; padding: 4px 14px; }
+.hh-log-day { padding: 12px 0 4px; font-weight: 800; font-size: .86rem; color: var(--hh-c); }
+.hh-log-row { display: grid; grid-template-columns: 28px 1fr auto; gap: 8px; align-items: start; padding: 8px 0; border-bottom: 1px solid color-mix(in srgb, var(--line) 60%, transparent); }
+.hh-log-row:last-child { border-bottom: 0; }
+.hh-log-row small { color: var(--muted); }
+.hh-log-note { display: block; overflow-wrap: anywhere; }
+.hh-log-row time { color: var(--muted); font-size: .8rem; font-variant-numeric: tabular-nums; }
+
+.hh-form label[hidden] { display: none; }
+.hh-fhist ul { list-style: none; margin: 6px 0 0; padding: 0; display: grid; gap: 4px; font-size: .9rem; color: var(--muted); }
+
+@media (min-width: 720px) {
+  .hh-list { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .hh-tab { flex: none; }
+  .hh-rooms .chips { margin: 0; padding: 2px 0 4px; flex-wrap: wrap; overflow: visible; }
+}

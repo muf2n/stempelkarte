@@ -15,6 +15,8 @@ import { wantsFridayTip, weekKeyOf, mondayOfWeek } from "./weekreport-core.js";
 import { needsReminder } from "./backup-core.js";
 import { dueTools } from "./alltag/werkzeug-core.js";
 import { dueVehicles } from "./alltag/fahrzeug-core.js";
+import { dueChores } from "./alltag/haushalt-core.js"; // Update 10 C
+import { habitsAtRisk } from "./alltag/habits-core.js"; // Update 10 C
 import { readVehicles, defaultVehicle } from "./trip-core.js";
 
 export const CATS = [
@@ -28,6 +30,8 @@ export const CATS = [
   { id: "material", e: "🧰", t: "Fehlendes Material" },
   { id: "werkzeug", e: "🔧", t: "Werkzeug-Prüfungen" },
   { id: "fahrzeug", e: "🚗", t: "Pickerl, Service & Versicherung" },
+  { id: "haushalt", e: "🏡", t: "Haushalt & Wartung" }, // Update 10 C
+  { id: "gewohnheiten", e: "🔥", t: "Gewohnheiten (Serie in Gefahr)" }, // Update 10 C
   { id: "bericht", e: "📒", t: "Wochenbericht am Freitag" },
   { id: "backup", e: "💾", t: "Backup-Erinnerung" },
 ];
@@ -41,6 +45,8 @@ export const NEEDS = {
   werkzeug: ["werkzeug"],
   fahrzeug: ["fahrzeug_info", "travel_fuel"],
   bericht: ["berichtsheft"],
+  haushalt: ["haushalt"], // Update 10 C
+  gewohnheiten: ["habits"], // Update 10 C
 };
 
 const pad = (n) => String(n).padStart(2, "0");
@@ -262,6 +268,24 @@ export function collect(input = {}) {
         const urgent = d.state === "abgelaufen" || d.state === "ueber";
         add({ id: `fz:${d.vehicleId || ""}:${d.kind}:${d.state}`, kind: "fahrzeug", emoji: d.e || "🚗", title: String(d.text || "").replace(/^\S+\s/, ""), when: now, prio: urgent ? 2 : 1, target: d.hash || "#alltag/fahrzeuge" });
       }
+    }
+  }
+
+  /* --- Haushalt: Putzplan überfällig/heute, Wartung bald (Update 10 C) --- */
+  if (on("haushalt")) {
+    const tasks = col("haushalt");
+    if (tasks) for (const d of dueChores(tasks, now)) {
+      add({ id: `hh:${d.id}:${d.due}`, kind: "haushalt", emoji: d.state === "ueber" ? "⏰" : d.e, title: `${d.title}${d.room ? ` (${d.room})` : ""}`,
+        sub: d.state === "ueber" ? `Überfällig – ${d.days === -1 ? "seit gestern" : `seit ${-d.days} Tagen`}` : d.state === "heute" ? "Heute dran 🧽" : `Wartung ${d.days === 1 ? "morgen" : `in ${d.days} Tagen`} fällig`,
+        when: now, prio: d.state === "ueber" ? 2 : d.state === "heute" ? 1 : 0, target: d.hash });
+    }
+  }
+
+  /* --- Gewohnheiten: Serie in Gefahr (ab 18 Uhr, Update 10 C) --- */
+  if (on("gewohnheiten")) {
+    const habits = col("habits");
+    if (habits) for (const h of habitsAtRisk(habits, now)) {
+      add({ id: `hb:${h.id}:${today}`, kind: "gewohnheiten", emoji: "🔥", title: `${h.emoji} ${h.title} – heute noch offen`, sub: `${h.streak} Tage am Stück – nicht abreißen lassen! 💪`, when: now, prio: 1, target: "#alltag/routinen" });
     }
   }
 
