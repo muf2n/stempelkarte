@@ -24,6 +24,7 @@ import { dueContracts } from "./alltag/vertraege-core.js"; // Update 10 E
 import { dueWarranties } from "./alltag/inventar-core.js"; // Update 10 E
 import { mutedByModules } from "./profiles-core.js"; // Update 10 F – Module ein/aus
 import { morningWindow, weeklyWindow, reviewWeek, readBriefing } from "./briefing-core.js"; // Update 10 F – Briefing
+import { learnReminder } from "./alltag/path-core.js"; // Update 10 – 🛤️ Lernpfad
 
 export const CATS = [
   { id: "aufgaben", e: "✅", t: "Fällige Aufgaben" },
@@ -38,6 +39,7 @@ export const CATS = [
   { id: "fahrzeug", e: "🚗", t: "Pickerl, Service & Versicherung" },
   { id: "haushalt", e: "🏡", t: "Haushalt & Wartung" }, // Update 10 C
   { id: "gewohnheiten", e: "🔥", t: "Gewohnheiten (Serie in Gefahr)" }, // Update 10 C
+  { id: "lernen", e: "🛤️", t: "Lern-Serie in Gefahr (Japanisch & LAP)" }, // Update 10 – Lernpfad
   { id: "bericht", e: "📒", t: "Wochenbericht am Freitag" },
   { id: "backup", e: "💾", t: "Backup-Erinnerung" },
   { id: "automation", e: "⚡", t: "Hinweise deiner Automationen" },
@@ -57,6 +59,7 @@ export const NEEDS = {
   bericht: ["berichtsheft"],
   haushalt: ["haushalt"], // Update 10 C
   gewohnheiten: ["habits"], // Update 10 C
+  lernen: ["learn_progress", "jp_stats", "lap_stats"], // Update 10 – Lernpfad
   automation: ["automation_log"],
   dokumente: ["dokumente"], // Update 10 E
   vertraege: ["vertraege"], // Update 10 E
@@ -326,6 +329,15 @@ export function collect(input = {}) {
     const habits = col("habits");
     if (habits) for (const h of habitsAtRisk(habits, now)) {
       add({ id: `hb:${h.id}:${today}`, kind: "gewohnheiten", emoji: "🔥", title: `${h.emoji} ${h.title} – heute noch offen`, sub: `${h.streak} Tage am Stück – nicht abreißen lassen! 💪`, when: now, prio: 1, target: "#alltag/routinen" });
+    }
+  }
+
+  /* --- 🛤️ Lern-Serie in Gefahr (ab 18 Uhr, Update 10 – Lernpfad) --- */
+  if (on("lernen")) {
+    const lp = col("learn_progress");
+    if (lp && lp.length) {
+      const item = learnReminder({ docs: lp, stats: [...(col("jp_stats") || []), ...(col("lap_stats") || [])].filter((x) => x && x.id === "me"), now });
+      if (item) add(item);
     }
   }
 

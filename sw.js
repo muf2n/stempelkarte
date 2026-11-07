@@ -256,6 +256,11 @@ const SHELL = [
   "js/alltag/lap-calc.js",
   "js/alltag/lap-own.js",
   "css/alltag-lap.css",
+  "js/alltag/path-core.js", // Update 10 – 🛤️ Lernpfad (Japanisch + LAP)
+  "js/alltag/path-ui.js",
+  "js/alltag/jp-path.js",
+  "js/alltag/lap-path.js",
+  "css/alltag-path.css",
   "js/gallery-active.js", // Update 9 (Agent U) – aktive Kategorie
   "css/gallery-active.css",
   "js/media-import-core.js", // Update 9 (Agent W3) – Kamera-Fotos übernehmen

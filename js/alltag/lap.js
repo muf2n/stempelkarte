@@ -18,8 +18,10 @@ import { createFormulas } from "./lap-formulas.js";
 import { createPractice } from "./lap-practice.js";
 import { createExam } from "./lap-exam.js";
 import { createOwn } from "./lap-own.js";
+import { createLapPath } from "./lap-path.js"; // Update 10 – 🛤️ Lernpfad
 
 const TABS = [
+  ["pfad", "🛤️", "Lernpfad"], // Update 10 – wie Duolingo (./path-ui.js)
   ["karten", "🃏", "Lernkarten"],
   ["formeln", "📐", "Formeln"],
   ["rechnen", "🔢", "Rechnen"],
@@ -54,7 +56,7 @@ export function mount(el) {
   let alive = true;
   let stats = null;
   let statsTimer = null;
-  let tab = TABS.some((t) => t[0] === lsGet(TAB_KEY)) ? lsGet(TAB_KEY) : "karten";
+  let tab = TABS.some((t) => t[0] === lsGet(TAB_KEY)) ? lsGet(TAB_KEY) : "pfad";
 
   el.innerHTML =
     `<div class="lap">` +
@@ -152,7 +154,7 @@ export function mount(el) {
   };
   L.explain = createExplainer(L);
 
-  const sections = { karten: createLearn(L), formeln: createFormulas(L), rechnen: createPractice(L), pruefung: createExam(L), eigene: createOwn(L) };
+  const sections = { karten: createLearn(L), formeln: createFormulas(L), rechnen: createPractice(L), pruefung: createExam(L), eigene: createOwn(L), pfad: createLapPath(L) };
 
   function renderYear() {
     if (!alive) return;
@@ -186,9 +188,10 @@ export function mount(el) {
   }
 
   function show(id, opts) {
-    if (!sections[id]) id = "karten";
+    if (!sections[id]) id = "pfad";
     if (active && active.hide) { try { active.hide(); } catch (err) { console.error(err); } }
     tab = id; lsSet(TAB_KEY, id);
+    el.querySelector(".lap").dataset.tab = id; // Lernpfad hat eigene Kopfzeile
     el.querySelectorAll(".lap-tab").forEach((b) => b.setAttribute("aria-selected", String(b.dataset.tab === id)));
     const btn = el.querySelector(`.lap-tab[data-tab="${id}"]`);
     if (btn && btn.scrollIntoView) { try { btn.scrollIntoView({ block: "nearest", inline: "nearest" }); } catch { /* egal */ } }

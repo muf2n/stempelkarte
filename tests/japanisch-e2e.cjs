@@ -67,6 +67,8 @@ function fakes(opts) {
       return route.abort();
     });
     await ctx.addInitScript(fakes, { sr, ja });
+    // Update 10: Standard-Reiter ist jetzt 🛤️ Lernpfad (eigener Test tests/lernpfad-e2e.cjs) – hier wie bisher starten
+    await ctx.addInitScript(() => { try { if (!localStorage.getItem("sk-jp-tab")) localStorage.setItem("sk-jp-tab", "kana"); } catch { /* egal */ } });
     const page = await ctx.newPage();
     page.on("console", (m) => { if (m.type() === "error") errors.push(m.text()); });
     page.on("pageerror", (e) => errors.push("pageerror: " + e.message));
@@ -98,7 +100,7 @@ function fakes(opts) {
   await page.waitForSelector(".jp-head .jp-stat", { timeout: 8000 });
   ok(/#alltag\/japanisch$/.test(page.url()), "Route #alltag/japanisch");
   ok(await page.evaluate(() => !!document.getElementById("jp-css")), "Modul-CSS geladen");
-  ok((await page.$$(".jp-tab")).length === 7, "7 Bereiche als Reiter");
+  ok((await page.$$(".jp-tab")).length === 8, "8 Bereiche als Reiter (inkl. 🛤️ Lernpfad)");
   ok(await page.isHidden(".jp-voicehint"), "japanische Stimme vorhanden → kein Hinweis");
 
   // ---- Kana ----

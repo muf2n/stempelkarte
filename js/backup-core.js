@@ -39,6 +39,7 @@ export const ALLTAG = [
   "haushalt", "habits", "routines", "goals", "notes", "ai_memory", "notfall", // Update 10 C
   "automations", "automation_log", // Update 10 – ⚡ Automationen
   "dokumente", "vertraege", "inventar", "kontakte", "money_wishes", // Update 10 E (Datei-Inhalte a_doc_files bewusst nicht)
+  "learn_progress", // Update 10 – 🛤️ Lernpfad (Japanisch + LAP)
 ];
 /** Nie sichern/zurückspielen (exakt). */
 export const EXCLUDE_EXACT = ["a_school_files", "a_travel_images", "a_doc_files", "photos", "backups", "meta"];
@@ -198,7 +199,7 @@ const SECTIONS = [
   ["orte", "📍", "Orte & Baustellen", (n) => n === "places" || n === "a_site_log"],
   ["geld", "💶", "Geld (Buchungen, Abos, Budgets, Ziele)", (n) => n.startsWith("a_money_")],
   ["schule", "🏫", "Schule", (n) => n.startsWith("a_school_")],
-  ["lernen", "🧠", "Lernen (LAP, Japanisch)", (n) => n.startsWith("a_lap_") || n.startsWith("a_jp_")],
+  ["lernen", "🧠", "Lernen (LAP, Japanisch)", (n) => n.startsWith("a_lap_") || n.startsWith("a_jp_") || n === "a_learn_progress"],
   ["material", "🧰", "Material & Einkauf", (n) => n.startsWith("a_material_") || n.startsWith("a_einkauf")],
   ["unterwegs", "🧳", "Unterwegs", (n) => n.startsWith("a_travel_")],
   ["galerie", "🖼️", "Galerie (nur Infos, keine Bilder)", (n) => n.startsWith("a_photo_")],

@@ -28,6 +28,8 @@ function fakes() {
       return route.abort();
     });
     await ctx.addInitScript(fakes);
+    // Update 10: Standard-Reiter ist jetzt 🛤️ Lernpfad (eigener Test tests/lernpfad-e2e.cjs) – hier wie bisher starten
+    await ctx.addInitScript(() => { try { if (!localStorage.getItem("sk-lap-tab")) localStorage.setItem("sk-lap-tab", "karten"); } catch { /* egal */ } });
     const page = await ctx.newPage();
     page.on("console", (m) => { if (m.type() === "error") errors.push(m.text()); });
     page.on("pageerror", (e) => errors.push("pageerror: " + e.message));
@@ -71,7 +73,7 @@ function fakes() {
   await page.waitForSelector(".lap-head .lap-stat", { timeout: 8000 });
   ok(/#alltag\/lap$/.test(page.url()), "Route #alltag/lap");
   ok(await page.evaluate(() => !!document.getElementById("lap-css")), "Modul-CSS geladen");
-  ok((await page.$$(".lap-tab")).length === 5, "5 Bereiche als Reiter (inkl. 📷 Eigene)");
+  ok((await page.$$(".lap-tab")).length === 6, "6 Bereiche als Reiter (inkl. 📷 Eigene, 🛤️ Lernpfad)");
   ok(await page.getAttribute('.lap-yearbar [data-year="0"]', "aria-pressed") === "true", "Lehrjahr-Auswahl da, Standard „Alle“");
   let h = await head(page);
   ok(/🔥 0/.test(h) && /0\/\d{3}/.test(h) && /📝 –/.test(h), "Kopfzeile: Serie 0, 0 Karten gelernt, noch keine Prüfung");

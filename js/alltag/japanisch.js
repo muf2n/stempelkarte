@@ -16,8 +16,10 @@ import { createListen, createSpeak } from "./jp-practice.js";
 import { createWrite } from "./jp-write.js";
 import { createRead } from "./jp-read.js";
 import { createSensei } from "./jp-sensei.js";
+import { createJpPath } from "./jp-path.js"; // Update 10 – 🛤️ Lernpfad
 
 const TABS = [
+  ["pfad", "🛤️", "Lernpfad"], // Update 10 – wie Duolingo (./path-ui.js)
   ["kana", "🔤", "Kana"],
   ["vokabeln", "🃏", "Vokabeln"],
   ["hoeren", "👂", "Hören"],
@@ -57,7 +59,7 @@ export function mount(el) {
   let alive = true;
   let stats = null;        // lokaler Stand (wird verzögert gespeichert)
   let statsTimer = null;
-  let tab = TABS.some((t) => t[0] === lsGet(TAB_KEY)) ? lsGet(TAB_KEY) : "kana";
+  let tab = TABS.some((t) => t[0] === lsGet(TAB_KEY)) ? lsGet(TAB_KEY) : "pfad";
 
   el.innerHTML =
     `<div class="jp">` +
@@ -111,11 +113,11 @@ export function mount(el) {
     async putOwn(word) { return cardsCol.put({ kind: "own", created: new Date().toISOString(), ...word }); },
     async removeOwn(id) { return cardsCol.remove(id); },
     /** Übung zählen (fürs Tagesziel und die Serie). */
-    count(field, ok = null) {
+    count(field, ok = null, by = 1) {
       const before = streak(curStats(), today());
       const goal = curStats().goal || 20;
       const wasDone = todayCount(curStats(), today()) >= goal;
-      stats = bump(curStats(), today(), field, 1, ok);
+      stats = bump(curStats(), today(), field, by, ok);
       saveStatsSoon();
       renderHead();
       if (!wasDone && todayCount(stats, today()) >= goal) ui.toast("🎯 Tagesziel geschafft – すごい！ (sugoi!)", 3200);
@@ -132,7 +134,7 @@ export function mount(el) {
 
   const sections = {
     kana: createKana(J), vokabeln: createVocab(J), hoeren: createListen(J), sprechen: createSpeak(J),
-    schreiben: createWrite(J), lesen: createRead(J), sensei: createSensei(J),
+    schreiben: createWrite(J), lesen: createRead(J), sensei: createSensei(J), pfad: createJpPath(J),
   };
   let active = null;
 
@@ -154,10 +156,11 @@ export function mount(el) {
   }
 
   function show(id) {
-    if (!sections[id]) id = "kana";
+    if (!sections[id]) id = "pfad";
     if (active && active.hide) { try { active.hide(); } catch (err) { console.error(err); } }
     stopSpeaking();
     tab = id; lsSet(TAB_KEY, id);
+    el.querySelector(".jp").dataset.tab = id; // Lernpfad hat eigene Kopfzeile
     el.querySelectorAll(".jp-tab").forEach((b) => b.setAttribute("aria-selected", String(b.dataset.tab === id)));
     const btn = el.querySelector(`.jp-tab[data-tab="${id}"]`);
     if (btn && btn.scrollIntoView) { try { btn.scrollIntoView({ block: "nearest", inline: "nearest" }); } catch { /* egal */ } }

@@ -43,6 +43,7 @@
 .dw-big { font-family: var(--f-mono); font-size: 1.7rem; font-weight: 600; line-height: 1.1; }
 .dw-big.plus, .dw-kv b.plus { color: var(--run); }
 .dw-big.minus, .dw-kv b.minus { color: var(--danger); }
+.dw-big.dw-lp { font-family: var(--f-display); font-size: 1.15rem; font-weight: 700; } /* Update 10 – Lernpfad */
 .dw-kv { display: flex; justify-content: space-between; gap: 10px; align-items: baseline; }
 .dw-kv span { color: var(--muted); }
 .dw-kv b { font-variant-numeric: tabular-nums; text-align: right; }

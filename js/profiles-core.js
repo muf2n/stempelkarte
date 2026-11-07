@@ -46,6 +46,7 @@ export const WIDGET_MODULES = {
   einkauf: ["einkauf"],
   faellig: ["werkzeug", "fahrzeuge"],
   haushalt: ["haushalt", "routinen"],
+  lernen: ["japanisch", "lap"], // Update 10 – Lernpfad
 };
 /** Suchtreffer-Ziel (go.t in js/views/search.js) → Modul. */
 export const SEARCH_MODULE = {

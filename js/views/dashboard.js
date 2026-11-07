@@ -18,6 +18,7 @@ import * as FZ from "../alltag/fahrzeug-core.js"; // Update 10 – Pickerl/Servi
 import { readVehicles, defaultVehicle } from "../trip-core.js";
 import * as HH from "../alltag/haushalt-core.js"; // Update 10 C – Haushalt
 import * as HB from "../alltag/habits-core.js"; // Update 10 C – Gewohnheiten
+import * as LP from "../alltag/path-core.js"; // Update 10 – 🛤️ Lernpfad
 import * as lockState from "../alltag/money-lock-state.js";
 import * as WX from "../weather.js"; // Update 10 – 🌦️ Wetter
 import * as WXC from "../weather-core.js";
@@ -43,6 +44,7 @@ const NEEDS = {
   einkauf: ["einkauf", "material_items"], // Update 10 – Einkaufsliste
   faellig: ["werkzeug", "fahrzeug_info", "travel_fuel"], // Update 10 – Werkzeug & Fahrzeuge
   haushalt: ["haushalt", "habits"], // Update 10 C – Haushalt & Gewohnheiten
+  lernen: ["learn_progress", "jp_stats", "lap_stats"], // Update 10 – Lernpfad
 };
 
 function u() { return ctx.util; }
@@ -168,6 +170,7 @@ function available(f) {
   if (col("einkauf").some((x) => x && !x.done) || col("material_items").some((x) => x && x.status === "brauche")) av.add("einkauf"); // Update 10
   if (dueItems().length) av.add("faellig"); // Update 10
   if (homeItems().chores.length || homeItems().habits.length) av.add("haushalt"); // Update 10 C
+  if (learnFacts()) av.add("lernen"); // Update 10 – Lernpfad
   if (WX.prefs().src !== "off") av.add("weather"); // Update 10 – „Nein danke“ blendet es aus
   const hasSchool = !!(f.schoolToday || f.schoolTomorrow || (u().readSchool && u().readSchool(settings())));
   if (hasSchool || col("school_exams").length || col("school_tasks").length || !loaded("school_exams")) av.add("school");
@@ -258,6 +261,7 @@ function widgetHTML(id, f) {
       case "einkauf": return wEinkauf();
       case "faellig": return wFaellig();
       case "haushalt": return wHaushalt();
+      case "lernen": return wLernen();
       case "weather": return wWeather(f);
       default: return "";
     }
@@ -428,6 +432,27 @@ function wHaushalt() {
   const hb = habits.length ? `<p class="dw-note">🔥 ${habits.length === 1 ? `„${esc(habits[0].title)}“ ist heute noch offen` : `${habits.length} Gewohnheiten heute noch offen`}</p>` : "";
   return card("haushalt", (rows ? `<ul class="dw-list">${rows}</ul>` : "") + (chores.length > 3 ? `<p class="dw-note">+ ${chores.length - 3} weitere</p>` : "") + hb,
     { hash: chores.length ? "#alltag/haushalt" : "#alltag/routinen", more: chores.length ? "Haushalt" : "Abhaken" });
+}
+
+/* ---- 🛤️ Lernen (Update 10 – Lernpfad): XP heute / Tagesziel + Serie ---- */
+function learnFacts() {
+  if (!loaded("learn_progress")) return null;
+  const docs = col("learn_progress");
+  const me = LP.readMe(docs.find((d) => d && d.id === "me"));
+  if (!me.goal) return null; // erst, wenn der Lernpfad benutzt wird
+  const mods = docs.filter((d) => d && (d.id === "jp" || d.id === "lap"));
+  const stats = [...col("jp_stats"), ...col("lap_stats")].filter((x) => x && x.id === "me");
+  const t = tKey();
+  return { xp: LP.xpOn(mods, t), goal: LP.goalXp(me.goal), streak: LP.learnStreak({ mods, stats, me }, t), last: me.last };
+}
+function wLernen() {
+  const f = learnFacts();
+  if (!f) return "";
+  const pct = Math.min(100, Math.round((f.xp / f.goal) * 100));
+  return card("lernen", `<p class="dw-big dw-lp">🔥 Lernen: ${f.xp}/${f.goal} XP heute</p>` +
+    `<div class="dw-bar" role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-valuenow="${pct}" aria-label="Tagesziel"><i style="width:${pct}%"></i></div>` +
+    `<p class="dw-note">${f.xp >= f.goal ? "Tagesziel geschafft 🎉" : "Eine kurze Lektion bringt dich weiter 💪"}${f.streak ? ` · ${f.streak} ${f.streak === 1 ? "Tag" : "Tage"} Serie` : ""}</p>`,
+    { hash: f.last === "jp" ? "#alltag/japanisch" : "#alltag/lap", more: "Lernpfad" });
 }
 
 /* ---- 🌦️ Wetter (Update 10): heute + 3 Tage, Warnungen als Hinweise; Ort nur auf dem Gerät ---- */
