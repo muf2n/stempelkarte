@@ -103,7 +103,8 @@ const H = 3600000;
  *   now, running: { start, pauseMs, pauseStart } | null, netMs (Arbeitszeit der laufenden Schicht),
  *   schoolTomorrow: "Berufsschule" | null, holidayTomorrow: string | null,
  *   examSoon: { title, days } | null, tasksOverdue: n, birthdayToday: "Name" | null,
- *   balanceMin: number | null, offline: bool, openMaterial: n, weekend: bool
+ *   balanceMin: number | null, offline: bool, openMaterial: n, weekend: bool,
+ *   weekReportDue: bool (Update 10 – Freitagnachmittag, Wochenbericht noch nicht abgegeben)
  * }
  */
 export function pickTips(f = {}, max = 2) {
@@ -126,6 +127,7 @@ export function pickTips(f = {}, max = 2) {
   if (f.holidayTomorrow) out.push({ id: "hol", e: "🎌", text: `Morgen ist ${f.holidayTomorrow} – schönen freien Tag!` });
   if (Number(f.tasksOverdue) > 0) out.push({ id: "overdue", e: "📝", text: f.tasksOverdue === 1 ? "1 Aufgabe ist überfällig – kurz erledigen?" : `${f.tasksOverdue} Aufgaben sind überfällig – kurz durchschauen?` });
   if (r && Number(f.openMaterial) > 0) out.push({ id: "mat", e: "🧰", text: `${f.openMaterial} Material${f.openMaterial === 1 ? "" : "ien"} für diese Baustelle noch offen.` });
+  if (f.weekReportDue) out.push({ id: "wr", e: "📋", text: "Wochenbericht fertig machen? Dein Entwurf fürs Berichtsheft wartet schon ✨", act: "wr" }); // Update 10
   if (f.offline) out.push({ id: "offline", e: "📴", text: "Du bist offline – deine Änderungen werden später synchronisiert." });
   const bal = Number(f.balanceMin);
   if (f.balanceMin != null && Number.isFinite(bal) && !r) {

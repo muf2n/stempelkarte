@@ -59,7 +59,8 @@ export function mount(el, c) {
       <p class="note">5 Wochen = 25 Arbeitstage (Mo – Fr). Zählt dein Betrieb Mo – Sa, sind es 30 Werktage.</p>
       <div class="ap-vac-tiles" id="ap-vac"></div>
     </div>
-    <button type="button" class="btn primary ap-report" id="ap-report">${icon("file", 20)}<span>Berichtsheft öffnen</span></button>`;
+    <button type="button" class="btn primary ap-report" id="ap-report">${icon("file", 20)}<span>Berichtsheft öffnen</span></button>
+    <button type="button" class="btn ghost ap-report" id="ap-wr">✨ <span>Wochenbericht (automatisch)</span></button>`;
 
   const text = (id, field) => {
     const inp = $(id);
@@ -86,6 +87,8 @@ export function mount(el, c) {
     if (await save({ vacationDays: n })) ctx.ui.toast(`Urlaubsanspruch: ${n} Tage`);
   });
   $("#ap-report").addEventListener("click", () => openReport(ctx, {}));
+  $("#ap-wr").addEventListener("click", () => import("./weekreport.js").then((m) => m.openWeekReport(ctx, {})) // Update 10
+    .catch((err) => { console.error(err); ctx.ui.toast("Wochenbericht konnte nicht geladen werden."); }));
 
   try { snap = ctx.store.get(); } catch { snap = null; }
   if (snap) update(snap);

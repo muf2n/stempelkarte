@@ -83,3 +83,11 @@ test("pickTips: Pause, Schule morgen, Geburtstag, offline – keine erfundenen T
   assert.equal(D.pickTips({ now: MON_10, examSoon: { title: "Test Mathe", days: 1 } })[0].text, "Test Mathe ist morgen – kurz wiederholen lohnt sich.");
   assert.equal(D.pickTips({ now: MON_19, offline: true, birthdayToday: "A", schoolTomorrow: "Berufsschule" }, 2).length, 2);
 });
+
+test("pickTips: Wochenbericht-Tipp (Update 10) nur, wenn fällig", () => {
+  const t = D.pickTips({ now: MON_10, weekReportDue: true });
+  assert.equal(t[0].id, "wr");
+  assert.equal(t[0].act, "wr");
+  assert.match(t[0].text, /Wochenbericht fertig machen\?/);
+  assert.ok(!D.pickTips({ now: MON_10 }).some((x) => x.id === "wr"));
+});

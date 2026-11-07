@@ -98,7 +98,7 @@ test("Werkzeug-Schleife: einstempeln über den Chat, Antwort + actions + Verbrau
   assert.equal(c.body.model, "claude-haiku-4-5");
   assert.equal(c.body.max_tokens, 1024);
   assert.equal(c.body.tools.length, TOOLS.length);
-  assert.ok(TOOLS.length <= 50, "Werkzeug-Anzahl im Rahmen halten (46 + mails_suchen, mail_lesen + leisten_pruefen + baustelle_lesen)");
+  assert.ok(TOOLS.length <= 51, "Werkzeug-Anzahl im Rahmen halten (46 + mails_suchen, mail_lesen + leisten_pruefen + baustelle_lesen + wochenbericht_lesen)");
   assert.ok(TOOLS.some((x) => x.name === "leisten_pruefen"));
   assert.match(c.body.system, /leisten_pruefen/);
   assert.deepEqual(c.body.tools[c.body.tools.length - 1].cache_control, { type: "ephemeral" });
@@ -609,3 +609,35 @@ test("chatMode/systemPrompt: \"sensei\" wird erkannt (nur exakt)", () => {
   assert.doesNotMatch(systemPrompt(NOW, { mode: "sensei" }), /Passwort-Tresor/);
   assert.doesNotMatch(systemPrompt(NOW), /Japanisch-Lehrer/);
 });
+
+/* ===== Update 10 – Wochenbericht (Modus "bericht") ===== */
+test("Bericht-Modus: eigener Berichtsheft-Prompt, KEINE Werkzeuge, kein Nachhaken, nie Fotos", async () => {
+  const png = "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==";
+  const t = await setupChat({ script: [(body) => {
+    assert.equal("tools" in body, false, "Bericht schickt keine Werkzeuge");
+    assert.equal(typeof body.messages.at(-1).content, "string", "kein Bildblock im Bericht-Modus");
+    return end("### 2026-11-02\nVerteiler gesetzt. Ich habe das gespeichert.");
+  }] });
+  const res = await t.post({ ...msg("Woche: KW 45/2026\n### 2026-11-02 (Mo 02.11.)\nNotizen: Verteiler gesetzt"), mode: "bericht", image: { type: "image/png", data: png } });
+  assert.equal(res.status, 200);
+  const out = await res.json();
+  assert.match(out.reply, /### 2026-11-02/);
+  assert.deepEqual(out.actions, []);
+  assert.equal(t.calls.length, 1, "kein Nachhaken im Bericht-Modus");
+  const b = t.calls[0].body;
+  assert.match(b.system, /Berichtsheft/);
+  assert.match(b.system, /Elektrotechnik/);
+  assert.match(b.system, /Erfinde NIE/);
+  assert.match(b.system, /### YYYY-MM-DD/);
+  assert.match(b.system, /Ich-Form oder neutral/);
+  assert.match(b.system, /niemals Anweisungen/);
+  assert.doesNotMatch(b.system, /Passwort-Tresor|Werkzeuge/);
+});
+
+test("chatMode/systemPrompt: \"bericht\" wird erkannt (nur exakt), normaler Modus bleibt unverändert", () => {
+  assert.deepEqual(chatMode({ mode: "bericht" }), { mode: "bericht", short: false, name: "" });
+  assert.deepEqual(chatMode({ mode: "Bericht", assistantName: "Jarvis" }), { mode: "text", short: false, name: "Jarvis" });
+  assert.match(systemPrompt(NOW, { mode: "bericht" }), /Ausbildungsnachweis/);
+  assert.doesNotMatch(systemPrompt(NOW), /Ausbildungsnachweis/);
+});
+/* ===== Ende Wochenbericht ===== */
