@@ -5,6 +5,8 @@ import { dueReminders, reminderText } from "../../js/cal-core.js";
 import { effectiveMode } from "../../js/privat-core.js"; // Update 9 – Privat / Arbeit
 import * as SV from "../../js/alltag/money-core.js"; // Update 9 – Sparziele (Lohn-Erinnerung, Aufrunden)
 import { weekdayTargetMin, readDayHours } from "../../js/util.js"; // Update 10c – Soll je Wochentag (eine Regel für App/Server/Push)
+import { readBriefing, pushLine, termineBetween, openTasks as briefTasks, einsatzSite } from "../../js/briefing-core.js"; // Update 10 F – Morgen-Briefing
+import { expandTodo } from "../../js/cal-core.js";
 import { budgetStatus, budgetAlerts, applyAlerts, normAlerts, monthOf as moneyMonthOf } from "../../js/alltag/money-core.js"; // Update 9 – Budget-Warnungen
 
 export const TZ = "Europe/Vienna";
@@ -493,3 +495,31 @@ export function decideBudget(now, settings, txs, budgets, cats, state) {
 }
 
 export { applyAlerts as applyBudgetAlerts };
+
+/* ---- Update 10 F: ☀️ Morgen-Briefing als Push (settings.briefing.push, Standard AUS) ----
+ * Einmal pro Tag ab settings.briefing.time (Standard 06:30) für 3 Stunden, nur wenn Erinnerungen generell an sind.
+ * Inhalt: nur Anzahl Termine/Aufgaben/Geburtstage und der Baustellen-Name laut Einsatzplan – keine Titel. pushlog.briefSent = Tag.
+ * todos = alle offenen Planer-Einträge, places = Orte (für placeId → Name). */
+export function briefingWanted(settings) { return readBriefing(settings).push && normReminders(settings && settings.reminders).enabled; }
+/** Jetzt fällig? (vor dem Lesen der Planer-Daten prüfen – spart Firestore-Lesen) */
+export function briefingDue(now, settings, pushlog) {
+  if (!briefingWanted(settings)) return false;
+  const b = readBriefing(settings);
+  const v = vienna(now);
+  const [th, tm] = b.time.split(":").map(Number);
+  const nowMin = v.hh * 60 + v.mm, at = th * 60 + tm;
+  return nowMin >= at && nowMin < at + 180 && !(pushlog && pushlog.briefSent === v.key);
+}
+export function decideBriefing(now, settings, pushlog, todos = [], places = []) {
+  if (!briefingDue(now, settings, pushlog)) return [];
+  const v = vienna(now);
+  const list = (Array.isArray(todos) ? todos : []).filter((t) => t && !t.done);
+  const termine = termineBetween(list, v.key, v.key, expandTodo).length;
+  const tasks = briefTasks(list, v.key).open;
+  const birthdays = list.filter((t) => { if (t.kind !== "geburtstag") return false; const p = parseBirthday(t); const x = p && birthdayIn(p, v.y); return !!x && x.m === v.m && x.d === v.d; }).length;
+  const site = einsatzSite(list, v.key, places);
+  return [{
+    type: "briefing", title: "☀️ Guten Morgen", body: pushLine({ termine, tasks, birthdays, site: site ? site.place : "" }),
+    tag: "briefing", url: "./#heute", log: [[["briefSent"], v.key]],
+  }];
+}

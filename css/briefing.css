@@ -1,0 +1,63 @@
+/* Update 10 F – ☀️ Morgen-Briefing & 📅 Wochenrückblick (js/briefing.js) + Angebot im Überblick (js/views/dashboard.js). Nur Farb-Tokens. */
+.bf { display: flex; flex-direction: column; gap: 12px; min-width: 0; }
+.bf-tabs { display: flex; gap: 6px; background: var(--soft); padding: 4px; border-radius: 999px; align-self: flex-start; }
+.bf-tab {
+  border: 0; background: transparent; color: var(--muted); font: inherit; font-weight: 600; font-size: .9rem;
+  padding: 7px 14px; border-radius: 999px; cursor: pointer; min-height: 36px;
+}
+.bf-tab[aria-selected="true"] { background: var(--card); color: var(--accent); box-shadow: var(--shadow); }
+.bf-tab:focus-visible { outline: none; box-shadow: var(--ring); }
+.bf-hero {
+  display: flex; flex-direction: column; gap: 2px; padding: 14px 16px; border-radius: 18px;
+  background: linear-gradient(135deg, color-mix(in srgb, var(--accent) 18%, var(--card)) 0%, color-mix(in srgb, var(--pause) 14%, var(--card)) 100%);
+  border: 1px solid color-mix(in srgb, var(--accent) 22%, transparent);
+}
+.bf-title { font-family: var(--f-display); font-size: 1.3rem; color: var(--ink); }
+.bf-body { display: grid; grid-template-columns: minmax(0, 1fr); gap: 10px; }
+@media (min-width: 720px) { .bf-body { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+.bf-sec {
+  background: var(--card); border: 1px solid color-mix(in srgb, var(--line) 75%, transparent); border-radius: 16px;
+  padding: 10px 12px 11px; min-width: 0; overflow-wrap: anywhere;
+}
+.bf-sec h3 { margin: 0 0 6px; font-size: .92rem; font-weight: 700; color: var(--ink); }
+.bf-sec ul { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 6px; }
+.bf-sec li { display: flex; gap: 8px; align-items: flex-start; min-width: 0; }
+.bf-e { font-size: 1.05rem; line-height: 1.3; flex: none; }
+.bf-t { display: flex; flex-direction: column; min-width: 0; font-size: .92rem; }
+.bf-t b { font-weight: 600; color: var(--ink); }
+.bf-t small { color: var(--muted); font-size: .82rem; }
+.bf-sec li.hot .bf-t b { color: var(--pause); }
+.bf-empty { margin: 0; color: var(--muted); font-size: .9rem; }
+.bf-actions { display: flex; flex-wrap: wrap; gap: 8px; }
+.bf-ai {
+  border-radius: 16px; padding: 10px 12px; background: var(--soft); color: var(--ink);
+  border-left: 3px solid var(--accent);
+}
+.bf-ai p { margin: 4px 0 0; line-height: 1.45; }
+.bf-ai-h { font-size: .85rem; color: var(--muted); }
+.bf-privacy { margin: -4px 0 0; }
+.bf-set { border-top: 1px solid var(--line); padding-top: 8px; }
+.bf-set summary { cursor: pointer; font-weight: 600; color: var(--muted); padding: 6px 0; min-height: 32px; }
+.bf-set .switch { margin: 6px 0; }
+.bf-time { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; font-size: .9rem; }
+.bf-time[hidden] { display: none; }
+.bf-time input { width: auto; }
+
+/* Angebot im Überblick */
+.dash-offer {
+  display: flex; align-items: center; gap: 10px; flex-wrap: wrap;
+  padding: 12px 14px; border-radius: 18px; color: var(--ink);
+  background: linear-gradient(135deg, color-mix(in srgb, var(--pause) 16%, var(--card)) 0%, color-mix(in srgb, var(--accent) 14%, var(--card)) 100%);
+  border: 1px solid color-mix(in srgb, var(--pause) 28%, transparent);
+}
+.dash-offer[hidden] { display: none; }
+.dash-offer-e { font-size: 1.6rem; line-height: 1; }
+.dash-offer-t { flex: 1 1 180px; min-width: 0; display: flex; flex-direction: column; }
+.dash-offer-t small { color: var(--muted); }
+.dash-offer-b { display: flex; gap: 6px; }
+.dash-chipbtn {
+  border: 1px solid color-mix(in srgb, var(--accent) 30%, transparent); background: color-mix(in srgb, var(--accent) 8%, var(--card));
+  color: var(--ink); font: inherit; font-size: .82rem; font-weight: 600; border-radius: 999px; padding: 5px 11px; min-height: 32px; cursor: pointer; white-space: nowrap;
+}
+.dash-chipbtn:hover { background: color-mix(in srgb, var(--accent) 16%, var(--card)); }
+.dash-chipbtn:focus-visible { outline: none; box-shadow: var(--ring); }

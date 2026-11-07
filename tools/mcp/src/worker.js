@@ -15,6 +15,7 @@ import { handleIcs } from "./ics.js";
 import { handleGmail, runGmailCron, GMAIL_CRON } from "./gmail.js";
 import { runBackupCron, BACKUP_CRON } from "./backup.js";
 import { rateOk, rateTake, retryAfter } from "./ratelimit.js";
+import { handleAuth } from "./auth.js"; // Update 10 F – Überall abmelden
 
 const CORS = {
   "access-control-allow-origin": "*",
@@ -98,9 +99,11 @@ export async function handle(request, env, { fetchImpl, now, ctx = null, log = (
     if (path === "/gmail/callback" && !rateTake("gmail-callback", request, t0)) return tooMany("gmail-callback");
     if (path === "/bank/finish" && !rateTake("bank-finish", request, t0)) return tooMany("bank-finish");
     if (path === "/ics" && !rateTake("ics", request, t0)) return tooMany("ics");
+    if (path === "/auth/revoke" && !rateTake("auth-revoke", request, t0)) return tooMany("auth-revoke");
   }
 
   if (path === "/chat") return handleChat(request, env, { fetchImpl, now: (now || (() => Date.now()))() });
+  if (path.startsWith("/auth/")) return handleAuth(request, env, { fetchImpl, now: (now || (() => Date.now()))() });
   if (path === "/ics") return handleIcs(request, env, { fetchImpl, now: (now || (() => Date.now()))() });
   if (path.startsWith("/bank/")) return handleBank(request, env, { fetchImpl, now: (now || (() => Date.now()))() });
   if (path.startsWith("/gmail/")) return handleGmail(request, env, { fetchImpl, now: (now || (() => Date.now()))(), ctx });

@@ -79,7 +79,7 @@ export function update(s) {
 /* ---------- Datenquellen (nur für eingeschaltete Kategorien) ---------- */
 
 function want() {
-  const off = N.readPrefs(snap.settings).off;
+  const off = N.effectiveOff(snap.settings); // Update 10 F – inkl. ausgeschalteter Module
   const names = new Set();
   for (const [cat, list] of Object.entries(N.NEEDS)) if (!off.has(cat)) list.forEach((n) => names.add(n));
   if (!off.has("geld") && (data.get("money_budget") || []).length) { names.add("money_tx"); names.add("money_cats"); }
@@ -114,6 +114,7 @@ function recompute() {
     moneyLocked: !!(lockMod && lockMod.isLocked()),
     lastBackupAt: lastBackupAt(s, [{ created: cachedAutoAt() }]),
     hasData: (snap.entries || []).length + (snap.todos || []).length + (snap.places || []).length > 0,
+    briefingOffer: true, // Update 10 F
   });
   const pruned = N.prune(state, items);
   if (JSON.stringify(pruned) !== JSON.stringify(state)) { state = pruned; writeState(); }
@@ -198,6 +199,10 @@ function navigate(target) {
     const todo = ((snap && snap.todos) || []).find((x) => x.id === t.slice(5));
     if (location.hash !== "#agenda") location.hash = "#agenda";
     if (todo && ctx.openTodoForm) setTimeout(() => ctx.openTodoForm(todo), 60);
+    return;
+  }
+  if (t.startsWith("briefing:")) { // Update 10 F – ☀️ Briefing / 📅 Wochenrückblick
+    import("./briefing.js").then((m) => m.openBriefing(ctx, t.slice(9))).catch((err) => { console.error(err); ctx.ui.toast("Briefing konnte nicht geladen werden."); });
     return;
   }
   if (t === "weekreport") {

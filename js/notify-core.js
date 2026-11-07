@@ -22,6 +22,8 @@ import { notifyItems as automationItems } from "./automation-core.js"; // Update
 import { dueDocs } from "./alltag/dokumente-core.js"; // Update 10 E
 import { dueContracts } from "./alltag/vertraege-core.js"; // Update 10 E
 import { dueWarranties } from "./alltag/inventar-core.js"; // Update 10 E
+import { mutedByModules } from "./profiles-core.js"; // Update 10 F – Module ein/aus
+import { morningWindow, weeklyWindow, reviewWeek, readBriefing } from "./briefing-core.js"; // Update 10 F – Briefing
 
 export const CATS = [
   { id: "aufgaben", e: "✅", t: "Fällige Aufgaben" },
@@ -41,6 +43,7 @@ export const CATS = [
   { id: "automation", e: "⚡", t: "Hinweise deiner Automationen" },
   { id: "vertraege", e: "📜", t: "Verträge & Kündigungsfristen" }, // Update 10 E
   { id: "garantie", e: "🛡️", t: "Garantie läuft ab (Inventar)" }, // Update 10 E
+  { id: "briefing", e: "☀️", t: "Morgen-Briefing & Wochenrückblick" }, // Update 10 F
 ];
 export const CAT_IDS = CATS.map((c) => c.id);
 
@@ -85,6 +88,12 @@ export function readPrefs(settings) {
   return { off: new Set(Array.isArray(n.off) ? n.off.filter((x) => CAT_IDS.includes(x)) : []) };
 }
 export function prefsForSave(off) { return { off: CAT_IDS.filter((id) => off.has(id)) }; }
+/** Update 10 F: wirklich stumme Kategorien = eigene Auswahl + durch ausgeschaltete Module (Module ein/aus). */
+export function effectiveOff(settings) {
+  const off = readPrefs(settings).off;
+  for (const c of mutedByModules(settings)) off.add(c);
+  return off;
+}
 
 /**
  * Hinweise sammeln.
@@ -95,7 +104,7 @@ export function collect(input = {}) {
   const now = Number(input.now) || Date.now();
   const today = keyOf(new Date(now));
   const tomorrow = addKey(today, 1);
-  const off = readPrefs(input.settings).off;
+  const off = effectiveOff(input.settings);
   const on = (k) => !off.has(k);
   const cols = input.cols || {};
   const loaded = input.loaded || {};
@@ -341,6 +350,12 @@ export function collect(input = {}) {
 
   /* --- ⚡ Automationen: Hinweise der letzten 3 Tage --- */
   if (on("automation")) { const logs = col("automation_log"); if (logs) for (const x of automationItems(logs, now)) add(x); }
+
+  /* --- ☀️ Update 10 F: Briefing anbieten (nur wenn die App es will – input.briefingOffer) --- */
+  if (on("briefing") && input.briefingOffer && readBriefing(input.settings).offer) {
+    if (morningWindow(now)) add({ id: `brief:${today}`, kind: "briefing", emoji: "☀️", title: "Dein Morgen-Briefing", sub: "Wetter, Termine, Baustelle & Material auf einen Blick", when: now, prio: 0, target: "briefing:morning" });
+    else if (weeklyWindow(now)) { const w = reviewWeek(now); add({ id: `weekly:${w.from}`, kind: "briefing", emoji: "📅", title: "Dein Wochenrückblick", sub: "Stunden, Erledigtes & was nächste Woche ansteht", when: now, prio: 0, target: "briefing:weekly" }); }
+  }
 
   return sortItems(out);
 }

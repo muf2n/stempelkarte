@@ -9,6 +9,7 @@ export const LIMITS = {
   "bank-finish": { capacity: 10, perMin: 10 },
   ics: { capacity: 60, perMin: 60 },
   "mcp-auth": { capacity: 20, perMin: 10 },
+  "auth-revoke": { capacity: 5, perMin: 5 }, // Update 10 F
 };
 
 const MAX_KEYS = 5000;

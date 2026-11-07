@@ -1,0 +1,35 @@
+// Update 10 F – 🖥️ System-Status › Was ist neu: ehrliche Liste aus der Versionsgeschichte (git log des Projekts), neueste zuerst.
+// Beim Veröffentlichen neuer Versionen hier oben ergänzen.
+export const CHANGELOG = [
+  { v: "Update 10 F", items: [
+    "☀️ Morgen-Briefing & 📅 Wochenrückblick (optional mit KI-Zusammenfassung zum Vorlesen, Push am Morgen – Standard aus)",
+    "⚡ Elektro-Tools: Einheiten umrechnen, Widerstands-Farbcode, Lexikon, Schaltzeichen, Rechner",
+    "👤 Profile (Arbeit, Schule, Privat, Urlaub, Fokus) und 🧩 Module ein/aus",
+    "🖥️ System-Status mit Speicher, Cache, Diagnose und „Überall abmelden“",
+  ] },
+  { v: "20261108-0300", items: ["⚡ Automationszentrum (Wenn → dann)", "🕰️ Zeitleiste", "Vergleichsmodus", "🌦️ Wetter im Überblick (Open-Meteo)", "Galerie-Extras"] },
+  { v: "20261108-0100", items: ["🏡 Haushalt (Putzplan, Wartung)", "🎯 Routinen & Ziele", "🧠 Notizbuch mit KI-Gedächtnis", "🆘 Notfallkarte"] },
+  { v: "20261107-2200", items: ["🧰 Werkzeug-Register mit QR, Scanner und Prüfterminen", "🚗 Fahrzeuge: Pickerl, Service, Tankbuch", "Fälligkeiten in den Mitteilungen", "Backup umfasst die neuen Daten"] },
+  { v: "20261107-2100", items: ["💾 Backups (automatisch & manuell)", "🔔 Benachrichtigungszentrale"] },
+  { v: "20261107-1930", items: ["🎓 LAP: Lehrjahre, Foto-Karten, Rechner, ~530 geprüfte Karten, eigene Karten"] },
+  { v: "20261107-1830", items: ["🔎 Universale Suche", "🛒 Einkaufsliste"] },
+  { v: "20261107-1730", items: ["🎓 LAP Elektrotechnik: Lernkarten, Formelsammlung, Rechenaufgaben, Prüfungssimulation, KI-Lehrer"] },
+  { v: "20261107-1700", items: ["📋 Automatischer Wochenbericht fürs Berichtsheft (Entwurf aus echten Daten, Druck/PDF)"] },
+  { v: "20261107-1610", items: ["Zweites Konto (Familie) erlaubt; Server-Funktionen nur für den Besitzer"] },
+  { v: "20261107-1600", items: ["🧮 Taschenrechner"] },
+  { v: "20261107-1400", items: ["🇯🇵 Japanisch: Kana, Vokabeln, Hören, Sprechen, Schreiben, Lesen, Sensei-Chat"] },
+  { v: "20261107-1200", items: ["Assistent: Fotos an Claude senden"] },
+  { v: "20261107-1130", items: ["Freizeit-Stempeluhr im Privat-Modus"] },
+  { v: "20261106-1530", items: ["🔧 Baustellen-Projektseiten: Status, Zeitleiste, Tagebuch, Material, Fotos, QR, Bericht"] },
+  { v: "20261106-1400", items: ["⏱️ Arbeitszeit-Pro: Prognose, Was-wäre-wenn, Änderungsprotokoll, Monatsabschluss, CSV/Excel, Soll je Wochentag"] },
+  { v: "20261106-1200", items: ["✨ Smart Dashboard im Reiter Heute (Aufgaben direkt abhaken)"] },
+  { v: "20261106-1000", items: ["⚙️ Einstellungen im Discord-Stil mit Suche"] },
+  { v: "20261106-0730", items: ["🎨 Gemütlicheres Design, Gruß nach Tageszeit, wählbare Akzentfarbe"] },
+  { v: "Update 9", items: [
+    "🔐 Geld-Sperre mit PIN/Fingerabdruck", "🛡️ Sicherheits-Updates (CSP, Server-Regeln, Ratenbegrenzung)",
+    "🗝️ Tresor mit verschlüsselten Dokumenten", "🐷 Sparziele mit echtem Konto, Zahltag-Erinnerung, Aufrunden",
+    "💶 Budget-Warnungen & „Kann ich mir das leisten?“", "📧 Gmail dauerhaft über den eigenen Server (nur lesen)",
+    "📅 Google Kalender per iCal-Link", "✨ Claude-Assistent sieht und ändert fast alles (Einstellungen zweistufig)",
+    "🏠 Privat-Modus", "🖼️ Galerie mit Alben",
+  ] },
+];
