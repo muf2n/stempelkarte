@@ -14,7 +14,8 @@ import * as HHC from "../alltag/haushalt-core.js"; // Update 10 C – Haushalt
 import * as HBC from "../alltag/habits-core.js"; // Update 10 C – Routinen & Ziele
 import * as NBC from "../alltag/notes-core.js"; // Update 10 C – Notizbuch
 import * as DKC from "../alltag/dokumente-core.js"; // Update 10 E
-import * as DKS from "../alltag/dokumente-store.js"; // Update 10 – 🔒 entschlüsselte Dokumente
+import * as DKS from "../alltag/dokumente-store.js";
+import * as AWC from "../alltag/app-wishes-core.js"; // Update 10 – 💡 App-Wünsche // Update 10 – 🔒 entschlüsselte Dokumente
 import * as VTC from "../alltag/vertraege-core.js"; // Update 10 E
 import * as INC from "../alltag/inventar-core.js"; // Update 10 E
 import * as KTC from "../alltag/kontakte-core.js"; // Update 10 E
@@ -29,7 +30,7 @@ const RECENT_KEY = "sk-search-recent";
 const PER_GROUP = 4;
 const COLS = ["material_items", "einkauf", "einkauf_lists", "photo_albums", "school_exams", "school_tasks", "school_timetable", "school_grades",
   "travel_trips", "travel_packing", "travel_places", "jp_cards", "berichtsheft", "werkzeug", "fahrzeug_info",
-  "haushalt", "habits", "goals", "notes", "ai_memory", "automations", "dokumente", "vertraege", "inventar", "kontakte"]; // Update 10 C + Automationen + E
+  "haushalt", "habits", "goals", "notes", "ai_memory", "automations", "dokumente", "vertraege", "inventar", "kontakte", "app_wishes"]; // Update 10 C + Automationen + E + 💡 App-Wünsche
 const MONEY_COLS = ["money_tx", "money_subs", "money_wishes"]; // Update 10 E: + Wunschliste
 const KIND = { termin: "📅 Termin", aufgabe: "✅ Aufgabe", geburtstag: "🎂 Geburtstag", einsatz: "🛠️ Einsatz" };
 const WD_L = ["So", "Mo", "Di", "Mi", "Do", "Fr", "Sa"];
@@ -370,6 +371,13 @@ function buildIndex() {
     add({ cat: "notizen", id: n.id, emoji: n.pinned ? "📌" : n.fav ? "⭐" : "📝", title: NBC.noteTitle(n),
       sub: [n.coll && `📁 ${n.coll}`, n.tags.map((t) => "#" + t).join(" "), NBC.excerpt(n.text, 70)].filter(Boolean).join(" · "),
       text: [NBC.plain(n.text), n.tags.join(" "), n.coll].join(" "), ts: n.updated, boost: n.pinned ? 1 : 0, go: { t: "hash", h: NBC.noteHash(n.id) } });
+  }
+  // Update 10 – 💡 App-Wünsche (öffnen die Seite in den Einstellungen – gleicher Weg wie Einstellungs-Treffer)
+  for (const x of D("app_wishes")) {
+    const w = AWC.normWish(x);
+    if (!w.id || !w.text) continue;
+    add({ cat: "wuensche", id: w.id, emoji: w.status === "umgesetzt" ? "✅" : w.status === "verworfen" ? "🗑️" : w.prio === "wichtig" ? "❗" : "💡", title: w.text.length > 80 ? w.text.slice(0, 79) + "…" : w.text,
+      sub: [AWC.statusById(w.status).label, w.area].filter(Boolean).join(" · "), text: [w.text, w.area].join(" "), ts: w.updated, go: { t: "setting", id: "wuensche" } });
   }
   // Update 10 E – 📁 Dokumente, 📜 Verträge, 📦 Inventar, 👤 Kontakte (Ziele per Hash)
   // 🔒 Update 10: nur der entschlüsselte Stand (Tresor entsperrt) – gesperrt werden keine Dokumente durchsucht.

@@ -119,7 +119,9 @@ const CATS = [
       <button type="button" class="btn ghost sm" id="ov-trash">🗑️ <span>Papierkorb (von Claude gelöscht)</span></button></div>` },
   { id: "system", g: "mehr", e: "🖥️", t: "System-Status", k: "system status version änderungen changelog neu sync speicher cache leeren diagnose ki verbrauch kosten abmelden überall sitzungen geräte", // Update 10 F
     html: `<div id="system-panel"></div>` },
-  { id: "hilfe", g: "mehr", e: "💡", t: "Hilfe & Über", k: "hilfe über version app info tipps",
+  { id: "wuensche", g: "mehr", e: "💡", t: "App-Wünsche", k: "app wunsch wünsche idee ideen verbesserung feature änderung vorschlag claude code feedback", // Update 10 – 💡 App-Wünsche
+    html: `<div id="wishes-panel"></div>` },
+  { id: "hilfe", g: "mehr", e: "ℹ️", t: "Hilfe & Über", k: "hilfe über version app info tipps",
     html: `<div class="sh-card sh-about"><div class="sh-about-ic" aria-hidden="true">⏰</div><b>Stempelkarte</b><span class="note" data-sh="version"></span></div>
       <div class="sh-card"><div class="lbl">Kleine Tipps</div><ul class="sh-tips">
         <li>Lange aufs App-Symbol drücken → Einstempeln oder Pause.</li>
@@ -276,7 +278,7 @@ function select(id) {
 /** Update 10 F: Profile & Module / System-Status erst beim Öffnen laden. */
 const lazyRender = {};
 function lazyPanel(id) {
-  const map = { profile: ["./profiles.js", "#profiles-panel"], system: ["./system-status.js", "#system-panel"] };
+  const map = { profile: ["./profiles.js", "#profiles-panel"], system: ["./system-status.js", "#system-panel"], wuensche: ["../alltag/app-wishes.js", "#wishes-panel"] };
   const m = map[id];
   if (!m) return;
   if (lazyRender[id]) { try { lazyRender[id](); } catch (e) { console.error(e); } return; }

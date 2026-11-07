@@ -29,6 +29,7 @@ export const GROUPS = Object.freeze([
   ["lernen", "🃏", "Japanisch & LAP"],
   ["bericht", "📋", "Wochenbericht"],
   ["automationen", "⚡", "Automationen"], // Update 10
+  ["wuensche", "💡", "App-Wünsche"], // Update 10 – 💡 App-Wünsche
 ]);
 export const groupMeta = (id) => GROUPS.find((g) => g[0] === id) || [id, "🔎", id];
 

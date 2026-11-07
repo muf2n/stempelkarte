@@ -199,6 +199,9 @@ const SHELL = [
   "js/alltag/dokumente-crypt.js", // Update 10 – 🔒
   "js/alltag/dokumente-store.js",
   "js/alltag/vault-session.js",
+  "js/alltag/app-wishes.js", // Update 10 – 💡 App-Wünsche
+  "js/alltag/app-wishes-core.js",
+  "css/app-wishes.css",
   "js/alltag/doc-files.js",
   "js/alltag/akten-ui.js",
   "js/alltag/vertraege.js",

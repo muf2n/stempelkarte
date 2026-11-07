@@ -9,7 +9,7 @@ import * as D from "../js/alltag/dokumente-core.js";
 V._setMinIterForTests(1000);
 const PW = "Korrekt Pferd Batterie 9!";
 const DOC = { id: "d1", title: "Garantie Waschmaschine", folder: "garantie", tags: ["Küche"], fav: true, type: "image/jpeg", size: 1234, name: "Garantie.jpg",
-  thumb: "data:image/jpeg;base64,AAAA", date: "2026-10-01", expires: "2026-11-20", remindDays: 30, links: [{ k: "place", id: "p1" }],
+  thumb: "data:image/jpeg;base64,AAAA", date: "2026-10-01", expires: "2026-11-20", remindDays: 30, links: [{ k: "place", id: "baustelle-zz9" }],
   ocr: "Seriennummer QX-998877", notes: "Original im Ordner Küche", created: 100, updated: 200 };
 const keys = async () => ({ a: (await V.createVault(PW, { iter: 1000 })).key, b: (await V.createVault(PW, { iter: 1000 })).key });
 
@@ -19,7 +19,7 @@ test("versiegeln → nur erlaubte Felder im Klartext, entschlüsseln liefert all
   const plainKeys = Object.keys(rec).filter((k) => !["iv", "ct"].includes(k));
   assert.ok(plainKeys.every((k) => E.PLAIN_KEYS.includes(k)), plainKeys.join(","));
   const json = JSON.stringify(rec);
-  for (const s of ["Garantie", "Küche", "QX-998877", "Original", "p1", "image/jpeg", "2026-10-01"]) assert.ok(!json.includes(s), s);
+  for (const s of ["Garantie", "Küche", "QX-998877", "Original", "baustelle-zz9", "image/jpeg", "2026-10-01"]) assert.ok(!json.includes(s), s);
   assert.equal(rec.enc, 1);
   assert.equal(rec.expires, "2026-11-20");
   const back = await E.openDoc(a, rec);

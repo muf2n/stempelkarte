@@ -32,6 +32,7 @@ import { WERKZEUG_TOOLS } from "./werkzeug.js"; // Update 10 – Werkzeug-Regist
 import { KONTAKTE_TOOLS } from "./kontakte.js"; // Update 10 E – kontakte_lesen (RO, Notizen untrusted, Telefon/E-Mail nur auf Nachfrage)
 import { FAHRZEUG_TOOLS } from "./fahrzeuge.js"; // Update 10 – Fahrzeuge (fahrzeuge_lesen, nur lesen)
 import { MEMORY_TOOLS } from "./memory.js"; // Update 10 C – gedaechtnis_lesen (RO, untrusted), gedaechtnis_merken (WR), notfallkarte_lesen (RO, nur nach Freigabe)
+import { WISH_TOOLS } from "./wishes.js"; // Update 10 – 💡 app_wuensche_lesen (RO), app_wunsch_notieren (WR → Untrusted-Sperre greift)
 
 const ABS_KINDS = ["urlaub", "krank", "zeitausgleich", "schule", "feiertag"];
 const GRADE_NAMES = { 1: "Sehr gut", 2: "Gut", 3: "Befriedigend", 4: "Genügend", 5: "Nicht genügend" };
@@ -1702,6 +1703,7 @@ for (const t of WERKZEUG_TOOLS) tool(t); // Update 10 – werkzeug_lesen (RO, No
 for (const t of FAHRZEUG_TOOLS) tool(t); // Update 10 – fahrzeuge_lesen (RO, Notizen als untrusted_content)
 for (const t of MEMORY_TOOLS) tool(t); // Update 10 C – KI-Gedächtnis + Notfallkarte
 for (const t of KONTAKTE_TOOLS) tool(t); // Update 10 E – kontakte_lesen
+for (const t of WISH_TOOLS) tool(t); // Update 10 – 💡 App-Wünsche
 
 /* ===== Gmail (nur lesen, nur auf Nachfrage) ===== */
 for (const t of GMAIL_TOOLS) tool(t);

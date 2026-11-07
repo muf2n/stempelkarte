@@ -1,0 +1,25 @@
+/* Update 10 – 💡 App-Wünsche (Einstellungen) */
+.aw { display: grid; gap: 12px; min-width: 0; }
+.aw-intro p { margin: 0; }
+.aw-form { display: grid; gap: 10px; }
+.aw-form textarea, .aw-form input, .aw-form select { width: 100%; box-sizing: border-box; }
+.aw-row { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+@media (max-width: 420px) { .aw-row { grid-template-columns: 1fr; } }
+.aw-form .btn { justify-self: start; }
+.aw-err { margin: 0; color: #c81e1e; font-weight: 600; }
+.aw-bar { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; justify-content: space-between; }
+.aw-filters { display: flex; flex-wrap: wrap; gap: 6px; }
+.aw-filters .chip[aria-selected="true"] { background: var(--accent); border-color: var(--accent); color: var(--accent-ink); }
+.aw-n { display: inline-block; min-width: 1.3em; padding: 0 5px; border-radius: 999px; font-size: .75rem; background: color-mix(in srgb, currentColor 16%, transparent); }
+.aw-ul { list-style: none; margin: 0; padding: 0; display: grid; gap: 10px; }
+.aw-item { display: grid; gap: 6px; min-width: 0; }
+.aw-umgesetzt .aw-text, .aw-verworfen .aw-text { color: var(--muted); }
+.aw-verworfen .aw-text { text-decoration: line-through; }
+.aw-top { display: flex; flex-wrap: wrap; gap: 6px; }
+.aw-b { font-size: .75rem; font-weight: 600; padding: 2px 8px; border-radius: 999px; background: color-mix(in srgb, var(--accent) 12%, var(--card)); color: var(--ink); }
+.aw-b-imp { background: color-mix(in srgb, #f59e0b 22%, var(--card)); }
+.aw-text { margin: 0; white-space: pre-wrap; overflow-wrap: anywhere; font-size: 1rem; }
+.aw-acts { display: flex; flex-wrap: wrap; gap: 6px; }
+.aw-empty p { margin: 0; text-align: center; }
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) .aw-err { color: #fca5a5; } }
+:root[data-theme="dark"] .aw-err { color: #fca5a5; }

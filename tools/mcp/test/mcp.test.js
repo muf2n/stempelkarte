@@ -84,6 +84,8 @@ test("tools/list: alle Werkzeuge mit deutschen Beschreibungen und Schemas", asyn
     "gedaechtnis_lesen", "gedaechtnis_merken", "notfallkarte_lesen",
     // Update 10 E – Kunden & Kontakte (nur lesen)
     "kontakte_lesen",
+    // Update 10 – 💡 App-Wünsche
+    "app_wuensche_lesen", "app_wunsch_notieren",
   ].sort());
   for (const x of result.tools) {
     assert.equal(x.inputSchema.type, "object");
