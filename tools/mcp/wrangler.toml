@@ -31,4 +31,4 @@ enabled = false
 # Gmail-Abo-Scan 1× täglich 06:30 UTC ≈ 07:30 Wien (Winterzeit) – muss zu GMAIL_CRON in src/gmail.js passen.
 [triggers]
 # Wochen-Backup sonntags 02:15 UTC ≈ 03:15 Wien – muss zu BACKUP_CRON in src/backup.js passen.
-crons = ["0 5,11,16,21 * * *", "30 6 * * *", "15 2 * * 0"]
+crons = ["0 5,11,16,21 * * *", "30 6 * * *", "15 2 * * SUN"]

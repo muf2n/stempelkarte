@@ -11,7 +11,7 @@ import { loadAccount, getAccessToken, resolveUid, DEFAULT_PROJECT } from "./goog
 import { Firestore } from "./firestore.js";
 import * as B from "../../../js/backup-core.js";
 
-export const BACKUP_CRON = "15 2 * * 0"; // sonntags 02:15 UTC ≈ 03:15 Wien (Winterzeit)
+export const BACKUP_CRON = "15 2 * * SUN"; // sonntags 02:15 UTC ≈ 03:15 Wien (Winterzeit)
 export const MIN_GAP_MS = 6 * 86400000;  // höchstens ein automatisches Backup pro ~Woche
 const COMMIT_BYTES = 8 * 1024 * 1024;    // Commit-Anfragen klein halten (Firestore-Limit 10 MiB)
 // Kleinste mögliche Dokument-ID (so macht es auch das Firebase-Admin-SDK bei recursiveDelete)
