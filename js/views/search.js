@@ -630,9 +630,8 @@ function pick(key) {
       case "place": location.hash = siteHash(g.id).slice(1); break;
       case "einkauf": lsSet("sk-ek-list", g.list || ""); toHash("#alltag/einkauf"); break;
       case "werkzeug": toHash(WZ.toolHash(g.id)); break; // Update 10
-      case "hash": toHash(g.hash); break; // Update 10 – z. B. Automationen
+      case "hash": toHash(g.hash || g.h); break; // Update 10 – Automationen (hash) + Phase C (h)
       case "fahrzeug": toHash(FZ.vehicleHash(g.id)); break; // Update 10
-      case "hash": toHash(g.h); break; // Update 10 C
       case "rt": lsSet("sk-rt-tab", g.tab); toHash("#alltag/routinen"); break; // Update 10 C
       case "mem": lsSet("sk-nb-tab", "memory"); toHash("#alltag/notizen"); break; // Update 10 C
       case "material": lsSet("sk-mt-tab", g.status === "verbaut" ? "verbaut" : "offen"); toHash("#alltag/material"); break;
