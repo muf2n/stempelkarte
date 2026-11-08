@@ -210,6 +210,11 @@ const SHELL = [
   "js/alltag/inventar-core.js",
   "js/alltag/kontakte.js",
   "js/alltag/kontakte-core.js",
+  // Update 10 – 💼 Buchhaltung (optional)
+  "js/alltag/buchhaltung.js",
+  "js/alltag/buch-core.js",
+  "js/alltag/buch-rules.js",
+  "css/alltag-buch.css",
   "js/alltag/finanz-core.js",
   "js/alltag/money-plan.js",
   "css/alltag-akten.css",

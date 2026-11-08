@@ -306,12 +306,12 @@ async function checkPin(pin) {
 
 /* ---------- Sperrbildschirm (im Geld-Bereich) ---------- */
 
-function lockScreen(host, { autoBio }) {
+function lockScreen(host, { autoBio, title = "" }) {
   const cfg = S.getCfg();
   const bio = bioHere();
   const reason = S.lockReason();
   const p = pad(host, {
-    title: "Geld ist gesperrt",
+    title: title || "Geld ist gesperrt",
     text: reason || (bio ? "Entsperre mit Fingerabdruck/Gesicht oder deiner PIN." : "Gib deine PIN ein."),
     len: (cfg.pin && cfg.pin.len) || 0,
     okLabel: "Entsperren",
@@ -564,7 +564,7 @@ export function openSettings() {
 
 /* ---------- Wächter um den Geld-Bereich ---------- */
 
-export function guard(el, ctx, mountInner) {
+export function guard(el, ctx, mountInner, opts = {}) { // opts.banner = false → kein „Geld schützen“-Banner (z. B. 💼 Buchhaltung)
   ensureCss();
   S.start();
   el.innerHTML = `<div class="ml-host"><div class="ml-banner-slot"></div><div class="ml-lockslot"></div><div class="ml-inner"></div></div>`;
@@ -590,7 +590,7 @@ export function guard(el, ctx, mountInner) {
   }
   function drawBanner() {
     const cfg = S.getCfg();
-    const k = mode === "open" && !cfg.enabled && !cfg.bannerDismissed ? "show" : "";
+    const k = mode === "open" && !cfg.enabled && !cfg.bannerDismissed && opts.banner !== false ? "show" : "";
     if (k === bannerKey) return;
     bannerKey = k;
     bannerSlot.innerHTML = k ?
@@ -616,7 +616,7 @@ export function guard(el, ctx, mountInner) {
       if (lockUi) { lockUi.destroy(); lockUi = null; }
       lockSlot.innerHTML = "";
       if (want === "loading") lockSlot.innerHTML = `<div class="al-loading">Lade …</div>`;
-      else if (want === "locked") lockUi = lockScreen(lockSlot, { autoBio: (prev === "" || prev === "loading") && !S.lockReason() });
+      else if (want === "locked") lockUi = lockScreen(lockSlot, { autoBio: (prev === "" || prev === "loading") && !S.lockReason(), title: opts.lockTitle || "" });
       else {
         inner = mountInner(innerEl, ctx) || 0;
       }

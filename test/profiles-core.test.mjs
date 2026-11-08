@@ -78,7 +78,23 @@ test("Module ein/aus: Mitteilungen, Widgets (erst wenn alle Module aus), Suche",
   // notify-core: effectiveOff ohne die eigenen Einstellungen zu verändern
   const st = { modules: { off: ["schule"] }, notify: { off: ["backup"] } };
   assert.deepEqual([...N.readPrefs(st).off], ["backup"]);
-  assert.deepEqual([...N.effectiveOff(st)].sort(), ["backup", "schule"]);
+  assert.deepEqual([...N.effectiveOff(st)].sort(), ["backup", "rechnungen", "schule"], "Buchhaltung ist optional (aus) → Rechnungs-Mitteilungen stumm");
   const items = N.collect({ now: new Date(2026, 10, 9, 15).getTime(), settings: st, todos: [], cols: { school_exams: [{ id: "x", kind: "Test", subject: "Mathe", date: "2026-11-10" }], school_tasks: [] }, loaded: { school_exams: true, school_tasks: true } });
   assert.equal(items.some((i) => i.kind === "schule"), false, "Schul-Mitteilungen weg, wenn Modul aus");
+});
+
+test("Optionale Module (💼 Buchhaltung): standardmäßig aus, einschalten merkt sich settings.modules.on", () => {
+  assert.ok(P.isOptional("buchhaltung"));
+  assert.equal(P.moduleOn({}, "buchhaltung"), false);
+  assert.ok(P.mutedByModules({}).has("rechnungen"));
+  let s = { modules: P.toggleModule({}, "buchhaltung", true) };
+  assert.deepEqual(s.modules, { off: [], on: ["buchhaltung"] });
+  assert.equal(P.moduleOn(s, "buchhaltung"), true);
+  assert.equal(P.searchAllowed(s, { t: "hash", h: "#alltag/buchhaltung/beleg/x" }), true);
+  s = { modules: P.toggleModule(s, "geld", false) };
+  assert.deepEqual(s.modules, { off: ["geld"], on: ["buchhaltung"] });
+  s = { modules: P.toggleModule(s, "buchhaltung", false) };
+  assert.deepEqual(s.modules, { off: ["buchhaltung", "geld"] });
+  assert.equal(P.moduleOn(s, "buchhaltung"), false);
+  assert.equal(P.searchAllowed({}, { t: "hash", h: "#alltag/buchhaltung" }), false);
 });

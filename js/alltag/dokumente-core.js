@@ -6,7 +6,7 @@
 //   verschlüsselt (dokumente-crypt.js, dokumente-store.js) – die Funktionen hier arbeiten mit dem entschlüsselten Stand.
 // Felder: title, folder (Ordner-ID oder eigener Name), tags [], fav, type (MIME), size, name (Dateiname), chunks, thumb (kleines JPEG),
 //   date (JJJJ-MM-TT), expires (Ablaufdatum), remindDays (Vorlauf, Standard 30), remind (Standard an),
-//   links: [{ k: "place"|"tx"|"todo"|"vertrag"|"inventar"|"kontakt", id }], ocr (bestätigter erkannter Text), notes
+//   links: [{ k: "place"|"tx"|"todo"|"vertrag"|"inventar"|"kontakt"|"beleg", id }], ocr (bestätigter erkannter Text), notes
 import { isKey, daysBetween, fmtDate } from "./money-core.js";
 
 export const MAX_BYTES = 10 * 1024 * 1024;   // 10 MB pro Datei (nach dem Verkleinern)
@@ -26,6 +26,7 @@ export const LINK_KINDS = {
   vertrag: { e: "📜", label: "Vertrag" },
   inventar: { e: "📦", label: "Inventar" },
   kontakt: { e: "👤", label: "Kontakt" },
+  beleg: { e: "🧾", label: "Beleg (Buchhaltung)" }, // Update 10 – 💼 Buchhaltung
 };
 export const DEFAULT_REMIND_DAYS = 30;
 const s = (v) => String(v ?? "").trim();

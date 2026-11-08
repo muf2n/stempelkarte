@@ -45,6 +45,7 @@ export function linkHash(l) {
     case "vertrag": return `#alltag/vertraege/${encodeURIComponent(l.id)}`;
     case "inventar": return `#alltag/inventar/${encodeURIComponent(l.id)}`;
     case "kontakt": return `#alltag/kontakte/${encodeURIComponent(l.id)}`;
+    case "beleg": return `#alltag/buchhaltung/beleg/${encodeURIComponent(l.id)}`; // Update 10 – 💼 Buchhaltung
     default: return null;
   }
 }

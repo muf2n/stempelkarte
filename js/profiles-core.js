@@ -38,7 +38,11 @@ export const MODULE_NOTIFY = {
   automationen: ["automation"],
   vertraege: ["vertraege"], // Update 10 E
   inventar: ["garantie"], // Update 10 E
+  buchhaltung: ["rechnungen"], // Update 10 – 💼 Buchhaltung
 };
+/** Optionale Module: standardmäßig AUS, bis sie jemand einschaltet (settings.modules.on). */
+export const DEFAULT_OFF = ["buchhaltung"];
+export const isOptional = (id) => DEFAULT_OFF.includes(id);
 /** Überblick-Widgets (js/dashboard-core.js) je Modul; ein Widget verschwindet erst, wenn ALLE seine Module aus sind. */
 export const WIDGET_MODULES = {
   money: ["geld"],
@@ -58,18 +62,23 @@ const uniq = (a) => [...new Set(a)];
 const strList = (a) => (Array.isArray(a) ? uniq(a.filter((x) => typeof x === "string" && x && x.length <= 40)) : []);
 
 /** settings.modules → Set ausgeschalteter Modul-IDs. knownIds (optional) filtert auf bekannte. */
-export function modulesOff(settings, knownIds = null) {
+function rawMods(settings) {
   const m = settings && settings.modules && typeof settings.modules === "object" ? settings.modules : {};
-  const off = strList(m.off);
+  return { off: strList(m.off), on: strList(m.on) };
+}
+export function modulesOff(settings, knownIds = null) {
+  const { off, on } = rawMods(settings);
+  for (const id of DEFAULT_OFF) if (!on.includes(id) && !off.includes(id)) off.push(id); // optionale Module: aus, bis eingeschaltet
   return new Set(knownIds ? off.filter((x) => knownIds.includes(x)) : off);
 }
 export const moduleOn = (settings, id) => !modulesOff(settings).has(id);
 
 /** Neuen Wert für settings.modules. */
 export function toggleModule(settings, id, on) {
-  const off = modulesOff(settings);
-  if (on) off.delete(id); else off.add(id);
-  return { off: [...off].sort() };
+  const r = rawMods(settings);
+  const off = new Set(r.off), onSet = new Set(r.on);
+  if (on) { off.delete(id); if (isOptional(id)) onSet.add(id); } else { off.add(id); onSet.delete(id); }
+  return onSet.size ? { off: [...off].sort(), on: [...onSet].sort() } : { off: [...off].sort() };
 }
 
 /** Durch ausgeschaltete Module stumme Mitteilungs-Kategorien. */

@@ -4,7 +4,7 @@ import { MODULES } from "../alltag/modules.js";
 import { icon } from "../icons.js";
 import { esc } from "../util.js";
 import * as store from "../store.js";
-import { modulesOff, toggleModule } from "../profiles-core.js"; // Update 10 F – Module ein/aus
+import { modulesOff, toggleModule, isOptional } from "../profiles-core.js"; // Update 10 F – Module ein/aus
 
 let C = null;
 let root = null;
@@ -82,13 +82,19 @@ async function renderModule(id) {
 
 /** Update 10 F: ausgeschaltetes Modul – freundlich erklären, mit einem Tipp wieder einschalten. */
 function offHTML(mod) {
+  const st = (store.get() || {}).settings || {};
+  const fresh = isOptional(mod.id) && !((st.modules && Array.isArray(st.modules.off) && st.modules.off.includes(mod.id)));
   root.innerHTML =
     `<div class="al-mod" style="--al-c:${esc(mod.color || "#4F46E5")}">` +
       `<div class="al-bar"><a class="al-back" href="#alltag" aria-label="Zurück zu Alltag">${icon("chevron-left", 20)}<span>Alltag</span></a>` +
       `<h2 class="al-title"><span class="al-title-ic">${icon(mod.icon, 20)}</span>${esc(mod.short || mod.title)}</h2></div>` +
-      `<div class="al-body"><div class="empty al-off"><span class="al-off-e" aria-hidden="true" style="font-size:2.4rem">🙈</span><h3>Dieser Bereich ist ausgeschaltet</h3>` +
-      `<p>Deine Daten sind noch da – du hast ihn nur unter Einstellungen › Profile &amp; Module ausgeblendet.</p>` +
-      `<button type="button" class="btn primary" data-al-on="${esc(mod.id)}">✅ Wieder einschalten</button></div></div></div>`;
+      (fresh
+        ? `<div class="al-body"><div class="empty al-off"><span class="al-off-e" aria-hidden="true" style="font-size:2.4rem">🧩</span><h3>Optionaler Bereich</h3>` +
+          `<p>${esc(mod.sub || "")}. Nicht jeder braucht das – deshalb ist er erst da, wenn du ihn einschaltest (auch unter Einstellungen › Profile &amp; Module).</p>` +
+          `<button type="button" class="btn primary" data-al-on="${esc(mod.id)}">✅ Einschalten</button></div></div></div>`
+        : `<div class="al-body"><div class="empty al-off"><span class="al-off-e" aria-hidden="true" style="font-size:2.4rem">🙈</span><h3>Dieser Bereich ist ausgeschaltet</h3>` +
+          `<p>Deine Daten sind noch da – du hast ihn nur unter Einstellungen › Profile &amp; Module ausgeblendet.</p>` +
+          `<button type="button" class="btn primary" data-al-on="${esc(mod.id)}">✅ Wieder einschalten</button></div></div></div>`);
   current = null;
   const b = root.querySelector("[data-al-on]");
   b.addEventListener("click", async () => {

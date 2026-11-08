@@ -17,6 +17,7 @@ import { askClaude, aiAvailable } from "./ai-client.js";
 import * as ui from "../ui.js";
 import { esc } from "../util.js";
 import { icon } from "../icons.js";
+import { modulesOff } from "../profiles-core.js"; // Update 10 – 💼 Beleg-Verknüpfung nur bei eingeschalteter Buchhaltung
 
 const VIEW_KEY = "sk-dk-view";
 const lsGet = (k) => { try { return localStorage.getItem(k); } catch { return null; } };
@@ -87,6 +88,11 @@ export function mount(el, ctx) {
       case "vertrag": return other.vertraege.all().filter((c) => c && c.id && c.name).map((c) => ({ id: c.id, label: c.name }));
       case "inventar": return other.inventar.all().filter((c) => c && c.id && c.name).map((c) => ({ id: c.id, label: c.name }));
       case "kontakt": return other.kontakte.all().filter((c) => c && c.id).map((c) => ({ id: c.id, label: c.name || c.company || c.person || "Kontakt" }));
+      case "beleg": { // Update 10 – 💼 Buchhaltung (Geld-Sperre: wie Buchungen)
+        if (moneyLocked()) return [];
+        return collection("buch_belege").all().filter((b) => b && b.id).sort((a, b) => String(b.date || "").localeCompare(String(a.date || ""))).slice(0, 200)
+          .map((b) => ({ id: b.id, label: `${A.fmtKey(b.date)} · ${b.partner || b.note || (b.type === "in" ? "Einnahme" : "Ausgabe")} · ${A.eur((Number(b.gross) || 0) / 100)}` }));
+      }
       case "tx": {
         if (moneyLocked()) return [];
         return collection("money_tx").all().filter((t) => t && t.id).sort((a, b) => String(b.date || "").localeCompare(String(a.date || ""))).slice(0, 150)
@@ -97,7 +103,7 @@ export function mount(el, ctx) {
   }
   function linkLabel(l) {
     const meta = D.LINK_KINDS[l.k] || { e: "🔗", label: l.k };
-    if (l.k === "tx" && moneyLocked()) return `${meta.e} ${meta.label}`;
+    if ((l.k === "tx" || l.k === "beleg") && moneyLocked()) return `${meta.e} ${meta.label}`;
     const t = targets(l.k).find((x) => x.id === l.id);
     return `${meta.e} ${t ? t.label.replace(/^[☐☑] /, "") : meta.label}`;
   }
@@ -277,7 +283,7 @@ export function mount(el, ctx) {
   function openForm({ doc = null, prepared = null, origName = "", preLink = null } = {}) {
     const d = doc || D.normDoc({ title: origName.replace(/\.[^.]+$/, ""), folder: prepared && prepared.type === "application/pdf" && /rechnung|invoice/i.test(origName) ? "rechnungen" : "sonstiges", date: A.todayKey(), links: preLink ? [preLink] : [] });
     let links = d.links.slice();
-    const kinds = Object.entries(D.LINK_KINDS).filter(([k]) => k !== "tx" || !moneyLocked());
+    const kinds = Object.entries(D.LINK_KINDS).filter(([k]) => (k !== "tx" && k !== "beleg") || !moneyLocked()).filter(([k]) => k !== "beleg" || !modulesOff((A.snap() || {}).settings).has("buchhaltung") || links.some((l) => l.k === "beleg"));
     openSheet({
       title: doc ? "✏️ Dokument bearbeiten" : "📁 Dokument ablegen",
       bodyHTML: `<form class="fields ak-form" novalidate>

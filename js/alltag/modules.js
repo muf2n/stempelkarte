@@ -30,6 +30,7 @@ export const MODULES = [
   { id: "vertraege", title: "📜 Verträge", short: "Verträge", sub: "Laufzeit, Kündigungsfrist & Preisänderungen", icon: "briefcase", color: "#7c2d12", load: () => import("./vertraege.js") }, // Update 10 E
   { id: "inventar", title: "📦 Inventar", short: "Inventar", sub: "Was du hast: Kaufpreis, Garantie, Seriennummer, QR", icon: "box", color: "#a16207", load: () => import("./inventar.js") }, // Update 10 E
   { id: "kontakte", title: "👤 Kunden & Kontakte", short: "Kontakte", sub: "Kunden, Firmen, Gesprächsnotizen & Aufträge", icon: "users", color: "#0e7490", load: () => import("./kontakte.js") }, // Update 10 E
+  { id: "buchhaltung", title: "💼 Buchhaltung", short: "Buchhaltung", sub: "Belege, Rechnungen, E/A-Rechnung & Export – optional", icon: "chart", color: "#1d4ed8", load: () => import("./buchhaltung.js") }, // Update 10 – optional (standardmäßig aus)
   { id: "rechner", title: "🧮 Taschenrechner", sub: "Rechnen mit Prozent, Wurzel & Verlauf", icon: "hash", color: "#475569", load: () => import("./calc.js") },
   { id: "japanisch", title: "🇯🇵 Japanisch", sub: "Kana, Vokabeln, Hören, Sprechen, Schreiben – mit Sensei", icon: "torii", color: "#dc2626", load: () => import("./japanisch.js") },
   { id: "lap", title: "🎓 LAP Elektrotechnik", short: "LAP Elektrotechnik", sub: "Lernkarten, Formeln, Rechnen, Prüfung – mit KI-Lehrer", icon: "bolt", color: "#ca8a04", load: () => import("./lap.js") },

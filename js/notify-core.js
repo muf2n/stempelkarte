@@ -22,6 +22,7 @@ import { notifyItems as automationItems } from "./automation-core.js"; // Update
 import { dueDocs } from "./alltag/dokumente-core.js"; // Update 10 E
 import { dueContracts } from "./alltag/vertraege-core.js"; // Update 10 E
 import { dueWarranties } from "./alltag/inventar-core.js"; // Update 10 E
+import { dueInvoices, normSettings as buchSettings, eur as buchEur } from "./alltag/buch-core.js"; // Update 10 – 💼 Buchhaltung
 import { mutedByModules } from "./profiles-core.js"; // Update 10 F – Module ein/aus
 import { morningWindow, weeklyWindow, reviewWeek, readBriefing } from "./briefing-core.js"; // Update 10 F – Briefing
 import { learnReminder } from "./alltag/path-core.js"; // Update 10 – 🛤️ Lernpfad
@@ -46,6 +47,7 @@ export const CATS = [
   { id: "vertraege", e: "📜", t: "Verträge & Kündigungsfristen" }, // Update 10 E
   { id: "garantie", e: "🛡️", t: "Garantie läuft ab (Inventar)" }, // Update 10 E
   { id: "briefing", e: "☀️", t: "Morgen-Briefing & Wochenrückblick" }, // Update 10 F
+  { id: "rechnungen", e: "🧾", t: "Offene & überfällige Rechnungen (Buchhaltung)" }, // Update 10
 ];
 export const CAT_IDS = CATS.map((c) => c.id);
 
@@ -64,6 +66,7 @@ export const NEEDS = {
   dokumente: ["dokumente"], // Update 10 E
   vertraege: ["vertraege"], // Update 10 E
   garantie: ["inventar"], // Update 10 E
+  rechnungen: ["buch_rechnungen", "buch_settings"], // Update 10 – 💼 Buchhaltung
 };
 
 const pad = (n) => String(n).padStart(2, "0");
@@ -291,6 +294,18 @@ export function collect(input = {}) {
     const cs = col("vertraege");
     if (cs) for (const d of dueContracts(cs, today)) {
       add({ id: `vt:${d.id}:${d.kind}:${d.date}`, kind: "vertraege", emoji: d.days <= 3 ? "⏰" : d.e, title: d.name, sub: d.kind === "frist" ? `Kündigungsfrist endet ${rel(d.date, today)}` : `Vertrag endet ${rel(d.date, today)}`, when: tsOf(d.date), prio: d.days <= 3 ? 2 : 1, target: d.hash });
+    }
+  }
+  /* --- Update 10: 💼 Buchhaltung – überfällige / bald fällige Rechnungen. Geld-Sperre (wenn Buchhaltung mitgeschützt): ohne Kunde/Betrag --- */
+  if (on("rechnungen")) {
+    const inv = col("buch_rechnungen");
+    const bs = col("buch_settings");
+    const hide = locked && buchSettings((bs || []).find((x) => x && x.id === "main")).lockWithMoney;
+    if (inv) for (const d of dueInvoices(inv, today)) {
+      if (!d.overdue && !d.soon) continue;
+      const who = hide ? "" : [d.customer, buchEur(d.gross)].filter(Boolean).join(" · ");
+      add({ id: `rg:${d.id}:${d.dueDate}`, kind: "rechnungen", emoji: d.overdue ? "⚠️" : "🧾", title: `Rechnung ${d.number}${d.overdue ? " überfällig" : " bald fällig"}`,
+        sub: [d.overdue ? `Fällig war ${rel(d.dueDate, today)}` : `Fällig ${rel(d.dueDate, today)}`, who].filter(Boolean).join(" · "), when: tsOf(d.dueDate), prio: d.overdue ? 2 : 1, target: d.hash });
     }
   }
   if (on("garantie")) {

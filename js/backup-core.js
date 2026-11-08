@@ -42,6 +42,7 @@ export const ALLTAG = [
   "learn_progress", // Update 10 – 🛤️ Lernpfad (Japanisch + LAP)
   // 🔒 „dokumente“: verschlüsselte Datensätze (enc: 1, iv/ct) werden unverändert gesichert – lesbar nur mit dem Tresor-Passwort.
   "app_wishes", // Update 10 – 💡 App-Wünsche
+  "buch_settings", "buch_belege", "buch_rechnungen", // Update 10 – 💼 Buchhaltung (Beleg-Dateien liegen verschlüsselt in 📁 Dokumente)
 ];
 /** Nie sichern/zurückspielen (exakt). */
 export const EXCLUDE_EXACT = ["a_school_files", "a_travel_images", "a_doc_files", "photos", "backups", "meta"];

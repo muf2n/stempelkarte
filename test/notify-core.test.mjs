@@ -181,3 +181,23 @@ test("Update 10 C: Haushalt (überfällig/heute/Wartung bald) und Gewohnheiten (
   const off = N.collect({ now, todos: [], cols, loaded, settings: { notify: { off: ["haushalt", "gewohnheiten"] } } });
   assert.ok(!off.some((x) => x.kind === "haushalt" || x.kind === "gewohnheiten"));
 });
+
+test("💼 Rechnungen: überfällig/bald fällig, nur wenn Buchhaltung an; Geld-Sperre → ohne Kunde/Betrag", async () => {
+  const N = await import("../js/notify-core.js");
+  const now = new Date(2026, 10, 8, 10).getTime();
+  const inv = [
+    { id: "a", kind: "rechnung", status: "offen", number: "2026-001", dueDate: "2026-11-01", ku: true, items: [{ qty: 1, text: "x", price: 12000 }], customer: { name: "Muster GmbH" } },
+    { id: "b", kind: "rechnung", status: "offen", number: "2026-002", dueDate: "2026-11-10", ku: true, items: [{ qty: 1, text: "x", price: 5000 }], customer: { name: "B" } },
+    { id: "c", kind: "rechnung", status: "offen", number: "2026-003", dueDate: "2026-12-30", ku: true, items: [], customer: {} },
+  ];
+  const on = { modules: { off: [], on: ["buchhaltung"] } };
+  const base = { now, todos: [], cols: { buch_rechnungen: inv, buch_settings: [] }, loaded: { buch_rechnungen: true, buch_settings: true } };
+  assert.equal(N.collect({ ...base, settings: {} }).filter((i) => i.kind === "rechnungen").length, 0, "Modul aus → nichts");
+  const items = N.collect({ ...base, settings: on }).filter((i) => i.kind === "rechnungen");
+  assert.deepEqual(items.map((i) => [i.title, i.prio, i.target]), [["Rechnung 2026-001 überfällig", 2, "#alltag/buchhaltung/rechnung/a"], ["Rechnung 2026-002 bald fällig", 1, "#alltag/buchhaltung/rechnung/b"]]);
+  assert.match(items[0].sub, /Muster GmbH · 120,00 €/);
+  const lk = N.collect({ ...base, settings: on, moneyLocked: true }).filter((i) => i.kind === "rechnungen");
+  assert.ok(lk.length === 2 && !lk[0].sub.includes("Muster") && !lk[0].sub.includes("€"), "gesperrt: keine Beträge/Kunden");
+  const free = N.collect({ ...base, cols: { ...base.cols, buch_settings: [{ id: "main", lockWithMoney: false }] }, settings: on, moneyLocked: true }).filter((i) => i.kind === "rechnungen");
+  assert.ok(free[0].sub.includes("120,00 €"), "nicht mitgeschützt: Beträge sichtbar");
+});

@@ -19,6 +19,7 @@ import * as AWC from "../alltag/app-wishes-core.js"; // Update 10 – 💡 App-W
 import * as VTC from "../alltag/vertraege-core.js"; // Update 10 E
 import * as INC from "../alltag/inventar-core.js"; // Update 10 E
 import * as KTC from "../alltag/kontakte-core.js"; // Update 10 E
+import * as BUC from "../alltag/buch-core.js"; // Update 10 – 💼 Buchhaltung
 import { prioById as wishPrio } from "../alltag/finanz-core.js"; // Update 10 E
 import { tripsBetween } from "../travel.js";
 import { fromLabel, toLabel, readVehicles } from "../trip-core.js";
@@ -30,7 +31,7 @@ const RECENT_KEY = "sk-search-recent";
 const PER_GROUP = 4;
 const COLS = ["material_items", "einkauf", "einkauf_lists", "photo_albums", "school_exams", "school_tasks", "school_timetable", "school_grades",
   "travel_trips", "travel_packing", "travel_places", "jp_cards", "berichtsheft", "werkzeug", "fahrzeug_info",
-  "haushalt", "habits", "goals", "notes", "ai_memory", "automations", "dokumente", "vertraege", "inventar", "kontakte", "app_wishes"]; // Update 10 C + Automationen + E + 💡 App-Wünsche
+  "haushalt", "habits", "goals", "notes", "ai_memory", "automations", "dokumente", "vertraege", "inventar", "kontakte", "app_wishes", "buch_settings", "buch_belege", "buch_rechnungen"]; // Update 10 C + Automationen + E + 💡 App-Wünsche
 const MONEY_COLS = ["money_tx", "money_subs", "money_wishes"]; // Update 10 E: + Wunschliste
 const KIND = { termin: "📅 Termin", aufgabe: "✅ Aufgabe", geburtstag: "🎂 Geburtstag", einsatz: "🛠️ Einsatz" };
 const WD_L = ["So", "Mo", "Di", "Mi", "Do", "Fr", "Sa"];
@@ -404,6 +405,31 @@ function buildIndex() {
     if (!c.id || !KTC.displayName(c)) continue;
     add({ cat: "kontakte", id: c.id, emoji: KTC.typeById(c.type).e, title: KTC.displayName(c), sub: [c.person, c.phone, c.email].filter(Boolean).join(" · "),
       text: KTC.searchText(c), ts: c.updated, go: { t: "hash", h: KTC.contactHash(c.id) } });
+  }
+  // Update 10 – 💼 Buchhaltung: Belege + Rechnungen. Mit „Geld-Sperre schützen“ (Standard) nur entsperrt.
+  {
+    const bset = BUC.normSettings(D("buch_settings").find((x) => x && x.id === "main"));
+    const bl = D("buch_belege"), br = D("buch_rechnungen");
+    if (!bset.lockWithMoney || moneyAllowed()) {
+      for (const x of bl) {
+        const b = BUC.normBeleg(x);
+        if (!b.id) continue;
+        add({ cat: "buchhaltung", id: "b_" + b.id, emoji: b.type === "in" ? "💶" : BUC.catById(b.cat).e, title: b.partner || b.note || BUC.catById(b.cat).label,
+          sub: [b.type === "in" ? "Einnahme" : "Ausgabe", BUC.eur(b.gross), BUC.fmtKey(b.date)].filter(Boolean).join(" · "), text: BUC.belegSearchText(b),
+          dates: b.date ? [b.date] : [], ts: b.updated || b.created, go: { t: "hash", h: BUC.belegHash(b.id) } });
+      }
+      const today = u.dayKey(Date.now());
+      for (const x of br) {
+        const i = BUC.normInvoice(x);
+        if (!i.id) continue;
+        const st = BUC.STATUS[BUC.invoiceStatus(i, today)];
+        add({ cat: "buchhaltung", id: "r_" + i.id, emoji: "🧾", title: `${i.kind === "storno" ? "Storno " : "Rechnung "}${i.number || "(Entwurf)"}${i.customer.name ? " · " + i.customer.name : ""}`,
+          sub: [st.e + " " + st.label, BUC.eur(BUC.invoiceTotals(i).gross), BUC.fmtKey(i.date)].filter(Boolean).join(" · "), text: BUC.invoiceSearchText(i),
+          dates: [i.date, i.dueDate].filter(isKey), ts: i.updated || i.created, go: { t: "hash", h: BUC.invoiceHash(i.id) } });
+      }
+    } else if (bl.length || br.length) {
+      add({ cat: "buchhaltung", id: "locked", emoji: "🔒", title: "Buchhaltung gesperrt – entsperren", sub: "Belege und Rechnungen werden erst nach dem Entsperren durchsucht", text: "buchhaltung rechnung rechnungen beleg belege gesperrt entsperren", boost: 3, go: { t: "hash", h: "#alltag/buchhaltung" } });
+    }
   }
   for (const x of D("ai_memory")) {
     const m = NBC.normMemory(x);
