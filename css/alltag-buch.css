@@ -185,7 +185,7 @@
 .bu-p-meta { display: grid; grid-template-columns: auto auto; gap: 2px 12px; margin: 0; font-size: .82rem; }
 .bu-p-meta dt { color: var(--bu-paper-muted); }
 .bu-p-meta dd { margin: 0; font-weight: 600; text-align: right; font-variant-numeric: tabular-nums; }
-.bu-p-title { margin: 6px 0 0; font-family: var(--f-serif); font-weight: 600; font-size: 1.5rem; color: var(--bu-paper-ink); }
+.bu-p-title { margin: 6px 0 0; font-family: inherit; font-weight: 700; letter-spacing: -.01em; font-size: 1.5rem; color: var(--bu-paper-ink); }
 .bu-p-h2 { margin: 10px 0 0; font-size: 1rem; color: var(--bu-paper-ink); }
 .bu-p-small { margin: 0; font-size: .8rem; color: var(--bu-paper-muted); }
 .bu-p-table { width: 100%; border-collapse: collapse; font-size: .84rem; }
