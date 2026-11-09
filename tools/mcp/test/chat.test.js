@@ -831,3 +831,11 @@ test("M1 Audit 2: moneyLocked → keine Geld-Werkzeuge, Hinweis im Prompt, Aufru
   assert.equal(out.reply, "ok");
   assert.equal(out.money, true); // App merkt sich: Antwort enthält Geld-Daten
 });
+
+test("Kalender im Systemprompt: Wochentage stimmen", async () => {
+  const { calendarLines } = await import("../src/chat.js");
+  const c = calendarLines("2026-11-09");
+  assert.match(c, /letzte Woche: Mo 02\.11\., Di 03\.11\., Mi 04\.11\., Do 05\.11\., Fr 06\.11\., Sa 07\.11\., So 08\.11\./);
+  assert.match(c, /diese Woche: Mo 09\.11\. \(heute\)/);
+  assert.match(calendarLines("2026-11-15"), /diese Woche: .*So 15\.11\. \(heute\)/);
+});

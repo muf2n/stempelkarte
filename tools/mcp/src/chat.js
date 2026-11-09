@@ -7,7 +7,7 @@ import { checkArgs } from "./mcp.js";
 import { loadAccount, getAccessToken, DEFAULT_PROJECT, DEFAULT_EMAIL } from "./google.js";
 import { Firestore } from "./firestore.js";
 import { Data } from "./data.js";
-import { vienna, fmtKeyWd, clock, pad } from "./time.js";
+import { vienna, fmtKeyWd, clock, pad, addDays } from "./time.js";
 
 export const JWKS_URL = "https://www.googleapis.com/service_accounts/v1/jwk/securetoken@system.gserviceaccount.com";
 export const ANTHROPIC_URL = "https://api.anthropic.com/v1/messages";
@@ -228,6 +228,7 @@ export function systemPrompt(now, { mode = "text", short = true, name = "" } = {
     ...(nm ? [`Du heißt ${nm}. Stell dich so vor, wenn gefragt.`] : []),
     "Du kannst (fast) alles in der App sehen und vieles ändern: Arbeitszeiten (Ein-/Ausstempeln, Pausen, Abschnitte, Einträge), Überstunden, Urlaub/Krankenstand/Zeitausgleich, Planer/Kalender (Termine mit Serien, Aufgaben, Geburtstage, Countdowns, Einsätze), Berichtsheft, Fahrtenbuch, Taggeld, Geld (Buchungen, Budget, Sparziele, Teilen, Abos, Kontostand), Schule (Stundenplan, Noten, Prüfungen, Hausaufgaben, Projekte), Material, Unterwegs (Reisen, Packlisten, Parkplatz, Tanken, Adressen), Galerie (Alben, Foto-Notizen – keine Bilder) und die Einstellungen.",
     `Jetzt ist ${fmtKeyWd(v.key)}, ${clock(now)} Uhr (Wiener Zeit).`,
+    calendarLines(v.key),
     "Antworte kurz, freundlich und auf Deutsch (österreichisch, Du-Form). Zeiten im 24-h-Format, Datum TT.MM.JJJJ, Beträge wie 1.234,56 €.",
     UNTRUSTED_PROMPT,
     "Für alle Daten benutzt du die Werkzeuge – erfinde und rate nie Zahlen, Zeiten, IDs oder Einträge. Weißt du nicht, wo etwas steht, nimm „suche“.",
@@ -332,6 +333,22 @@ export function attachImage(messages, img) {
   ] };
   return out;
 }
+
+/** Kalender ±3 Wochen mit Wochentagen – das Modell rechnet Wochentage sonst oft falsch (z. B. „Fr, 07.11.“ statt Sa). */
+export function calendarLines(todayKey) {
+  const out = [];
+  for (let w = -3; w <= 3; w++) {
+    const days = [];
+    const mon = addDays(todayKey, -((new Date(todayKey + "T12:00:00Z").getUTCDay() + 6) % 7) + w * 7);
+    for (let i = 0; i < 7; i++) {
+      const k = addDays(mon, i);
+      days.push(`${WD_SHORT[i]} ${k.slice(8, 10)}.${k.slice(5, 7)}.${k === todayKey ? " (heute)" : ""}`);
+    }
+    out.push((w === 0 ? "diese Woche: " : w === -1 ? "letzte Woche: " : w === 1 ? "nächste Woche: " : `${w > 0 ? "+" : ""}${w} Wochen: `) + days.join(", "));
+  }
+  return "Kalender (verbindlich – Wochentage IMMER hier nachschauen, nie selbst ausrechnen; nach dem Eintragen den Wochentag aus dem Werkzeug-Ergebnis übernehmen):\n" + out.join("\n");
+}
+const WD_SHORT = ["Mo", "Di", "Mi", "Do", "Fr", "Sa", "So"];
 
 const monthOf = (now) => { const v = vienna(now); return `${v.y}-${pad(v.m)}`; };
 
