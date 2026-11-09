@@ -109,7 +109,7 @@ export async function verifyIdToken(token, { projectId, email, fetchImpl, now })
 /* ---------- Anthropic ---------- */
 
 /** Geld-Werkzeuge: bei aktiver Geld-Sperre (body.moneyLocked) nicht angeboten (M1, Audit 2). */
-export const MONEY_TOOLS = new Set(["geld_lesen", "ausgabe_eintragen", "leisten_pruefen", "abos_lesen", "abo_bearbeiten", "geld_eintragen"]);
+export const MONEY_TOOLS = new Set(["geld_lesen", "ausgabe_eintragen", "leisten_pruefen", "abos_lesen", "abo_bearbeiten", "abo_anlegen", "geld_eintragen"]);
 export const MONEY_LOCKED_PROMPT = "GELD-SPERRE AKTIV: Der Geld-Bereich ist in der App gesperrt. Du hast keinen Zugriff auf Kontostand, Buchungen, Ausgaben, Budgets oder Abos. Fragt jemand danach, antworte freundlich: „Geld ist gesperrt – entsperre es in der App.“ Nenne keine Beträge aus früheren Nachrichten.";
 export const MONEY_LOCKED_MSG = "Geld ist gesperrt – entsperre es in der App.";
 

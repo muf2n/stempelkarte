@@ -1294,6 +1294,48 @@ tool({
 });
 
 tool({
+  name: "abo_anlegen",
+  title: "Abo neu anlegen",
+  description: "Legt ein NEUES Abo an (Alltag → Geld → Abos), z. B. Netflix 13,99 € monatlich ab 15.11. Vorher mit abos_lesen prüfen, ob es das Abo schon gibt (dann abo_bearbeiten). Datum als TT.MM.(JJJJ) oder JJJJ-MM-TT. Speichert keine Passwörter.",
+  inputSchema: {
+    type: "object",
+    properties: {
+      name: { type: "string", description: "Name, z. B. \"Spotify\"" },
+      betrag: { type: ["number", "string"], description: "Betrag in Euro pro Intervall, z. B. 10.99 oder \"10,99\"" },
+      intervall: { type: "string", enum: ["week", "month", "quarter", "year"], description: "Abrechnung: week, month (Standard), quarter, year" },
+      naechste_abbuchung: { type: "string", description: "Nächster Abbuchungstag, z. B. \"15.11.\" (Standard: heute)" },
+      was: { type: "string", description: "Optional: was genau, z. B. \"Premium Individual\"" },
+      kuendigungslink: { type: "string", description: "Optional: https-Link zum Kündigen/Verwalten" },
+    },
+    required: ["name", "betrag"],
+    additionalProperties: false,
+  },
+  annotations: WR,
+  async run(args, d) {
+    const today = dayKey(d.now);
+    const name = s(args.name).trim().slice(0, 60);
+    need(name, "Wie heißt das Abo?");
+    const amount = typeof args.betrag === "number" ? args.betrag : parseAmount(String(args.betrag || ""));
+    if (!Number.isFinite(amount) || amount <= 0 || amount > 100000) throw new UserError("Bitte einen gültigen Betrag angeben, z. B. 9,99.");
+    const interval = INTERVALS[args.intervall] ? args.intervall : "month";
+    const next = args.naechste_abbuchung ? parseDate(args.naechste_abbuchung, today) : today;
+    if (!next) throw new UserError("Das Datum verstehe ich nicht – bitte als TT.MM. angeben.");
+    let cancelUrl = s(args.kuendigungslink).trim();
+    if (cancelUrl && !/^https:\/\/[^\s]+$/i.test(cancelUrl)) cancelUrl = "";
+    const all = await d.alltag("money_subs");
+    const dup = all.find((x) => norm(x.name || "") === norm(name) && !x.ended && !x.cancelledOn);
+    if (dup) throw new UserError(`„${dup.name}“ gibt es schon (${eur(dup.amount)}). Zum Ändern abo_bearbeiten benutzen.`);
+    const id = alltagId(d.now);
+    const day = interval === "week" ? null : Number(next.slice(8, 10));
+    const data = { id, name, what: s(args.was).trim().slice(0, 80), amount: round2(amount), interval, next, day, category: "abos", paused: false,
+      contractType: "Monatlich kündbar", startDate: null, minTermEnd: null, trialEnd: null, contractEnd: null, noticeText: "", autoRenew: null,
+      cancelUrl: cancelUrl || "", manageUrl: "", cancelHow: "", account: "", remind: true, catalogKey: null, source: "assistent", created: d.now, updated: d.now };
+    await d.commit([d.fs.setWrite(d.p(`a_money_subs/${id}`), data)]);
+    return `Abo angelegt: ${name} · ${eur(amount)} ${INTERVALS[interval]} · nächste Abbuchung ${fmtKey(next)}.`;
+  },
+});
+
+tool({
   name: "abo_bearbeiten",
   title: "Abo-Details ändern",
   description: "Ändert einzelne Felder eines vorhandenen Abos (Alltag → Geld → Abos) – z. B. Kündigungslink, Anleitung „So kündigst du“, Vertragsart, Mindestlaufzeit, Kündigungsfrist, Testzeitraum-Ende, Login oder „gekündigt am“. Löscht nie ein Abo. Felder leer lassen bzw. null = Wert entfernen. Passwörter werden nicht gespeichert (dafür gibt es den Passwort-Tresor).",

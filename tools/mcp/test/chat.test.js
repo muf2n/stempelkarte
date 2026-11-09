@@ -792,7 +792,7 @@ test("M1 Audit 2: moneyLocked → keine Geld-Werkzeuge, Hinweis im Prompt, Aufru
     script: [
       (body) => {
         const names = body.tools.map((x) => x.name);
-        for (const n of ["geld_lesen", "ausgabe_eintragen", "leisten_pruefen", "abos_lesen", "abo_bearbeiten", "geld_eintragen"]) assert.ok(!names.includes(n), n);
+        for (const n of ["geld_lesen", "ausgabe_eintragen", "leisten_pruefen", "abos_lesen", "abo_bearbeiten", "abo_anlegen", "geld_eintragen"]) assert.ok(!names.includes(n), n);
         assert.ok(names.includes("suche") && names.includes("todos_lesen"));
         assert.match(JSON.stringify(body.system), /Geld ist gesperrt – entsperre es in der App/);
         return use("geld_lesen", { monat: "2026-11" }, "g1");

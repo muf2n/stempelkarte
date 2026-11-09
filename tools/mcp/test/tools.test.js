@@ -588,3 +588,16 @@ test("Update 9 – Privat: Zeitplan (Wochenende) in status_heute; Privatfahrt ä
   assert.match(r2.text, /Modus: Privat bis Mo, 09\.11\.2026 06:00 \(automatisch außerhalb der Arbeitszeit\)/);
   assert.equal(L.netMin({ start: 0, end: 3600000, pauseMin: 0, privateTrip: true }), 0);
 });
+
+test("abo_anlegen legt ein Abo an und erkennt Doppelte", async () => {
+  const t = await seeded();
+  let r = await t.tool("abo_anlegen", { name: "Spotify", betrag: "10,99", intervall: "month", naechste_abbuchung: "15.11.2026" });
+  assert.ok(!r.isError, r.text);
+  assert.match(r.text, /Abo angelegt: Spotify · 10,99\s€ monatlich · nächste Abbuchung 15\.11\.2026/);
+  r = await t.tool("abos_lesen");
+  assert.match(r.text, /Spotify/);
+  r = await t.tool("abo_anlegen", { name: "spotify", betrag: 5 });
+  assert.ok(r.isError && /gibt es schon/.test(r.text), r.text);
+  r = await t.tool("abo_anlegen", { name: "X", betrag: "abc" });
+  assert.ok(r.isError && /gültigen Betrag/.test(r.text), r.text);
+});
