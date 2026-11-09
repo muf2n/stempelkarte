@@ -224,6 +224,7 @@ const TOOL_EINTRAG_BEARBEITEN = {
       personen: { type: "array", items: { type: "string" } },
       gutschrift_h: { type: "number", description: "Nur Urlaub/Krank/Zeitausgleich/Schule: Gutschrift in Stunden" },
       grund: { type: "string", description: "Optional: kurzer Grund der Änderung fürs Änderungsprotokoll (z. B. \"Ausstempeln vergessen\")" },
+      neues_datum: { type: "string", description: "Eintrag auf einen ANDEREN TAG verschieben (Uhrzeiten bleiben gleich), z. B. \"06.11.2026\" – wenn er am falschen Tag eingetragen wurde" },
     },
     additionalProperties: false,
   },
@@ -248,6 +249,25 @@ const TOOL_EINTRAG_BEARBEITEN = {
     const kind = e.kind || "work";
     const said = [];
     await closedGuard(d, dayKey(e.start));
+    // Update 10 – auf einen anderen Tag verschieben (Uhrzeiten bleiben, Abschnitte wandern mit)
+    if (s(args.neues_datum)) {
+      const target = dateArg(args.neues_datum, today, "neues_datum");
+      const from = dayKey(e.start);
+      const dd = diffDays(from, target);
+      if (dd !== 0) {
+        if (target > today) throw new UserError("In die Zukunft kann ich keinen Eintrag verschieben.");
+        const mv = (ts) => { if (!Number.isFinite(ts)) return ts; const [h, mi] = clock(ts).split(":").map(Number); return keyToTs(addDays(dayKey(ts), dd), h, mi); };
+        const nStart = mv(e.start), nEnd = mv(e.end);
+        const others = (await d.entriesRange(keyToTs(target), keyToTs(addDays(target, 1)))).filter((x) => x.id !== e.id && Number.isFinite(x.start));
+        const clash = others.find((x) => x.start < nEnd && (Number.isFinite(x.end) ? x.end : x.start) > nStart);
+        if (clash) throw new UserError(`Am ${fmtKeyWd(target)} gibt es schon einen Eintrag ${clock(clash.start)}–${clock(clash.end)} (ID ${clash.id}), der sich überschneidet.`);
+        await closedGuard(d, target);
+        e.start = nStart; e.end = nEnd;
+        if (Array.isArray(e.segments)) e.segments = e.segments.map((x) => (x ? { ...x, start: mv(x.start), ...(Number.isFinite(x.end) ? { end: mv(x.end) } : {}) } : x));
+        if (Array.isArray(e.pauses)) e.pauses = e.pauses.map((x) => (x ? { ...x, start: mv(x.start), end: mv(x.end) } : x));
+        said.push(`Tag ${fmtKeyWd(from)} → ${fmtKeyWd(target)}`);
+      }
+    }
     if (kind !== "work") {
       for (const k of ["beginn", "ende", "pause_min", "ort", "personen"]) if (args[k] != null && s(args[k]) !== "") throw new UserError(`Bei ${kindLabel(kind)} gibt es kein Feld „${k}“ – nur Notiz und gutschrift_h.`);
       if (args.gutschrift_h != null) {
@@ -305,7 +325,7 @@ const TOOL_EINTRAG_BEARBEITEN = {
       e.note = args.notiz_anhaengen === true ? [s(e.note), add].filter(Boolean).join(" · ") : add;
       said.push(args.notiz_anhaengen === true ? "Notiz ergänzt" : "Notiz ersetzt");
     }
-    if (!said.length) throw new UserError("Was soll geändert werden? (beginn, ende, pause_min, ort, notiz, personen, gutschrift_h)");
+    if (!said.length) throw new UserError("Was soll geändert werden? (neues_datum, beginn, ende, pause_min, ort, notiz, personen, gutschrift_h)");
     if (dayKey(e.start).slice(0, 7) !== dayKey(prev.start).slice(0, 7)) await closedGuard(d, dayKey(e.start));
     const logged = WT.withHistory(e, { by: "assistent", op: "edit", prev, at: d.now, reason: s(args.grund) });
     await d.commit([d.fs.setWrite(d.p(`entries/${id}`), clean(logged), { exists: true })]);

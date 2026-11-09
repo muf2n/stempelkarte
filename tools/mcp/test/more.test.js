@@ -456,3 +456,16 @@ test("Update 9 – Sparziele: geld_lesen mit echtem Konto, Spar-Erinnerung, Aufr
   r = await t.tool("geld_eintragen", { aktion: "erinnerung", name: "moped", aus: true });
   assert.equal(t.g.get(`${b}/a_money_goals/g1`).reminder.on, false);
 });
+
+test("eintrag_bearbeiten: neues_datum verschiebt den Eintrag auf einen anderen Tag", async () => {
+  const t = await seeded();
+  let r = await t.tool("eintrag_bearbeiten", { id: "e1", neues_datum: "30.10.2026", grund: "falscher Tag" });
+  assert.ok(!r.isError, r.text);
+  assert.match(r.text, /Tag Mo, 02\.11\.2026 → Fr, 30\.10\.2026/);
+  const moved = t.g.get(`${t.base}/entries/e1`);
+  assert.equal(moved.start, vt(2026, 10, 30, 7, 0));
+  assert.equal(moved.end, vt(2026, 10, 30, 15, 30));
+  assert.equal(moved.segments[1].start, vt(2026, 10, 30, 7, 30));
+  r = await t.tool("eintrag_bearbeiten", { id: "e1", neues_datum: "20.11.2026" });
+  assert.ok(r.isError && /Zukunft/.test(r.text), r.text);
+});
