@@ -243,6 +243,14 @@ function fakes() {
   ok((await page.$$('.lp-node[aria-label*="Rechnen"]')).length >= 1, "Rechen-Lektionen eingeflochten");
   await page.click('.lp-goalbtn[data-goal="leicht"]');
   await page.waitForTimeout(150);
+  // Ganz neu (noch nichts gelernt/falsch): „Üben“ darf nie ins Leere laufen – wärmt mit der aktuellen Lektion auf
+  await page.click('.lp-practice [data-lp="practice"]');
+  await page.waitForSelector(".lp-player .lp-ex", { timeout: 4000 });
+  ok(/∞/.test(await page.textContent(".lp-phearts")), "Neu-Start: „Üben“ öffnet trotzdem (Aufwärmen, ∞ Herzen)");
+  await page.click('.lp-player [data-p="quit"]');
+  await page.waitForTimeout(250);
+  if (await page.$(".lp-player")) { const q = await page.$('.lp-player [data-p="quit-yes"], .lp-player [data-p="leave"]'); if (q) await q.click(); }
+  await page.waitForSelector(".lp-player", { state: "detached", timeout: 4000 }).catch(() => {});
   await page.evaluate(() => window.scrollTo(0, 0));
   await shot(page, "lp-lap-path-390-dark.png");
   await page.click(".lp-node.is-current");

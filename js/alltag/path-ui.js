@@ -278,7 +278,14 @@ export function createPath(M) {
 
   /* ================= Lektion (Vollbild) ================= */
   function startPractice() {
-    const items = M.practiceItems(units(), getMod());
+    let items = M.practiceItems(units(), getMod());
+    if (!items.length) {
+      // Noch nichts falsch/geschafft (z. B. Herzen in der allerersten Lektion verloren) → mit der aktuellen Lektion aufwärmen,
+      // damit man nie festhängt.
+      const mod = getMod();
+      const cur = units().flatMap((u) => u.nodes).find((n) => n.type === "lesson" && Array.isArray(n.items) && n.items.length && !mod.nodes[n.id]);
+      items = cur ? cur.items.slice(0, 8) : [];
+    }
     if (!items.length) { ui.toast("Noch nix zu üben – mach zuerst eine Lektion 🙂"); return; }
     startLesson({ type: "practice", id: "practice", title: "Üben", items, pool: items }, null);
   }
@@ -462,9 +469,13 @@ export function createPath(M) {
     renderEx();
     if (!ok) { const s = player.root.querySelector(".lp-ex"); if (s && !reduceMotion()) s.classList.add("lp-shake"); }
   }
-  function next() {
+  async function next() {
     if (!player) return;
-    if (!player.practice && P.heartsNow(getMe().hearts).n <= 0) { player.out = true; renderOut(); return; }
+    if (!player.practice && P.heartsNow(getMe().hearts).n <= 0) {
+      // Fehler auch bei abgebrochener Lektion merken → „Fehler üben“ hat etwas zu tun
+      try { for (const [ref, good] of Object.entries(player.run.refs || {})) await M.grade(ref, good); } catch (err) { console.warn(err); }
+      player.out = true; renderOut(); return;
+    }
     player.run = P.nextRun(player.run);
     player.checked = null; player.sel = null; player.tiles = []; player.match = { l: null, r: null, done: [], bad: 0 }; player.heard = "";
     if (player.calc) player.calc.reset();
