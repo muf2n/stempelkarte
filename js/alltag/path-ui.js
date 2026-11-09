@@ -99,7 +99,15 @@ export function createPath(M) {
     if (!col.loaded) return;
     const r = P.applyFreezes(src(), today());
     if (r.used) { save({ me: r.me }); ui.toast(`🧊 Dein Serien-Schutz hat die Serie gerettet${r.used > 1 ? ` (${r.used} Tage)` : ""}!`, 3200); }
+    // 🌅 Erster Besuch an einem neuen Tag → Energie gratis wieder voll
+    if (col.get("me")) {
+      const d = P.dailyRefill(getMe());
+      if (d.me.energy.day !== P.readMe(col.get("me")).energy.day) save({ me: d.me });
+      if (d.refilled && !r.used) ui.toast("🌅 Neuer Tag – deine Energie ist wieder voll 🔋", 3000);
+    }
   }
+  /** 🔋 Energie-Anzeige: Zahl + Mini-Balken */
+  const energyBar = (n) => `<span class="lp-ebar" aria-hidden="true"><span style="width:${Math.round((n / P.MAX_ENERGY) * 100)}%"></span></span>`;
 
   /* ---------- Pfad-Ansicht ---------- */
   function headHTML() {
@@ -107,14 +115,14 @@ export function createPath(M) {
     const me = s.me;
     const st = P.learnStreak(s, today());
     const active = P.activeToday(s, today());
-    const h = P.heartsNow(me.hearts);
+    const h = P.energyNow(me.energy);
     const xp = P.xpOn(s.mods, today());
     const goal = me.goal ? P.goalXp(me.goal) : 0;
     const pct = goal ? Math.min(100, Math.round((xp / goal) * 100)) : 0;
     return `<div class="lp-top" role="group" aria-label="Dein Lernstand">` +
       `<div class="lp-chip lp-streak${active ? " on" : ""}" title="Lern-Serie (Japanisch + LAP)"><span aria-hidden="true">🔥</span><b>${st}</b><small>${st === 1 ? "Tag" : "Tage"}</small></div>` +
       `<div class="lp-chip lp-gems" title="Edelsteine"><span aria-hidden="true">💎</span><b>${me.gems || 0}</b></div>` +
-      `<div class="lp-chip lp-hearts${h.n === 0 ? " empty" : ""}" title="${h.n < P.MAX_HEARTS ? `Nächstes Herz in ${fmtMin(h.nextIn)}` : "Herzen voll"}"><span aria-hidden="true">❤️</span><b>${h.n}</b>${h.n < P.MAX_HEARTS ? `<small>+1 in ${fmtMin(h.nextIn)}</small>` : ""}</div>` +
+      `<div class="lp-chip lp-energy${h.n < P.ENERGY_START ? " low" : ""}" title="Energie ${h.n}/${P.MAX_ENERGY}${h.n < P.MAX_ENERGY ? ` · +1 in ${fmtMin(h.nextIn)}` : " · voll"}" aria-label="Energie ${h.n} von ${P.MAX_ENERGY}"><span aria-hidden="true">🔋</span><b>${h.n}</b>${h.n < P.MAX_ENERGY ? `<small>+1 in ${fmtMin(h.nextIn)}</small>` : ""}</div>` +
       `<div class="lp-chip lp-xp" title="XP heute${goal ? ` · Tagesziel ${goal} XP` : ""}"><span aria-hidden="true">⚡</span><b>${xp}${goal ? `<i>/${goal}</i>` : ""}</b>${goal ? `<span class="lp-mini"><span style="width:${pct}%"></span></span>` : "<small>XP heute</small>"}</div>` +
       `<button type="button" class="lp-chip lp-morebtn" data-lp="side" aria-expanded="${sideOpen}" aria-label="Fortschritt, Laden und Abzeichen">📊</button>` +
     `</div>`;
@@ -201,7 +209,7 @@ export function createPath(M) {
     const xp = P.xpOn(s.mods, today());
     const week = P.weekXp(s.mods, today());
     const lg = P.weekLeague(s.mods, today());
-    const h = P.heartsNow(me.hearts);
+    const h = P.energyNow(me.energy);
     const pct = goal ? Math.min(100, Math.round((xp / goal) * 100)) : 0;
     const ring = `<svg class="lp-ring" viewBox="0 0 44 44" aria-hidden="true"><circle cx="22" cy="22" r="18" class="lp-ring-bg"/><circle cx="22" cy="22" r="18" class="lp-ring-fg" stroke-dasharray="${(pct * 1.131).toFixed(1)} 200"/></svg>`;
     const got = P.ACHIEVEMENTS.filter((a) => me.ach[a.id]).length;
@@ -211,7 +219,8 @@ export function createPath(M) {
         `<p class="lp-muted lp-league">📆 Diese Woche: <b>${lg.now} XP</b>${lg.best ? ` · Rekord der letzten 4 Wochen ${lg.best} XP${lg.now > lg.best ? " – neuer Rekord! 🥳" : ""}` : ""}</p></div>` +
       `<div class="lp-card"><b class="lp-h4">💎 Laden <small>${me.gems || 0} 💎</small></b>` +
         `<div class="lp-shop"><button type="button" class="lp-shopbtn" data-lp="buy-freeze" ${me.gems >= P.FREEZE_COST && me.freezes < P.MAX_FREEZES ? "" : "disabled"}><span aria-hidden="true">🧊</span><span><b>Serien-Schutz</b><small>${me.freezes ? `${me.freezes} bereit · ` : ""}rettet 1 verpassten Tag</small></span><i>${P.FREEZE_COST} 💎</i></button>` +
-        `<button type="button" class="lp-shopbtn" data-lp="buy-hearts" ${me.gems >= P.HEARTS_COST && h.n < P.MAX_HEARTS ? "" : "disabled"}><span aria-hidden="true">❤️</span><span><b>Herzen auffüllen</b><small>${h.n}/${P.MAX_HEARTS} – sofort wieder voll</small></span><i>${P.HEARTS_COST} 💎</i></button></div></div>` +
+        `<button type="button" class="lp-shopbtn" data-lp="buy-energy" ${me.gems >= P.ENERGY_GEMS && h.n < P.MAX_ENERGY ? "" : "disabled"}><span aria-hidden="true">🔋</span><span><b>Energie auffüllen</b><small>${h.n}/${P.MAX_ENERGY} – sofort wieder voll</small></span><i>${P.ENERGY_GEMS} 💎</i></button></div>` +
+        `<p class="lp-muted lp-einfo">🔋 Jede Übung kostet 1 Energie, ein Fehler 2. Alle ${P.COMBO_EVERY} richtigen in Folge gibt's +${P.COMBO_ENERGY}. Sie lädt alle 30 min um 1 nach und ist jeden Tag wieder voll.</p></div>` +
       `<div class="lp-card"><b class="lp-h4">🏆 Abzeichen <small>${got}/${P.ACHIEVEMENTS.length}</small></b><ul class="lp-shelf">` +
         P.ACHIEVEMENTS.map((a) => `<li class="lp-badge${me.ach[a.id] ? " got" : ""}" title="${esc(a.t)} – ${esc(a.d)}${me.ach[a.id] ? " ✔" : ""}"><span aria-hidden="true">${me.ach[a.id] ? a.e : "🔒"}</span><small>${esc(a.t)}</small></li>`).join("") +
       `</ul></div>` +
@@ -225,7 +234,7 @@ export function createPath(M) {
     page.innerHTML = `<div class="lp${sideOpen ? " side-open" : ""}">` + headHTML() +
       `<div class="lp-grid"><div class="lp-main">` +
         (me.goal ? "" : goalPickHTML()) +
-        `<div class="lp-card lp-practice"><span class="lp-practice-i" aria-hidden="true">🏋️</span><div><b>Üben</b><small>Deine Fehler wiederholen – kostet keine Herzen und bringt ❤️ +1</small></div><button type="button" class="lp-btn sm" data-lp="practice">ÜBEN</button></div>` +
+        `<div class="lp-card lp-practice"><span class="lp-practice-i" aria-hidden="true">🏋️</span><div><b>Üben</b><small>Deine Fehler wiederholen – gratis und lädt 🔋 auf</small></div><button type="button" class="lp-btn sm" data-lp="practice">ÜBEN</button></div>` +
         `<div class="lp-path">${pathHTML()}</div>` +
       `</div><aside class="lp-side" aria-label="Fortschritt">${sideHTML()}</aside></div></div>`;
     window.scrollTo(0, keepY);
@@ -253,7 +262,7 @@ export function createPath(M) {
     render();
     const el = page && page.querySelector(`[data-node="${CSS.escape(id)}"]`);
     if (el) el.classList.add("lp-pop-anim");
-    ui.toast(`🎁 +${r.gems} 💎 und +${r.xp} XP – juhu!`, 2600);
+    ui.toast(`🎁 +${r.gems} 💎${r.energy ? `, +${r.energy} 🔋` : ""} und +${r.xp} XP – juhu!`, 2600);
     if (getMe().sound !== false) beep("end");
   }
   function onPageClick(ev) {
@@ -268,7 +277,7 @@ export function createPath(M) {
     if (k === "chest") { chest(b.dataset.id); return; }
     if (k === "practice") { startPractice(); return; }
     if (k === "buy-freeze") { const r = P.buyFreeze(getMe()); if (r.ok) { save({ me: r.me }).then(render); ui.toast("🧊 Serien-Schutz gekauft – deine Serie ist abgesichert!"); } return; }
-    if (k === "buy-hearts") { const r = P.buyHearts(getMe()); if (r.ok) { save({ me: r.me }).then(render); ui.toast("❤️ Herzen wieder voll!"); } return; }
+    if (k === "buy-energy") { const r = P.buyEnergy(getMe()); if (r.ok) { save({ me: r.me }).then(render); ui.toast("🔋 Energie wieder voll!"); } return; }
   }
   function onPageChange(ev) {
     const t = ev.target;
@@ -280,7 +289,7 @@ export function createPath(M) {
   function startPractice() {
     let items = M.practiceItems(units(), getMod());
     if (!items.length) {
-      // Noch nichts falsch/geschafft (z. B. Herzen in der allerersten Lektion verloren) → mit der aktuellen Lektion aufwärmen,
+      // Noch nichts falsch/geschafft (z. B. Energie in der allerersten Lektion aufgebraucht) → mit der aktuellen Lektion aufwärmen,
       // damit man nie festhängt.
       const mod = getMod();
       const cur = units().flatMap((u) => u.nodes).find((n) => n.type === "lesson" && Array.isArray(n.items) && n.items.length && !mod.nodes[n.id]);
@@ -292,7 +301,7 @@ export function createPath(M) {
   function startLesson(node, unit) {
     const me = getMe();
     const practice = node.type === "practice";
-    if (!practice && P.heartsNow(me.hearts).n <= 0) { openPlayer({ node, unit, ex: [], out: true }); return; }
+    if (!practice && !P.canStart(me.energy)) { openPlayer({ node, unit, ex: [], out: true }); return; }
     const ex = P.buildLesson(node, { ...M.lessonCtx(), module: M.module, seed: Date.now() });
     if (!ex.length) { ui.toast("Für diese Lektion gibt's gerade keine Übungen 😕"); return; }
     const st = P.nodeStates(units(), getMod());
@@ -314,7 +323,7 @@ export function createPath(M) {
       run: P.startRun(ex, { mode: practice ? "practice" : "lesson" }),
       t0: Date.now(), checked: null, sel: null, tiles: [], match: { l: null, r: null, done: [], bad: 0 }, out, endInfo: null,
       calc: M.calc ? M.calc((text) => { const i = root.querySelector(".lp-numin"); if (i) { i.value = text; i.dispatchEvent(new Event("input", { bubbles: true })); i.focus({ preventScroll: true }); } }) : null,
-      rec: null,
+      rec: null, gained: 0,
     };
     root.addEventListener("click", onPlayerClick);
     root.addEventListener("input", onPlayerInput);
@@ -337,12 +346,12 @@ export function createPath(M) {
   const exNow = () => P.runCurrent(player.run);
   function topHTML() {
     const r = player.run;
-    const h = P.heartsNow(getMe().hearts);
+    const h = P.energyNow(getMe().energy);
     const pct = Math.round(P.runProgress(r) * 100);
     return `<div class="lp-ptop"><button type="button" class="lp-x" data-p="quit" aria-label="Lektion beenden">✕</button>` +
       `<div class="lp-prog" role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-valuenow="${pct}" aria-label="Fortschritt"><span style="width:${Math.max(pct, 3)}%"></span></div>` +
       (r.combo >= 3 ? `<span class="lp-combo" title="${r.combo} richtig in Folge">🔥<b>${r.combo}</b></span>` : "") +
-      `<span class="lp-phearts${player.practice ? " inf" : ""}" title="${player.practice ? "Üben kostet keine Herzen" : "Herzen"}">❤️<b>${player.practice ? "∞" : h.n}</b></span></div>`;
+      `<span class="lp-penergy${player.practice ? " free" : h.n < P.ENERGY_START ? " low" : ""}" title="${player.practice ? "Üben kostet keine Energie" : `Energie ${h.n}/${P.MAX_ENERGY}`}"><span aria-hidden="true">🔋</span><b>${h.n}</b>${energyBar(h.n)}${player.practice ? `<small>gratis</small>` : ""}</span></div>`;
   }
 
   function exHTML(ex) {
@@ -414,6 +423,7 @@ export function createPath(M) {
       return `<div class="lp-sheet ${c.ok ? "ok" : "no"}" role="status" aria-live="assertive">` +
         `<div class="lp-sheet-in"><div class="lp-fb-head"><span class="lp-fb-i" aria-hidden="true">${c.ok ? "✔" : "✖"}</span><div><b class="lp-fb-t">${c.ok ? esc(c.praise) : "Nicht ganz 💛"}</b>` +
         (c.ok ? (c.near ? `<p class="lp-fb-r">Fast perfekt – genau: <b>${ex.jp ? `<span class="jp-ja">${esc(c.solution)}</span>` : esc(c.solution)}</b></p>` : "") : `<p class="lp-fb-r">Richtig wäre: <b>${ex.jp || ex.type === "speak" ? `<span class="jp-ja">${esc(c.solution)}</span>` : esc(c.solution)}</b></p>`) +
+        (c.bonus ? `<p class="lp-fb-en">🔋 +${c.bonus} Combo-Bonus – ${P.COMBO_EVERY} richtig in Folge!</p>` : c.gain ? `<p class="lp-fb-en">🔋 +${c.gain} Energie</p>` : "") +
         `</div></div>${extra}<button type="button" class="lp-btn lp-cont ${c.ok ? "ok" : "no"}" data-p="next">WEITER</button></div></div>`;
     }
     if (ex.type === "match" || ex.type === "speak") return `<div class="lp-foot"></div>`;
@@ -460,9 +470,13 @@ export function createPath(M) {
     player.checked = { ok, near, praise: PRAISE[Math.floor(Math.random() * PRAISE.length)], solution: P.solutionText(ex, M.fmtNum) };
     player.run = P.answerRun(player.run, ok);
     const me = getMe();
-    if (!ok && !player.practice) {
-      const hearts = P.loseHeart(me.hearts);
-      await save({ me: { ...me, hearts } });
+    if (!player.practice) {
+      const r = P.spendEnergy(me.energy, { correct: ok, combo: player.run.combo });
+      player.checked.cost = r.cost; player.checked.bonus = r.bonus;
+      await save({ me: { ...me, energy: r.energy } });
+    } else if (ok) {
+      const r = P.practiceGain(me.energy, player.gained);
+      if (r.add) { player.gained += r.add; player.checked.gain = r.add; await save({ me: { ...me, energy: r.energy } }); }
     }
     if (me.sound !== false) beep(ok ? "ok" : "no");
     if (!ok) vibrate(60);
@@ -471,7 +485,7 @@ export function createPath(M) {
   }
   async function next() {
     if (!player) return;
-    if (!player.practice && P.heartsNow(getMe().hearts).n <= 0) {
+    if (!player.practice && P.energyNow(getMe().energy).n <= 0) {
       // Fehler auch bei abgebrochener Lektion merken → „Fehler üben“ hat etwas zu tun
       try { for (const [ref, good] of Object.entries(player.run.refs || {})) await M.grade(ref, good); } catch (err) { console.warn(err); }
       player.out = true; renderOut(); return;
@@ -485,14 +499,16 @@ export function createPath(M) {
   }
 
   function renderOut() {
-    const h = P.heartsNow(getMe().hearts);
+    const h = P.energyNow(getMe().energy);
     const me = getMe();
-    player.root.innerHTML = `<div class="lp-ptop"><button type="button" class="lp-x" data-p="close" aria-label="Schließen">✕</button></div>` +
-      `<div class="lp-pbody lp-center lp-out">${mascot("calm", 120)}<h2 class="lp-q">Keine Herzen mehr ❤️‍🩹</h2>` +
-      `<p class="lp-lead">Mach eine kurze Pause oder übe Fehler 💪</p>` +
-      `<p class="lp-muted">${h.n < P.MAX_HEARTS ? `Nächstes Herz in ${fmtMin(h.nextIn)} – der Rest der App geht natürlich ganz normal weiter.` : ""}</p>` +
-      `<div class="lp-outbtns"><button type="button" class="lp-btn" data-p="practice">🏋️ FEHLER ÜBEN (+1 ❤️)</button>` +
-      `<button type="button" class="lp-btn ghost" data-p="buy" ${me.gems >= P.HEARTS_COST ? "" : "disabled"}>❤️ Auffüllen · ${P.HEARTS_COST} 💎 <small>(du hast ${me.gems || 0})</small></button>` +
+    const empty = h.n <= 0;
+    player.root.innerHTML = `<div class="lp-ptop"><button type="button" class="lp-x" data-p="close" aria-label="Schließen">✕</button>` +
+      `<span class="lp-penergy low" title="Energie ${h.n}/${P.MAX_ENERGY}"><span aria-hidden="true">🔋</span><b>${h.n}</b>${energyBar(h.n)}</span></div>` +
+      `<div class="lp-pbody lp-center lp-out">${mascot("calm", 120)}<h2 class="lp-q">${empty ? "Keine Energie mehr 🪫" : "Zu wenig Energie 🪫"}</h2>` +
+      `<p class="lp-lead">${empty ? "Funki braucht eine kleine Ladepause – üb kurz oder lade auf 💪" : `Für eine Lektion brauchst du mindestens ${P.ENERGY_START} 🔋 – üb kurz, das lädt auf 💪`}</p>` +
+      `<p class="lp-muted">+1 🔋 in ${fmtMin(h.nextIn)} · morgen ist sie wieder voll – der Rest der App geht natürlich ganz normal weiter.</p>` +
+      `<div class="lp-outbtns"><button type="button" class="lp-btn" data-p="practice">🏋️ Üben (gratis, lädt Energie)</button>` +
+      `<button type="button" class="lp-btn ghost" data-p="buy" ${me.gems >= P.ENERGY_GEMS ? "" : "disabled"}>🔋 Auffüllen · ${P.ENERGY_GEMS} 💎 <small>(du hast ${me.gems || 0})</small></button>` +
       `<button type="button" class="lp-btn ghost" data-p="close">Später weiter</button></div></div>`;
   }
 
@@ -507,7 +523,6 @@ export function createPath(M) {
     const xpBefore = P.xpOn(mods(), today());
     const applied = P.applyLesson(getMod(), getMe(), { node: p.node, unit: p.unit, rewards, ok: r.ok, day: today(), jump: p.jump });
     let me = applied.me;
-    if (p.practice) me = { ...me, hearts: P.gainHeart(me.hearts) };
     pending = { ...(pending || {}), [M.module]: applied.mod, me };
     const after = P.learnStreak(src(), today());
     const tags = [...P.completedTags(units(), applied.mod), ...(M.module === "lap" ? P.lapTags(units(), applied.mod) : [])];
@@ -548,7 +563,7 @@ export function createPath(M) {
       `</div>` +
       `<div class="lp-endlist">` +
         `<p class="lp-streakline${e.streakUp ? " up" : ""}"><span class="lp-flame" aria-hidden="true">🔥</span> ${e.streak} ${e.streak === 1 ? "Tag" : "Tage"} Serie${e.streakUp ? " – weiter so!" : ""}</p>` +
-        `<p>💎 +${e.rewards.gems} Edelsteine${player.practice ? " · ❤️ +1 Herz" : ""}</p>` +
+        `<p>💎 +${e.rewards.gems} Edelsteine${player.practice && player.gained ? ` · 🔋 +${player.gained} Energie` : ""}</p>` +
         (crownTxt ? `<p>${crownTxt}</p>` : "") +
         (e.goalHit ? `<p>🎯 Tagesziel geschafft!</p>` : "") +
         ach.map((a) => `<p class="lp-achnew">🏆 Neues Abzeichen: <b>${a.e} ${esc(a.t)}</b></p>`).join("") +
@@ -584,7 +599,7 @@ export function createPath(M) {
     if (k === "quit") { if (!player.checked && player.run.solved.length && !confirmQuit()) return; closePlayer(); render(); return; }
     if (k === "close") { closePlayer(); render(); return; }
     if (k === "practice") { closePlayer(); startPractice(); return; }
-    if (k === "buy") { const r = P.buyHearts(getMe()); if (r.ok) { save({ me: r.me }).then(() => { closePlayer(); render(); ui.toast("❤️ Herzen wieder voll – weiter geht's!"); }); } return; }
+    if (k === "buy") { const r = P.buyEnergy(getMe()); if (r.ok) { save({ me: r.me }).then(() => { closePlayer(); render(); ui.toast("🔋 Energie wieder voll – weiter geht's!"); }); } return; }
     if (k === "done") { closePlayer(); openNode = null; render(); scrollToCurrent(true); const e = page && page.querySelector(".lp-node.is-current"); if (e) e.classList.add("lp-pop-anim"); return; }
     if (k === "next") { next(); return; }
     if (k === "check") { check(); return; }

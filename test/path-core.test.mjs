@@ -1,5 +1,5 @@
 // node --test test/path-core.test.mjs
-// Update 10 – 🛤️ Lernpfad (Japanisch + LAP): Einheiten, Freischalten, Herzen, XP/Edelsteine/Serien-Schutz, Lektionen, Fehler-Wiederholung.
+// Update 10 – 🛤️ Lernpfad (Japanisch + LAP): Einheiten, Freischalten, 🔋 Energie, XP/Edelsteine/Serien-Schutz, Lektionen, Fehler-Wiederholung.
 import test from "node:test";
 import assert from "node:assert/strict";
 import * as P from "../js/alltag/path-core.js";
@@ -129,19 +129,86 @@ test("Ablauf: Fehler kommen am Ende nochmal (max. 2×), SRS-Refs, Fortschritt & 
   assert.equal(c.maxCombo, 3);
 });
 
-test("❤️ Herzen: −1 pro Fehler, +1 je 30 min, nie unter 0, Auffüllen per Üben", () => {
-  const t0 = 1_000_000_000_000;
-  let h = { n: 5, at: 0 };
-  h = P.loseHeart(h, t0);
-  assert.deepEqual(h, { n: 4, at: t0 });
-  assert.equal(P.heartsNow(h, t0 + 10 * 60e3).nextIn, 20 * 60e3);
-  assert.equal(P.heartsNow(h, t0 + P.REFILL_MS).n, 5);
-  h = { n: 0, at: t0 };
-  assert.equal(P.loseHeart(h, t0).n, 0);
-  assert.equal(P.heartsNow(h, t0 + 2.5 * P.REFILL_MS).n, 2);
-  assert.equal(P.heartsNow(h, t0 + 99 * P.REFILL_MS).n, 5);
-  assert.equal(P.gainHeart({ n: 0, at: t0 }, t0).n, 1);
-  assert.deepEqual(P.gainHeart({ n: 4, at: t0 }, t0), { n: 5, at: 0 });
+test("🔋 Energie: richtig −1, falsch −2, nie unter 0, +1 je 30 min", () => {
+  const t0 = new Date(2026, 10, 9, 10, 0).getTime();
+  const D = "2026-11-09";
+  assert.equal(P.MAX_ENERGY, 25);
+  let r = P.spendEnergy({ n: 25, at: 0, day: D }, { correct: true, combo: 1 }, t0);
+  assert.deepEqual(r.energy, { n: 24, at: t0, day: D }); assert.equal(r.cost, 1);
+  r = P.spendEnergy(r.energy, { correct: false }, t0);
+  assert.equal(r.energy.n, 22); assert.equal(r.cost, 2);
+  assert.equal(r.energy.at, t0, "Ladeuhr läuft ab der ersten Ausgabe weiter");
+  assert.equal(P.spendEnergy({ n: 1, at: t0, day: D }, { correct: false }, t0).energy.n, 0, "nie unter 0");
+  assert.equal(P.spendEnergy({ n: 0, at: t0, day: D }, { correct: true }, t0).cost, 0);
+  // Nachladen
+  const e = { n: 10, at: t0, day: D };
+  assert.equal(P.energyNow(e, t0 + 10 * 60e3).nextIn, 20 * 60e3);
+  assert.equal(P.energyNow(e, t0 + P.REFILL_MS).n, 11);
+  assert.equal(P.energyNow(e, t0 + 2.5 * P.REFILL_MS).n, 12);
+  assert.equal(P.energyNow(e, t0 + 2.5 * P.REFILL_MS).nextIn, P.REFILL_MS / 2);
+  assert.equal(P.energyNow({ n: 24, at: t0, day: D }, t0 + 3 * P.REFILL_MS).n, 25, "nie über voll");
+  assert.equal(P.energyNow({ n: 24, at: t0, day: D }, t0 + 3 * P.REFILL_MS).nextIn, 0);
+  assert.equal(P.REFILL_MS, 30 * 60e3);
+});
+
+test("🔋 Combo-Bonus: alle 5 richtigen in Folge +2, nie über voll, kein Bonus bei 0", () => {
+  const t0 = new Date(2026, 10, 9, 10, 0).getTime();
+  const D = "2026-11-09";
+  let r = P.spendEnergy({ n: 10, at: t0, day: D }, { correct: true, combo: 5 }, t0);
+  assert.equal(r.bonus, 2); assert.equal(r.energy.n, 11);
+  assert.equal(P.spendEnergy({ n: 10, at: t0, day: D }, { correct: true, combo: 4 }, t0).bonus, 0);
+  assert.equal(P.spendEnergy({ n: 10, at: t0, day: D }, { correct: true, combo: 10 }, t0).bonus, 2);
+  assert.equal(P.spendEnergy({ n: 10, at: t0, day: D }, { correct: false, combo: 0 }, t0).bonus, 0);
+  r = P.spendEnergy({ n: 25, at: 0, day: D }, { correct: true, combo: 5 }, t0);
+  assert.equal(r.energy.n, 25); assert.equal(r.bonus, 1, "nur bis voll");
+  r = P.spendEnergy({ n: 1, at: t0, day: D }, { correct: true, combo: 5 }, t0);
+  assert.equal(r.energy.n, 0); assert.equal(r.bonus, 0, "leer → kein Bonus");
+  // Ablauf mit startRun/answerRun: combo nach der Antwort
+  let run = P.startRun([1, 2, 3, 4, 5].map((i) => ({ type: "mc", ref: "r" + i })));
+  let en = { n: 20, at: t0, day: D }, bonus = 0;
+  for (let i = 0; i < 5; i++) { run = P.answerRun(run, true); const x = P.spendEnergy(en, { correct: true, combo: run.combo }, t0); en = x.energy; bonus += x.bonus; run = P.nextRun(run); }
+  assert.equal(bonus, 2); assert.equal(en.n, 17);
+});
+
+test("🔋 Tages-Auffüllung, Start ab 5, Schatzkiste, 💎 Auffüllen, Üben, Umstieg von ❤️", () => {
+  const t0 = new Date(2026, 10, 9, 10, 0).getTime();
+  const tomorrow = new Date(2026, 10, 10, 7, 0).getTime();
+  const D = "2026-11-09";
+  // neuer Tag → gratis voll
+  const low = { n: 3, at: t0, day: D };
+  assert.equal(P.energyNow(low, tomorrow).n, 25);
+  assert.equal(P.energyNow(low, tomorrow).fresh, true);
+  const dr = P.dailyRefill({ energy: low }, tomorrow);
+  assert.ok(dr.refilled); assert.deepEqual(dr.me.energy, { n: 25, at: 0, day: "2026-11-10" });
+  assert.equal(P.dailyRefill(dr.me, tomorrow + 60e3).refilled, false, "nur einmal am Tag");
+  assert.equal(P.dailyRefill({ energy: { n: 25, at: 0, day: D } }, tomorrow).refilled, false, "war schon voll → kein Hinweis");
+  // Start-Schwelle
+  assert.equal(P.ENERGY_START, 5);
+  assert.equal(P.canStart({ n: 4, at: t0, day: D }, t0), false);
+  assert.equal(P.canStart({ n: 5, at: t0, day: D }, t0), true);
+  assert.equal(P.canStart({ n: 4, at: t0, day: D }, t0 + P.REFILL_MS), true, "nach 30 min wieder genug");
+  // Schatzkiste: +5 🔋 (nur unter 20) zusätzlich zu den 💎
+  const chest = JU[0].nodes.find((x) => x.type === "chest");
+  let k = P.openChest({ id: "jp" }, { energy: { n: 8, at: t0, day: D } }, chest, D, t0);
+  assert.equal(k.gems, P.GEMS.chest); assert.equal(k.energy, 5); assert.equal(k.me.energy.n, 13);
+  k = P.openChest({ id: "jp" }, { energy: { n: 20, at: t0, day: D } }, chest, D, t0);
+  assert.equal(k.energy, 0); assert.equal(k.me.energy.n, 20);
+  // 💎 Auffüllen
+  assert.equal(P.ENERGY_GEMS, 300);
+  assert.equal(P.buyEnergy({ gems: 400, energy: { n: 25, at: 0, day: D } }, t0).why, "full");
+  assert.equal(P.buyEnergy({ gems: 299, energy: { n: 2, at: t0, day: D } }, t0).why, "gems");
+  const be = P.buyEnergy({ gems: 400, energy: { n: 2, at: t0, day: D } }, t0);
+  assert.ok(be.ok); assert.equal(be.me.gems, 100); assert.equal(be.me.energy.n, 25);
+  // 🏋️ Üben: +1 je richtiger Antwort, höchstens +5 pro Runde, nie über voll
+  let en = { n: 0, at: t0, day: D }, gained = 0;
+  for (let i = 0; i < 8; i++) { const g = P.practiceGain(en, gained, t0); en = g.energy; gained += g.add; }
+  assert.equal(gained, P.PRACTICE_ENERGY_MAX); assert.equal(en.n, 5);
+  assert.equal(P.practiceGain({ n: 25, at: 0, day: D }, 0, t0).add, 0);
+  // Umstieg: altes me.hearts → volle Energie, hearts verschwindet
+  const m = P.readMe({ id: "me", gems: 7, hearts: { n: 0, at: t0 } });
+  assert.equal(m.hearts, undefined); assert.equal(m.gems, 7);
+  assert.equal(P.energyNow(m.energy, t0).n, 25);
+  assert.equal(P.readMe({ energy: { n: 9, at: t0, day: D } }).energy.n, 9, "vorhandene Energie bleibt");
 });
 
 test("XP, 💎 Edelsteine, Kronen, Schatzkiste, Laden", () => {
@@ -168,9 +235,6 @@ test("XP, 💎 Edelsteine, Kronen, Schatzkiste, Laden", () => {
   const f = P.buyFreeze({ gems: 250 });
   assert.ok(f.ok); assert.equal(f.me.gems, 50); assert.equal(f.me.freezes, 1);
   assert.equal(P.buyFreeze({ gems: 999, freezes: P.MAX_FREEZES }).why, "max");
-  assert.equal(P.buyHearts({ gems: 400, hearts: { n: 5 } }).why, "full");
-  const bh = P.buyHearts({ gems: 400, hearts: { n: 1, at: Date.now() } });
-  assert.ok(bh.ok); assert.equal(bh.me.gems, 50); assert.equal(bh.me.hearts.n, 5);
 });
 
 test("🔥 Serie über beide Module + klassische Übungen, 🧊 Serien-Schutz", () => {

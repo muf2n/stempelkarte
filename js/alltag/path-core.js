@@ -2,10 +2,10 @@
 //   • Einheiten/Knoten aus den vorhandenen Inhalten erzeugen (jpUnits, lapUnits) – keine erfundenen Fakten
 //   • Freischalt-Regeln, Kronen, Schatzkisten, Einheiten-Prüfung (nodeStates, applyLesson, openChest)
 //   • Lektionen bauen (buildLesson, deterministisch mit Seed) und ablaufen lassen (startRun/answerRun – Fehler kommen hinten nochmal)
-//   • ❤️ Herzen (Nachfüllen alle 30 min), ⚡ XP & Tagesziel, 💎 Edelsteine, 🧊 Serien-Schutz, 🏆 Abzeichen, 🔔 Erinnerung
+//   • 🔋 Energie wie bei Duolingo (25 max, −1 je Übung, −2 bei Fehler, Combo-Bonus, +1 alle 30 min, täglich voll), ⚡ XP & Tagesziel, 💎 Edelsteine, 🧊 Serien-Schutz, 🏆 Abzeichen, 🔔 Erinnerung
 // Gespeichert in der Alltag-Sammlung "learn_progress": Dokument je Modul ("jp", "lap") + gemeinsames Dokument "me".
 //   Modul: { id, nodes: { <knoten>: { c:Krone 1–3, p:perfekt, n:gespielt, at } }, xp: { "JJJJ-MM-TT": XP } }
-//   me:    { id:"me", gems, hearts:{ n, at }, freezes, frozen:{ Tag:true }, goal, sound, ok, perfect, lessons, ach:{ id: ms }, last }
+//   me:    { id:"me", gems, energy:{ n, at, day }, freezes, frozen:{ Tag:true }, goal, sound, ok, perfect, lessons, ach:{ id: ms }, last }
 // Unit-Tests: test/path-core.test.mjs
 import { dayKey, addDays, rng, shuffle, streak as srsStreak } from "./srs-core.js";
 import { parseJa, tileAnswers } from "./jp-text.js";
@@ -13,10 +13,18 @@ import { parseJa, tileAnswers } from "./jp-text.js";
 export { rng, dayKey };
 
 /* ================= Konstanten ================= */
-export const MAX_HEARTS = 5;
-export const REFILL_MS = 30 * 60 * 1000;
+export const MAX_ENERGY = 25;          // 🔋 volle Energie
+export const ENERGY_COST = 1;          // jede beantwortete Übung
+export const ENERGY_WRONG = 2;         // falsche Antwort kostet insgesamt 2
+export const ENERGY_START = 5;         // Lektion starten erst ab 5 🔋
+export const COMBO_EVERY = 5;          // alle 5 richtigen in Folge …
+export const COMBO_ENERGY = 2;         // … +2 🔋 Bonus
+export const REFILL_MS = 30 * 60 * 1000; // +1 🔋 alle 30 min (Duolingo: 1 h – hier Selbstlern-App)
+export const CHEST_ENERGY = 5;         // 🎁 Schatzkiste: +5 🔋 …
+export const CHEST_ENERGY_BELOW = 20;  // … wenn unter 20
+export const PRACTICE_ENERGY_MAX = 5;  // 🏋️ Üben: +1 je richtiger Antwort, höchstens +5 pro Runde
+export const ENERGY_GEMS = 300;        // 💎 → volle Energie
 export const FREEZE_COST = 200;
-export const HEARTS_COST = 350;
 export const MAX_FREEZES = 2;
 export const GOALS = [
   { id: "leicht", name: "Leicht", emoji: "🌱", xp: 20 },
@@ -27,10 +35,12 @@ export const GOALS = [
 export const goalXp = (id) => (GOALS.find((g) => g.id === id) || GOALS[1]).xp;
 export const XP = { lesson: 10, perfect: 5, check: 20, practice: 5, chest: 5, comboStep: 5, comboXp: 2, comboMax: 6 };
 export const GEMS = { perfect: 5, check: 10, chest: 20, lesson: 1 };
-export const DEFAULT_ME = { id: "me", gems: 0, hearts: { n: MAX_HEARTS, at: 0 }, freezes: 0, frozen: {}, goal: null, sound: true, ok: 0, perfect: 0, lessons: 0, ach: {}, last: null };
+export const DEFAULT_ME = { id: "me", gems: 0, energy: { n: MAX_ENERGY, at: 0, day: null }, freezes: 0, frozen: {}, goal: null, sound: true, ok: 0, perfect: 0, lessons: 0, ach: {}, last: null };
 export const readMe = (doc) => {
   const d = doc && typeof doc === "object" ? doc : {};
-  return { ...DEFAULT_ME, ...d, hearts: { ...DEFAULT_ME.hearts, ...(d.hearts || {}) }, frozen: { ...(d.frozen || {}) }, ach: { ...(d.ach || {}) } };
+  const rest = { ...d };
+  delete rest.hearts; // ❤️ Herzen (alt) → 🔋 Energie: alle starten nach dem Update mit voller Energie
+  return { ...DEFAULT_ME, ...rest, energy: { ...DEFAULT_ME.energy, ...(d.energy && typeof d.energy === "object" ? d.energy : {}) }, frozen: { ...(d.frozen || {}) }, ach: { ...(d.ach || {}) } };
 };
 export const readMod = (doc, id) => {
   const d = doc && typeof doc === "object" ? doc : {};
@@ -605,39 +615,72 @@ export function applyLesson(modDoc, meDoc, { node, unit = null, rewards, ok = 0,
 export function openChest(modDoc, meDoc, node, day, now = Date.now()) {
   const mod = readMod(modDoc, modDoc && modDoc.id);
   const me = readMe(meDoc);
-  if (mod.nodes[node.id]) return { mod, me, xp: 0, gems: 0 };
+  if (mod.nodes[node.id]) return { mod, me, xp: 0, gems: 0, energy: 0 };
   mod.nodes[node.id] = { c: 1, p: 0, n: 1, at: now };
   mod.xp[day] = (mod.xp[day] || 0) + XP.chest;
   me.gems = (me.gems || 0) + GEMS.chest;
-  return { mod, me, xp: XP.chest, gems: GEMS.chest };
+  const e = energyNow(me.energy, now);
+  let energy = 0;
+  if (e.n < CHEST_ENERGY_BELOW) { me.energy = gainEnergy(me.energy, now, CHEST_ENERGY); energy = me.energy.n - e.n; }
+  return { mod, me, xp: XP.chest, gems: GEMS.chest, energy };
 }
 function trimDays(obj, keep = 400) {
   const keys = Object.keys(obj).sort();
   for (const k of keys.slice(0, Math.max(0, keys.length - keep))) delete obj[k];
 }
 
-/* ================= ❤️ Herzen ================= */
-/** Aktueller Stand inkl. Nachfüllen (+1 alle 30 min). → { n, at, nextIn (ms bis zum nächsten Herz, 0 wenn voll) } */
-export function heartsNow(h, now = Date.now()) {
-  const raw = h && h.n != null ? Number(h.n) : MAX_HEARTS;
-  let n = Math.max(0, Math.min(MAX_HEARTS, Number.isFinite(raw) ? Math.floor(raw) : MAX_HEARTS));
-  let at = Number(h && h.at) || 0;
-  if (n >= MAX_HEARTS) return { n: MAX_HEARTS, at, nextIn: 0 };
+/* ================= 🔋 Energie ================= */
+/**
+ * Aktueller Stand inkl. Nachladen (+1 alle 30 min) und 🌅 Tages-Auffüllung (erster Besuch an einem neuen Tag → voll).
+ * e = { n, at, day } → { n, at, day, nextIn (ms bis +1, 0 wenn voll), fresh (true = heute frisch aufgefüllt) }
+ */
+export function energyNow(e, now = Date.now()) {
+  const today = dayKey(new Date(now));
+  if (!e || typeof e !== "object" || e.day !== today) return { n: MAX_ENERGY, at: 0, day: today, nextIn: 0, fresh: !!(e && e.day && e.day !== today && Number(e.n) < MAX_ENERGY) };
+  const raw = e.n != null ? Number(e.n) : MAX_ENERGY;
+  let n = Math.max(0, Math.min(MAX_ENERGY, Number.isFinite(raw) ? Math.floor(raw) : MAX_ENERGY));
+  let at = Number(e.at) || 0;
+  if (n >= MAX_ENERGY) return { n: MAX_ENERGY, at: 0, day: today, nextIn: 0, fresh: false };
   if (!at) at = now;
   const gained = Math.floor(Math.max(0, now - at) / REFILL_MS);
-  n = Math.min(MAX_HEARTS, n + gained);
+  n = Math.min(MAX_ENERGY, n + gained);
   at += gained * REFILL_MS;
-  return { n, at, nextIn: n >= MAX_HEARTS ? 0 : REFILL_MS - (now - at) };
+  return { n, at: n >= MAX_ENERGY ? 0 : at, day: today, nextIn: n >= MAX_ENERGY ? 0 : REFILL_MS - (now - at), fresh: false };
 }
-export function loseHeart(h, now = Date.now()) {
-  const c = heartsNow(h, now);
-  if (c.n <= 0) return { n: 0, at: c.at };
-  return { n: c.n - 1, at: c.n >= MAX_HEARTS ? now : c.at };
+/**
+ * Eine beantwortete Übung verbuchen: richtig −1, falsch −2. combo = richtige in Folge NACH dieser Antwort;
+ * alle COMBO_EVERY richtigen +COMBO_ENERGY (nie über voll, kein Bonus bei 0). → { energy, cost, bonus }
+ */
+export function spendEnergy(e, { correct = true, combo = 0 } = {}, now = Date.now()) {
+  const c = energyNow(e, now);
+  const cost = Math.min(c.n, correct ? ENERGY_COST : ENERGY_WRONG);
+  let n = c.n - cost;
+  let bonus = 0;
+  if (correct && n > 0 && combo > 0 && combo % COMBO_EVERY === 0) { bonus = Math.min(COMBO_ENERGY, MAX_ENERGY - n); n += bonus; }
+  const energy = { n, at: n >= MAX_ENERGY ? 0 : c.at || now, day: c.day };
+  return { energy, cost, bonus };
 }
-export function gainHeart(h, now = Date.now(), k = 1) {
-  const c = heartsNow(h, now);
-  const n = Math.min(MAX_HEARTS, c.n + k);
-  return { n, at: n >= MAX_HEARTS ? 0 : c.at };
+/** Energie dazugeben (Üben, Schatzkiste). */
+export function gainEnergy(e, now = Date.now(), k = 1) {
+  const c = energyNow(e, now);
+  const n = Math.min(MAX_ENERGY, c.n + Math.max(0, k));
+  return { n, at: n >= MAX_ENERGY ? 0 : c.at, day: c.day };
+}
+/** Genug Energie, um eine Lektion zu starten? */
+export const canStart = (e, now = Date.now()) => energyNow(e, now).n >= ENERGY_START;
+/** 🏋️ Üben: +1 je richtiger Antwort, höchstens PRACTICE_ENERGY_MAX pro Runde. gained = bisher in dieser Runde. → { energy, add } */
+export function practiceGain(e, gained = 0, now = Date.now()) {
+  const c = energyNow(e, now);
+  const add = gained >= PRACTICE_ENERGY_MAX || c.n >= MAX_ENERGY ? 0 : 1;
+  return { energy: add ? gainEnergy(e, now, add) : { n: c.n, at: c.at, day: c.day }, add };
+}
+/** 🌅 Tages-Auffüllung speichern (erster Besuch an einem neuen Tag). → { me, refilled } (refilled nur, wenn vorher nicht voll) */
+export function dailyRefill(meDoc, now = Date.now()) {
+  const me = readMe(meDoc);
+  const today = dayKey(new Date(now));
+  if (me.energy.day === today) return { me, refilled: false };
+  const c = energyNow(me.energy, now);
+  return { me: { ...me, energy: { n: MAX_ENERGY, at: 0, day: today } }, refilled: c.fresh };
 }
 
 /* ================= 💎 Laden ================= */
@@ -647,11 +690,11 @@ export function buyFreeze(meDoc) {
   if ((me.gems || 0) < FREEZE_COST) return { me, ok: false, why: "gems" };
   return { me: { ...me, gems: me.gems - FREEZE_COST, freezes: (me.freezes || 0) + 1 }, ok: true };
 }
-export function buyHearts(meDoc, now = Date.now()) {
+export function buyEnergy(meDoc, now = Date.now()) {
   const me = readMe(meDoc);
-  if (heartsNow(me.hearts, now).n >= MAX_HEARTS) return { me, ok: false, why: "full" };
-  if ((me.gems || 0) < HEARTS_COST) return { me, ok: false, why: "gems" };
-  return { me: { ...me, gems: me.gems - HEARTS_COST, hearts: { n: MAX_HEARTS, at: 0 } }, ok: true };
+  if (energyNow(me.energy, now).n >= MAX_ENERGY) return { me, ok: false, why: "full" };
+  if ((me.gems || 0) < ENERGY_GEMS) return { me, ok: false, why: "gems" };
+  return { me: { ...me, gems: me.gems - ENERGY_GEMS, energy: { n: MAX_ENERGY, at: 0, day: dayKey(new Date(now)) } }, ok: true };
 }
 
 /* ================= 🔥 Serie & ⚡ XP ================= */

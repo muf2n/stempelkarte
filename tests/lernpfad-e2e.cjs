@@ -95,7 +95,7 @@ function fakes() {
   }
   /** Lektion bis zum Ende spielen. → Liste der Übungsarten */
   async function playToEnd(page, { wrongAt = [], calcOnce = false, shots = null } = {}) {
-    const types = [];
+    const types = [], oks = [];
     let n = 0, usedCalc = false;
     for (let guard = 0; guard < 60; guard++) {
       if (await page.$(".lp-end, .lp-out")) break;
@@ -104,6 +104,7 @@ function fakes() {
       if (useCalc) usedCalc = true;
       const r = await answer(page, { wrong: wrongAt.includes(n), calc: useCalc });
       types.push(r.type);
+      if (!r.skipped) oks.push(r.ok);
       if (shots && n === 0) { await shots.exercise(); }
       if (!r.skipped) {
         if (shots && wrongAt.includes(n)) await shots.feedback();
@@ -112,8 +113,27 @@ function fakes() {
       }
       n++;
     }
-    return { types, usedCalc };
+    return { types, oks, usedCalc };
   }
+
+  /** 🔋 erwartete Energie nach einer Folge von Antworten (richtig −1, falsch −2, alle 5 in Folge +2, nie über 25, kein Bonus bei 0) */
+  function expectEnergy(start, oks) {
+    let n = start, combo = 0;
+    for (const good of oks) {
+      n = Math.max(0, n - (good ? 1 : 2));
+      combo = good ? combo + 1 : 0;
+      if (good && n > 0 && combo % 5 === 0) n = Math.min(25, n + 2);
+    }
+    return n;
+  }
+  const todayKey = () => { const d = new Date(); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`; };
+  const chip = async (page) => (await page.textContent(".lp-energy")).replace(/\s/g, "");
+  const setMe = (page, patch) => page.evaluate((pt) => {
+    const a = JSON.parse(localStorage.getItem("sk-a-learn_progress") || "[]");
+    let m = a.find((d) => d.id === "me"); if (!m) { m = { id: "me" }; a.push(m); }
+    Object.assign(m, pt);
+    localStorage.setItem("sk-a-learn_progress", JSON.stringify(a));
+  }, patch);
 
   /* ================= 🇯🇵 Japanisch – hell, 390 ================= */
   let { ctx, page } = await newPage("light");
@@ -129,7 +149,8 @@ function fakes() {
   ok(await page.$(".lp-node.is-current") && await page.$(".lp-start"), "erster Knoten aktuell mit START");
   ok((await page.$$(".lp-node.is-locked")).length > 10, "weitere Knoten gesperrt 🔒");
   ok(await page.$(".lp-node.lp-n-chest") && await page.$(".lp-node.lp-n-check"), "Schatzkiste 🎁 und Prüfung 🏁 im Pfad");
-  ok(/❤️5/.test((await page.textContent(".lp-hearts")).replace(/\s/g, "")), "5 Herzen");
+  ok(/🔋25/.test(await chip(page)) && !/\+1in/.test(await chip(page)), "🔋 25 Energie (voll, kein „+1 in“)");
+  ok(!(await page.$(".lp-hearts, .lp-phearts")) && !/❤️|Herz/.test(await page.textContent(".lp")), "keine Herzen mehr im Lernpfad");
   // Tagesziel einmal wählen
   ok(await page.isVisible(".lp-goalpick"), "Tagesziel-Auswahl beim ersten Mal");
   await page.click('.lp-goalbtn[data-goal="normal"]');
@@ -145,6 +166,7 @@ function fakes() {
   await page.click('.lp-pop [data-lp="start"]');
   await page.waitForSelector(".lp-player .lp-ex", { timeout: 3000 });
   ok(await page.isVisible(".lp-prog") && await page.isVisible(".lp-check"), "Vollbild-Lektion mit Fortschrittsbalken und PRÜFEN");
+  ok(await page.isVisible(".lp-penergy .lp-ebar") && /🔋25/.test((await page.textContent(".lp-penergy")).replace(/\s/g, "")), "Player oben: 🔋 25 mit kleinem Energie-Balken");
   ok(await page.isDisabled(".lp-check"), "PRÜFEN erst nach einer Auswahl");
   let first = await curEx(page);
   ok(first.type === "mc" && first.mode === "k2r", "erste Übung: Kana → Romaji");
@@ -171,7 +193,9 @@ function fakes() {
   ok(!(await page.$(".lp-player")), "WEITER schließt die Lektion");
   let me = await lpDoc(page, "me");
   let jp = await lpDoc(page, "jp");
-  ok(me.hearts.n === 4, "ein Fehler kostet ein Herz (4 ❤️)");
+  const en1 = expectEnergy(25, jpRes.oks);
+  ok(!me.hearts && me.energy && me.energy.n === en1, `Energie: ${jpRes.oks.length} Antworten, 1 Fehler (−2), Combo-Bonus → 🔋 ${me.energy && me.energy.n} (erwartet ${en1})`);
+  ok(en1 === 25 - jpRes.oks.length - 1 + 2 * Math.floor((jpRes.oks.length - 1) / 5), "falsch kostet 2, alle 5 richtigen in Folge +2");
   ok(jp && Object.keys(jp.nodes).length === 1 && jp.nodes["jp-hira-b1-1"].c === 1, "Knoten 1 geschafft, Krone Stufe 1");
   const xp1 = Object.values(jp.xp)[0];
   ok(xp1 >= 10, `XP gespeichert (${xp1})`);
@@ -182,7 +206,7 @@ function fakes() {
   ok(st[0] && Object.values(st[0].days)[0].path >= 11, "klassische Statistik zählt die Lernpfad-Übungen");
   ok(await page.getAttribute('[data-node="jp-hira-b1-1"]', "class").then((c) => /is-done/.test(c)), "Knoten 1 ⭐ geschafft");
   ok(await page.getAttribute('[data-node="jp-hira-b1-2"]', "class").then((c) => /is-current/.test(c)), "nächster Knoten freigeschaltet (aktuell)");
-  ok(/❤️4/.test((await page.textContent(".lp-hearts")).replace(/\s/g, "")) && /\+1 in/.test(await page.textContent(".lp-hearts")), "Kopfzeile: 4 Herzen, +1 in … min");
+  ok((await chip(page)).startsWith(`🔋${en1}`) && /\+1in(30|29)min/.test(await chip(page)), `Kopfzeile: 🔋 ${en1}, „+1 in 30 min“`);
 
   // Reload → alles bleibt
   await page.reload();
@@ -197,32 +221,62 @@ function fakes() {
   await page.click('.jp-tab[data-tab="pfad"]');
   await page.waitForSelector(".lp-path");
 
-  // Herzen leer → freundlicher Hinweis + Üben
-  await page.evaluate(() => {
-    const a = JSON.parse(localStorage.getItem("sk-a-learn_progress"));
-    const m = a.find((d) => d.id === "me"); m.hearts = { n: 1, at: Date.now() };
-    localStorage.setItem("sk-a-learn_progress", JSON.stringify(a));
-  });
+  // 🔋 Energie leer mitten in der Lektion → freundlicher Hinweis (Funki) + Üben/Auffüllen/Später
+  await setMe(page, { energy: { n: 5, at: Date.now(), day: todayKey() } });
   await page.reload();
   await page.waitForSelector(".lp-path .lp-node", { timeout: 8000 });
+  ok((await chip(page)).startsWith("🔋5"), "Kopfzeile: 🔋 5");
   await page.click(".lp-node.is-current");
   await page.click('.lp-pop [data-lp="start"]');
   await page.waitForSelector(".lp-player .lp-ex");
+  ok(true, "mit 5 🔋 lässt sich eine Lektion starten");
   await answer(page, { wrong: true });
-  ok(/❤️0/.test((await page.textContent(".lp-phearts")).replace(/\s/g, "")), "letztes Herz verloren");
+  ok(/🔋3/.test((await page.textContent(".lp-penergy")).replace(/\s/g, "")), "falsche Antwort kostet 2 🔋 (5 → 3)");
+  await page.click(".lp-cont");
+  await answer(page, { wrong: true });
+  await page.click(".lp-cont");
+  ok(!(await page.$(".lp-out")), "mit 1 🔋 geht die Lektion weiter (Schwelle nur beim Start)");
+  await answer(page, { wrong: true });
+  ok(/🔋0/.test((await page.textContent(".lp-penergy")).replace(/\s/g, "")), "Energie aufgebraucht (0)");
   await page.click(".lp-cont");
   await page.waitForSelector(".lp-out");
-  ok(/Mach eine kurze Pause oder übe Fehler/.test(await page.textContent(".lp-out")), "0 Herzen → „Mach eine kurze Pause oder übe Fehler 💪“");
-  await shot(page, "lp-jp-hearts-out-390-light.png");
+  const outTxt = await page.textContent(".lp-out");
+  ok(/Keine Energie mehr/.test(outTxt) && await page.$(".lp-out .lp-mascot-calm"), "0 🔋 → „Keine Energie mehr“ mit Funki");
+  ok(/Üben \(gratis, lädt Energie\)/.test(outTxt) && /Auffüllen · 300 💎/.test(outTxt) && /Später weiter/.test(outTxt), "Knöpfe: 🏋️ Üben (gratis) · 🔋 Auffüllen 300 💎 · Später weiter");
+  await shot(page, "lp-jp-energy-out-390-light.png");
   await page.click('.lp-out [data-p="practice"]');
   await page.waitForSelector(".lp-player .lp-ex");
-  ok(/∞/.test(await page.textContent(".lp-phearts")), "Üben kostet keine Herzen (∞)");
-  await playToEnd(page, { wrongAt: [1] });
+  ok(/gratis/.test(await page.textContent(".lp-penergy")), "Üben kostet keine Energie (gratis)");
+  await shot(page, "lp-jp-practice-390-light.png");
+  const pr = await playToEnd(page, { wrongAt: [1] });
   await page.waitForSelector(".lp-end");
-  ok(/Fein geübt/.test(await page.textContent(".lp-end")) && /\+1 Herz/.test(await page.textContent(".lp-end")), "Üben fertig: ❤️ +1");
+  const gain = Math.min(5, pr.oks.filter(Boolean).length);
+  ok(/Fein geübt/.test(await page.textContent(".lp-end")) && new RegExp(`🔋 \\+${gain} Energie`).test(await page.textContent(".lp-end")), `Üben fertig: 🔋 +${gain}`);
   await page.click('[data-p="done"]');
   me = await lpDoc(page, "me");
-  ok(me.hearts.n === 1, "Herz durch Üben zurück (1 ❤️)");
+  ok(me.energy.n === gain && gain === 5, "Üben lädt +1 je richtiger Antwort, höchstens +5 (0 → 5)");
+  // Start-Schwelle + Auffüllen mit 💎
+  await setMe(page, { gems: 320, energy: { n: 3, at: Date.now(), day: todayKey() } });
+  await page.reload();
+  await page.waitForSelector(".lp-path .lp-node", { timeout: 8000 });
+  ok(/\+1in/.test(await chip(page)) && await page.$(".lp-energy.low"), "unter 5 🔋: Chip markiert + „+1 in … min“");
+  await page.click(".lp-node.is-current");
+  await page.click('.lp-pop [data-lp="start"]');
+  await page.waitForSelector(".lp-out");
+  ok(/Zu wenig Energie/.test(await page.textContent(".lp-out")) && /mindestens 5/.test(await page.textContent(".lp-out")), "Start erst ab 5 🔋 → „Zu wenig Energie“");
+  await page.click('.lp-out [data-p="buy"]');
+  await page.waitForSelector(".lp-player", { state: "detached" });
+  me = await lpDoc(page, "me");
+  ok(me.energy.n === 25 && me.gems === 20, "🔋 Auffüllen: 300 💎 → voll");
+  ok((await chip(page)).startsWith("🔋25"), "Kopfzeile wieder 🔋 25");
+  // 🌅 Neuer Tag → gratis voll
+  await setMe(page, { energy: { n: 2, at: Date.now() - 3600e3, day: "2026-01-01" } });
+  await page.reload();
+  await page.waitForSelector(".lp-path .lp-node", { timeout: 8000 });
+  await page.waitForTimeout(300);
+  me = await lpDoc(page, "me");
+  ok((await chip(page)).startsWith("🔋25") && me.energy.n === 25 && me.energy.day === todayKey(), "erster Besuch an einem neuen Tag: Energie gratis voll");
+  ok(/Neuer Tag/.test(await page.evaluate(() => document.body.innerText)), "Hinweis „🌅 Neuer Tag – Energie wieder voll“");
   // App bleibt bedienbar
   await page.evaluate(() => { location.hash = "#heute"; });
   await page.waitForTimeout(300);
@@ -246,7 +300,7 @@ function fakes() {
   // Ganz neu (noch nichts gelernt/falsch): „Üben“ darf nie ins Leere laufen – wärmt mit der aktuellen Lektion auf
   await page.click('.lp-practice [data-lp="practice"]');
   await page.waitForSelector(".lp-player .lp-ex", { timeout: 4000 });
-  ok(/∞/.test(await page.textContent(".lp-phearts")), "Neu-Start: „Üben“ öffnet trotzdem (Aufwärmen, ∞ Herzen)");
+  ok(/gratis/.test(await page.textContent(".lp-penergy")), "Neu-Start: „Üben“ öffnet trotzdem (Aufwärmen, gratis)");
   await page.click('.lp-player [data-p="quit"]');
   await page.waitForTimeout(250);
   if (await page.$(".lp-player")) { const q = await page.$('.lp-player [data-p="quit-yes"], .lp-player [data-p="leave"]'); if (q) await q.click(); }
@@ -266,7 +320,7 @@ function fakes() {
   await page.click('[data-p="done"]');
   let lap = await lpDoc(page, "lap");
   me = await lpDoc(page, "me");
-  ok(lap.nodes["lap-y1-grund-1-1"] && me.hearts.n === 4, "LAP-Lektion geschafft, ein Herz weniger");
+  ok(lap.nodes["lap-y1-grund-1-1"] && me.energy.n === expectEnergy(25, lapRes.oks), `LAP-Lektion geschafft, 🔋 ${me.energy.n} (${lapRes.oks.length} Antworten, 1 Fehler)`);
   const lc = await page.evaluate(() => JSON.parse(localStorage.getItem("sk-a-lap_cards") || "[]"));
   ok(lc.some((c) => c.lapses >= 1) && lc.length >= 6, "Fehler fließen ins LAP-SRS (Lernkarten-Reiter)");
   ok(/is-current/.test(await page.getAttribute('[data-node="lap-y1-grund-1-2"]', "class")), "nächste LAP-Lektion freigeschaltet");
@@ -299,7 +353,7 @@ function fakes() {
   for (const scheme of ["light", "dark"]) {
     ({ ctx, page } = await newPage(scheme));
     await page.evaluate(() => {
-      localStorage.setItem("sk-a-learn_progress", JSON.stringify([{ id: "me", goal: "normal", gems: 420, hearts: { n: 5, at: 0 }, freezes: 0, frozen: {}, ach: {}, ok: 0, lessons: 0, perfect: 0 }]));
+      localStorage.setItem("sk-a-learn_progress", JSON.stringify([{ id: "me", goal: "normal", gems: 420, freezes: 0, frozen: {}, ach: {}, ok: 0, lessons: 0, perfect: 0 }]));
       localStorage.setItem("sk-a-lap_stats", JSON.stringify([{ id: "me", goal: 15, newPerDay: 10, year: 1, days: {} }]));
       });
     await page.reload(); await page.waitForTimeout(300);
@@ -325,11 +379,12 @@ function fakes() {
 
   /* ================= Japanisch dunkel: Übung + Feedback + Ende ================= */
   ({ ctx, page } = await newPage("dark"));
-  await page.evaluate(() => { localStorage.setItem("sk-a-learn_progress", JSON.stringify([{ id: "me", goal: "ernst", gems: 0, hearts: { n: 5, at: 0 }, ach: {} }])); });
+  await page.evaluate(() => { localStorage.setItem("sk-a-learn_progress", JSON.stringify([{ id: "me", goal: "ernst", gems: 0, hearts: { n: 0, at: Date.now() }, ach: {} }])); });
     await page.reload(); await page.waitForTimeout(300);
     await page.evaluate(() => { location.hash = "#alltag/japanisch"; });
   await page.waitForSelector(".lp-path .lp-node", { timeout: 8000 });
   await page.evaluate(() => window.scrollTo(0, 0));
+  ok((await chip(page)).startsWith("🔋25"), "Umstieg: alte ❤️ Herzen (0) → 🔋 25 Energie");
   await shot(page, "lp-jp-path-390-dark.png");
   // Wortschatz-Abschnitt ist eigener Abschnitt → frei
   await page.click('[data-node="jp-w0-1"]');
@@ -341,6 +396,18 @@ function fakes() {
   ok(vres.types.includes("tiles") && vres.types.includes("match"), "Wortschatz: Kacheln bauen + Paare");
   await page.waitForSelector(".lp-end");
   await shot(page, "lp-jp-end-390-dark.png");
+  await page.click('[data-p="done"]');
+  ok(!(await lpDoc(page, "me")).hearts, "Umstieg: hearts-Feld ist weg");
+  await setMe(page, { energy: { n: 0, at: Date.now() - 10 * 60e3, day: todayKey() } });
+  await page.reload();
+  await page.waitForSelector(".lp-path .lp-node", { timeout: 8000 });
+  await page.evaluate(() => window.scrollTo(0, 0));
+  ok(/\+1in(20|21)min/.test(await chip(page)), "„+1 in 20 min“ unter dem Energie-Chip");
+  await shot(page, "lp-jp-path-low-390-dark.png");
+  await page.click('[data-node="jp-w0-2"]');
+  await page.click('.lp-pop [data-lp="start"]');
+  await page.waitForSelector(".lp-out");
+  await shot(page, "lp-jp-energy-out-390-dark.png");
   await ctx.close();
   void tilesShot;
 
@@ -357,7 +424,7 @@ function fakes() {
       const us = P.jpUnits({ groups: d.KANA_GROUPS, vocab: d.VOCAB, toKata: c.toKatakana, grammar: g.GRAMMAR, sentences: s.SENTENCES, order: g.PATH_ORDER });
       const nodes = {};
       for (const u of us) if (u.id === "jp-w0" || u.id === "jp-w1") for (const n of u.nodes) nodes[n.id] = { c: 1, n: 1, at: Date.now() };
-      localStorage.setItem("sk-a-learn_progress", JSON.stringify([{ id: "me", goal: "normal", gems: 0, hearts: { n: 5, at: 0 }, ach: { first: 1 } }, { id: "jp", nodes, xp: {} }]));
+      localStorage.setItem("sk-a-learn_progress", JSON.stringify([{ id: "me", goal: "normal", gems: 0, ach: { first: 1 } }, { id: "jp", nodes, xp: {} }]));
     });
     await page.reload(); await page.waitForTimeout(300);
     await page.evaluate(() => { location.hash = "#alltag/japanisch"; });
@@ -402,7 +469,7 @@ function fakes() {
   /* ================= Desktop 1440: Seitenleiste, Laden, Kacheln-Übung ================= */
   ({ ctx, page } = await newPage("light", { width: 1440, height: 900 }));
   await page.evaluate(() => {
-    localStorage.setItem("sk-a-learn_progress", JSON.stringify([{ id: "me", goal: "normal", gems: 420, hearts: { n: 3, at: Date.now() }, freezes: 0, frozen: {}, ach: { first: 1 }, ok: 12, lessons: 1 }]));
+    localStorage.setItem("sk-a-learn_progress", JSON.stringify([{ id: "me", goal: "normal", gems: 420, energy: { n: 8, at: Date.now(), day: (() => { const d = new Date(); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`; })() }, freezes: 0, frozen: {}, ach: { first: 1 }, ok: 12, lessons: 1 }]));
     });
     await page.reload(); await page.waitForTimeout(300);
     await page.evaluate(() => { location.hash = "#alltag/japanisch"; });
@@ -416,7 +483,7 @@ function fakes() {
   await page.waitForTimeout(200);
   me = await lpDoc(page, "me");
   ok(me.gems === 220 && me.freezes === 1, "🧊 Serien-Schutz für 200 💎 gekauft");
-  ok(await page.isDisabled('[data-lp="buy-hearts"]'), "Herzen auffüllen braucht 350 💎");
+  ok(await page.isDisabled('[data-lp="buy-energy"]') && /300 💎/.test(await page.textContent('[data-lp="buy-energy"]')), "🔋 Energie auffüllen braucht 300 💎 (220 reichen nicht)");
   await shot(page, "lp-jp-path-1440-light.png");
   await page.click('[data-node="jp-w0-1"]');
   await page.click('.lp-pop [data-lp="start"]');
