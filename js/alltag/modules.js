@@ -25,6 +25,7 @@ export const MODULES = [
   { id: "fahrzeuge", title: "🚗 Fahrzeuge", short: "Fahrzeuge", sub: "Pickerl, Service, Tankbuch, Kilometerstand", icon: "car", color: "#2563eb", load: () => import("./fahrzeuge.js") }, // Update 10
   { id: "haushalt", title: "🏡 Haushalt", short: "Haushalt", sub: "Putzplan, Wartung & was heute dran ist", icon: "home", color: "#0f766e", load: () => import("./haushalt.js") }, // Update 10 C
   { id: "routinen", title: "🎯 Routinen & Ziele", short: "Routinen & Ziele", sub: "Gewohnheiten 🔥, Morgen-/Abendroutine, Ziele", icon: "target", color: "#ea580c", load: () => import("./routinen.js") }, // Update 10 C
+  { id: "listen", title: "🎬 Freizeit-Listen", short: "Freizeit-Listen", sub: "Serien, Filme, Bücher, Games, Ausflüge & Geschenkideen", icon: "star", color: "#db2777", load: () => import("./listen.js") }, // Update 11
   { id: "notizen", title: "🧠 Notizbuch", short: "Notizbuch", sub: "Notizen, Verknüpfungen & was Claude sich merkt", icon: "note", color: "#7c3aed", load: () => import("./notizen.js") }, // Update 10 C
   { id: "notfall", title: "🆘 Notfallkarte", short: "Notfallkarte", sub: "Blutgruppe, Allergien, Medikamente, Kontakte", icon: "heart", color: "#dc2626", load: () => import("./notfall.js") }, // Update 10 C
   { id: "dokumente", title: "📁 Dokumente", short: "Dokumente", sub: "Rechnungen, Verträge, Garantie – mit Ablauf-Erinnerung", icon: "file", color: "#0369a1", load: () => import("./dokumente.js") }, // Update 10 E

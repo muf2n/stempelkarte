@@ -33,6 +33,7 @@ on:
       - "js/site-core.js"
       - "js/weekreport-core.js"
       - "js/alltag/einkauf-core.js"
+      - "js/alltag/listen-core.js"
       - "js/alltag/werkzeug-core.js"
       - "js/alltag/fahrzeug-core.js"
       - "js/alltag/notes-core.js"

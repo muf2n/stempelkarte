@@ -201,3 +201,22 @@ test("💼 Rechnungen: überfällig/bald fällig, nur wenn Buchhaltung an; Geld-
   const free = N.collect({ ...base, cols: { ...base.cols, buch_settings: [{ id: "main", lockWithMoney: false }] }, settings: on, moneyLocked: true }).filter((i) => i.kind === "rechnungen");
   assert.ok(free[0].sub.includes("120,00 €"), "nicht mitgeschützt: Beträge sichtbar");
 });
+
+test("Update 11: 🎁 Geschenk-Anlässe in den nächsten 14 Tagen", () => {
+  const now = new Date(2026, 10, 10, 9, 0).getTime(); // Di 10.11.2026
+  const cols = { freizeit_listen: [
+    { id: "g1", type: "geschenk", title: "Schal", person: "Mama", occasion: "Geburtstag", date: "2026-11-12" },
+    { id: "g2", type: "geschenk", title: "Buch", date: "2026-12-24" },
+    { id: "g3", type: "geschenk", title: "Tasse", date: "2026-11-11", status: "fertig" },
+    { id: "f1", type: "film", title: "Dune", date: "2026-11-11" },
+  ] };
+  const r = N.collect({ now, todos: [], cols, loaded: { freizeit_listen: true } });
+  const g = r.filter((x) => x.kind === "geschenke");
+  assert.deepEqual(g.map((x) => x.id), ["gs:g1:2026-11-12"]);
+  assert.equal(g[0].title, "Geschenk für Mama");
+  assert.equal(g[0].prio, 2);
+  assert.equal(g[0].target, "#alltag/listen/geschenk");
+  assert.deepEqual(N.NEEDS.geschenke, ["freizeit_listen"]);
+  const off = N.collect({ now, todos: [], cols, loaded: { freizeit_listen: true }, settings: { notify: { off: ["geschenke"] } } });
+  assert.ok(!off.some((x) => x.kind === "geschenke"));
+});

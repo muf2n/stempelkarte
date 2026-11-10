@@ -37,6 +37,7 @@ export const MODULE_NOTIFY = {
   routinen: ["gewohnheiten"],
   automationen: ["automation"],
   vertraege: ["vertraege"], // Update 10 E
+  listen: ["geschenke"], // Update 11
   inventar: ["garantie"], // Update 10 E
   buchhaltung: ["rechnungen"], // Update 10 – 💼 Buchhaltung
 };

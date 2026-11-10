@@ -1,0 +1,50 @@
+/* Update 11 – Alltag › 🎬 Freizeit-Listen (js/alltag/listen.js). Präfix .ls- */
+.ls { display: flex; flex-direction: column; gap: 12px; min-width: 0; max-width: 760px; margin: 0 auto; width: 100%; padding-bottom: 40px; }
+.ls-hero { display: flex; align-items: center; gap: 12px; padding: 14px 16px; border-radius: var(--r-sm); color: #fff;
+  background: linear-gradient(135deg, #db2777, #7c3aed); box-shadow: var(--shadow); }
+.ls-hero > span { font-size: 2rem; line-height: 1; }
+.ls-hero b { display: block; font-size: 1.1rem; }
+.ls-hero small { opacity: .92; }
+.ls-tabs { display: flex; gap: 6px; overflow-x: auto; padding-bottom: 4px; scrollbar-width: thin; }
+.ls-tab { flex: none; display: inline-flex; align-items: center; gap: 6px; min-height: 40px; padding: 6px 12px; border-radius: 999px;
+  border: 1px solid var(--line); background: var(--card); color: var(--ink); font: inherit; font-weight: 600; cursor: pointer; }
+.ls-tab.on { background: var(--accent); border-color: var(--accent); color: var(--accent-ink, #fff); }
+.ls-tab i { font-style: normal; font-size: .75rem; padding: 1px 7px; border-radius: 999px; background: color-mix(in srgb, currentColor 16%, transparent); }
+.ls-bar { display: grid; grid-template-columns: minmax(0, 1fr) auto auto; gap: 8px; align-items: center; }
+.ls-bar > * { width: auto; min-width: 0; margin: 0; }
+.ls-bar select { max-width: 9.5em; }
+@media (max-width: 520px) { .ls-bar { grid-template-columns: minmax(0, 1fr) auto; } .ls-bar input[type="search"] { grid-column: 1 / -1; } .ls-bar select { max-width: none; } }
+.ls-form { display: grid; gap: 10px; }
+.ls-form h3 { margin: 0; }
+.ls-form label { display: grid; gap: 4px; font-weight: 600; font-size: .9rem; min-width: 0; }
+.ls-row { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+@media (max-width: 420px) { .ls-row { grid-template-columns: 1fr; } }
+.ls-stars { border: 0; margin: 0; padding: 0; display: flex; align-items: center; gap: 2px; flex-wrap: wrap; }
+.ls-stars legend { font-weight: 600; font-size: .9rem; padding: 0; margin-bottom: 4px; }
+.ls-stars label { display: inline-flex; cursor: pointer; }
+.ls-stars input { position: absolute; opacity: 0; width: 1px; height: 1px; }
+.ls-stars label span { font-size: 1.6rem; line-height: 1; color: var(--line); padding: 2px; }
+.ls-stars label:has(~ label input:checked) span, .ls-stars label:has(input:checked) span { color: #f59e0b; }
+.ls-stars .ls-nostar span { font-size: .85rem; color: var(--muted); margin-left: 8px; }
+.ls-stars input:focus-visible + span { outline: 2px solid var(--ring, var(--accent)); border-radius: 4px; }
+.ls-btns { display: flex; gap: 8px; flex-wrap: wrap; }
+.ls-list { list-style: none; margin: 0; padding: 0; display: grid; gap: 8px; }
+.ls-item { display: flex; align-items: flex-start; gap: 10px; padding: 10px 12px; border-radius: var(--r-sm); background: var(--card); border: 1px solid var(--line); }
+.ls-item.st-laeuft { border-left: 4px solid var(--accent); }
+.ls-item.st-fertig .ls-main b { opacity: .7; }
+.ls-st { flex: none; min-height: 36px; padding: 4px 10px; border-radius: 999px; border: 1px solid var(--line); background: var(--soft, transparent);
+  color: var(--ink); font: inherit; font-size: .8rem; font-weight: 600; cursor: pointer; white-space: nowrap; }
+.ls-main { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; overflow-wrap: anywhere; }
+.ls-main small { color: var(--muted); font-size: .84rem; }
+.ls-note { white-space: pre-line; }
+.ls-rate { color: #f59e0b; letter-spacing: 1px; font-size: .95rem; }
+.ls-link { font-size: .84rem; }
+.ls-acts { flex: none; display: flex; gap: 4px; }
+.ls-group h4 { margin: 6px 0; display: flex; align-items: baseline; gap: 8px; flex-wrap: wrap; }
+.ls-group h4 small { color: var(--muted); font-weight: 500; }
+@media (max-width: 480px) {
+  .ls-item { flex-wrap: wrap; }
+  .ls-main { flex-basis: calc(100% - 100px); order: 2; }
+  .ls-st { order: 1; }
+  .ls-acts { order: 3; margin-left: auto; }
+}

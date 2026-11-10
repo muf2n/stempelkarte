@@ -86,6 +86,8 @@ test("tools/list: alle Werkzeuge mit deutschen Beschreibungen und Schemas", asyn
     "kontakte_lesen",
     // Update 10 – 💡 App-Wünsche
     "app_wuensche_lesen",
+    // Update 11 – Freizeit-Listen
+    "listen_lesen",
     // M3 (Audit 2): einkauf_hinzufuegen, gedaechtnis_merken, app_wunsch_notieren nur im In-App-Chat (Schreibsperre nach fremdem Text)
   ].sort());
   for (const x of result.tools) {

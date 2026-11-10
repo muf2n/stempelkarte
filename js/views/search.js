@@ -17,6 +17,7 @@ import * as DKC from "../alltag/dokumente-core.js"; // Update 10 E
 import * as DKS from "../alltag/dokumente-store.js";
 import * as AWC from "../alltag/app-wishes-core.js"; // Update 10 – 💡 App-Wünsche // Update 10 – 🔒 entschlüsselte Dokumente
 import * as VTC from "../alltag/vertraege-core.js"; // Update 10 E
+import * as LSC from "../alltag/listen-core.js"; // Update 11
 import * as INC from "../alltag/inventar-core.js"; // Update 10 E
 import * as KTC from "../alltag/kontakte-core.js"; // Update 10 E
 import * as BUC from "../alltag/buch-core.js"; // Update 10 – 💼 Buchhaltung
@@ -31,7 +32,7 @@ const RECENT_KEY = "sk-search-recent";
 const PER_GROUP = 4;
 const COLS = ["material_items", "einkauf", "einkauf_lists", "photo_albums", "school_exams", "school_tasks", "school_timetable", "school_grades",
   "travel_trips", "travel_packing", "travel_places", "jp_cards", "berichtsheft", "werkzeug", "fahrzeug_info",
-  "haushalt", "habits", "goals", "notes", "ai_memory", "automations", "dokumente", "vertraege", "inventar", "kontakte", "app_wishes", "buch_settings", "buch_belege", "buch_rechnungen"]; // Update 10 C + Automationen + E + 💡 App-Wünsche
+  "haushalt", "habits", "goals", "notes", "ai_memory", "automations", "dokumente", "vertraege", "inventar", "kontakte", "app_wishes", "buch_settings", "buch_belege", "buch_rechnungen", "freizeit_listen"]; // Update 10 C + Automationen + E + 💡 App-Wünsche
 const MONEY_COLS = ["money_tx", "money_subs", "money_wishes"]; // Update 10 E: + Wunschliste
 const KIND = { termin: "📅 Termin", aufgabe: "✅ Aufgabe", geburtstag: "🎂 Geburtstag", einsatz: "🛠️ Einsatz" };
 const WD_L = ["So", "Mo", "Di", "Mi", "Do", "Fr", "Sa"];
@@ -399,6 +400,13 @@ function buildIndex() {
     if (!c.id || !c.name) continue;
     add({ cat: "vertraege", id: c.id, emoji: VTC.kindById(c.kind).e, title: c.name, sub: [c.provider, VTC.statusLine(c, u.dayKey(Date.now()))].filter(Boolean).join(" · "),
       text: VTC.searchText(c), ts: c.updated, go: { t: "hash", h: VTC.contractHash(c.id) } });
+  }
+  for (const x of D("freizeit_listen")) { // Update 11 – Freizeit-Listen
+    const it = LSC.normItem(x);
+    if (!it.id || !it.title) continue;
+    const ty = LSC.typeById(it.type);
+    add({ cat: "listen", id: it.id, emoji: ty.e, title: it.title, sub: [ty.one, LSC.statusLabel(it.type, it.status), it.person].filter(Boolean).join(" · "),
+      text: LSC.searchText(it), dates: it.date ? [it.date] : [], ts: it.updated, go: { t: "hash", h: LSC.listHash(it.type) } });
   }
   for (const x of D("inventar")) {
     const it = INC.normItem(x);

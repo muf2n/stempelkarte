@@ -27,6 +27,7 @@ import { SETTINGS_TOOLS } from "./settings.js"; // Update 9 – Einstellungen nu
 import { GMAIL_TOOLS } from "./gmail.js"; // Gmail dauerhaft (nur lesen): mails_suchen, mail_lesen
 import { SITE_TOOLS } from "./baustelle.js"; // Update 10d – Baustellen-Projektseite (nur lesen)
 import { WEEKREPORT_TOOLS } from "./wochenbericht.js"; // Update 10 – Automatischer Wochenbericht (nur lesen)
+import { LISTEN_TOOLS } from "./listen.js"; // Update 11 – Freizeit-Listen (listen_lesen)
 import { EINKAUF_TOOLS } from "./einkauf.js"; // Update 10 – Einkaufsliste (einkauf_lesen, einkauf_hinzufuegen)
 import { WERKZEUG_TOOLS } from "./werkzeug.js"; // Update 10 – Werkzeug-Register (werkzeug_lesen, nur lesen)
 import { KONTAKTE_TOOLS } from "./kontakte.js"; // Update 10 E – kontakte_lesen (RO, Notizen untrusted, Telefon/E-Mail nur auf Nachfrage)
@@ -1740,6 +1741,7 @@ for (const t of [...READ_TOOLS, ...WRITE_TOOLS, ...SETTINGS_TOOLS]) tool(t);
 /* ===== Update 10d: Baustellen-Projektseite (nur lesen) ===== */
 for (const t of SITE_TOOLS) tool(t);
 for (const t of WEEKREPORT_TOOLS) tool(t); // Update 10 – wochenbericht_lesen
+for (const t of LISTEN_TOOLS) tool(t); // Update 11 – listen_lesen (RO)
 for (const t of EINKAUF_TOOLS) tool(t); // Update 10 – einkauf_lesen (RO), einkauf_hinzufuegen (WR → Untrusted-Sperre greift)
 for (const t of WERKZEUG_TOOLS) tool(t); // Update 10 – werkzeug_lesen (RO, Notizen als untrusted_content)
 for (const t of FAHRZEUG_TOOLS) tool(t); // Update 10 – fahrzeuge_lesen (RO, Notizen als untrusted_content)
