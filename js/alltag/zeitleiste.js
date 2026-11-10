@@ -11,7 +11,7 @@ import { tripsBetween } from "../travel.js";
 import { fromLabel, toLabel } from "../trip-core.js";
 
 const FILTER_KEY = "sk-tl-cats";
-const COLS = ["site_log", "travel_trips", "freizeit", "school_exams"];
+const COLS = ["site_log", "travel_trips", "travel_journal", "freizeit", "school_exams"]; // Update 11: + Reisetagebuch
 const STEP = 18;        // so viele neue Einträge pro Nachladen (mindestens)
 const MAX_EMPTY = 24;   // höchstens so viele leere Monate am Stück durchsuchen
 const lsGet = (k) => { try { return localStorage.getItem(k); } catch { return null; } };

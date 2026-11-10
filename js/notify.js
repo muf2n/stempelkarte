@@ -6,6 +6,7 @@ import * as N from "./notify-core.js";
 import { collection } from "./alltag/db.js";
 import { lastBackupAt } from "./backup-core.js";
 import { cachedAutoAt } from "./backup.js";
+import * as guard from "./sync-guard.js"; // Update 11 – Sync-Konflikte
 
 const LS = "stempelkarte.notify.v1";
 let ctx = null;
@@ -65,6 +66,7 @@ export function mount(c) {
   window.addEventListener("sk:backup-changed", schedule);
   window.addEventListener("storage", (ev) => { if (ev.key === LS) { state = readState(); schedule(); } });
   setInterval(schedule, 60000);
+  guard.onChange(schedule); // Update 11
   import("./alltag/money-lock-state.js").then((m) => { lockMod = m; m.onChange(schedule); schedule(); }).catch(() => { /* ohne Geld-Sperre */ });
   if (ctx.store && ctx.store.get) update(ctx.store.get());
 }
@@ -115,6 +117,7 @@ function recompute() {
     lastBackupAt: lastBackupAt(s, [{ created: cachedAutoAt() }]),
     hasData: (snap.entries || []).length + (snap.todos || []).length + (snap.places || []).length > 0,
     briefingOffer: true, // Update 10 F
+    conflicts: guard.conflicts(), // Update 11
   });
   const pruned = N.prune(state, items);
   if (JSON.stringify(pruned) !== JSON.stringify(state)) { state = pruned; writeState(); }
@@ -203,6 +206,10 @@ function navigate(target) {
   }
   if (t.startsWith("briefing:")) { // Update 10 F – ☀️ Briefing / 📅 Wochenrückblick
     import("./briefing.js").then((m) => m.openBriefing(ctx, t.slice(9))).catch((err) => { console.error(err); ctx.ui.toast("Briefing konnte nicht geladen werden."); });
+    return;
+  }
+  if (t === "sync:conflicts") { // Update 11
+    import("./views/sync-conflicts.js").then((m) => m.openConflicts(ctx)).catch((err) => console.error(err));
     return;
   }
   if (t === "weekreport") {

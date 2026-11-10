@@ -1,0 +1,41 @@
+/* Update 12 – Alltag › 💼 Karriere (js/alltag/karriere.js). Präfix .kr2- */
+.kr2 { display: flex; flex-direction: column; gap: 12px; min-width: 0; max-width: 780px; margin: 0 auto; width: 100%; padding-bottom: 40px; }
+.kr2-tabs { display: flex; gap: 6px; overflow-x: auto; scrollbar-width: none; }
+.kr2-tab { flex: none; display: inline-flex; align-items: center; gap: 6px; min-height: 42px; padding: 6px 14px; border-radius: 999px; border: 1px solid var(--line); background: var(--card); color: var(--ink); font: inherit; font-weight: 600; cursor: pointer; }
+.kr2-tab.on { background: var(--accent); border-color: var(--accent); color: var(--accent-ink, #fff); }
+.kr2-body { display: flex; flex-direction: column; gap: 12px; min-width: 0; }
+.kr2-row { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.kr2-row h3 { margin: 0; }
+.kr2-sp { flex: 1; }
+.kr2-hero { display: flex; align-items: center; gap: 16px; }
+.kr2-hero h3 { margin: 0 0 2px; }
+.kr2-hero small { color: var(--muted); display: block; margin-bottom: 8px; }
+.kr2-ring { flex: none; width: 84px; height: 84px; border-radius: 50%; display: grid; place-items: center;
+  background: radial-gradient(closest-side, var(--card) 76%, transparent 78% 100%), conic-gradient(var(--accent) calc(var(--p) * 1%), var(--line) 0); }
+.kr2-ring b { font-size: 1.2rem; }
+.kr2-goals, .kr2-skills, .kr2-list, .kr2-cv, .kr2-prep { list-style: none; margin: 8px 0 0; padding: 0; display: grid; gap: 6px; }
+.kr2-goals li { display: flex; align-items: center; gap: 8px; min-width: 0; }
+.kr2-goals label { flex: 1; display: flex; align-items: center; gap: 8px; min-height: 40px; overflow-wrap: anywhere; }
+.kr2-goals li.done span { text-decoration: line-through; color: var(--muted); }
+.kr2-goals small { color: var(--muted); flex: none; }
+.kr2-x { border: 0; background: none; color: var(--muted); cursor: pointer; min-width: 36px; min-height: 36px; }
+.kr2-skills li { display: grid; grid-template-columns: minmax(0, 1fr) 40%; gap: 10px; align-items: center; }
+.kr2-bar { height: 8px; border-radius: 99px; background: var(--line); overflow: hidden; }
+.kr2-bar i { display: block; height: 100%; background: var(--accent); border-radius: inherit; }
+.kr2-pre { white-space: pre-line; }
+.kr2-cv { border-left: 2px solid var(--line); padding-left: 12px; }
+.kr2-cv button { width: 100%; display: flex; flex-direction: column; align-items: flex-start; gap: 1px; padding: 6px 0; border: 0; background: none; color: var(--ink); font: inherit; text-align: left; cursor: pointer; overflow-wrap: anywhere; }
+.kr2-cv small, .kr2-cv span { color: var(--muted); font-size: .86rem; }
+.kr2-item { width: 100%; display: flex; align-items: center; gap: 12px; padding: 10px 12px; border-radius: var(--r-sm); border: 1px solid var(--line); background: var(--card); color: var(--ink); font: inherit; text-align: left; cursor: pointer; min-width: 0; }
+.kr2-item > span:first-child { font-size: 1.4rem; }
+.kr2-item > span:last-child { display: flex; flex-direction: column; min-width: 0; overflow-wrap: anywhere; }
+.kr2-item small { color: var(--muted); font-size: .84rem; }
+.kr2-item.ab { border-color: var(--danger, #dc2626); }
+.kr2-item.bald { border-color: #f59e0b; }
+.kr2-pipe { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 6px; }
+.kr2-pipe span { display: flex; flex-direction: column; align-items: center; padding: 8px 4px; border-radius: var(--r-sm); background: var(--card); border: 1px solid var(--line); text-align: center; }
+.kr2-pipe b { font-size: 1.2rem; }
+.kr2-pipe small { font-size: .7rem; color: var(--muted); }
+.kr2-hint p { margin: 2px 0; }
+.kr2-prep label { display: flex; gap: 8px; align-items: flex-start; font-weight: 500; }
+.kr2-q { padding-left: 20px; line-height: 1.6; }

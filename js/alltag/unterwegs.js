@@ -12,6 +12,7 @@ import { createPack } from "./unterwegs-pack.js";
 import { createPark } from "./unterwegs-park.js";
 import { createFuel } from "./unterwegs-fuel.js";
 import { createPlaces } from "./unterwegs-places.js";
+import { createJournal } from "./unterwegs-journal.js"; // Update 11 – Reisetagebuch
 import { putImage, getImage, cachedImage, delImage, shrinkImage, dataBytes, bookMoney, unbookMoney, safeWrite } from "./unterwegs-shared.js";
 
 const TABS = [
@@ -43,6 +44,7 @@ export function mount(el, ctx) {
     parking: collection("travel_parking"),
     fuel: collection("travel_fuel"),
     places: collection("travel_places"),
+    journal: collection("travel_journal"), // Update 11
   };
   const S = {
     tab: TABS.some((t) => t[0] === lsGet(TAB_KEY)) ? lsGet(TAB_KEY) : "reisen",
@@ -62,6 +64,7 @@ export function mount(el, ctx) {
   const park = createPark({ col: col.parking, ui, queue, isVisible: () => alive && S.tab === "parken" });
   const fuel = createFuel({ col: col.fuel, ui, queue });
   const places = createPlaces({ col: col.places, ui, queue });
+  const journal = createJournal({ col: col.journal, ui, queue, todayKey: C.todayKey });
 
   el.innerHTML =
     `<div class="uw">` +
@@ -95,6 +98,7 @@ export function mount(el, ctx) {
       if (n) { n.focus({ preventScroll: true }); try { n.setSelectionRange(keep.s, keep.e); } catch { /* egal */ } }
     }
     pack.afterRender(page);
+    if (S.tab === "reisen" && S.trip) journal.afterRender(page);
     const showFab = (S.tab === "reisen" && !S.trip) || S.tab === "tanken" || S.tab === "adressen";
     fab.hidden = !showFab;
     fab.setAttribute("aria-label", S.tab === "tanken" ? "Tankung eintragen" : S.tab === "adressen" ? "Adresse hinzufügen" : "Reise hinzufügen");
@@ -206,7 +210,7 @@ export function mount(el, ctx) {
       `<small class="note">Wird beim Verlassen des Feldes gespeichert.</small>` +
     `</section>`;
 
-    return `<div class="uw-detail">${hero}<div class="uw-detail-grid"><div class="uw-col">${packSec}</div><div class="uw-col">${budgetSec}${planSec}${docsSec}</div></div></div>`;
+    return `<div class="uw-detail">${hero}<div class="uw-detail-grid"><div class="uw-col">${packSec}</div><div class="uw-col">${budgetSec}${planSec}${journal.sectionHTML(t)}${docsSec}</div></div></div>`;
   }
 
   /* ---------- Packlisten-Reiter ---------- */
@@ -417,7 +421,7 @@ export function mount(el, ctx) {
   }
 
   async function onClick(ev) {
-    const t = ev.target.closest("[data-tab], [data-uw], [data-pk], [data-pa], [data-fu], [data-pl]");
+    const t = ev.target.closest("[data-tab], [data-uw], [data-pk], [data-pa], [data-fu], [data-pl], [data-jr]");
     if (!t || !el.contains(t)) return;
     if (t.classList.contains("uw-tab")) {
       if (S.tab === t.dataset.tab) { S.trip = null; S.list = null; }
@@ -428,6 +432,7 @@ export function mount(el, ctx) {
     if (t.dataset.pa) { if (park.onClick(t)) ev.preventDefault(); return; }
     if (t.dataset.fu) { fuel.onClick(t); return; }
     if (t.dataset.pl) { places.onClick(t); return; }
+    if (t.dataset.jr) { journal.onClick(t, col.trips.get(t.dataset.id)); return; }
     if (t.dataset.pk) {
       if (pack.onClick(t, { onDeleted: (id) => { if (S.list === id) { S.list = null; queue(); } } })) return;
       if (t.dataset.pk === "fromtpl") {

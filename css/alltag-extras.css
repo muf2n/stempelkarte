@@ -1,0 +1,43 @@
+/* Update 12 – gemeinsames Aussehen für 🐾 Tiere, 👕 Kleiderschrank, 👥 Gruppen, 🏠 Wohnen (js/alltag/xui.js). Präfix .xu- */
+.xu { display: flex; flex-direction: column; gap: 12px; min-width: 0; max-width: 780px; margin: 0 auto; width: 100%; padding-bottom: 40px; }
+.xu-tabs { display: flex; gap: 6px; overflow-x: auto; scrollbar-width: none; }
+.xu-tab { flex: none; display: inline-flex; align-items: center; gap: 6px; min-height: 42px; padding: 6px 14px; border-radius: 999px; border: 1px solid var(--line); background: var(--card); color: var(--ink); font: inherit; font-weight: 600; cursor: pointer; }
+.xu-tab.on { background: var(--accent); border-color: var(--accent); color: var(--accent-ink, #fff); }
+.xu-tab i { font-style: normal; font-size: .72rem; background: #dc2626; color: #fff; border-radius: 999px; padding: 0 6px; }
+.xu-row { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; min-width: 0; }
+.xu-row h3 { margin: 0; }
+.xu-sp { flex: 1; }
+.xu-empty { text-align: center; display: flex; flex-direction: column; align-items: center; gap: 6px; }
+.xu-emo { font-size: 2.6rem; }
+.xu-list { list-style: none; margin: 0; padding: 0; display: grid; gap: 8px; }
+.xu-item { width: 100%; display: flex; align-items: center; gap: 12px; padding: 10px 12px; border-radius: var(--r-sm); border: 1px solid var(--line); background: var(--card); color: var(--ink); font: inherit; text-align: left; cursor: pointer; min-width: 0; }
+.xu-item > .xu-ie { flex: none; font-size: 1.6rem; width: 2em; text-align: center; }
+.xu-item > .xu-im { flex: 1; min-width: 0; display: flex; flex-direction: column; overflow-wrap: anywhere; }
+.xu-item small { color: var(--muted); font-size: .84rem; }
+.xu-item.warn { border-color: #f59e0b; }
+.xu-item.done { opacity: .6; }
+.xu-thumb { flex: none; width: 52px; height: 52px; border-radius: 10px; object-fit: cover; background: var(--line); }
+.xu-grid { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(auto-fill, minmax(120px, 1fr)); gap: 8px; }
+.xu-tile { width: 100%; display: flex; flex-direction: column; align-items: center; gap: 4px; padding: 8px; border-radius: var(--r-sm); border: 1px solid var(--line); background: var(--card); color: var(--ink); font: inherit; cursor: pointer; text-align: center; overflow-wrap: anywhere; }
+.xu-tile img, .xu-tile .xu-ph { width: 100%; aspect-ratio: 1; border-radius: 8px; object-fit: cover; background: color-mix(in srgb, var(--line) 50%, transparent); display: grid; place-items: center; font-size: 2.4rem; }
+.xu-tile small { color: var(--muted); font-size: .76rem; }
+.xu-tile[aria-pressed="true"] { border: 2px solid var(--accent); }
+.xu-kpis { display: grid; grid-template-columns: repeat(auto-fit, minmax(110px, 1fr)); gap: 8px; }
+.xu-kpis span { display: flex; flex-direction: column; padding: 10px; border-radius: var(--r-sm); background: var(--card); border: 1px solid var(--line); }
+.xu-kpis small { color: var(--muted); font-size: .78rem; }
+.xu-kpis b { font-size: 1.15rem; }
+.xu-check { list-style: none; margin: 0; padding: 0; display: grid; gap: 6px; }
+.xu-check li { display: flex; gap: 10px; align-items: flex-start; padding: 8px 10px; border-radius: var(--r-sm); background: var(--card); border: 1px solid var(--line); }
+.xu-check li.late { border-color: #f59e0b; }
+.xu-check li.done { opacity: .55; }
+.xu-check li.done span { text-decoration: line-through; }
+.xu-check label { display: flex; gap: 10px; align-items: flex-start; flex: 1; min-width: 0; overflow-wrap: anywhere; }
+.xu-check small { color: var(--muted); display: block; }
+.xu-bar { display: block; height: 8px; border-radius: 99px; background: var(--line); overflow: hidden; }
+.xu-bar i { display: block; height: 100%; background: var(--accent); border-radius: inherit; }
+.xu-hero { display: flex; align-items: center; gap: 14px; }
+.xu-hero img, .xu-hero .xu-ph { width: 76px; height: 76px; border-radius: 50%; object-fit: cover; background: color-mix(in srgb, var(--accent) 15%, var(--card)); display: grid; place-items: center; font-size: 2.4rem; flex: none; }
+.xu-hero h2 { margin: 0; }
+.xu-hero small { color: var(--muted); }
+.xu-spark { display: flex; align-items: flex-end; gap: 3px; height: 60px; margin-top: 8px; }
+.xu-spark i { flex: 1; min-width: 4px; background: var(--accent); border-radius: 3px 3px 0 0; }

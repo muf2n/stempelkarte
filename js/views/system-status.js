@@ -1,6 +1,7 @@
 // Update 10 F – 🖥️ System-Status (Einstellungen › Sonstiges): Version, Was ist neu, Sync, Backup, Speicher, KI-Verbrauch,
 // Service-Worker-Cache (+ „Cache leeren & neu laden“), „Diagnose kopieren“ (nur Zahlen/Flags, keine Inhalte) und „Überall abmelden“.
 import { CHANGELOG } from "../changelog.js";
+import * as guard from "../sync-guard.js"; // Update 11 – Sync-Konflikte
 import { agoText, lastBackupAt } from "../backup-core.js";
 import { getFirebase } from "../firebase.js";
 import { openedNames, collection } from "../alltag/db.js";
@@ -140,6 +141,10 @@ export function mountPanel(el, ctx) {
         <div class="ss-kv"><span>💾 Letztes Backup</span><b data-ss="backup">${esc(bk ? agoText(bk) : "noch nie")}</b></div>
         <div class="ss-kv"><span>🤖 KI diesen Monat</span><b data-ss="ai">${cloud ? "…" : "–"}</b></div>
       </div>
+      ${cloud ? `<div class="sh-card"><div class="lbl">🔄 Sync-Konflikte</div>
+        <p class="note">${guard.conflicts().length ? `⚠️ ${guard.conflicts().length} ${guard.conflicts().length === 1 ? "Änderung wurde" : "Änderungen wurden"} von einem anderen Gerät überschrieben.` : "✅ Keine – wenn zwei Geräte offline dasselbe ändern, siehst du es hier und kannst deine Version zurückholen."}</p>
+        ${guard.conflicts().length ? `<button type="button" class="btn primary sm" data-ss-act="conflicts">🔄 Ansehen &amp; entscheiden</button>` : ""}
+      </div>` : ""}
       <div class="sh-card"><div class="lbl">🗄️ Speicher</div>
         <div class="ss-bar" data-ss="bar" hidden><i></i></div>
         <ul class="ss-list" data-ss="storage"><li>Wird berechnet …</li></ul>
@@ -194,6 +199,7 @@ export function mountPanel(el, ctx) {
     const b = ev.target.closest("[data-ss-act]");
     if (!b) return;
     const act = b.dataset.ssAct;
+    if (act === "conflicts") { import("./sync-conflicts.js").then((m) => m.openConflicts(ctx)).catch((err) => console.error(err)); return; }
     if (act === "more") { el.querySelectorAll(".ss-old").forEach((x) => { x.hidden = false; }); b.hidden = true; return; }
     if (act === "diag") {
       const txt = JSON.stringify(await diagnose(ctx), null, 2);

@@ -111,7 +111,7 @@ function addDaysKey(key, n) {
 }
 
 export const stars = (n) => "★".repeat(n) + "☆".repeat(5 - n);
-export const fmtPrice = (v) => v ? v.toLocaleString("de-AT", { style: "currency", currency: "EUR" }) : "";
+export const fmtPrice = (v) => v ? v.toLocaleString("de-DE", { style: "currency", currency: "EUR" }) : "";
 export const listHash = (type) => `#alltag/listen${type ? "/" + encodeURIComponent(type) : ""}`;
 export function routeType(hash) {
   const m = String(hash || "").match(/^#alltag\/listen\/([a-z]+)/);

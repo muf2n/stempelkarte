@@ -398,3 +398,20 @@
 
 /* Sheet-Chips (außerhalb .uw) */
 .sheet .uw-catchips .chip:disabled { opacity: .4; }
+
+/* Update 11 – 📔 Reisetagebuch (js/alltag/unterwegs-journal.js) */
+.uw-jr-acts { display: flex; gap: 6px; flex-wrap: wrap; }
+.uw-jr { list-style: none; margin: 0; padding: 0 0 0 14px; border-left: 2px solid color-mix(in srgb, var(--accent) 40%, var(--line)); display: grid; gap: 14px; }
+.uw-jr-e { position: relative; min-width: 0; }
+.uw-jr-e::before { content: ""; position: absolute; left: -20px; top: 8px; width: 10px; height: 10px; border-radius: 50%; background: var(--accent); }
+.uw-jr-head { display: flex; align-items: center; gap: 8px; width: 100%; padding: 0; border: 0; background: none; color: var(--muted); font: inherit; font-weight: 700; font-size: .88rem; cursor: pointer; text-align: left; min-height: 32px; }
+.uw-jr-mood { font-size: 1.2rem; }
+.uw-jr-t { display: block; margin-top: 2px; }
+.uw-jr-text { margin: 4px 0 0; white-space: pre-line; overflow-wrap: anywhere; line-height: 1.5; }
+.uw-jr-ph { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; }
+.uw-jr-img { position: relative; width: 72px; height: 72px; border-radius: 10px; overflow: hidden; background: var(--soft, var(--line)); display: grid; place-items: center; }
+.uw-jr-img img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.uw-jr-x { position: absolute; top: 2px; right: 2px; width: 26px; height: 26px; border-radius: 50%; border: 0; background: rgba(0, 0, 0, .6); color: #fff; font-size: .8rem; cursor: pointer; }
+.uw-jr-add { align-self: flex-start; cursor: pointer; }
+.uw-journal .uw-h-row { flex-wrap: wrap; row-gap: 6px; }
+.uw-journal .uw-h { white-space: nowrap; display: flex; align-items: center; gap: 6px; }

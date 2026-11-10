@@ -1,6 +1,7 @@
 // Update 10 F – 🖥️ System-Status › Was ist neu: ehrliche Liste aus der Versionsgeschichte (git log des Projekts), neueste zuerst.
 // Beim Veröffentlichen neuer Versionen hier oben ergänzen.
 export const CHANGELOG = [
+  { v: "20261111-0100", items: ["🍳 Kochen: Rezepte, Wochen-Essensplan, Was koche ich?, Koch-Timer", "💼 Karriere: Ausbildung, Lebenslauf, Zertifikate, Bewerbungen", "📊 Mein Leben: Digital Twin, Statistik, Jahresrückblick", "🎮 Spielwelt: Level, Quests, Erfolge, Shop, Mini-Games", "🐾 Haustiere · 👕 Kleiderschrank · 👥 Freunde & Gruppen · 🏠 Wohnen", "🗑️ Müllkalender & 🥫 Vorrat · 📔 Reisetagebuch · 🔄 Sync-Konflikte"] },
   { v: "20261110-2200", items: ["🎬 Freizeit-Listen: Serien, Filme, Bücher, Games, Musik, Hobbys, Ausflüge, Projekte & Geschenkideen", "🎁 Erinnerung an Geschenk-Anlässe", "🔍 Listen in der App-Suche, Claude kann sie lesen"] },
   { v: "20261110-1300", items: ["📍 Zwischenstopps: App beim Autofahren öffnen merkt den Standort – Umwege zählen bei den km mit"] },
   { v: "Update 10 F", items: [

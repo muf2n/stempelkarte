@@ -17,6 +17,7 @@ export const GROUPS = Object.freeze([
   ["vertraege", "📜", "Verträge"], // Update 10 E
   ["inventar", "📦", "Inventar"], // Update 10 E
   ["listen", "🎬", "Freizeit-Listen"], // Update 11
+  ["kochen", "🍳", "Rezepte"], ["wohnen", "🔎", "Wo liegt was"], // Update 12
   ["kontakte", "👤", "Kunden & Kontakte"], // Update 10 E
   ["buchhaltung", "💼", "Buchhaltung"], // Update 10 – Belege & Rechnungen
   ["fotos", "📷", "Fotos & Alben"],

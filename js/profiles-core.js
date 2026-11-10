@@ -33,11 +33,12 @@ export const MODULE_NOTIFY = {
   material: ["material"],
   werkzeug: ["werkzeug"],
   fahrzeuge: ["fahrzeug"],
-  haushalt: ["haushalt"],
+  haushalt: ["haushalt", "muell", "vorrat"],
   routinen: ["gewohnheiten"],
   automationen: ["automation"],
   vertraege: ["vertraege"], // Update 10 E
   listen: ["geschenke"], // Update 11
+  tiere: ["tiere"], karriere: ["karriere"], wohnen: ["verleih"], gruppen: ["gruppen"], // Update 12
   inventar: ["garantie"], // Update 10 E
   buchhaltung: ["rechnungen"], // Update 10 – 💼 Buchhaltung
 };

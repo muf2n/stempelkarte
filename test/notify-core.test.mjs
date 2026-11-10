@@ -220,3 +220,27 @@ test("Update 11: 🎁 Geschenk-Anlässe in den nächsten 14 Tagen", () => {
   const off = N.collect({ now, todos: [], cols, loaded: { freizeit_listen: true }, settings: { notify: { off: ["geschenke"] } } });
   assert.ok(!off.some((x) => x.kind === "geschenke"));
 });
+
+test("Update 11: 🗑️ Müll am Vorabend und 🥫 Vorrat-MHD", () => {
+  const cols = {
+    muell: [{ id: "r", kind: "rest", start: "2026-11-11", every: 2 }],
+    vorrat: [{ id: "m", name: "Milch", qty: 1, best: "2026-11-11" }, { id: "n", name: "Nudeln", qty: 3 }],
+  };
+  const loaded = { muell: true, vorrat: true };
+  const r = N.collect({ now: new Date(2026, 10, 10, 19).getTime(), todos: [], cols, loaded });
+  const m = r.find((x) => x.kind === "muell");
+  assert.ok(m && /morgen/.test(m.title) && m.target === "#alltag/haushalt/muell");
+  const v = r.filter((x) => x.kind === "vorrat");
+  assert.equal(v.length, 1);
+  assert.equal(v[0].target, "#alltag/haushalt/vorrat");
+  assert.ok(!N.collect({ now: new Date(2026, 10, 10, 10).getTime(), todos: [], cols, loaded }).some((x) => x.kind === "muell"));
+  const off = N.collect({ now: new Date(2026, 10, 10, 19).getTime(), todos: [], cols, loaded, settings: { notify: { off: ["muell", "vorrat"] } } });
+  assert.ok(!off.some((x) => x.kind === "muell" || x.kind === "vorrat"));
+});
+
+test("Update 11: 🔄 Sync-Konflikte als Mitteilung", () => {
+  const r = N.collect({ now: Date.now(), todos: [], conflicts: [{ key: "entries/e1", at: 5 }, { key: "a:notes/n", at: 9 }] });
+  const s = r.find((x) => x.kind === "sync");
+  assert.ok(s && s.title === "2 Sync-Konflikte" && s.target === "sync:conflicts");
+  assert.ok(!N.collect({ now: Date.now(), todos: [], conflicts: [] }).some((x) => x.kind === "sync"));
+});

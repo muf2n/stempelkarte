@@ -21,6 +21,9 @@ import { readVehicles, defaultVehicle } from "./trip-core.js";
 import { notifyItems as automationItems } from "./automation-core.js"; // Update 10 – ⚡ Automationen
 import { dueDocs } from "./alltag/dokumente-core.js"; // Update 10 E
 import { dueContracts } from "./alltag/vertraege-core.js"; // Update 10 E
+import { dueBins, dueStock } from "./alltag/hausextra-core.js"; // Update 11
+import { petDue, lendDue, upcomingEvents } from "./alltag/extras-core.js"; // Update 12
+import { dueCerts, jobHints } from "./alltag/karriere-core.js"; // Update 12
 import { normItem as normListItem, upcomingGifts, listHash } from "./alltag/listen-core.js"; // Update 11
 import { dueWarranties } from "./alltag/inventar-core.js"; // Update 10 E
 import { dueInvoices, normSettings as buchSettings, eur as buchEur } from "./alltag/buch-core.js"; // Update 10 – 💼 Buchhaltung
@@ -40,6 +43,13 @@ export const CATS = [
   { id: "werkzeug", e: "🔧", t: "Werkzeug-Prüfungen" },
   { id: "fahrzeug", e: "🚗", t: "Pickerl, Service & Versicherung" },
   { id: "haushalt", e: "🏡", t: "Haushalt & Wartung" }, // Update 10 C
+  { id: "muell", e: "🗑️", t: "Müllabfuhr (Vorabend & morgens)" }, // Update 11
+  { id: "sync", e: "🔄", t: "Sync-Konflikte zwischen Geräten" }, // Update 11
+  { id: "tiere", e: "🐾", t: "Haustiere: Pflege, Impfung, Medikamente" }, // Update 12
+  { id: "karriere", e: "💼", t: "Karriere: Zertifikate & Bewerbungen" }, // Update 12
+  { id: "verleih", e: "🔁", t: "Verliehenes zurückholen" }, // Update 12
+  { id: "gruppen", e: "👥", t: "Gruppen-Termine" }, // Update 12
+  { id: "vorrat", e: "🥫", t: "Vorrat: Ablaufdatum (MHD)" }, // Update 11
   { id: "gewohnheiten", e: "🔥", t: "Gewohnheiten (Serie in Gefahr)" }, // Update 10 C
   { id: "lernen", e: "🛤️", t: "Lern-Serie in Gefahr (Japanisch & LAP)" }, // Update 10 – Lernpfad
   { id: "bericht", e: "📒", t: "Wochenbericht am Freitag" },
@@ -62,6 +72,8 @@ export const NEEDS = {
   fahrzeug: ["fahrzeug_info", "travel_fuel"],
   bericht: ["berichtsheft"],
   haushalt: ["haushalt"], // Update 10 C
+  muell: ["muell"], vorrat: ["vorrat"], // Update 11
+  tiere: ["tiere"], karriere: ["karriere_certs", "karriere_jobs"], verleih: ["wohnen"], gruppen: ["gruppen"], // Update 12
   gewohnheiten: ["habits"], // Update 10 C
   lernen: ["learn_progress", "jp_stats", "lap_stats"], // Update 10 – Lernpfad
   automation: ["automation_log"],
@@ -297,6 +309,44 @@ export function collect(input = {}) {
     const cs = col("vertraege");
     if (cs) for (const d of dueContracts(cs, today)) {
       add({ id: `vt:${d.id}:${d.kind}:${d.date}`, kind: "vertraege", emoji: d.days <= 3 ? "⏰" : d.e, title: d.name, sub: d.kind === "frist" ? `Kündigungsfrist endet ${rel(d.date, today)}` : `Vertrag endet ${rel(d.date, today)}`, when: tsOf(d.date), prio: d.days <= 3 ? 2 : 1, target: d.hash });
+    }
+  }
+  /* --- Update 12: 🐾 Tiere, 💼 Karriere, 🔁 Verleih, 👥 Gruppen-Termine --- */
+  if (on("tiere")) {
+    const ps = col("tiere");
+    if (ps) for (const d of petDue(ps, today)) add({ id: `ti:${d.pet.id}:${d.kind}:${d.id}:${d.date}`, kind: "tiere", emoji: { pflege: "🧽", impfung: "💉", medikament: "💊", tierarzt: "🩺" }[d.kind], title: `${d.pet.emoji} ${d.pet.name}: ${d.text}`, sub: d.days < 0 ? `seit ${-d.days} Tagen fällig` : d.days === 0 ? "heute" : `in ${d.days} Tagen`, when: tsOf(d.date), prio: d.kind === "medikament" || d.days < 0 ? 2 : 1, target: "#alltag/tiere" });
+  }
+  if (on("karriere")) {
+    const cs = col("karriere_certs"), js = col("karriere_jobs");
+    if (cs) for (const c of dueCerts(cs, today)) add({ id: `kc:${c.id}:${c.expires}`, kind: "karriere", emoji: c.days < 0 ? "⌛" : "🏅", title: c.title, sub: c.days < 0 ? "Abgelaufen – erneuern?" : `Läuft ${rel(c.expires, today)} ab`, when: tsOf(c.expires), prio: 1, target: "#alltag/karriere" });
+    if (js) for (const j of jobHints(js, today)) add({ id: `kj:${j.id}:${j.next || j.applied}`, kind: "karriere", emoji: "📨", title: j.company, sub: j.hint, when: j.next ? tsOf(j.next) : now, prio: j.next === today ? 2 : 1, target: "#alltag/karriere" });
+  }
+  if (on("verleih")) {
+    const ws = col("wohnen");
+    if (ws) for (const l of lendDue(ws, today)) add({ id: `vl:${l.id}:${l.due}`, kind: "verleih", emoji: l.dir === "an" ? "📤" : "📥", title: `${l.what} ${l.dir === "an" ? "von " + l.who + " zurückholen" : "an " + l.who + " zurückgeben"}`, sub: l.due < today ? `Seit ${rel(l.due, today)} überfällig` : `Bis ${rel(l.due, today)}`, when: tsOf(l.due), prio: l.due <= today ? 2 : 1, target: "#alltag/wohnen" });
+  }
+  if (on("gruppen")) {
+    const gs = col("gruppen");
+    if (gs) for (const e of upcomingEvents(gs, today, 1)) add({ id: `gr:${e.group.id}:${e.id}:${e.date}`, kind: "gruppen", emoji: e.group.emoji, title: e.title, sub: `${e.group.name} · ${e.date === today ? "heute" : "morgen"}${e.time ? " um " + e.time : ""}${e.place ? " · " + e.place : ""}`, when: tsOf(e.date, e.time), prio: e.date === today ? 2 : 1, target: "#alltag/gruppen" });
+  }
+  /* --- Update 11: 🔄 Sync-Konflikte (Daten aus js/sync-guard.js, ohne Inhalte) --- */
+  if (on("sync") && Array.isArray(input.conflicts) && input.conflicts.length) {
+    const cs = input.conflicts;
+    add({ id: `sy:${cs.map((c) => c.key + ":" + c.at).join("|").slice(0, 120)}`, kind: "sync", emoji: "🔄", title: cs.length === 1 ? "1 Sync-Konflikt" : `${cs.length} Sync-Konflikte`,
+      sub: "Ein anderes Gerät hat etwas überschrieben – tippen zum Entscheiden", when: Math.max(...cs.map((c) => Number(c.at) || 0)) || now, prio: 2, target: "sync:conflicts" });
+  }
+  /* --- Update 11: 🗑️ Müll (heute bis 12 Uhr / morgen ab 14 Uhr) und 🥫 Vorrat (MHD abgelaufen/bald) --- */
+  if (on("muell")) {
+    const bs = col("muell");
+    if (bs) for (const b of dueBins(bs, now)) {
+      add({ id: `mu:${b.id}:${b.day}`, kind: "muell", emoji: b.e, title: `${b.name} ${b.when === "heute" ? "wird heute abgeholt" : "– morgen ist Abholung"}`, sub: b.when === "heute" ? "Schnell noch rausstellen! 🚛" : "Heute Abend rausstellen 🌙", when: tsOf(b.day), prio: 2, target: "#alltag/haushalt/muell" });
+    }
+  }
+  if (on("vorrat")) {
+    const vs = col("vorrat");
+    if (vs) for (const x of dueStock(vs, today)) {
+      const gone = x.flags.includes("abgelaufen");
+      add({ id: `vr:${x.id}:${x.best}`, kind: "vorrat", emoji: gone ? "⌛" : "🥫", title: x.name, sub: gone ? `Abgelaufen – ${rel(x.best, today)}` : `Haltbar bis ${rel(x.best, today)}`, when: tsOf(x.best), prio: 1, target: "#alltag/haushalt/vorrat" });
     }
   }
   /* --- Update 11: 🎁 Geschenk-Anlässe in den nächsten 14 Tagen (noch nicht verschenkt) --- */

@@ -12,6 +12,7 @@
 
 import * as store from "../store.js";
 import { getFirebase } from "../firebase.js";
+import * as guard from "../sync-guard.js"; // Update 11 – Konflikt-Erkennung
 
 const cols = new Map();
 
@@ -87,6 +88,9 @@ class Collection {
       if (this.key !== myKey) return;
       const m = new Map();
       qs.forEach((d) => m.set(d.id, { ...d.data(), id: d.id }));
+      try { // Update 11: vom Server bestätigte Änderungen anderer Geräte auf Konflikte prüfen
+        for (const ch of qs.docChanges()) if (ch.type !== "removed" && !ch.doc.metadata.hasPendingWrites) guard.onServerDoc("a:" + this.name, { ...ch.doc.data(), id: ch.doc.id });
+      } catch (err) { console.warn("Konfliktprüfung:", err); }
       this.items = m;
       this.loaded = true;
       this._emit();
@@ -124,7 +128,8 @@ class Collection {
   async put(item) {
     this._ensure();
     const id = item.id || newId();
-    const data = clean({ ...item, id, updated: Date.now(), created: item.created || Date.now() });
+    let data = clean({ ...item, id, updated: Date.now(), created: item.created || Date.now() });
+    if (this.key !== "local" && this.key) data = guard.beforeWrite("a:" + this.name, data, this.items.get(id) || null); // Update 11
     this.items.set(id, data);
     if (this.key === "local") { this._saveLocal(); this._emit(); return id; }
     this._emit();

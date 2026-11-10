@@ -5,6 +5,7 @@
 import { getFirebase } from "./firebase.js";
 import { toast } from "./ui.js";
 import { newId } from "./util.js";
+import * as guard from "./sync-guard.js"; // Update 11 – Konflikt-Erkennung
 
 const LS_KEY = "stempelkarte.local.v1";
 const SAVE_DELAY_MS = 250;
@@ -291,6 +292,7 @@ export async function startCloud(u) {
     if (myGen !== gen) return;
     const m = new Map();
     qs.forEach((d) => m.set(d.id, { ...d.data(), id: d.id }));
+    checkConflicts("entries", qs);
     entries = m;
     markSeen("entries");
     changed();
@@ -310,6 +312,7 @@ export async function startCloud(u) {
     if (myGen !== gen) return;
     const m = new Map();
     qs.forEach((d) => m.set(d.id, normTodo(d.data(), d.id)));
+    checkConflicts("todos", qs);
     todos = m;
     changed();
   }, (err) => console.warn("Firestore-Listener „todos“ fehlgeschlagen:", err)));
@@ -382,10 +385,18 @@ async function persist(cloudWrite) {
   }
 }
 
+/** Update 11: vom Server bestätigte Änderungen anderer Geräte auf Konflikte prüfen (js/sync-guard.js). */
+function checkConflicts(col, qs) {
+  try { for (const ch of qs.docChanges()) if (ch.type !== "removed" && !ch.doc.metadata.hasPendingWrites) guard.onServerDoc(col, { ...ch.doc.data(), id: ch.doc.id }); }
+  catch (err) { console.warn("Konfliktprüfung:", err); }
+}
+/** Update 11: im Cloud-Modus Gerätekennung + Basis-Version mitschreiben. */
+const stampFor = (col, id, data, known) => (mode === "cloud" ? withoutId(guard.beforeWrite(col, { ...data, id, updated: Date.now() }, known)) : data);
+
 export async function saveEntry(entry) {
   requireStarted();
   const id = entry?.id || newId("e");
-  const data = clean(withoutId(entry));
+  const data = stampFor("entries", id, clean(withoutId(entry)), entries.get(id) || null);
   entries.set(id, { ...data, id });
   changed();
   await persist((db, fs, uid) => fs.setDoc(fs.doc(db, "users", uid, "entries", id), data));
@@ -445,7 +456,7 @@ export async function saveTodo(todo) {
   const id = todo?.id || newId("t");
   const prev = todos.get(id);
   const full = normTodo({ ...(prev || {}), ...withoutId(todo), createdAt: todo?.createdAt ?? prev?.createdAt ?? Date.now() }, id);
-  const data = clean(withoutId(full));
+  const data = stampFor("todos", id, clean(withoutId(full)), prev || null);
   todos.set(id, { ...data, id });
   changed();
   await persist((db, fs, uid) => fs.setDoc(fs.doc(db, "users", uid, "todos", id), data));

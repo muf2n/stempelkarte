@@ -1,0 +1,54 @@
+/* Update 12 – Alltag › 🍳 Kochen (js/alltag/kochen.js). Präfix .kc- */
+.kc { display: flex; flex-direction: column; gap: 12px; min-width: 0; max-width: 820px; margin: 0 auto; width: 100%; padding-bottom: 40px; }
+.kc-tabs { display: flex; gap: 6px; overflow-x: auto; scrollbar-width: none; }
+.kc-tab { flex: none; display: inline-flex; align-items: center; gap: 6px; min-height: 42px; padding: 6px 14px; border-radius: 999px; border: 1px solid var(--line);
+  background: var(--card); color: var(--ink); font: inherit; font-weight: 600; cursor: pointer; }
+.kc-tab.on { background: var(--accent); border-color: var(--accent); color: var(--accent-ink, #fff); }
+.kc-row { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; min-width: 0; }
+.kc-row h3 { margin: 0; }
+.kc-center { justify-content: center; }
+.kc-sp { flex: 1; }
+.kc-bar { display: grid; grid-template-columns: minmax(0, 1fr) auto auto auto; gap: 6px; align-items: center; }
+.kc-bar > * { margin: 0; min-width: 0; }
+.kc-bar .btn { min-width: 44px; min-height: 44px; }
+.kc-grid { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 8px; }
+.kc-card { width: 100%; height: 100%; display: flex; flex-direction: column; align-items: flex-start; gap: 4px; padding: 12px; border-radius: var(--r-sm);
+  border: 1px solid var(--line); background: var(--card); color: var(--ink); font: inherit; text-align: left; cursor: pointer; overflow-wrap: anywhere; }
+.kc-card b { line-height: 1.25; }
+.kc-card small { color: var(--muted); font-size: .8rem; }
+.kc-card.wide { flex-direction: row; align-items: center; gap: 12px; position: relative; overflow: hidden; }
+.kc-card.wide > span:nth-child(2) { flex: 1; min-width: 0; display: flex; flex-direction: column; }
+.kc-emo { font-size: 1.8rem; line-height: 1; }
+.kc-emo.big { font-size: 2.8rem; }
+.kc-pct { position: absolute; left: 0; bottom: 0; height: 4px; width: var(--p); background: var(--accent); }
+.kc-sug { list-style: none; margin: 0; padding: 0; display: grid; gap: 8px; }
+.kc-head { display: flex; gap: 12px; align-items: center; }
+.kc-head h2 { margin: 0; font-size: 1.35rem; overflow-wrap: anywhere; }
+.kc-head small { color: var(--muted); }
+.kc-rate { display: flex; gap: 2px; margin-top: 2px; }
+.kc-rate button { border: 0; background: none; font-size: 1.3rem; color: var(--line); cursor: pointer; padding: 2px; min-width: 32px; min-height: 32px; }
+.kc-rate button.on { color: #f59e0b; }
+.kc-sv { display: flex; align-items: center; gap: 6px; }
+.kc-sv .btn { min-width: 40px; min-height: 40px; padding: 0; font-size: 1.1rem; }
+.kc-ings { margin: 8px 0 10px; padding-left: 20px; line-height: 1.7; }
+.kc-steps { margin: 8px 0 10px; padding-left: 22px; display: grid; gap: 10px; }
+.kc-steps p { margin: 0 0 4px; line-height: 1.5; overflow-wrap: anywhere; }
+.kc-note { white-space: pre-line; margin: 6px 0 0; }
+.kc-src { font-size: .9rem; }
+.kc-timers { position: sticky; top: 0; z-index: 5; display: flex; flex-wrap: wrap; gap: 6px; }
+.kc-tm { display: inline-flex; align-items: center; gap: 6px; padding: 6px 10px; border-radius: 999px; background: var(--accent); color: var(--accent-ink, #fff); font-size: .9rem; box-shadow: var(--shadow); max-width: 100%; }
+.kc-tm b { font-variant-numeric: tabular-nums; }
+.kc-tm.done { background: var(--danger, #dc2626); animation: kc-blink 1s infinite; }
+.kc-tm button { border: 0; background: rgba(255, 255, 255, .25); color: inherit; border-radius: 50%; width: 26px; height: 26px; cursor: pointer; }
+@keyframes kc-blink { 50% { opacity: .55; } }
+@media (prefers-reduced-motion: reduce) { .kc-tm.done { animation: none; } }
+.kc-week { justify-content: center; }
+.kc-week .btn { min-width: 44px; }
+.kc-plan { list-style: none; margin: 0; padding: 0; display: grid; gap: 8px; }
+.kc-plan li { display: grid; grid-template-columns: 4.6em minmax(0, 1fr); gap: 8px; align-items: start; padding: 8px 10px; border-radius: var(--r-sm); background: var(--card); border: 1px solid var(--line); }
+.kc-plan li.today { border-color: var(--accent); }
+.kc-day { padding-top: 8px; font-variant-numeric: tabular-nums; }
+.kc-meals { display: flex; flex-wrap: wrap; gap: 6px; min-width: 0; }
+.kc-meal { min-height: 38px; padding: 4px 10px; border-radius: 10px; border: 1px dashed var(--line); background: none; color: var(--muted); font: inherit; font-size: .88rem; cursor: pointer; max-width: 100%; text-align: left; overflow-wrap: anywhere; }
+.kc-meal.set { border-style: solid; color: var(--ink); background: color-mix(in srgb, var(--accent) 10%, var(--card)); }
+@media (max-width: 420px) { .kc-meal:not(.set) span { display: none; } }

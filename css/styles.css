@@ -5103,3 +5103,9 @@ html.mm-mask .mm-amt::after, html.mm-mask [data-tg="tg"]::after, html.mm-mask [d
 .acc-sw:focus-visible { outline: none; box-shadow: var(--ring); }
 .acc-ico { font-size: 1.3rem; }
 .ai-msg.ai-hidden, .ai-msg.ai-locknote { opacity:.7; font-style:italic; }
+
+/* Update 11 – 🔄 Sync-Konflikte (js/views/sync-conflicts.js) */
+.sc { display: grid; gap: 10px; }
+.sc-c { display: flex; flex-direction: column; gap: 4px; min-width: 0; overflow-wrap: anywhere; }
+.sc-c small { color: var(--muted); }
+.sc-c .row { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 6px; }

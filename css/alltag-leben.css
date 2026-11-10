@@ -1,0 +1,49 @@
+/* Update 12 – Alltag › 📊 Mein Leben (js/alltag/leben.js). Präfix .lb- */
+.lb { display: flex; flex-direction: column; gap: 12px; min-width: 0; max-width: 780px; margin: 0 auto; width: 100%; padding-bottom: 40px; }
+.lb-tabs { display: flex; gap: 6px; overflow-x: auto; scrollbar-width: none; }
+.lb-tab { flex: none; display: inline-flex; align-items: center; gap: 6px; min-height: 42px; padding: 6px 14px; border-radius: 999px; border: 1px solid var(--line); background: var(--card); color: var(--ink); font: inherit; font-weight: 600; cursor: pointer; }
+.lb-tab.on { background: var(--accent); border-color: var(--accent); color: var(--accent-ink, #fff); }
+.lb-row { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; min-width: 0; }
+.lb-sp { flex: 1; }
+.lb-nav { justify-content: center; }
+.lb-nav .btn { min-width: 44px; }
+.lb-twin { display: flex; gap: 16px; align-items: center; }
+.lb-twin h3 { margin: 0; }
+.lb-twin p { margin: 6px 0 0; }
+.lb-ava { position: relative; flex: none; width: 76px; height: 76px; border-radius: 50%; display: grid; place-items: center; font-size: 2.6rem;
+  background: radial-gradient(circle at 30% 30%, color-mix(in srgb, var(--accent) 30%, var(--card)), var(--card)); border: 3px solid var(--accent); }
+.lb-hat { position: absolute; top: -18px; left: 50%; transform: translateX(-50%); font-size: 1.7rem; }
+.lb-areas { list-style: none; margin: 0; padding: 0; display: grid; gap: 8px; }
+.lb-areas li { display: flex; gap: 10px; align-items: center; padding: 10px 12px; border-radius: var(--r-sm); background: var(--card); border: 1px solid var(--line); }
+.lb-ae { font-size: 1.5rem; }
+.lb-am { flex: 1; min-width: 0; display: grid; gap: 6px; }
+.lb-am small { color: var(--muted); }
+.lb-bar { height: 10px; border-radius: 99px; background: var(--line); overflow: hidden; display: block; }
+.lb-bar i { display: block; height: 100%; border-radius: inherit; transition: width .6s ease; }
+@media (prefers-reduced-motion: reduce) { .lb-bar i { transition: none; } }
+.up { color: #16a34a; } .down { color: #dc2626; }
+.lb-stack { display: flex; height: 22px; border-radius: 99px; overflow: hidden; margin: 8px 0; }
+.lb-stack i { min-width: 3px; }
+.lb-legend { list-style: none; margin: 0; padding: 0; display: grid; gap: 4px; font-size: .92rem; }
+.lb-legend span { display: inline-block; width: 10px; height: 10px; border-radius: 3px; margin-right: 6px; }
+.lb-legend small { color: var(--muted); }
+.lb-tbl { width: 100%; border-collapse: collapse; }
+.lb-tbl td { padding: 6px 4px; border-bottom: 1px solid var(--line); }
+.lb-tbl td:nth-child(2), .lb-tbl td:nth-child(3) { text-align: right; white-space: nowrap; font-variant-numeric: tabular-nums; }
+.lb-tbl small, .card h3 small { color: var(--muted); font-weight: 500; font-size: .8rem; }
+.lb-kpis { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; }
+.lb-kpis span { display: flex; flex-direction: column; }
+.lb-kpis small { color: var(--muted); }
+.lb-chart { display: grid; grid-template-columns: repeat(12, minmax(0, 1fr)); gap: 4px; height: 150px; align-items: end; margin-top: 8px; }
+.lb-col { display: flex; flex-direction: column; align-items: center; height: 100%; gap: 4px; min-width: 0; }
+.lb-colbar { flex: 1; width: 100%; display: flex; flex-direction: column-reverse; border-radius: 4px; overflow: hidden; background: color-mix(in srgb, var(--line) 40%, transparent); }
+.lb-colbar i { display: block; width: 100%; }
+.lb-col small { font-size: .65rem; color: var(--muted); }
+.lb-hero { text-align: center; padding: 18px; border-radius: var(--r-sm); color: #fff; background: linear-gradient(135deg, #7c3aed, #db2777, #f59e0b); }
+.lb-hero h2 { margin: 0; color: #fff; }
+.lb-hero p { margin: 6px 0 0; opacity: .95; }
+.lb-tiles { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 8px; }
+.lb-tile { display: flex; flex-direction: column; align-items: flex-start; gap: 2px; padding: 12px; border-radius: var(--r-sm); background: var(--card); border: 1px solid var(--line); }
+.lb-tile span { font-size: 1.5rem; }
+.lb-tile b { font-size: 1.35rem; }
+.lb-tile small { color: var(--muted); }

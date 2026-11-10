@@ -11,7 +11,8 @@ import { esc } from "../util.js";
 const TAB_KEY = "sk-hh-tab";
 const lsGet = (k) => { try { return localStorage.getItem(k); } catch { return null; } };
 const lsSet = (k, v) => { try { localStorage.setItem(k, v); } catch { /* egal */ } };
-const TABS = [["putz", "🧽", "Putzplan"], ["wartung", "🛠️", "Wartung"], ["verlauf", "📜", "Verlauf"]];
+const TABS = [["putz", "🧽", "Putzplan"], ["wartung", "🛠️", "Wartung"], ["muell", "🗑️", "Müll"], ["vorrat", "🥫", "Vorrat"], ["verlauf", "📜", "Verlauf"]];
+const EXTRA = new Set(["muell", "vorrat"]); // Update 11 – eigene Tabs aus ./hausextra.js
 
 function injectCSS() {
   if (document.getElementById("hh-css")) return;
@@ -27,8 +28,11 @@ const safe = (p, ok) => Promise.resolve(p).then(() => { if (ok) ui.toast(ok); re
 export function mount(el) {
   injectCSS();
   const col = collection("haushalt");
-  const S = { tab: TABS.some((t) => t[0] === lsGet(TAB_KEY)) ? lsGet(TAB_KEY) : "putz", room: "" };
+  const want = (location.hash.match(/^#alltag\/haushalt\/([a-z]+)/) || [])[1] || lsGet(TAB_KEY); // Update 11: #alltag/haushalt/<tab>
+  const S = { tab: TABS.some((t) => t[0] === want) ? want : "putz", room: "" };
   let alive = true, queued = false;
+  let extra = null; // { tab, off } – Update 11
+  const stopExtra = () => { if (extra) { try { extra.off(); } catch { /* egal */ } extra = null; } };
   const queue = () => { if (queued || !alive) return; queued = true; queueMicrotask(() => { queued = false; if (alive) render(); }); };
 
   el.innerHTML =
@@ -56,9 +60,21 @@ export function mount(el) {
         `<div class="hh-sum-t"><b>${c.faellig ? `${c.faellig} ${c.faellig === 1 ? "Aufgabe ist" : "Aufgaben sind"} dran` : "Alles erledigt – gönn dir was! ☕"}</b>` +
         `<small>${over ? `${over} davon überfällig · ` : ""}${c.putz} im Putzplan · ${c.wartung} Wartung</small></div>`;
     tabsEl.innerHTML = TABS.map(([id, e, label]) => {
-      const n = id === "verlauf" ? 0 : due.filter((d) => d.kind === id && d.state !== "bald").length;
+      const n = id === "verlauf" || EXTRA.has(id) ? 0 : due.filter((d) => d.kind === id && d.state !== "bald").length;
       return `<button type="button" role="tab" class="hh-tab" data-tab="${id}" aria-selected="${S.tab === id}"><span aria-hidden="true">${e}</span><span>${label}</span>${n ? `<span class="hh-tab-n" title="fällig">${n}</span>` : ""}</button>`;
     }).join("");
+    if (EXTRA.has(S.tab)) {
+      roomsEl.innerHTML = "";
+      if (!extra || extra.tab !== S.tab) {
+        stopExtra();
+        const tab = S.tab;
+        extra = { tab, off: () => {} };
+        import("./hausextra.js").then((m) => { if (alive && extra && extra.tab === tab) extra.off = m.mountTab(tab, mainEl); })
+          .catch((err) => { console.error(err); mainEl.innerHTML = `<p class="note">Konnte nicht laden – bitte neu öffnen.</p>`; });
+      }
+      return;
+    }
+    stopExtra();
     if (S.tab === "verlauf") { roomsEl.innerHTML = ""; renderLog(tasks); return; }
     const list = tasks.filter((t) => t.kind === S.tab);
     const rooms = [...new Set(list.map((t) => t.room).filter(Boolean))].sort((a, b) => a.localeCompare(b, "de"));
@@ -211,7 +227,9 @@ export function mount(el) {
     } else if (a === "untick" && t) safe(col.put(H.untick(t)), "↩️ Zurückgenommen");
   });
 
+  const onHash = () => { const t = (location.hash.match(/^#alltag\/haushalt\/([a-z]+)/) || [])[1]; if (t && t !== S.tab && TABS.some((x) => x[0] === t)) { S.tab = t; lsSet(TAB_KEY, t); render(); } };
+  window.addEventListener("hashchange", onHash);
   const off = col.watch(queue);
   render();
-  return () => { alive = false; try { off(); } catch { /* egal */ } };
+  return () => { alive = false; stopExtra(); window.removeEventListener("hashchange", onHash); try { off(); } catch { /* egal */ } };
 }

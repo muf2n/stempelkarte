@@ -134,6 +134,15 @@ export function build(input = {}, { from = 0, to = Infinity } = {}) {
     add({ id: "r:" + t.id, cat: "reisen", ts: tsAt(t.from, "09:00"), emoji: s(t.emoji) || "✈️", title: s(t.title) || s(t.dest) || "Reise", sub: [s(t.dest) && s(t.dest) !== s(t.title) ? s(t.dest) : "", nights ? `${nights} ${nights === 1 ? "Nacht" : "Nächte"}` : ""].filter(Boolean).join(" · "), target: "#alltag/unterwegs" });
   }
 
+  /* Update 11 – 📔 Reisetagebuch (Kategorie „reisen“) */
+  const tripTitle = new Map((cols.travel_trips || []).filter((t) => t && t.id).map((t) => [t.id, s(t.title) || s(t.dest) || "Reise"]));
+  for (const j of cols.travel_journal || []) {
+    if (!j || !j.id || !RE_KEY.test(s(j.day))) continue;
+    const text = s(j.text).replace(/\s+/g, " ");
+    add({ id: "j:" + j.id, cat: "reisen", ts: tsAt(j.day, "12:00"), emoji: s(j.mood) || "📔", title: s(j.title) || `Reisetagebuch · ${tripTitle.get(s(j.tripId)) || "Reise"}`,
+      sub: [text.length > 90 ? text.slice(0, 89) + "…" : text, Array.isArray(j.photoIds) && j.photoIds.length ? `📷 ${j.photoIds.length}` : ""].filter(Boolean).join(" · "), target: "#alltag/unterwegs" });
+  }
+
   /* Freizeit */
   for (const f of cols.freizeit || []) {
     if (!f || !Number.isFinite(Number(f.start))) continue;
