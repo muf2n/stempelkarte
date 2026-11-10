@@ -20,12 +20,28 @@ export function createJpPath(J) {
     }
     return cache;
   };
+  let topicsCache = null;
+  /** falsche/fällige Kana & Wörter (SRS), schlimmste zuerst */
+  const weak = () => {
+    units();
+    const today = J.today();
+    return [...J.cards().values()]
+      .filter((c) => byId.has(c.id) && c.seen > 0 && (c.reps === 0 || (c.due && c.due <= today)))
+      .sort((a, b) => (b.lapses || 0) - (a.lapses || 0) || String(a.due).localeCompare(String(b.due)))
+      .map((c) => byId.get(c.id));
+  };
   const meta = (id) => { const it = byId && byId.get(id); return it && it.kind === "kana" ? { kind: "kana", kana: it.kana, romaji: it.romaji } : { kind: "vocab" }; };
 
   return createPath({
     module: "jp",
     name: "Japanisch",
+    flag: "🇯🇵",
+    prop: "fan",
     units,
+    /** 🏋️ Üben: Themen (Kana-Reihen, Wortschatz, Grammatik) */
+    trainTopics: () => { const us = units(); if (!topicsCache || topicsCache.us !== us) topicsCache = { us, t: P.jpTrainTopics(us) }; return topicsCache.t; },
+    /** 🩹 Meine Fehler: falsche/fällige Kana & Wörter aus dem SRS */
+    weakItems: () => weak(),
     lessonCtx: () => ({ canListen: ttsSupported(), canSpeak: srSupported() }),
     /** Tippen/Sprechen prüfen → true | "near" (kleiner Tippfehler) | false */
     check(ex, value) {
@@ -55,13 +71,7 @@ export function createJpPath(J) {
     countStats(n) { if (n > 0) J.count("path", null, n); },
     /** 🏋️ Üben: zuletzt falsche/fällige Kana & Wörter, sonst aus geschafften Lektionen. */
     practiceItems(us, mod) {
-      units();
-      const today = J.today();
-      const weak = [...J.cards().values()]
-        .filter((c) => byId.has(c.id) && c.seen > 0 && (c.reps === 0 || (c.due && c.due <= today)))
-        .sort((a, b) => (b.lapses || 0) - (a.lapses || 0) || String(a.due).localeCompare(String(b.due)))
-        .map((c) => byId.get(c.id));
-      const out = weak.slice(0, 10);
+      const out = weak().slice(0, 10);
       if (out.length < 6) {
         const done = us.flatMap((u) => u.nodes).filter((n) => n.type === "lesson" && mod.nodes[n.id]).flatMap((n) => n.items);
         for (const it of done.slice().reverse()) { if (out.length >= 8) break; if (!out.includes(it)) out.push(it); }

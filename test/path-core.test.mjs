@@ -7,6 +7,8 @@ import { KANA_GROUPS, VOCAB } from "../js/alltag/jp-data.js";
 import { toKatakana } from "../js/alltag/jp-core.js";
 import { CARDS, TOPICS, FORMULAS } from "../js/alltag/lap-data.js";
 import { PROBLEM_TYPES, makeProblem } from "../js/alltag/lap-core.js";
+import { GRAMMAR, PATH_ORDER } from "../js/alltag/jp-data-grammar.js";
+import { SENTENCES } from "../js/alltag/jp-data-sentences.js";
 
 const JU = P.jpUnits({ groups: KANA_GROUPS, vocab: VOCAB, toKata: toKatakana });
 const lap = (year) => P.lapUnits({ cards: CARDS, topics: TOPICS, problemTypes: PROBLEM_TYPES, year, formulas: FORMULAS });
@@ -265,4 +267,148 @@ test("Abzeichen & Erinnerung ab 18:00", () => {
   assert.ok(r && /Gefahr/.test(r.title) && r.target === "#alltag/japanisch");
   assert.equal(P.learnReminder({ docs, now: morning }), null);
   assert.equal(P.learnReminder({ docs: [...docs, { id: "lap", xp: { "2026-11-07": 5 } }], now: evening }), null);
+});
+
+/* ================= Update 10c – 🔋 Prozent & Energie-Modus, 🏋️ freies Üben ================= */
+test("🔋 Prozent-Anzeige: 19/25 → 76 %, Grenzen, energyView", () => {
+  assert.equal(P.energyPct(19), 76); assert.equal(P.fmtEnergyPct(19), "76 %");
+  assert.equal(P.energyPct(25), 100); assert.equal(P.energyPct(0), 0); assert.equal(P.energyPct(-3), 0); assert.equal(P.energyPct(99), 100);
+  assert.equal(P.energyPct(1), 4);
+  const t0 = new Date(2026, 10, 7, 10).getTime();
+  const v = P.energyView({ energy: { n: 19, at: t0, day: T } }, t0);
+  assert.deepEqual([v.inf, v.text, v.sub, v.pct, v.low], [false, "76 %", "19/25", 76, false]);
+  assert.equal(P.energyView({ energy: { n: 3, at: t0, day: T } }, t0).low, true);
+  const inf = P.energyView({ energyMode: "unbegrenzt", energy: { n: 3, at: t0, day: T } }, t0);
+  assert.equal(inf.inf, true); assert.equal(inf.text, "∞");
+});
+
+test("🔋 Modi: Normal / Entspannt (Fehler −1, +1 je 10 min) / Unbegrenzt (kein Verbrauch, nie leer)", () => {
+  const t0 = new Date(2026, 10, 7, 10).getTime();
+  const e = { n: 10, at: t0, day: T };
+  assert.equal(P.readMe({}).energyMode, "normal", "Standard für bestehende Nutzer: Normal");
+  assert.equal(P.readMe({ energyMode: "quatsch" }).energyMode, "normal");
+  assert.equal(P.modeOf({ energyMode: "entspannt" }), "entspannt");
+  // Normal
+  assert.equal(P.spendEnergy(e, { correct: false }, t0).cost, 2);
+  // Entspannt
+  let r = P.spendEnergy(e, { correct: false, mode: "entspannt" }, t0);
+  assert.equal(r.cost, 1); assert.equal(r.energy.n, 9);
+  assert.equal(P.energyNow({ n: 10, at: t0, day: T }, t0 + 10 * 60e3, "entspannt").n, 11, "+1 nach 10 min");
+  assert.equal(P.energyNow({ n: 10, at: t0, day: T }, t0 + 10 * 60e3, "normal").n, 10, "Normal: erst nach 30 min");
+  assert.equal(P.energyNow({ n: 10, at: t0, day: T }, t0 + 25 * 60e3, "entspannt").nextIn, 5 * 60e3);
+  r = P.spendEnergy(e, { correct: true, combo: 5, mode: "entspannt" }, t0);
+  assert.equal(r.bonus, 2, "Combo gilt auch im Entspannt-Modus");
+  // Unbegrenzt
+  r = P.spendEnergy({ n: 0, at: t0, day: T }, { correct: false, mode: "unbegrenzt" }, t0);
+  assert.equal(r.cost, 0); assert.equal(r.bonus, 0); assert.equal(r.energy.n, 0, "gespeicherte Energie bleibt unverändert");
+  r = P.spendEnergy(e, { correct: true, combo: 5, mode: "unbegrenzt" }, t0);
+  assert.equal(r.bonus, 0); assert.equal(r.energy.n, 10);
+  assert.equal(P.canStart({ n: 0, at: t0, day: T }, t0, "unbegrenzt"), true);
+  assert.equal(P.canStart({ n: 4, at: t0, day: T }, t0, "normal"), false);
+  assert.equal(P.isOut({ n: 0, at: t0, day: T }, t0, "unbegrenzt"), false, "Unbegrenzt: nie „keine Energie“");
+  assert.equal(P.isOut({ n: 0, at: t0, day: T }, t0, "normal"), true);
+  assert.equal(P.isOut({ n: 0, at: t0, day: T }, t0 + 10 * 60e3, "entspannt"), false, "Entspannt lädt schneller nach");
+  assert.equal(P.practiceGain({ n: 3, at: t0, day: T }, 0, t0, "unbegrenzt").add, 0, "Üben lädt bei ∞ nichts (nicht nötig)");
+  assert.equal(P.practiceGain({ n: 3, at: t0, day: T }, 0, t0, "entspannt").add, 1);
+  // Schatzkiste & Laden im Modus Unbegrenzt
+  const k = P.openChest({ id: "jp" }, { energyMode: "unbegrenzt", energy: { n: 8, at: t0, day: T } }, { id: "jp-x-k3" }, T, t0);
+  assert.equal(k.energy, 0); assert.equal(k.gems, P.GEMS.chest);
+  assert.equal(P.buyEnergy({ energyMode: "unbegrenzt", gems: 999, energy: { n: 1, at: t0, day: T } }, t0).why, "unlimited");
+  assert.equal(P.setEnergyMode({}, "unbegrenzt").energyMode, "unbegrenzt");
+  assert.equal(P.setEnergyMode({}, "xx").energyMode, "normal");
+});
+
+test("🔋 Jetzt auffüllen (gratis): Normal 1× am Tag, Entspannt jederzeit, Unbegrenzt nicht nötig", () => {
+  const t0 = new Date(2026, 10, 7, 10).getTime();
+  const low = { energy: { n: 4, at: t0, day: T } };
+  let r = P.freeRefill(low, t0);
+  assert.ok(r.ok); assert.equal(r.me.energy.n, 25); assert.equal(r.me.freeRefillDay, T);
+  const used = { ...r.me, energy: { n: 2, at: t0, day: T } };
+  assert.deepEqual(P.canFreeRefill(used, t0), { ok: false, why: "used" });
+  assert.equal(P.freeRefill(used, t0).ok, false, "zweites Mal am selben Tag nicht");
+  const next = new Date(2026, 10, 8, 10).getTime();
+  assert.ok(P.freeRefill({ ...used, energy: { n: 2, at: next, day: "2026-11-08" } }, next).ok, "am nächsten Tag wieder");
+  assert.equal(P.canFreeRefill({ energy: { n: 25, at: 0, day: T } }, t0).why, "full");
+  const relaxed = { energyMode: "entspannt", freeRefillDay: T, energy: { n: 2, at: t0, day: T } };
+  r = P.freeRefill(relaxed, t0);
+  assert.ok(r.ok, "Entspannt: jederzeit"); assert.ok(P.freeRefill({ ...r.me, energy: { n: 1, at: t0, day: T } }, t0).ok);
+  assert.equal(P.canFreeRefill({ energyMode: "unbegrenzt", energy: { n: 2, at: t0, day: T } }, t0).why, "unlimited");
+});
+
+const JUG = P.jpUnits({ groups: KANA_GROUPS, vocab: VOCAB, toKata: toKatakana, grammar: GRAMMAR, sentences: SENTENCES, order: PATH_ORDER });
+test("🏋️ Üben – Quellen: Alles, Einheit (auch gesperrt), Thema, Meine Fehler, Zufall", () => {
+  const mod = { nodes: {} };
+  const st = P.nodeStates(JUG, mod);
+  const locked = JUG.find((u) => u.kind === "vocab" && u.nodes.every((n) => st[n.id] === "locked")) || JUG.find((u) => u.nodes.every((n) => st[n.id] === "locked"));
+  assert.ok(locked, "es gibt gesperrte Einheiten");
+  const un = P.trainSource({ kind: "unit", id: locked.id }, { units: JUG });
+  assert.ok(un.nodes.length >= 1 && un.nodes.every((n) => n.unit === locked.id && n.type === "lesson"), "gesperrte Einheit: ihre Lektionen");
+  assert.deepEqual(new Set(P.trainItems(un.nodes).map((x) => x.id)), new Set(locked.items.filter((x) => un.nodes.some((n) => n.items.includes(x))).map((x) => x.id)));
+  const all = P.trainSource({ kind: "all" }, { units: JUG });
+  assert.equal(all.nodes.length, P.allNodes(JUG).filter((n) => n.type === "lesson").length, "Alles = alle Lektionen, egal ob frei");
+  // Themen
+  const tps = P.jpTrainTopics(JUG);
+  assert.deepEqual(tps.map((g) => g.id), ["hira", "kata", "voc", "gr"]);
+  const row = tps[0].items[0];
+  assert.ok(row.nodes[0].items.every((x) => x.kind === "kana" && x.script === "hira"));
+  const voc = tps[2].items.find((t) => t.nodes.length >= 2) || tps[2].items[0];
+  const tp = P.trainSource({ kind: "topic", id: voc.id }, { units: JUG, topics: tps });
+  assert.ok(P.trainItems(tp.nodes).every((x) => x.kind === "vocab" && x.topic === voc.label), "Wortschatz-Thema: nur Wörter dieses Themas");
+  const gr = P.trainSource({ kind: "topic", id: tps[3].items[0].id }, { topics: tps });
+  assert.ok(gr.nodes.length === 2 && gr.nodes[0].hint, "Grammatik-Punkt mit Regel 💡");
+  // Fehler
+  const weak = JUG[0].items.slice(0, 11);
+  const wk = P.trainSource({ kind: "weak" }, { weak });
+  assert.equal(wk.nodes.length, 2); assert.equal(P.trainItems(wk.nodes).length, 11);
+  assert.equal(P.trainSource({ kind: "weak" }, { weak: [] }).nodes.length, 0);
+  // Zufall: genau eine Einheit, deterministisch
+  const z1 = P.trainSource({ kind: "random" }, { units: JUG, seed: 7 }), z2 = P.trainSource({ kind: "random" }, { units: JUG, seed: 7 });
+  assert.equal(z1.unit, z2.unit); assert.ok(z1.nodes.every((n) => n.unit === z1.unit));
+  // LAP: Lehrjahr & Thema über alle Jahre
+  const lt = P.lapTrainTopics({ cards: CARDS, topics: TOPICS, problemTypes: PROBLEM_TYPES, formulas: FORMULAS });
+  const y2 = lt[0].items.find((t) => t.id === "y2");
+  assert.ok(y2 && P.trainItems(y2.nodes).every((c) => (Number(c.year) || 1) === 2));
+  const grund = lt[1].items.find((t) => t.id === "t:grund");
+  const gi = P.trainItems(grund.nodes);
+  assert.equal(gi.length, CARDS.filter((c) => c.topic === "grund" && c.x && c.x.length).length, "Thema: alle Karten aller Lehrjahre");
+  assert.ok(grund.nodes.some((n) => n.kind === "calc"), "Thema enthält passende Rechenaufgaben");
+});
+
+test("🏋️ Üben – Set bauen: Länge 10/20/50, gleiche Übungsarten, deterministisch; endlos nachlegen; Fehler nochmal", () => {
+  const ctx = { module: "jp", canListen: true, canSpeak: false };
+  const nodes = P.trainSource({ kind: "unit", id: JUG[3].id }, { units: JUG }).nodes;
+  for (const n of [10, 20, 50]) {
+    const ex = P.buildTraining(nodes, ctx, { size: n, seed: 3 });
+    assert.equal(ex.length, n, `${n} Übungen`);
+  }
+  const a = P.buildTraining(nodes, ctx, { size: 10, seed: 5 }), b = P.buildTraining(nodes, ctx, { size: 10, seed: 5 });
+  assert.deepEqual(a, b);
+  assert.ok(new Set(a.map((e) => e.type)).size >= 2, "verschiedene Übungsarten");
+  const lapEx = P.buildTraining(P.lapTrainTopics({ cards: CARDS, topics: TOPICS, problemTypes: PROBLEM_TYPES, formulas: FORMULAS })[0].items[0].nodes, { module: "lap", makeProblem, formulas: FORMULAS }, { size: 20, seed: 9 });
+  assert.equal(lapEx.length, 20);
+  assert.ok(lapEx.every((e) => ["mc", "tf", "match", "num"].includes(e.type)));
+  assert.equal(P.buildTraining([], ctx, { size: 10 }).length, 0);
+  // endlos: Lauf verlängern
+  let run = P.startRun(a, { mode: "train" });
+  for (let i = 0; i < 9; i++) { run = P.answerRun(run, i !== 2); run = P.nextRun(run); }
+  assert.equal(run.queue.length, 10, "freies Üben: Fehler werden nicht hinten angehängt");
+  run = P.extendRun(run, P.buildTraining(nodes, ctx, { size: P.TRAIN_BATCH, seed: 11 }));
+  assert.equal(run.total, 20); assert.deepEqual(run.queue.slice(-10).map((e) => e.key), [10, 11, 12, 13, 14, 15, 16, 17, 18, 19], "neue, eindeutige Schlüssel");
+  assert.ok(!P.runDone(run));
+  // Fehler nochmal üben
+  const mx = P.mistakeExercises(run, 1);
+  assert.equal(mx.length, 1); assert.equal(mx[0].q, a[2].q); assert.ok(!("key" in mx[0]));
+  if (mx[0].options) assert.deepEqual([...mx[0].options].sort(), [...a[2].options].sort());
+});
+
+test("🏋️ Üben – XP: +1 je richtiger Antwort, max. 50 am Tag, zählt fürs Tagesziel, kein Kronen-/Knoten-Fortschritt", () => {
+  let r = P.applyTraining({ id: "jp" }, {}, { ok: 8, day: T });
+  assert.equal(r.xp, 8); assert.equal(r.mod.xp[T], 8); assert.equal(r.me.ok, 8); assert.deepEqual(r.mod.nodes, {});
+  assert.equal(r.me.lessons, 0, "zählt nicht als Lektion");
+  r = P.applyTraining(r.mod, r.me, { ok: 45, day: T });
+  assert.equal(r.xp, 42); assert.ok(r.capped); assert.equal(r.mod.xp[T], 50);
+  assert.equal(P.trainXpLeft(r.me, T), 0);
+  r = P.applyTraining(r.mod, r.me, { ok: 5, day: T });
+  assert.equal(r.xp, 0); assert.equal(r.me.ok, 58, "richtige Antworten zählen trotzdem fürs Abzeichen");
+  assert.equal(P.trainXpLeft(r.me, "2026-11-08"), 50, "neuer Tag – neues Limit");
 });

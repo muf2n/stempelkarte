@@ -25,12 +25,26 @@ export function createLapPath(L) {
   const cards = CARDS;
   const ids = new Set(cards.map((c) => c.id));
   const units = () => P.lapUnits({ cards, topics: TOPICS, problemTypes: PROBLEM_TYPES, year: L.year(), formulas: FORMULAS, pairs });
+  let allCache = null, topicsCache = null;
+  /** falsche/fällige Karten (SRS) bis zum gewählten Lehrjahr */
+  const weak = () => {
+    const today = L.today();
+    const map = L.cards();
+    return filterYear(cards, L.year(), "upto").filter((c) => { const s = map.get(c.id); return s && s.seen > 0 && (s.reps === 0 || (s.due && s.due <= today)); })
+      .sort((a, b) => ((map.get(b.id).lapses || 0) - (map.get(a.id).lapses || 0)));
+  };
   const fmtNum = (x, ex) => (ex && ex.unit === "€" ? fmt(x, 2) : fmtAuto(x));
 
   return createPath({
     module: "lap",
     name: "LAP",
+    flag: "🎓",
+    prop: "tool",
     units,
+    /** 🏋️ Üben „Alles“/„Zufall“: alle Lehrjahre */
+    trainAll: () => (allCache = allCache || P.lapUnits({ cards, topics: TOPICS, problemTypes: PROBLEM_TYPES, year: 0, formulas: FORMULAS, pairs })),
+    trainTopics: () => (topicsCache = topicsCache || P.lapTrainTopics({ cards, topics: TOPICS, problemTypes: PROBLEM_TYPES, formulas: FORMULAS, pairs })),
+    weakItems: () => weak(),
     unitsKey: () => String(L.year()),
     lessonCtx: () => ({ makeProblem, formulas: FORMULAS }),
     check(ex, value) {
@@ -51,12 +65,7 @@ export function createLapPath(L) {
     },
     countStats(n) { if (n > 0) L.count("path", null, n); },
     practiceItems(us, mod) {
-      const today = L.today();
-      const map = L.cards();
-      const pool = filterYear(cards, L.year(), "upto");
-      const weak = pool.filter((c) => { const s = map.get(c.id); return s && s.seen > 0 && (s.reps === 0 || (s.due && s.due <= today)); })
-        .sort((a, b) => ((map.get(b.id).lapses || 0) - (map.get(a.id).lapses || 0)));
-      const out = weak.slice(0, 8);
+      const out = weak().slice(0, 8);
       if (out.length < 5) {
         const done = us.flatMap((u) => u.nodes).filter((n) => n.type === "lesson" && n.kind === "cards" && mod.nodes[n.id]).flatMap((n) => n.items);
         for (const c of done.slice().reverse()) { if (out.length >= 8) break; if (!out.includes(c)) out.push(c); }

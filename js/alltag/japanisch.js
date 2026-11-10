@@ -20,6 +20,7 @@ import { createJpPath } from "./jp-path.js"; // Update 10 – 🛤️ Lernpfad
 
 const TABS = [
   ["pfad", "🛤️", "Lernpfad"], // Update 10 – wie Duolingo (./path-ui.js)
+  ["ueben", "🏋️", "Üben"], // Update 10c – frei üben, alle Fragen, gratis (./path-ui.js trainer)
   ["kana", "🔤", "Kana"],
   ["vokabeln", "🃏", "Vokabeln"],
   ["grammatik", "📐", "Grammatik"], // Update 10b – 20 Lektionen (./jp-grammar.js, nachgeladen)
@@ -152,6 +153,7 @@ export function mount(el) {
   const sections = {
     kana: createKana(J), vokabeln: createVocab(J), hoeren: createListen(J), sprechen: createSpeak(J),
     schreiben: createWrite(J), lesen: createRead(J), sensei: createSensei(J), pfad: createJpPath(J),
+    get ueben() { return this.pfad.trainer; },
     grammatik: lazySection(() => import("./jp-grammar.js").then((m) => m.createGrammar(J))),
   };
   let active = null;

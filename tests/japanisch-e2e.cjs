@@ -100,7 +100,7 @@ function fakes(opts) {
   await page.waitForSelector(".jp-head .jp-stat", { timeout: 8000 });
   ok(/#alltag\/japanisch$/.test(page.url()), "Route #alltag/japanisch");
   ok(await page.evaluate(() => !!document.getElementById("jp-css")), "Modul-CSS geladen");
-  ok((await page.$$(".jp-tab")).length === 9, "9 Bereiche als Reiter (inkl. 🛤️ Lernpfad und 📐 Grammatik)");
+  ok((await page.$$(".jp-tab")).length === 10, "10 Bereiche als Reiter (inkl. 🛤️ Lernpfad, 🏋️ Üben und 📐 Grammatik)");
   ok(await page.isHidden(".jp-voicehint"), "japanische Stimme vorhanden → kein Hinweis");
 
   // ---- Kana ----

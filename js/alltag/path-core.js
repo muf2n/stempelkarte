@@ -5,7 +5,8 @@
 //   • 🔋 Energie wie bei Duolingo (25 max, −1 je Übung, −2 bei Fehler, Combo-Bonus, +1 alle 30 min, täglich voll), ⚡ XP & Tagesziel, 💎 Edelsteine, 🧊 Serien-Schutz, 🏆 Abzeichen, 🔔 Erinnerung
 // Gespeichert in der Alltag-Sammlung "learn_progress": Dokument je Modul ("jp", "lap") + gemeinsames Dokument "me".
 //   Modul: { id, nodes: { <knoten>: { c:Krone 1–3, p:perfekt, n:gespielt, at } }, xp: { "JJJJ-MM-TT": XP } }
-//   me:    { id:"me", gems, energy:{ n, at, day }, freezes, frozen:{ Tag:true }, goal, sound, ok, perfect, lessons, ach:{ id: ms }, last }
+//   me:    { id:"me", gems, energy:{ n, at, day }, energyMode:"normal"|"entspannt"|"unbegrenzt", freeRefillDay, train:{ day, xp },
+//            freezes, frozen:{ Tag:true }, goal, sound, ok, perfect, lessons, ach:{ id: ms }, last }
 // Unit-Tests: test/path-core.test.mjs
 import { dayKey, addDays, rng, shuffle, streak as srsStreak } from "./srs-core.js";
 import { parseJa, tileAnswers } from "./jp-text.js";
@@ -33,13 +34,15 @@ export const GOALS = [
   { id: "intensiv", name: "Intensiv", emoji: "🔥", xp: 150 },
 ];
 export const goalXp = (id) => (GOALS.find((g) => g.id === id) || GOALS[1]).xp;
-export const XP = { lesson: 10, perfect: 5, check: 20, practice: 5, chest: 5, comboStep: 5, comboXp: 2, comboMax: 6 };
+export const XP = { train: 1, lesson: 10, perfect: 5, check: 20, practice: 5, chest: 5, comboStep: 5, comboXp: 2, comboMax: 6 };
 export const GEMS = { perfect: 5, check: 10, chest: 20, lesson: 1 };
-export const DEFAULT_ME = { id: "me", gems: 0, energy: { n: MAX_ENERGY, at: 0, day: null }, freezes: 0, frozen: {}, goal: null, sound: true, ok: 0, perfect: 0, lessons: 0, ach: {}, last: null };
+export const DEFAULT_ME = { id: "me", gems: 0, energy: { n: MAX_ENERGY, at: 0, day: null }, energyMode: "normal", freeRefillDay: null, train: { day: null, xp: 0 }, freezes: 0, frozen: {}, goal: null, sound: true, ok: 0, perfect: 0, lessons: 0, ach: {}, last: null };
 export const readMe = (doc) => {
   const d = doc && typeof doc === "object" ? doc : {};
   const rest = { ...d };
   delete rest.hearts; // ❤️ Herzen (alt) → 🔋 Energie: alle starten nach dem Update mit voller Energie
+  if (!ENERGY_MODES.some((m) => m.id === rest.energyMode)) rest.energyMode = "normal";
+  if (!rest.train || typeof rest.train !== "object") rest.train = { day: null, xp: 0 };
   return { ...DEFAULT_ME, ...rest, energy: { ...DEFAULT_ME.energy, ...(d.energy && typeof d.energy === "object" ? d.energy : {}) }, frozen: { ...(d.frozen || {}) }, ach: { ...(d.ach || {}) } };
 };
 export const readMod = (doc, id) => {
@@ -539,7 +542,7 @@ export function startRun(exercises, { mode = "lesson" } = {}) {
 }
 export const runCurrent = (run) => (run && run.pos < run.queue.length ? run.queue[run.pos] : null);
 /**
- * Antwort auf die aktuelle Übung verbuchen. Falsch → dieselbe Übung kommt am Ende nochmal (höchstens MAX_REQUEUE-mal).
+ * Antwort auf die aktuelle Übung verbuchen. Falsch → dieselbe Übung kommt am Ende nochmal (höchstens MAX_REQUEUE-mal; nicht im Modus "train").
  * refs: SRS-Ergebnis je Lernobjekt (false, sobald einmal falsch).
  */
 export function answerRun(run, correct) {
@@ -558,7 +561,8 @@ export function answerRun(run, correct) {
     r.combo = 0;
     r.wrong[ex.key] = (r.wrong[ex.key] || 0) + 1;
     for (const id of refs) r.refs[id] = false;
-    if ((r.requeued[ex.key] || 0) < MAX_REQUEUE) { r.requeued[ex.key] = (r.requeued[ex.key] || 0) + 1; r.queue.push({ ...ex }); }
+    // 🏋️ freies Üben ("train"): kein Nachreichen – dafür „Fehler nochmal üben“ am Ende
+    if (run.mode !== "train" && (r.requeued[ex.key] || 0) < MAX_REQUEUE) { r.requeued[ex.key] = (r.requeued[ex.key] || 0) + 1; r.queue.push({ ...ex }); }
     else if (!r.solved.includes(ex.key)) r.solved.push(ex.key); // aufgeben, damit die Lektion endet
   }
   return r;
@@ -569,6 +573,28 @@ export function skipRun(run) {
   const ex = runCurrent(run);
   if (!ex) return run;
   return { ...run, solved: run.solved.includes(ex.key) ? run.solved : [...run.solved, ex.key], pos: run.pos + 1 };
+}
+/** Endlos-Üben: weitere Übungen hinten anhängen (neue Schlüssel). */
+export function extendRun(run, exercises) {
+  const add = exercises.map((e, i) => { const x = { ...e }; delete x.key; return { ...x, key: run.total + i }; });
+  return { ...run, queue: [...run.queue, ...add], total: run.total + add.length };
+}
+/** „Fehler nochmal üben“: jede falsch beantwortete Übung einmal (Antworten neu gemischt). */
+export function mistakeExercises(run, seed = 1) {
+  const rand = rng(seed);
+  const out = [];
+  const seen = new Set();
+  for (const e of run.queue) {
+    if (!run.wrong[e.key] || seen.has(e.key)) continue;
+    seen.add(e.key);
+    const x = { ...e };
+    delete x.key;
+    if (Array.isArray(x.options)) x.options = shuffle(x.options, rand);
+    if (Array.isArray(x.tiles)) x.tiles = shuffle(x.tiles, rand);
+    if (x.type === "match") { x.left = shuffle(x.left, rand); x.right = shuffle(x.right, rand); }
+    out.push(x);
+  }
+  return out;
 }
 export const runDone = (run) => !!run && run.pos >= run.queue.length;
 /** Fortschrittsbalken 0–1 (zählt nur gelöste Übungen, wie bei Duolingo). */
@@ -619,9 +645,9 @@ export function openChest(modDoc, meDoc, node, day, now = Date.now()) {
   mod.nodes[node.id] = { c: 1, p: 0, n: 1, at: now };
   mod.xp[day] = (mod.xp[day] || 0) + XP.chest;
   me.gems = (me.gems || 0) + GEMS.chest;
-  const e = energyNow(me.energy, now);
+  const e = energyNow(me.energy, now, modeOf(me));
   let energy = 0;
-  if (e.n < CHEST_ENERGY_BELOW) { me.energy = gainEnergy(me.energy, now, CHEST_ENERGY); energy = me.energy.n - e.n; }
+  if (!isUnlimited(modeOf(me)) && e.n < CHEST_ENERGY_BELOW) { me.energy = gainEnergy(me.energy, now, CHEST_ENERGY, modeOf(me)); energy = me.energy.n - e.n; }
   return { mod, me, xp: XP.chest, gems: GEMS.chest, energy };
 }
 function trimDays(obj, keep = 400) {
@@ -630,30 +656,56 @@ function trimDays(obj, keep = 400) {
 }
 
 /* ================= 🔋 Energie ================= */
+/** 🔋 Energie-Modus (me.energyMode): Normal wie bisher · Entspannt (Fehler nur −1, +1 alle 10 min) · Unbegrenzt (∞, kein Verbrauch). */
+export const ENERGY_MODES = [
+  { id: "normal", emoji: "🔋", name: "Normal", d: `Antwort −${ENERGY_COST}, Fehler −${ENERGY_WRONG}, +1 alle 30 min` },
+  { id: "entspannt", emoji: "🌿", name: "Entspannt", d: "Fehler kosten nur 1, +1 alle 10 min" },
+  { id: "unbegrenzt", emoji: "♾️", name: "Unbegrenzt", d: "Kein Verbrauch – üb so viel du willst" },
+];
+export const RELAX_REFILL_MS = 10 * 60 * 1000;
+/** Gültiger Modus aus me (Standard „normal“). */
+export const modeOf = (me) => { const m = me && me.energyMode; return ENERGY_MODES.some((x) => x.id === m) ? m : "normal"; };
+export const refillMs = (mode = "normal") => (mode === "entspannt" ? RELAX_REFILL_MS : REFILL_MS);
+export const isUnlimited = (mode) => mode === "unbegrenzt";
+/** Energie in Prozent (0–100, gerundet). */
+export const energyPct = (n) => Math.max(0, Math.min(100, Math.round((Number(n) || 0) / MAX_ENERGY * 100)));
+/** „76 %“ */
+export const fmtEnergyPct = (n) => `${energyPct(n)} %`;
 /**
- * Aktueller Stand inkl. Nachladen (+1 alle 30 min) und 🌅 Tages-Auffüllung (erster Besuch an einem neuen Tag → voll).
- * e = { n, at, day } → { n, at, day, nextIn (ms bis +1, 0 wenn voll), fresh (true = heute frisch aufgefüllt) }
+ * Aktueller Stand inkl. Nachladen (+1 alle 30 min bzw. 10 min im Modus Entspannt) und 🌅 Tages-Auffüllung (erster Besuch an einem neuen Tag → voll).
+ * e = { n, at, day } → { n, at, day, nextIn (ms bis +1, 0 wenn voll), fresh (true = heute frisch aufgefüllt), inf (Modus Unbegrenzt) }
  */
-export function energyNow(e, now = Date.now()) {
+export function energyNow(e, now = Date.now(), mode = "normal") {
   const today = dayKey(new Date(now));
+  if (isUnlimited(mode)) return { ...energyNow(e, now, "normal"), n: MAX_ENERGY, nextIn: 0, inf: true };
+  const R = refillMs(mode);
   if (!e || typeof e !== "object" || e.day !== today) return { n: MAX_ENERGY, at: 0, day: today, nextIn: 0, fresh: !!(e && e.day && e.day !== today && Number(e.n) < MAX_ENERGY) };
   const raw = e.n != null ? Number(e.n) : MAX_ENERGY;
   let n = Math.max(0, Math.min(MAX_ENERGY, Number.isFinite(raw) ? Math.floor(raw) : MAX_ENERGY));
   let at = Number(e.at) || 0;
   if (n >= MAX_ENERGY) return { n: MAX_ENERGY, at: 0, day: today, nextIn: 0, fresh: false };
   if (!at) at = now;
-  const gained = Math.floor(Math.max(0, now - at) / REFILL_MS);
+  const gained = Math.floor(Math.max(0, now - at) / R);
   n = Math.min(MAX_ENERGY, n + gained);
-  at += gained * REFILL_MS;
-  return { n, at: n >= MAX_ENERGY ? 0 : at, day: today, nextIn: n >= MAX_ENERGY ? 0 : REFILL_MS - (now - at), fresh: false };
+  at += gained * R;
+  return { n, at: n >= MAX_ENERGY ? 0 : at, day: today, nextIn: n >= MAX_ENERGY ? 0 : R - (now - at), fresh: false };
+}
+/** Anzeige: { inf, n, pct, text:"76 %"|"∞", sub:"19/25", nextIn, low } */
+export function energyView(meDoc, now = Date.now()) {
+  const me = readMe(meDoc);
+  const mode = modeOf(me);
+  const h = energyNow(me.energy, now, mode);
+  if (h.inf) return { inf: true, mode, n: MAX_ENERGY, pct: 100, text: "∞", sub: "unbegrenzt", nextIn: 0, low: false };
+  return { inf: false, mode, n: h.n, pct: energyPct(h.n), text: fmtEnergyPct(h.n), sub: `${h.n}/${MAX_ENERGY}`, nextIn: h.nextIn, low: h.n < ENERGY_START };
 }
 /**
- * Eine beantwortete Übung verbuchen: richtig −1, falsch −2. combo = richtige in Folge NACH dieser Antwort;
- * alle COMBO_EVERY richtigen +COMBO_ENERGY (nie über voll, kein Bonus bei 0). → { energy, cost, bonus }
+ * Eine beantwortete Übung verbuchen: richtig −1, falsch −2 (Entspannt: −1, Unbegrenzt: 0). combo = richtige in Folge NACH dieser Antwort;
+ * alle COMBO_EVERY richtigen +COMBO_ENERGY (nie über voll, kein Bonus bei 0, nicht bei Unbegrenzt). → { energy, cost, bonus }
  */
-export function spendEnergy(e, { correct = true, combo = 0 } = {}, now = Date.now()) {
-  const c = energyNow(e, now);
-  const cost = Math.min(c.n, correct ? ENERGY_COST : ENERGY_WRONG);
+export function spendEnergy(e, { correct = true, combo = 0, mode = "normal" } = {}, now = Date.now()) {
+  if (isUnlimited(mode)) { const c = energyNow(e, now); return { energy: { n: c.n, at: c.at, day: c.day }, cost: 0, bonus: 0 }; }
+  const c = energyNow(e, now, mode);
+  const cost = Math.min(c.n, correct || mode === "entspannt" ? ENERGY_COST : ENERGY_WRONG);
   let n = c.n - cost;
   let bonus = 0;
   if (correct && n > 0 && combo > 0 && combo % COMBO_EVERY === 0) { bonus = Math.min(COMBO_ENERGY, MAX_ENERGY - n); n += bonus; }
@@ -661,18 +713,20 @@ export function spendEnergy(e, { correct = true, combo = 0 } = {}, now = Date.no
   return { energy, cost, bonus };
 }
 /** Energie dazugeben (Üben, Schatzkiste). */
-export function gainEnergy(e, now = Date.now(), k = 1) {
-  const c = energyNow(e, now);
+export function gainEnergy(e, now = Date.now(), k = 1, mode = "normal") {
+  const c = energyNow(e, now, isUnlimited(mode) ? "normal" : mode);
   const n = Math.min(MAX_ENERGY, c.n + Math.max(0, k));
   return { n, at: n >= MAX_ENERGY ? 0 : c.at, day: c.day };
 }
-/** Genug Energie, um eine Lektion zu starten? */
-export const canStart = (e, now = Date.now()) => energyNow(e, now).n >= ENERGY_START;
+/** Genug Energie, um eine Lektion zu starten? (Unbegrenzt: immer) */
+export const canStart = (e, now = Date.now(), mode = "normal") => isUnlimited(mode) || energyNow(e, now, mode).n >= ENERGY_START;
+/** Energie leer → „Keine Energie mehr“-Bildschirm? (Unbegrenzt: nie) */
+export const isOut = (e, now = Date.now(), mode = "normal") => !isUnlimited(mode) && energyNow(e, now, mode).n <= 0;
 /** 🏋️ Üben: +1 je richtiger Antwort, höchstens PRACTICE_ENERGY_MAX pro Runde. gained = bisher in dieser Runde. → { energy, add } */
-export function practiceGain(e, gained = 0, now = Date.now()) {
-  const c = energyNow(e, now);
-  const add = gained >= PRACTICE_ENERGY_MAX || c.n >= MAX_ENERGY ? 0 : 1;
-  return { energy: add ? gainEnergy(e, now, add) : { n: c.n, at: c.at, day: c.day }, add };
+export function practiceGain(e, gained = 0, now = Date.now(), mode = "normal") {
+  const c = energyNow(e, now, isUnlimited(mode) ? "normal" : mode);
+  const add = isUnlimited(mode) || gained >= PRACTICE_ENERGY_MAX || c.n >= MAX_ENERGY ? 0 : 1;
+  return { energy: add ? gainEnergy(e, now, add, mode) : { n: c.n, at: c.at, day: c.day }, add };
 }
 /** 🌅 Tages-Auffüllung speichern (erster Besuch an einem neuen Tag). → { me, refilled } (refilled nur, wenn vorher nicht voll) */
 export function dailyRefill(meDoc, now = Date.now()) {
@@ -680,7 +734,28 @@ export function dailyRefill(meDoc, now = Date.now()) {
   const today = dayKey(new Date(now));
   if (me.energy.day === today) return { me, refilled: false };
   const c = energyNow(me.energy, now);
-  return { me: { ...me, energy: { n: MAX_ENERGY, at: 0, day: today } }, refilled: c.fresh };
+  return { me: { ...me, energy: { n: MAX_ENERGY, at: 0, day: today } }, refilled: c.fresh && !isUnlimited(modeOf(me)) };
+}
+/** Energie-Modus wechseln. */
+export function setEnergyMode(meDoc, mode) {
+  const me = readMe(meDoc);
+  return { ...me, energyMode: ENERGY_MODES.some((m) => m.id === mode) ? mode : "normal" };
+}
+/** „🔋 Jetzt auffüllen (gratis)“: Entspannt jederzeit, Normal 1× am Tag, Unbegrenzt nicht nötig. → { ok, why? } */
+export function canFreeRefill(meDoc, now = Date.now()) {
+  const me = readMe(meDoc);
+  const mode = modeOf(me);
+  if (isUnlimited(mode)) return { ok: false, why: "unlimited" };
+  if (energyNow(me.energy, now, mode).n >= MAX_ENERGY) return { ok: false, why: "full" };
+  if (mode === "normal" && me.freeRefillDay === dayKey(new Date(now))) return { ok: false, why: "used" };
+  return { ok: true };
+}
+export function freeRefill(meDoc, now = Date.now()) {
+  const me = readMe(meDoc);
+  const c = canFreeRefill(me, now);
+  if (!c.ok) return { me, ok: false, why: c.why };
+  const today = dayKey(new Date(now));
+  return { me: { ...me, energy: { n: MAX_ENERGY, at: 0, day: today }, ...(modeOf(me) === "normal" ? { freeRefillDay: today } : {}) }, ok: true };
 }
 
 /* ================= 💎 Laden ================= */
@@ -692,9 +767,143 @@ export function buyFreeze(meDoc) {
 }
 export function buyEnergy(meDoc, now = Date.now()) {
   const me = readMe(meDoc);
-  if (energyNow(me.energy, now).n >= MAX_ENERGY) return { me, ok: false, why: "full" };
+  if (isUnlimited(modeOf(me))) return { me, ok: false, why: "unlimited" };
+  if (energyNow(me.energy, now, modeOf(me)).n >= MAX_ENERGY) return { me, ok: false, why: "full" };
   if ((me.gems || 0) < ENERGY_GEMS) return { me, ok: false, why: "gems" };
   return { me: { ...me, gems: me.gems - ENERGY_GEMS, energy: { n: MAX_ENERGY, at: 0, day: dayKey(new Date(now)) } }, ok: true };
+}
+
+/* ================= 🏋️ Üben (eigener Reiter): frei, gratis, unabhängig vom Fortschritt ================= */
+export const TRAIN_XP_DAY = 50;           // höchstens 50 XP am Tag aus dem freien Üben (+1 je richtiger Antwort)
+export const TRAIN_LENGTHS = [10, 20, 50, 0]; // 0 = endlos
+export const TRAIN_BATCH = 10;            // Endlos: so viele Übungen werden jeweils nachgelegt
+const lessonNodes = (units) => units.flatMap((u) => u.nodes.filter((n) => n.type === "lesson"));
+/** Alle Lernobjekte (eindeutig nach id) einer Knotenliste. */
+export function trainItems(nodes) {
+  const seen = new Set();
+  const out = [];
+  for (const n of nodes) for (const it of n.items || []) { const k = it.id || it; if (!seen.has(k)) { seen.add(k); out.push(it); } }
+  return out;
+}
+/**
+ * Quelle → Knoten, aus denen geübt wird (auch gesperrte Einheiten!).
+ * src = { kind: "all" | "unit" | "topic" | "weak" | "random", id? }
+ * units = Einheiten des Pfads, all = alle Einheiten (LAP: alle Lehrjahre), topics = [{ id, title, items:[{ id, label, emoji, nodes }] }], weak = SRS-Fehler/fällige Objekte
+ * → { nodes, label, unit? }
+ */
+export function trainSource(src, { units = [], all = null, topics = [], weak = [], seed = 1 } = {}) {
+  const pool = all || units;
+  const kind = (src && src.kind) || "all";
+  if (kind === "unit") {
+    const u = units.find((x) => x.id === src.id) || pool.find((x) => x.id === src.id);
+    return u ? { nodes: lessonNodes([u]), label: `${u.emoji} ${u.title}`, unit: u.id } : { nodes: [], label: "" };
+  }
+  if (kind === "topic") {
+    const t = topics.flatMap((g) => g.items).find((x) => x.id === src.id);
+    return t ? { nodes: t.nodes, label: `${t.emoji} ${t.label}` } : { nodes: [], label: "" };
+  }
+  if (kind === "weak") {
+    const nodes = chunk(weak, 8).map((items, i) => ({ type: "practice", id: `weak-${i}`, title: "Meine Fehler", items, pool: weak }));
+    return { nodes, label: "🩹 Meine Fehler" };
+  }
+  if (kind === "random") {
+    const cands = pool.filter((u) => lessonNodes([u]).length);
+    if (!cands.length) return { nodes: [], label: "" };
+    const u = pick(rng(seed), cands);
+    return { nodes: lessonNodes([u]), label: `🎲 ${u.emoji} ${u.title}`, unit: u.id };
+  }
+  return { nodes: lessonNodes(pool), label: "🌈 Alles gemischt" };
+}
+const exKey = (e) => `${e.type}|${e.mode || ""}|${e.ref || e.q}|${e.big || e.claim || ""}`;
+/**
+ * Übungs-Set aus Knoten bauen (gleiche Übungsarten wie im Pfad, über buildLesson): aus jedem Knoten ein paar Übungen, gemischt.
+ * Deterministisch für denselben Seed. size = gewünschte Anzahl.
+ */
+export function buildTraining(nodes, ctx = {}, { size = 10, seed = Date.now() } = {}) {
+  const rand = rng(seed);
+  const list = (nodes || []).filter(Boolean);
+  if (!list.length || !(size > 0)) return [];
+  const order = shuffle(list, rand);
+  const per = Math.max(2, Math.min(6, Math.ceil(size / order.length)));
+  const out = [];
+  const seen = new Set();
+  const rounds = order.length * 4 + size;
+  for (let i = 0; out.length < size && i < rounds; i++) {
+    const n = order[i % order.length];
+    const ex = buildLesson(n, { ...ctx, seed: Math.floor(rand() * 2147483647) });
+    let took = 0;
+    for (const e of shuffle(ex, rand)) {
+      if (took >= per || out.length >= size) break;
+      const k = exKey(e);
+      if (seen.has(k) && i < order.length * 2) continue; // erst wiederholen, wenn es nichts Neues mehr gibt
+      seen.add(k);
+      out.push(e.hint ? { ...e, hintOpen: false } : e);
+      took++;
+    }
+  }
+  return shuffle(out, rand).slice(0, size);
+}
+/** Übrige Übe-XP heute. */
+export const trainXpLeft = (meDoc, day) => { const me = readMe(meDoc); return Math.max(0, TRAIN_XP_DAY - (me.train.day === day ? Number(me.train.xp) || 0 : 0)); };
+/** Freies Üben verbuchen: +1 XP je richtiger Antwort (max. 50/Tag), zählt fürs Tagesziel/Serie und „100 Fragen richtig“. → { mod, me, xp, capped } */
+export function applyTraining(modDoc, meDoc, { ok = 0, day, now = Date.now() } = {}) {
+  const mod = readMod(modDoc, modDoc && modDoc.id);
+  const me = readMe(meDoc);
+  const used = me.train.day === day ? Number(me.train.xp) || 0 : 0;
+  const want = Math.max(0, ok) * XP.train;
+  const xp = Math.max(0, Math.min(want, TRAIN_XP_DAY - used));
+  if (xp) { mod.xp[day] = (mod.xp[day] || 0) + xp; trimDays(mod.xp); }
+  me.train = { day, xp: used + xp, at: now };
+  me.ok = (me.ok || 0) + Math.max(0, ok);
+  me.last = mod.id;
+  return { mod, me, xp, capped: want > xp };
+}
+/** 🇯🇵 Themen zum Üben: Kana-Reihen (Hiragana/Katakana), Wortschatz-Themen, Grammatik-Punkte. */
+export function jpTrainTopics(units) {
+  const rows = (tag) => units.filter((u) => u.tag === tag).flatMap((u) => u.nodes.filter((n) => n.type === "lesson")
+    .map((n) => ({ id: `row:${n.id}`, label: n.title, emoji: n.emoji, nodes: [n], jp: true, count: (n.items || []).length })));
+  const voc = new Map();
+  for (const u of units.filter((x) => x.kind === "vocab")) {
+    const topic = (u.items[0] && u.items[0].topic) || u.title;
+    if (!voc.has(topic)) voc.set(topic, { id: `voc:${topic}`, label: topic, emoji: u.emoji, nodes: [], count: 0 });
+    const t = voc.get(topic);
+    t.nodes.push(...lessonNodes([u])); t.count += u.items.length;
+  }
+  const gr = units.filter((u) => u.kind === "grammar").map((u) => ({ id: `gr:${u.id}`, label: u.title.replace(/^📐\s*/, ""), emoji: u.emoji, nodes: lessonNodes([u]), count: u.items.length }));
+  return [
+    { id: "hira", title: "🎌 Hiragana-Reihen", items: rows("hira") },
+    { id: "kata", title: "🗾 Katakana-Reihen", items: rows("kata") },
+    { id: "voc", title: "📚 Wortschatz-Themen", items: [...voc.values()] },
+    { id: "gr", title: "📐 Grammatik", items: gr },
+  ].filter((g) => g.items.length);
+}
+/** 🎓 Themen zum Üben: je Lehrjahr, je LAP-Thema (alle Lehrjahre, inkl. passender Rechenaufgaben), alle Rechenaufgaben. */
+export function lapTrainTopics({ cards, topics, problemTypes, formulas = [], pairs = {} }) {
+  const valid = cards.filter((c) => c && Array.isArray(c.x) && c.x.length >= 1);
+  const calcNodes = (types, topic) => {
+    const out = [];
+    for (let i = 0; i < types.length; i += 2) out.push({ type: "lesson", kind: "calc", id: `tr-calc-${topic}-${i}`, title: "Rechnen", emoji: "🔢", calc: types.slice(i, i + 2), topic, pairs: [], formulas, pool: [] });
+    return out;
+  };
+  const years = [1, 2, 3].map((y) => {
+    const us = lapUnits({ cards, topics, problemTypes, year: y, formulas, pairs });
+    return { id: `y${y}`, label: `${y}. Lehrjahr`, emoji: "🎓", nodes: lessonNodes(us), count: valid.filter((c) => (Number(c.year) || 1) === y).length };
+  }).filter((t) => t.nodes.length);
+  const tps = topics.map((tp) => {
+    const list = valid.filter((c) => c.topic === tp.id);
+    const types = problemTypes.filter((t) => CALC_TOPIC[t.id] === tp.id).map((t) => t.id);
+    const nodes = [
+      ...chunk(list, 8).map((items, i) => ({ type: "lesson", kind: "cards", id: `tr-${tp.id}-${i}`, title: tp.name, emoji: tp.emoji, items, topic: tp.id, pairs: pairs[tp.id] || [], formulas, pool: list })),
+      ...calcNodes(types, tp.id),
+    ];
+    return { id: `t:${tp.id}`, label: tp.name, emoji: tp.emoji, nodes, count: list.length };
+  }).filter((t) => t.nodes.length);
+  const calc = { id: "calc", label: "Rechenaufgaben (alle)", emoji: "🔢", nodes: calcNodes(problemTypes.map((t) => t.id), "calc"), count: problemTypes.length };
+  return [
+    { id: "years", title: "🎓 Lehrjahr", items: years },
+    { id: "topics", title: "📚 Themen", items: tps },
+    { id: "calc", title: "🔢 Rechnen", items: calc.nodes.length ? [calc] : [] },
+  ].filter((g) => g.items.length);
 }
 
 /* ================= 🔥 Serie & ⚡ XP ================= */

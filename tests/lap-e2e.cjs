@@ -73,7 +73,7 @@ function fakes() {
   await page.waitForSelector(".lap-head .lap-stat", { timeout: 8000 });
   ok(/#alltag\/lap$/.test(page.url()), "Route #alltag/lap");
   ok(await page.evaluate(() => !!document.getElementById("lap-css")), "Modul-CSS geladen");
-  ok((await page.$$(".lap-tab")).length === 6, "6 Bereiche als Reiter (inkl. 📷 Eigene, 🛤️ Lernpfad)");
+  ok((await page.$$(".lap-tab")).length === 7, "7 Bereiche als Reiter (inkl. 📷 Eigene, 🛤️ Lernpfad, 🏋️ Üben)");
   ok(await page.getAttribute('.lap-yearbar [data-year="0"]', "aria-pressed") === "true", "Lehrjahr-Auswahl da, Standard „Alle“");
   let h = await head(page);
   ok(/🔥 0/.test(h) && /0\/\d{3}/.test(h) && /📝 –/.test(h), "Kopfzeile: Serie 0, 0 Karten gelernt, noch keine Prüfung");

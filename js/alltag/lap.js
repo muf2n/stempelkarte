@@ -22,6 +22,7 @@ import { createLapPath } from "./lap-path.js"; // Update 10 – 🛤️ Lernpfad
 
 const TABS = [
   ["pfad", "🛤️", "Lernpfad"], // Update 10 – wie Duolingo (./path-ui.js)
+  ["ueben", "🏋️", "Üben"], // Update 10c – frei üben, alle Fragen, gratis (./path-ui.js trainer)
   ["karten", "🃏", "Lernkarten"],
   ["formeln", "📐", "Formeln"],
   ["rechnen", "🔢", "Rechnen"],
@@ -155,6 +156,7 @@ export function mount(el) {
   L.explain = createExplainer(L);
 
   const sections = { karten: createLearn(L), formeln: createFormulas(L), rechnen: createPractice(L), pruefung: createExam(L), eigene: createOwn(L), pfad: createLapPath(L) };
+  sections.ueben = sections.pfad.trainer; // Update 10c – 🏋️ Üben teilt sich den Player mit dem Lernpfad
 
   function renderYear() {
     if (!alive) return;
