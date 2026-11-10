@@ -203,6 +203,7 @@ function renderList() {
       `</button>` +
       `<button type="button" class="site-go" data-site="${esc(p.id)}" aria-label="Baustellen-Seite ${esc(p.name || "")} öffnen">` +
         `<span class="site-go-st" aria-hidden="true">${SC.STATUS_META[st].e}</span><span class="site-go-l">Projekt</span><span aria-hidden="true">›</span></button>` +
+      (hasCoords(p) || p.addr ? `<a class="site-go site-route" href="#alltag/karte?place=${encodeURIComponent(p.id)}" aria-label="Route zu ${esc(p.name || "Ort")}"><span class="site-go-st" aria-hidden="true">🗺️</span><span class="site-go-l">Route</span></a>` : "") + // Update 10 – Karte & Route
       `</div>`;
   };
   const closed = SC.closedSites(places, today);
@@ -279,7 +280,7 @@ export function mount(el, ctx) {
   });
 
   el.querySelector("[data-r=list]").addEventListener("click", (ev) => {
-    const sg = ev.target.closest(".site-go"); // Update 10d
+    const sg = ev.target.closest(".site-go[data-site]"); // Update 10d (🗺️ Route-Link ist ein normaler Hash-Link)
     if (sg) { openSite(sg.dataset.site); return; }
     const b = ev.target.closest(".place-item");
     if (!b) return;

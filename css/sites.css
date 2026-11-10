@@ -220,3 +220,6 @@ button.st-ev-b:focus-visible { outline: none; box-shadow: var(--ring); }
 .st-cust b { display: block; }
 .st-cust small { color: var(--muted); }
 .st-docs { margin-top: 0; }
+/* Update 10 – 🗺️ Route-Knopf neben „Projekt“ (öffnet Alltag › Karte & Route) */
+.site-route { text-decoration: none; min-width: 62px; }
+.site-go.site-route > .site-go-l { display: inline; }

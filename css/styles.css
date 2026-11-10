@@ -2996,6 +2996,8 @@ html[data-compact="1"] #view-heute [data-r="btns"] .btn.go { min-height: 84px; f
   display: flex; flex-direction: column; gap: 3px; padding: 10px 4px; min-height: 56px; justify-content: center; font: inherit;
 }
 .ag-title { font-size: 1.02rem; font-weight: 600; overflow-wrap: anywhere; }
+.ag-route { flex: none; width: 44px; height: 44px; display: grid; place-items: center; border-radius: 50%; text-decoration: none; font-size: 1.15rem; border: 1px solid var(--line); background: color-mix(in srgb, var(--accent) 7%, var(--card)); } /* Update 10 – 🗺️ Route zum Termin */
+.ag-route:focus-visible { outline: none; box-shadow: var(--ring); }
 .ag-meta { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 10px; font-size: .84rem; color: var(--muted); }
 .ag-meta > span { display: inline-flex; align-items: center; gap: 4px; min-width: 0; }
 .ag-badge { padding: 1px 8px; border-radius: 999px; background: var(--k-feiertag-bg, var(--soft)); color: var(--k-feiertag, var(--accent)); font-weight: 700; font-size: .75rem; }

@@ -71,6 +71,7 @@ export function mount(el) {
         <div class="ak-hero-acts">
           ${tel ? `<a class="btn primary sm" href="${esc(tel)}">📞 <span>Anrufen</span></a>` : ""}
           ${mail ? `<a class="btn ghost sm" href="${esc(mail)}">✉️ <span>E-Mail</span></a>` : ""}
+          ${c.address ? `<a class="btn ghost sm" data-kt-route href="#alltag/karte?q=${esc(encodeURIComponent(c.address.replace(/\s*\n\s*/g, ", ")))}&amp;name=${esc(encodeURIComponent(K.displayName(c)))}">🗺️ <span>Route</span></a>` : ""}
           <button type="button" class="btn ghost sm" data-kt="call">📝 <span>Gesprächsnotiz</span></button>
           <button type="button" class="btn ghost sm" data-kt="edit">${icon("pencil", 16)}<span>Bearbeiten</span></button>
         </div>

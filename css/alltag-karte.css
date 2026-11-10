@@ -1,0 +1,176 @@
+/* Update 10 – Alltag › 🗺️ Karte & Route (js/alltag/karte.js). Präfix .kr-
+   Handy: Karte Vollbild, Suchfeld oben drüber, Ergebnisse im Bottom-Sheet. Desktop (≥ 1024 px): Seitenleiste + Karte.
+   Kartenkacheln bleiben hell (OSM), die Bedienelemente folgen den App-Farben (hell/dunkel). */
+.al-mod:has(.kr) { gap: 10px; }
+.al-body:has(> .kr) { min-width: 0; }
+.kr {
+  --kr-r: 18px;
+  --kr-blue: #1a73e8;
+  position: relative; width: 100%; min-height: 380px; height: calc(100dvh - 190px);
+  margin: 0; border-radius: var(--kr-r); overflow: hidden; overflow: clip; isolation: isolate;
+  background: #e8eef3; border: 1px solid var(--line); box-shadow: var(--shadow);
+}
+.kr .sr { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+.kr-mapwrap { position: absolute; inset: 0; z-index: 0; }
+.kr-map { position: absolute; inset: 0; background: #e8eef3; }
+.kr-map .leaflet-control-attribution { font-size: 10.5px; background: rgba(255, 255, 255, .86); color: #333; border-radius: 6px 0 0 0; }
+.kr-map .leaflet-control-attribution a { color: #0b57d0; }
+.kr-map .leaflet-top.leaflet-right { top: 68px; }
+.kr-map .leaflet-top.leaflet-right .leaflet-control-attribution { border-radius: 8px; margin: 0 10px 0 0; }
+.kr-mapnote {
+  position: absolute; left: 12px; right: 12px; top: 74px; z-index: 450; margin: 0; padding: 10px 12px; border-radius: 12px;
+  background: var(--card); color: var(--ink); border: 1px solid var(--line); box-shadow: var(--shadow); font-size: .9rem;
+}
+.kr-pin { background: none; border: 0; }
+.kr-pin span { display: block; font-size: 32px; line-height: 36px; text-align: center; filter: drop-shadow(0 2px 2px rgba(0, 0, 0, .35)); }
+
+/* Suchfeld */
+.kr-search {
+  position: absolute; z-index: 1001; top: 10px; left: 10px; right: 10px;
+  display: flex; align-items: center; gap: 2px; min-height: 52px; padding: 4px 6px 4px 14px;
+  background: var(--card); color: var(--ink); border: 1px solid var(--line); border-radius: 26px;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, .12), 0 8px 24px -8px rgba(0, 0, 0, .25);
+}
+.kr-search:focus-within { box-shadow: var(--ring); }
+.kr-search-ic { font-size: 1rem; opacity: .7; }
+.kr-search input {
+  flex: 1 1 auto; min-width: 0; border: 0; background: transparent; color: inherit; font: inherit; font-size: 1.05rem;
+  padding: 10px 6px; outline: none; box-shadow: none; min-height: 0;
+}
+.kr-search input::-webkit-search-cancel-button { display: none; }
+.kr-ib {
+  flex: none; width: 40px; height: 40px; display: grid; place-items: center; border-radius: 50%; border: 0; background: transparent;
+  color: inherit; font-size: 1.1rem; cursor: pointer;
+}
+.kr-ib:hover { background: color-mix(in srgb, var(--accent) 12%, transparent); }
+.kr-ib:focus-visible { outline: none; box-shadow: var(--ring); }
+.kr-go { background: var(--accent); color: var(--accent-ink); font-weight: 800; }
+.kr-go:hover { background: color-mix(in srgb, var(--accent) 85%, #000); }
+.kr-ib.on { background: #dc2626; color: #fff; animation: kr-pulse 1s infinite; }
+@keyframes kr-pulse { 50% { box-shadow: 0 0 0 6px rgba(220, 38, 38, .25); } }
+.kr-sugg {
+  position: absolute; top: calc(100% + 6px); left: 0; right: 0; max-height: min(60vh, 420px); overflow: auto;
+  background: var(--card); border: 1px solid var(--line); border-radius: 16px; padding: 6px; box-shadow: var(--shadow);
+}
+.kr-sugg-h { font-size: .74rem; text-transform: uppercase; letter-spacing: .06em; color: var(--muted); font-weight: 700; padding: 8px 10px 4px; }
+.kr-sugg-note { margin: 0; padding: 10px; color: var(--muted); font-size: .9rem; }
+
+/* Knöpfe auf der Karte */
+.kr-fab {
+  position: absolute; z-index: 600; right: 12px; width: 46px; height: 46px; border-radius: 50%;
+  border: 1px solid var(--line); background: var(--card); color: var(--ink); box-shadow: var(--shadow); font-size: 1.2rem; cursor: pointer;
+}
+.kr-fab:focus-visible { outline: none; box-shadow: var(--ring); }
+.kr-locate { bottom: calc(var(--kr-sheet-h, 42%) + 12px); transition: bottom .25s ease; }
+.kr-follow {
+  position: absolute; z-index: 700; left: 10px; right: 10px; top: 72px; display: flex; align-items: center; gap: 12px;
+  padding: 10px 14px; border-radius: 16px; background: #0f5132; color: #fff; box-shadow: var(--shadow);
+}
+.kr-follow-ic { font-size: 1.8rem; }
+.kr-follow small { display: block; opacity: .85; font-weight: 700; }
+.kr-follow b { display: block; font-size: 1.05rem; line-height: 1.25; }
+.kr:has(.kr-follow:not([hidden])) .leaflet-top.leaflet-right { top: 150px; }
+
+/* Bottom-Sheet (Handy) */
+.kr-sheet {
+  position: absolute; z-index: 1000; left: 0; right: 0; bottom: 0; max-height: 44%;
+  display: flex; flex-direction: column; background: var(--card); color: var(--ink);
+  border-radius: 22px 22px 0 0; border-top: 1px solid var(--line); box-shadow: 0 -8px 24px -10px rgba(0, 0, 0, .3);
+  transition: max-height .25s ease;
+}
+.kr { --kr-sheet-h: 44%; }
+.kr:has(.kr-sheet[data-expanded="true"]) { --kr-sheet-h: 86%; }
+.kr-sheet[data-expanded="true"] { max-height: 86%; }
+.kr-grip { flex: none; display: grid; place-items: center; height: 26px; border: 0; background: transparent; cursor: grab; touch-action: none; }
+.kr-grip span { width: 44px; height: 5px; border-radius: 3px; background: color-mix(in srgb, var(--muted) 45%, transparent); }
+.kr-grip:focus-visible { outline: none; box-shadow: inset var(--ring); }
+.kr-sheet-body { flex: 1 1 auto; min-height: 0; overflow: auto; padding: 0 16px 16px; display: flex; flex-direction: column; gap: 12px; overscroll-behavior: contain; }
+
+.kr-hello h2, .kr-dest h2 { margin: 0; font-family: var(--f-display); font-size: 1.25rem; line-height: 1.2; }
+.kr-hello .note, .kr-dest .note { margin: 2px 0 0; }
+.kr-sec h3 { margin: 4px 0 6px; font-size: .78rem; text-transform: uppercase; letter-spacing: .06em; color: var(--muted); }
+.kr-picks { display: flex; flex-direction: column; }
+.kr-pick {
+  display: flex; align-items: center; gap: 12px; width: 100%; min-height: 52px; padding: 8px 10px; text-align: left;
+  border: 0; border-radius: 12px; background: transparent; color: inherit; font: inherit; cursor: pointer;
+}
+.kr-pick:hover { background: color-mix(in srgb, var(--accent) 8%, transparent); }
+.kr-pick:focus-visible { outline: none; box-shadow: var(--ring); }
+.kr-pick-e { flex: none; width: 36px; height: 36px; display: grid; place-items: center; border-radius: 50%; background: color-mix(in srgb, var(--accent) 12%, var(--card)); font-size: 1.05rem; }
+.kr-pick-t { min-width: 0; display: flex; flex-direction: column; }
+.kr-pick-t b { font-weight: 700; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.kr-pick-t small { color: var(--muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.kr-favs { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 8px; }
+.kr-favs .kr-pick { border: 1px solid var(--line); background: color-mix(in srgb, var(--accent) 5%, var(--card)); }
+.kr-link { border: 0; background: none; padding: 2px 0; color: var(--accent); font: inherit; font-weight: 700; cursor: pointer; text-decoration: underline; text-underline-offset: 2px; }
+.kr-card { padding: 12px 14px; border-radius: 14px; border: 1px solid var(--line); background: color-mix(in srgb, var(--accent) 5%, var(--card)); }
+.kr-card p { margin: 0 0 6px; }
+.kr-card h3 { margin: 0 0 6px; font-size: 1.05rem; }
+.kr-row, .kr-btns { display: flex; flex-wrap: wrap; gap: 8px; }
+.kr-btns .btn { flex: 1 1 160px; justify-content: center; text-decoration: none; }
+.kr-err { color: var(--danger); }
+.kr-err-card { border-color: color-mix(in srgb, var(--danger) 40%, var(--line)); }
+.kr-small { margin: 0; font-size: .82rem; }
+
+.kr-dest { display: flex; align-items: flex-start; gap: 10px; }
+.kr-dest-t { flex: 1 1 auto; min-width: 0; }
+.kr-dest-t h2 { overflow-wrap: anywhere; }
+.kr-x { flex: none; width: 38px; height: 38px; border-radius: 50%; border: 1px solid var(--line); background: var(--card); color: var(--ink); cursor: pointer; font-size: 1rem; }
+.kr-from { font-size: .9rem; color: var(--muted); }
+.kr-from b { color: var(--ink); }
+
+.kr-modes { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 6px; }
+.kr-mode {
+  display: flex; flex-direction: column; align-items: center; gap: 1px; min-height: 64px; padding: 6px 4px; border-radius: 14px;
+  border: 1px solid var(--line); background: var(--card); color: var(--ink); font: inherit; cursor: pointer;
+}
+.kr-mode-e { font-size: 1.25rem; line-height: 1.1; }
+.kr-mode-l { font-size: .74rem; color: var(--muted); font-weight: 600; }
+.kr-mode-t { font-size: .86rem; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.kr-mode[aria-selected="true"] { background: color-mix(in srgb, var(--accent) 14%, var(--card)); border-color: var(--accent); box-shadow: inset 0 0 0 1px var(--accent); }
+.kr-mode[aria-selected="true"] .kr-mode-l { color: var(--accent); }
+.kr-mode:focus-visible { outline: none; box-shadow: var(--ring); }
+
+.kr-sum { display: flex; align-items: baseline; justify-content: space-between; flex-wrap: wrap; gap: 4px 12px; }
+.kr-sum-main { display: flex; align-items: baseline; gap: 10px; }
+.kr-dur { font-family: var(--f-display); font-size: 1.7rem; color: var(--run); }
+.kr-dist { color: var(--muted); font-weight: 600; }
+.kr-arr { margin: 0; font-weight: 700; }
+.kr-loading { color: var(--muted); align-items: center; justify-content: flex-start; }
+.kr-spin { width: 18px; height: 18px; border-radius: 50%; border: 3px solid color-mix(in srgb, var(--accent) 25%, transparent); border-top-color: var(--accent); animation: kr-rot .8s linear infinite; }
+@keyframes kr-rot { to { transform: rotate(360deg); } }
+@media (prefers-reduced-motion: reduce) { .kr-spin, .kr-ib.on { animation: none; } .kr-sheet, .kr-locate { transition: none; } }
+
+.kr-steps { border: 1px solid var(--line); border-radius: 14px; overflow: hidden; }
+.kr-steps summary { cursor: pointer; padding: 12px 14px; font-weight: 700; list-style-position: inside; }
+.kr-steps summary small { color: var(--muted); font-weight: 600; }
+.kr-steps ol { list-style: none; margin: 0; padding: 0 6px 6px; }
+.kr-step { display: grid; grid-template-columns: 34px 1fr auto; align-items: center; gap: 8px; padding: 8px; border-top: 1px solid color-mix(in srgb, var(--line) 70%, transparent); cursor: pointer; border-radius: 10px; }
+.kr-step:hover { background: color-mix(in srgb, var(--accent) 6%, transparent); }
+.kr-step.now { background: color-mix(in srgb, #f59e0b 18%, var(--card)); }
+.kr-step-ic { font-size: 1.15rem; text-align: center; }
+.kr-step small { color: var(--muted); white-space: nowrap; font-variant-numeric: tabular-nums; }
+.kr-info p { margin: 0 0 10px; line-height: 1.45; }
+.kr-empty { margin: 0; }
+
+/* Handy: randlos wie eine Karten-App */
+@media (max-width: 1023.98px) {
+  .kr { width: auto; margin: 0 calc(-1 * var(--side)); border-radius: 0; border-left: 0; border-right: 0; }
+  .kr-map .leaflet-control-zoom { display: none; } /* Handy: Zoomen mit zwei Fingern, unten liegt das Sheet */
+}
+/* Desktop: Seitenleiste links, Karte rechts */
+@media (min-width: 1024px) {
+  .kr { display: grid; grid-template-columns: 400px minmax(0, 1fr); grid-template-rows: auto minmax(0, 1fr); background: var(--card); }
+  .kr-mapwrap { position: relative; inset: auto; grid-column: 2; grid-row: 1 / 3; }
+  .kr-search { position: relative; top: auto; left: auto; right: auto; grid-column: 1; grid-row: 1; margin: 14px 14px 6px; box-shadow: none; }
+  .kr-sheet { position: relative; grid-column: 1; grid-row: 2; max-height: none; border-radius: 0; border-top: 0; box-shadow: none; background: var(--card); }
+  .kr-sheet[data-expanded="true"] { max-height: none; }
+  .kr-grip { display: none; }
+  .kr-sheet-body { padding: 8px 16px 20px; }
+  .kr-locate { bottom: 104px; }
+  .kr-map .leaflet-top.leaflet-right { top: 0; }
+  .kr-mapnote, .kr-follow { top: 12px; }
+  .kr:has(.kr-follow:not([hidden])) .leaflet-top.leaflet-right { top: 80px; }
+  .kr-sugg { z-index: 1100; }
+  .kr-mapwrap { border-left: 1px solid var(--line); }
+}

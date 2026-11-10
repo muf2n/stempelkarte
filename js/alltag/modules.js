@@ -18,6 +18,7 @@ export const MODULES = [
   { id: "geld",   title: "Geld",            sub: "Einnahmen, Budget, Sparziele, Abos", icon: "wallet", color: "#3fae7a", load: () => import("./money.js") },
   { id: "schule", title: "Schule & Lernen", sub: "Stundenplan, Prüfungen, Noten, Lernen", icon: "book", color: "#5b7cfa", load: () => import("./school.js") },
   { id: "unterwegs", title: "Unterwegs", sub: "Reisen, Packlisten, Parkplatz, Tanken", icon: "suitcase", color: "#0d9488", load: () => import("./unterwegs.js") },
+  { id: "karte", title: "🗺️ Karte & Route", short: "Karte & Route", sub: "Wohin? Auto, zu Fuß, Rad & Öffis – mit Weg & Zeit", icon: "map", color: "#1a73e8", load: () => import("./karte.js") }, // Update 10 – Karte & Route
   { id: "einkauf", title: "🛒 Einkaufsliste", short: "Einkaufsliste", sub: "Listen, abhaken, teilen – fehlendes Material inklusive", icon: "cart", color: "#16a34a", load: () => import("./einkauf.js") },
   { id: "material", title: "Material", sub: "Offen · vor Ort · verbaut · pro Baustelle", icon: "toolbox", color: "#ea580c", load: () => import("./material.js") },
   { id: "werkzeug", title: "🧰 Werkzeug", short: "Werkzeug", sub: "Register, Prüftermine, Verleih – mit QR-Sticker", icon: "wrench", color: "#c2410c", load: () => import("./werkzeug.js") }, // Update 10

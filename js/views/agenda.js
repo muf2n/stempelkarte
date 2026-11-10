@@ -133,7 +133,9 @@ function itemHTML(t, tKey) {
   return `<li class="ag-item${t.done ? " done" : ""}${t.kind === "termin" ? " termin" : ""}${overdue ? " late" : ""}" data-id="${esc(t.id)}">` +
     (t._rec ? `<span class="ag-check ag-rec" aria-hidden="true">${icon("repeat", 18)}</span>` : `<button type="button" class="ag-check" data-act="check" aria-pressed="${t.done ? "true" : "false"}" aria-label="${t.done ? "Wieder offen" : "Erledigt"}: ${esc(t.title)}">${icon("check", 22)}</button>`) +
     `<button type="button" class="ag-main" data-act="edit"${t._rec ? ` data-inst="${esc(t._key)}"` : ""}><span class="ag-title">${esc(t.title || "Ohne Titel")}</span>` +
-    (meta.length ? `<span class="ag-meta">${meta.join("")}</span>` : "") + `</button></li>`;
+    (meta.length ? `<span class="ag-meta">${meta.join("")}</span>` : "") + `</button>` +
+    (t.kind === "termin" && !t.done && String(t.location || "").trim() ? `<a class="ag-route" href="#alltag/karte?q=${esc(encodeURIComponent(String(t.location).trim()))}&amp;name=${esc(encodeURIComponent(t.title || "Termin"))}" aria-label="Route zu ${esc(t.title || "Termin")}" title="Route">🗺️</a>` : "") + // Update 10 – Karte & Route
+    `</li>`;
 }
 
 function bell(size = 18) {

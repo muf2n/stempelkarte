@@ -13,6 +13,7 @@ export const PRIVATE_KEYS = [
   "stempelkarte.gmail.tok", "stempelkarte.gmail.server", "stempelkarte.gmail.hint", // Gmail-Zugriff
   "stempelkarte.gcal.tok", "stempelkarte.gcal.ids", "stempelkarte.gcal.v1", "stempelkarte.gcalConnected", // Google-Kalender-Zugriff + Kopie
   "stempelkarte.bank.status", "stempelkarte.bank.flash", // Bank-Status
+  "sk-karte-recent", "sk-karte-geo", // Karte & Route: letzte Ziele + gesuchte Adressen
 ];
 /** Präfixe: Kalender-Abo-Kopien des Cloud-Kontos (Schlüssel enthalten "cloud:<uid>"). */
 const PRIVATE_PREFIXES = ["stempelkarte.ical.list.cloud:", "stempelkarte.ical.data.cloud:"];

@@ -301,6 +301,12 @@ function buildIndex() {
     if (!p || !p.id) continue;
     add({ cat: "orte", id: p.id, emoji: "📍", title: s(p.name) || "Ort", sub: s(p.addr), text: [p.note, p.notes, p.client, p.customer, p.status].join(" "), go: { t: "place", id: p.id } });
   }
+  // 🗺️ Karte & Route (Update 10) – Bereich + „Route zu …“ je Ort mit Position/Adresse
+  add({ cat: "orte", id: "karte", emoji: "🗺️", title: "Karte & Route", sub: "Wohin? Auto, zu Fuß, Rad & Öffis", text: "karte maps landkarte route routenplaner navigation navi weg wohin öffis bus bahn zug fahrrad rad zu fuß auto anfahrt", boost: 2, go: { t: "hash", hash: "#alltag/karte" } });
+  for (const p of places) {
+    if (!p || !p.id || !((Number.isFinite(p.lat) && Number.isFinite(p.lng)) || s(p.addr))) continue;
+    add({ cat: "orte", id: "route_" + p.id, emoji: "🗺️", title: `Route zu ${s(p.name) || "Ort"}`, sub: s(p.addr), text: "route navigation anfahrt weg", boost: -3, go: { t: "hash", hash: `#alltag/karte?place=${encodeURIComponent(p.id)}` } });
+  }
 
   // 🛒 Einkauf
   const lists = EK.listsOf(D("einkauf_lists"));

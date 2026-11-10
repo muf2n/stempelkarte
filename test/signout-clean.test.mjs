@@ -25,3 +25,11 @@ test("clearPrivateStorage: Verläufe, Wetter, Briefing, Suche, Tokens, Cloud-Kal
   assert.notEqual(ss.getItem("sk-tresor-fails"), null, "Fehlversuch-Zähler bleibt");
   assert.ok(!PRIVATE_KEYS.includes("stempelkarte.accent"));
 });
+
+test("clearPrivateStorage: Karte & Route – letzte Ziele und gesuchte Adressen weg", () => {
+  const ls = mem({ "sk-karte-recent": "[]", "sk-karte-geo": "{}", "sk-karte-mode": "car" });
+  clearPrivateStorage(ls, mem());
+  assert.equal(ls.getItem("sk-karte-recent"), null);
+  assert.equal(ls.getItem("sk-karte-geo"), null);
+  assert.equal(ls.getItem("sk-karte-mode"), "car", "Verkehrsmittel-Vorliebe bleibt");
+});
