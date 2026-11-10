@@ -87,7 +87,7 @@ const route = (pts) => { let m = 0; for (let i = 1; i < pts.length; i++) m += ha
   await page.click('[data-r="btns"] [data-act="seg"]');
   await page.click('.sheet .seg-chips [data-a="Autofahren"]');
   ok(await waitFor(async () => { const s = await curSeg(); return s && s.activity === "Autofahren" && s.loc; }), "Abschnitt „Autofahren“ mit Startpunkt");
-  ok(await page.isVisible('[data-r="viaadd"]'), "Knopf „📍 Hier merken“ im Uhr-Kärtchen");
+  ok(await page.waitForSelector('[data-r="viaadd"]', { state: "visible", timeout: 5000 }).then(() => true, () => false), "Knopf „📍 Hier merken“ im Uhr-Kärtchen");
   ok(!(await curSeg()).via, "noch kein Zwischenstopp (Start = gleicher Ort)");
 
   /* ---------- 3× App öffnen an verschiedenen Orten ---------- */
