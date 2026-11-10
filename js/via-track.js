@@ -28,7 +28,7 @@ export function currentDrive(s) {
 export function allowed(s) {
   if (!s) return false;
   if (s.settings && s.settings.autoLocate === false) return false;
-  if (isPrivatNow(s)) return false;
+  if (isPrivatNow(s) && !s.running) return false; // eingestempelt = Arbeitsfahrt – Privat-Modus gilt nur ohne laufende Schicht
   return true;
 }
 

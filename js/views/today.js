@@ -487,7 +487,7 @@ function renderClock() {
     segHTML = `<b${actAttrs(cur.activity)}>${util.esc(cur.activity || "Arbeiten")}</b>` +
       `<span>seit ${util.clock(cur.start)} · <span data-r="segdur">0:00</span> h</span>`;
     if (isDrive(cur.activity)) segHTML += `<span class="seg-route">${routeHTML(cur, { current: true })}</span>`;
-    if (isDrive(cur.activity) && viaTrack.allowed(snap)) { // Update 10 – 📍 Zwischenstopps
+    if (isDrive(cur.activity) && !(snap && snap.settings && snap.settings.autoLocate === false)) { // Update 10 – 📍 Zwischenstopps (eingestempelt = Arbeit, Privat-Modus egal)
       const nv = viaPoints(cur).length;
       segHTML += `<span class="seg-via">${nv ? `<span data-r="vianum">📍 ${util.esc(viaCountText(nv))}</span>` : ""}` +
         `<button type="button" class="linkbtn" data-r="viaadd" title="Aktuellen Standort als Zwischenstopp merken">📍 Hier merken</button></span>`;
