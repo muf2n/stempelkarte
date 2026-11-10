@@ -97,6 +97,7 @@ function heroHTML(place, d) {
     ${place.siteNotes ? `<div class="st-notes"><b>📝 Notizen</b><p class="st-sel">${esc(place.siteNotes)}</p></div>` : ""}
     ${!dates && !place.contact && !place.phone && !crew.length && !place.siteNotes ? `<p class="note">Tipp: Trag Ansprechpartner, Telefon, Zeitraum und Team ein – tipp auf „✏️ Projektdaten“. 😊</p>` : ""}
     <div class="st-actions">
+      ${(Number.isFinite(place.lat) && Number.isFinite(place.lng)) || place.addr ? `<button type="button" class="btn sm ghost" data-st="route">🗺️ Route</button>` : ""}
       <button type="button" class="btn sm ghost" data-st="edit">✏️ Projektdaten</button>
       <button type="button" class="btn sm ghost" data-st="qr">🔳 QR-Code</button>
       <button type="button" class="btn sm ghost" data-st="report">📄 Bericht</button>
@@ -648,6 +649,7 @@ function onClick(ev) {
     case "report": openReport(); break;
     case "place": if (place) ctx.openPlaceForm(place); break;
     case "matlist": closeSite({ fromHash: true }); location.hash = "alltag/material"; break;
+    case "route": if (place) { closeSite({ fromHash: true }); location.hash = "alltag/karte?place=" + encodeURIComponent(place.id); } break; // Update 10 – Karte & Route
     case "addlog": openLogForm(); break;
     case "log": { const l = cols().log.get(b.dataset.id); if (l) openLogForm(l); break; }
     case "addtodo": ctx.openTodoForm(null, { kind: "todo", placeId: cur.id, title0: `Neue Aufgabe · ${place ? place.name : "Baustelle"}` }); break;

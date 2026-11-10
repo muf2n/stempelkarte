@@ -93,6 +93,9 @@ const SHELL = [
   "js/timeline-core.js",
   "js/alltag/zeitleiste.js",
   "css/alltag-zeitleiste.css",
+  "js/alltag/karte.js", // Update 10 – Karte & Route
+  "js/alltag/route-core.js",
+  "css/alltag-karte.css",
   "js/compare-core.js",
   "js/views/compare.js",
   "css/compare.css",
