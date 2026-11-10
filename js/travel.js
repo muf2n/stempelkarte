@@ -81,11 +81,36 @@ export function manualKm(seg) {
   return Number.isFinite(n) && n >= 0 ? n : null;
 }
 
-/** Schlüssel für ein Koordinatenpaar (5 Nachkommastellen ≈ 1 m) – erkennt geänderte Start/Ziel-Punkte. */
+/** Schlüssel für Koordinaten (5 Nachkommastellen ≈ 1 m) – erkennt geänderte Start/Ziel-Punkte.
+ *  coordKey(a, b) wie bisher; coordKey([a, via…, b]) für eine Strecke mit 📍 Zwischenstopps
+ *  (bei genau zwei Punkten identisch zu coordKey(a, b)). */
 export function coordKey(a, b) {
-  if (!hasLL(a) || !hasLL(b)) return "";
+  const pts = Array.isArray(a) ? a : [a, b];
+  if (pts.length < 2 || !pts.every(hasLL)) return "";
   const f = (p) => `${p.lat.toFixed(5)},${p.lng.toFixed(5)}`;
-  return `${f(a)};${f(b)}`;
+  return pts.map(f).join(";");
+}
+
+/** Höchstzahl 📍 Zwischenstopps je Fahrt-Abschnitt. */
+export const VIA_MAX = 25;
+
+/** Gültige 📍 Zwischenstopps eines Abschnitts (Feld `via: [{lat,lng,at,acc}]`, optional). */
+export function viaPoints(seg) {
+  const v = seg && Array.isArray(seg.via) ? seg.via : [];
+  return v.filter(hasLL).slice(0, VIA_MAX);
+}
+
+/** Alle Punkte einer Fahrt: Start → Zwischenstopps → Ziel (nur mit Start UND Ziel, sonst []). */
+export function routePoints(seg) {
+  if (!seg || !hasLL(seg.loc) || !hasLL(seg.endLoc)) return [];
+  return [seg.loc, ...viaPoints(seg), seg.endLoc];
+}
+
+/** Summe der Luftlinien-Teilstrecken in Metern. */
+export function pathM(pts) {
+  let m = 0;
+  for (let i = 1; i < (pts || []).length; i++) m += haversineM(pts[i - 1], pts[i]);
+  return m;
 }
 
 /** Gespeicherte Straßen-km eines Abschnitts oder null (fehlt / passt nicht mehr zu den Koordinaten). */
@@ -93,7 +118,9 @@ export function roadKm(seg) {
   if (!seg || seg.kmRoad === null || seg.kmRoad === undefined || seg.kmRoad === "") return null;
   const n = Number(seg.kmRoad);
   if (!Number.isFinite(n) || n < 0) return null;
-  if (seg.kmRoadFor && hasLL(seg.loc) && hasLL(seg.endLoc) && seg.kmRoadFor !== coordKey(seg.loc, seg.endLoc)) return null;
+  if (seg.kmRoadFor && hasCoords(seg) && seg.kmRoadFor !== coordKey(routePoints(seg))) return null;
+  // Strecke hat Zwischenstopps, alter Wert ohne Schlüssel galt nur für Start → Ziel
+  if (!seg.kmRoadFor && viaPoints(seg).length && hasCoords(seg)) return null;
   return n;
 }
 
@@ -101,7 +128,8 @@ export function roadKm(seg) {
 export function hasCoords(seg) { return !!seg && hasLL(seg.loc) && hasLL(seg.endLoc); }
 
 /** Kilometer eines Fahrt-Abschnitts: {km, manual, road, est, source} oder null (unbekannt).
- *  Vorrang: manuell (source "manual") > Straße (source "road") > Luftlinie × Umwegfaktor (source "est"). */
+ *  Vorrang: manuell (source "manual") > Straße (source "road") > Luftlinie × Umwegfaktor (source "est").
+ *  Mit 📍 Zwischenstopps (`via`): Straße über alle Punkte, Luftlinie = Summe der Teilstrecken. */
 export function segmentKm(seg, settings) {
   if (!seg) return null;
   const m = manualKm(seg);
@@ -110,7 +138,7 @@ export function segmentKm(seg, settings) {
   if (r != null) return { km: r, manual: false, road: true, est: false, source: "road" };
   if (hasLL(seg.loc) && hasLL(seg.endLoc)) {
     const f = readAllowance(settings).kmFactor;
-    return { km: (haversineM(seg.loc, seg.endLoc) / 1000) * f, manual: false, road: false, est: true, source: "est" };
+    return { km: (pathM(routePoints(seg)) / 1000) * f, manual: false, road: false, est: true, source: "est" };
   }
   return null;
 }
@@ -208,6 +236,7 @@ export function tripsBetween(entries, from, to, settings, places = null) {
         vehicleId: typeof s.vehicleId === "string" && s.vehicleId ? s.vehicleId : null,
         km: k ? k.km : null, manual: !!(k && k.manual), road: !!(k && k.road), est: !!(k && k.est),
         source: k ? k.source : null,
+        via: viaPoints(s),
         seg: s,
       };
       const p = typeof s.purpose === "string" ? s.purpose.trim() : "";

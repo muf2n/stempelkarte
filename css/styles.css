@@ -1325,6 +1325,17 @@ body::before {
   box-shadow: 0 0 0 4px color-mix(in srgb, var(--act) 22%, transparent);
 }
 .seg-now .seg-route { color: var(--muted); font-size: .92rem; overflow-wrap: anywhere; }
+/* Update 10 – 📍 Zwischenstopps */
+.seg-now .seg-via { display: flex; flex-wrap: wrap; justify-content: center; align-items: center; gap: 4px 10px; color: var(--muted); font-size: .86rem; }
+.seg-now .seg-via .linkbtn { font-size: .86rem; padding: 4px 6px; min-height: 32px; }
+.ek-via { display: block; margin-top: 4px; }
+.ek-via > small, .fb-via > small { color: var(--muted); }
+.via-list { list-style: none; margin: 4px 0 0; padding: 0; display: flex; flex-direction: column; gap: 4px; }
+.via-list li { display: flex; align-items: center; gap: 8px; font-size: .88rem; color: var(--muted); min-width: 0; }
+.via-list li > span { flex: 1 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.via-list li b { color: var(--ink); font-variant-numeric: tabular-nums; margin-right: 4px; }
+.via-list .via-del { flex: none; width: 32px; height: 32px; border: 0; border-radius: 50%; background: transparent; color: var(--muted); cursor: pointer; display: inline-grid; place-items: center; }
+.via-list .via-del:hover, .via-list .via-del:focus-visible { background: var(--line, rgba(0,0,0,.08)); color: var(--ink); }
 
 /* Abschnittsliste (Uhr) + Abschnitte (Einträge) mit farbiger Leiste */
 .seg-list { gap: 6px; }
@@ -4780,6 +4791,12 @@ div.entry.ek-schcard:hover { border-color: var(--sch-line); }
 .fb-route small { font-size: .72rem; font-weight: 700; text-transform: uppercase; letter-spacing: .05em; color: var(--muted); }
 .fb-route b { overflow-wrap: anywhere; }
 .fb-route span { color: var(--muted); font-size: .88rem; overflow-wrap: anywhere; }
+/* Update 10 – 📍 Zwischenstopps im Fahrt-Detail (kleiner Punkt statt Kreis, Zeilen nebeneinander) */
+.fb-route > li.fb-via::before { width: 8px; height: 8px; left: -17px; border-color: #F59E0B; background: var(--card); }
+.fb-route .via-list li { flex-direction: row; align-items: center; gap: 6px; }
+.fb-route .via-list li::before { content: none; }
+.fb-route .via-list li > span { display: block; color: var(--muted); }
+.fb-route .via-list li b { color: var(--ink); }
 .fb-det-km { display: flex; flex-direction: column; gap: 2px; padding: 10px 12px; border-radius: var(--r-sm); background: color-mix(in srgb, var(--soft) 50%, var(--card)); }
 .fb-det-km > div { display: flex; align-items: baseline; justify-content: space-between; gap: 10px; }
 .fb-det-km strong { font-family: var(--f-display); font-size: 1.5rem; font-variant-numeric: tabular-nums; }

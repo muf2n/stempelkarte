@@ -283,7 +283,10 @@ export function mapsDirUrl(t) {
   const enc = (loc, name, addr) => (loc ? `${loc.lat},${loc.lng}` : encodeURIComponent(addr || name || ""));
   const o = enc(t.fromLoc, t.from, t.fromAddr), d = enc(t.toLoc, t.to, t.toAddr);
   if (!o || !d) return "";
-  return `https://www.google.com/maps/dir/?api=1&origin=${o}&destination=${d}&travelmode=driving`;
+  // Update 10 – 📍 Zwischenstopps als Wegpunkte (Google erlaubt bis zu 9 in der URL)
+  const via = Array.isArray(t.via) ? t.via.filter((p) => p && Number.isFinite(p.lat) && Number.isFinite(p.lng)).slice(0, 9) : [];
+  const wp = via.length ? `&waypoints=${via.map((p) => `${p.lat},${p.lng}`).join("%7C")}` : "";
+  return `https://www.google.com/maps/dir/?api=1&origin=${o}&destination=${d}${wp}&travelmode=driving`;
 }
 
 /** Abschnitt-Index im Roh-Array `entry.segments` → aktualisierte Abschnitte mit `patch` (null-Werte löschen das Feld). */

@@ -1,6 +1,7 @@
 // Update 10 F – 🖥️ System-Status › Was ist neu: ehrliche Liste aus der Versionsgeschichte (git log des Projekts), neueste zuerst.
 // Beim Veröffentlichen neuer Versionen hier oben ergänzen.
 export const CHANGELOG = [
+  { v: "20261110-1300", items: ["📍 Zwischenstopps: App beim Autofahren öffnen merkt den Standort – Umwege zählen bei den km mit"] },
   { v: "Update 10 F", items: [
     "☀️ Morgen-Briefing & 📅 Wochenrückblick (optional mit KI-Zusammenfassung zum Vorlesen, Push am Morgen – Standard aus)",
     "⚡ Elektro-Tools: Einheiten umrechnen, Widerstands-Farbcode, Lexikon, Schaltzeichen, Rechner",

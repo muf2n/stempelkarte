@@ -16,6 +16,9 @@ import * as freizeit from "./freizeit.js"; // Update 10 – Freizeit-Stempeluhr 
 import * as privDrive from "../privat-drive.js";
 import * as WT from "../worktime-core.js"; // Update 10c – Änderungsprotokoll, GPS-Schutz, Pausenhinweis
 import { isPrivatNow } from "../privat.js";
+import * as viaTrack from "../via-track.js"; // Update 10 – 📍 Zwischenstopps
+import { viaPoints } from "../travel.js";
+import { viaCountText } from "../via-core.js";
 
 // Einsatzplan-Helfer (js/einsatz.js, Agent T) – dynamisch, mit Fallback (null)
 let einsatzForFn = null;
@@ -353,6 +356,13 @@ export function mount(el, c) {
     selected: [],
     onChange: () => { pplTouched = ctx.util.dayKey(Date.now()); },
   });
+  try { viaTrack.init(ctx); } catch (e) { console.error(e); } // Update 10 – 📍 Zwischenstopps
+  $("segnow").addEventListener("click", (ev) => {
+    const b = ev.target.closest('[data-r="viaadd"]');
+    if (!b || b.disabled) return;
+    b.disabled = true;
+    viaTrack.capture({ manual: true }).finally(() => { b.disabled = false; });
+  });
   document.addEventListener("visibilitychange", () => {
     if (document.visibilityState === "visible" && root && !root.hidden) refreshNear();
     try { driveWatchTick(); } catch (e) { console.error(e); }
@@ -373,6 +383,7 @@ export function update(s) {
   try { myday.update(s); } catch (e) { console.error(e); }
   try { dash.update(s); } catch (e) { console.error(e); }
   try { privatUi.update(s); } catch (e) { console.error(e); }
+  try { viaTrack.onSnap(s); } catch (e) { console.error(e); } // Update 10 – 📍 Zwischenstopps beim App-Start
   try { freizeit.update(s); } catch (e) { console.error(e); }
   try { if (photoBar) photoBar.update(s); } catch (e) { console.error(e); }
   if (s.running) {
@@ -476,6 +487,11 @@ function renderClock() {
     segHTML = `<b${actAttrs(cur.activity)}>${util.esc(cur.activity || "Arbeiten")}</b>` +
       `<span>seit ${util.clock(cur.start)} · <span data-r="segdur">0:00</span> h</span>`;
     if (isDrive(cur.activity)) segHTML += `<span class="seg-route">${routeHTML(cur, { current: true })}</span>`;
+    if (isDrive(cur.activity) && viaTrack.allowed(snap)) { // Update 10 – 📍 Zwischenstopps
+      const nv = viaPoints(cur).length;
+      segHTML += `<span class="seg-via">${nv ? `<span data-r="vianum">📍 ${util.esc(viaCountText(nv))}</span>` : ""}` +
+        `<button type="button" class="linkbtn" data-r="viaadd" title="Aktuellen Standort als Zwischenstopp merken">📍 Hier merken</button></span>`;
+    }
     if (ss.length > 1) {
       listHTML = ss.map((g, i) => {
         const last = i + 1 === ss.length;

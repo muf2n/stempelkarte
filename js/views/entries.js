@@ -4,6 +4,8 @@ import { icon } from "../icons.js";
 import { leaves, sparkles, emptyClipboard } from "../deco.js";
 import { segmentKm, isDriving, fmtKm, fmtEur, entryKm, allowanceByDay, LEVEL_LABELS } from "../travel.js"; // Update 9
 import { openAllowanceDay } from "./trips.js"; // Update 9
+import { viaPoints } from "../travel.js";
+import { viaListHTML, fillViaAddrs, withoutVia, viaCountText } from "../via-core.js"; // Update 10 – 📍 Zwischenstopps
 import * as WT from "../worktime-core.js"; // Update 10c – Änderungsprotokoll, Monatsabschluss, Pausenhinweis
 import { esc as escH, kindLabel as kindLabelH } from "../util.js";
 
@@ -763,6 +765,7 @@ function segmentsHTML(e, util, geo) {
     } else if (pl) {
       parts.push(esc(pl));
     }
+    if (driving && viaPoints(x).length) parts.push(`📍 ${esc(viaCountText(viaPoints(x).length))}`); // Update 10
     if (sk) parts.push(`<b class="tg-km">${sk.est ? "≈ " : ""}${esc(fmtKm(sk.km))} km</b>${sk.manual ? " <small>manuell</small>" : sk.road ? " <small>Straße</small>" : ""}`); // Update 9: Straßen-km
     parts.push(esc(`${hm(Math.max(0, (x.end - x.start) / 60000))} h`));
     return `<li ${actAttrs(act, esc)}>${parts.join(" · ")}</li>`;
@@ -1000,9 +1003,20 @@ export function openEntryForm(entry, ctx, prefill = null) {
     if (!x || !isDriving(x)) return "";
     const est = segmentKm({ ...x, km: null }, store.get().settings);
     const v = x.km === null || x.km === undefined || x.km === "" ? "" : String(x.km).replace(".", ",");
-    return `<label class="rm-inline tg-kmedit"><span>km</span><input type="text" inputmode="decimal" data-segkm="${i}" value="${util.esc(v)}" placeholder="${est ? (est.est ? "≈ " : "") + util.esc(fmtKm(est.km)) : "z. B. 23"}"><span>${est ? (est.road ? "leer = Straßen-km" : "leer = Schätzung") : "selbst eintragen"}</span></label>`;
+    const via = viaPoints(x); // Update 10 – 📍 Zwischenstopps (✕ entfernt, mit „Speichern“ übernehmen)
+    const viaH = via.length ? `<div class="ek-via"><small>📍 ${util.esc(viaCountText(via.length))}</small>${viaListHTML(via, util, { attr: "segvia", pre: i + ":" })}</div>` : "";
+    return `<label class="rm-inline tg-kmedit"><span>km</span><input type="text" inputmode="decimal" data-segkm="${i}" value="${util.esc(v)}" placeholder="${est ? (est.est ? "≈ " : "") + util.esc(fmtKm(est.km)) : "z. B. 23"}"><span>${est ? (est.road ? "leer = Straßen-km" : "leer = Schätzung") : "selbst eintragen"}</span></label>` + viaH;
   }
   function bindKm() {
+    const host = box.querySelector('[data-r="ef-segs"]');
+    if (host) fillViaAddrs(host, c.geo);
+    box.querySelectorAll("[data-segvia]").forEach((b) => b.addEventListener("click", () => {
+      const [i, j] = String(b.dataset.segvia).split(":").map(Number);
+      if (!segEdit || !segEdit[i]) return;
+      segEdit[i] = withoutVia(segEdit[i], j);
+      renderSegEdit();
+      ui.toast("📍 Zwischenstopp entfernt – mit „Speichern“ übernehmen");
+    }));
     box.querySelectorAll("[data-segkm]").forEach((inp) => inp.addEventListener("input", () => {
       const i = Number(inp.dataset.segkm);
       if (!segEdit || !segEdit[i]) return;

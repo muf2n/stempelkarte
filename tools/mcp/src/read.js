@@ -292,6 +292,7 @@ function tripText(t, settings, multiVeh) {
   const km = t.km == null ? "km unbekannt" : `${t.source === "est" ? "≈ " : ""}${TR.fmtKmD(t.km)} km (${SRC_LABEL[t.source] || "?"})`;
   const bits = [`${clock(t.start)}${Number.isFinite(t.end) ? "–" + clock(t.end) : ""}`, `${t.isReturn ? "↩ " : ""}${a.main} → ${b.main}`, km,
     t.private ? "privat" : `Zweck: ${t.purpose}${t.purposeSet ? "" : " (Vorschlag)"}`];
+  if (t.via && t.via.length) bits.push(`📍 ${t.via.length} Zwischenstopp${t.via.length === 1 ? "" : "s"}`); // Update 10
   if (v && multiVeh) bits.push(`Fahrzeug: ${v.name}`);
   else if (v && v.type === "privat") bits.push(`${v.name} (Privatauto)`);
   return `- ${bits.join(" · ")} (fahrt ${tripRef(t)})`;

@@ -1,8 +1,9 @@
 // Update 9 – Fahrtenbuch: Straßen-km über den öffentlichen OSRM-Routing-Dienst (router.project-osrm.org).
 // Höchstens 1 Anfrage pro Sekunde, nacheinander, nur für sichtbare Fahrten ohne gespeicherte Straßen-km.
 // Ergebnis wird am Abschnitt gespeichert (kmRoad, kmRoadAt, kmRoadFor) – über store.saveEntry, also nur einmal.
+// 📍 Zwischenstopps (seg.via): eine Anfrage über alle Punkte (start;via…;ziel), kmRoadFor = coordKey(alle Punkte).
 // Abschaltbar: settings.trips.roadKm === false → keine Anfragen (gespeicherte Werte gelten weiter).
-import { coordKey, roadKm, hasCoords, haversineM, manualKm } from "./travel.js";
+import { coordKey, roadKm, hasCoords, manualKm, routePoints, pathM } from "./travel.js";
 import { readTripSettings } from "./trip-core.js";
 
 const OSRM = "https://router.project-osrm.org/route/v1/driving/";
@@ -29,7 +30,7 @@ export function pending() { return queue.length + (busy ? 1 : 0); }
 export function needsRoad(seg) {
   if (!seg || !hasCoords(seg)) return false;
   if (manualKm(seg) != null || roadKm(seg) != null) return false;
-  return haversineM(seg.loc, seg.endLoc) >= 50; // gleicher Punkt → keine Abfrage
+  return pathM(routePoints(seg)) >= 50; // gleicher Punkt → keine Abfrage
 }
 
 /** Fahrt (aus tripsBetween) zur Abfrage vormerken. Gibt true zurück, wenn neu eingereiht. */
@@ -39,7 +40,7 @@ export function request(trip) {
   if (!readTripSettings(s.settings).roadKm) return false;
   const seg = trip.entry.segments && trip.entry.segments[trip.rawIndex];
   if (!needsRoad(seg)) return false;
-  const ck = coordKey(seg.loc, seg.endLoc);
+  const ck = coordKey(routePoints(seg));
   const f = failed.get(ck);
   if (f && Date.now() - f < 10 * 60000) return false;
   const id = `${trip.key}|${ck}`;
@@ -55,9 +56,12 @@ export function clear() { queue.length = 0; queued.clear(); }
 
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
-/** Straßen-Distanz in km zwischen zwei Punkten oder null. */
+/** Straßen-Distanz in km zwischen zwei Punkten – fetchRoadKm(a, b) – oder über eine Punktliste
+ *  – fetchRoadKm([a, via…, b]) – oder null. */
 export async function fetchRoadKm(a, b) {
-  const url = `${OSRM}${a.lng},${a.lat};${b.lng},${b.lat}?overview=false`;
+  const pts = Array.isArray(a) ? a : [a, b];
+  if (pts.length < 2) return null;
+  const url = `${OSRM}${pts.map((p) => `${p.lng},${p.lat}`).join(";")}?overview=false`;
   const ctrl = typeof AbortController !== "undefined" ? new AbortController() : null;
   const timer = ctrl ? setTimeout(() => ctrl.abort(), 8000) : null;
   try {
@@ -86,16 +90,16 @@ async function pump() {
       const job = queue.shift();
       const e0 = store.get().entries.find((x) => x.id === job.entryId);
       const seg0 = e0 && e0.segments && e0.segments[job.rawIndex];
-      if (!seg0 || !needsRoad(seg0) || coordKey(seg0.loc, seg0.endLoc) !== job.ck) { queued.delete(job.id); continue; }
+      if (!seg0 || !needsRoad(seg0) || coordKey(routePoints(seg0)) !== job.ck) { queued.delete(job.id); continue; }
       lastAt = Date.now();
-      const km = await fetchRoadKm(seg0.loc, seg0.endLoc);
+      const km = await fetchRoadKm(routePoints(seg0));
       lastAt = Date.now();
       queued.delete(job.id);
       if (km == null) { failed.set(job.ck, Date.now()); continue; }
       // frisch aus dem Store lesen – zwischenzeitliche Änderungen nicht überschreiben
       const e = store.get().entries.find((x) => x.id === job.entryId);
       const seg = e && Array.isArray(e.segments) ? e.segments[job.rawIndex] : null;
-      if (!seg || coordKey(seg.loc, seg.endLoc) !== job.ck) continue;
+      if (!seg || coordKey(routePoints(seg)) !== job.ck) continue;
       const segs = e.segments.map((x, i) => (i === job.rawIndex
         ? { ...x, kmRoad: Math.round(km * 100) / 100, kmRoadAt: Date.now(), kmRoadFor: job.ck } : x));
       try {

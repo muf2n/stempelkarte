@@ -3,7 +3,7 @@
 // Icons und Schriftdateien (fonts.gstatic.com): cache-first.
 // Alle anderen fremden Domains (Firebase, Google APIs, Nominatim, OSM, unpkg) werden nicht angefasst.
 
-const VERSION = "20261110-0800"; // wird beim Veröffentlichen automatisch ersetzt
+const VERSION = "20261110-1300"; // wird beim Veröffentlichen automatisch ersetzt
 const CACHE = "stempelkarte-" + VERSION;
 const FONT_CACHE = "stempelkarte-fonts"; // versionsunabhängig, bleibt erhalten
 const NET_TIMEOUT_MS = 4000; // bei schlechtem Netz nach dieser Zeit auf den Cache ausweichen
@@ -118,6 +118,8 @@ const SHELL = [
   // Update 9 – Fahrtenbuch
   "js/trip-core.js",
   "js/road-km.js",
+  "js/via-core.js", // Update 10 – 📍 Zwischenstopps
+  "js/via-track.js",
   "js/views/triplog.js",
   "js/photos.js",
   "js/views/gallery.js",

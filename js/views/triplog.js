@@ -18,6 +18,8 @@ import {
   mapsDirUrl, patchSegment, insertTrip, fmtKmD,
 } from "../trip-core.js";
 import * as road from "../road-km.js";
+import { viaPoints } from "../travel.js";
+import { viaListHTML, fillViaAddrs, withoutVia, viaCountText } from "../via-core.js"; // Update 10 – 📍 Zwischenstopps
 import { readApprentice } from "./report.js";
 
 const pad = (n) => String(n).padStart(2, "0");
@@ -365,6 +367,7 @@ export function openTripDetail(ctx, t) {
       </div>
       <ol class="fb-route">
         <li><small>Von</small><b>${esc(a.main)}</b>${a.full && a.full !== a.main ? `<span>${esc(t.fromAddr || a.full)}</span>` : (a.sub ? `<span>${esc(a.sub)}</span>` : "")}</li>
+        ${viaPoints(seg).length ? `<li class="fb-via"><small data-r="vianum">📍 ${esc(viaCountText(viaPoints(seg).length))}</small><div data-r="via">${viaListHTML(viaPoints(seg), u)}</div></li>` : ""}
         <li><small>Nach</small><b>${esc(b.main)}</b>${b.full && b.full !== b.main ? `<span>${esc(t.toAddr || b.full)}</span>` : (b.sub ? `<span>${esc(b.sub)}</span>` : "")}</li>
       </ol>
       <div class="fb-det-km">
@@ -390,6 +393,48 @@ export function openTripDetail(ctx, t) {
   const sheet = ctx.ui.openSheet({ title: "Fahrt", bodyHTML: body });
   const box = sheet.el;
   const pa = bindPurposeArt(box, state);
+  // Update 10 – 📍 Zwischenstopps: Liste mit ✕, Entfernen speichert sofort und rechnet die km neu
+  const viaHost = box.querySelector('[data-r="via"]');
+  const freshTrip = () => {
+    const e = ctx.store.get().entries.find((x) => x.id === t.entry.id);
+    return e ? { ...t, entry: e, seg: e.segments[t.rawIndex] } : null;
+  };
+  const showKm = () => {
+    const ft = freshTrip();
+    if (!ft || !ft.seg) return;
+    const k = segmentKm(ft.seg, ctx.store.get().settings || {});
+    const tt = { ...ft, km: k ? k.km : null, source: k ? k.source : null };
+    const kv = box.querySelector('[data-r="kmv"]');
+    if (kv) kv.textContent = `${kmValue(tt)} km`;
+    const src = box.querySelector(".fb-det-src");
+    if (src) src.innerHTML = `${srcBadge(tt, 15)} ${esc(tt.source ? KM_SOURCE[tt.source].label : "unbekannt")}`;
+    const mp = box.querySelector(".fb-maps");
+    if (mp) { const nu = mapsDirUrl({ ...t, via: viaPoints(ft.seg) }); if (nu) mp.href = nu; }
+  };
+  const offRoad = road.onUpdate((key) => { if (!box.isConnected) { offRoad(); return; } if (key === t.key) showKm(); });
+  if (viaHost) {
+    fillViaAddrs(viaHost, ctx.geo);
+    viaHost.addEventListener("click", async (ev) => {
+      const b = ev.target.closest("[data-viadel]");
+      if (!b) return;
+      const ft = freshTrip();
+      if (!ft || !ft.seg) return;
+      const ns = withoutVia(ft.seg, Number(b.dataset.viadel));
+      try {
+        await saveSeg(ctx, t, { via: ns.via || null, kmRoad: null, kmRoadAt: null, kmRoadFor: null });
+      } catch { return; }
+      const left = viaPoints(ns);
+      viaHost.innerHTML = viaListHTML(left, u);
+      fillViaAddrs(viaHost, ctx.geo);
+      const li = viaHost.closest(".fb-via");
+      if (!left.length && li) li.remove();
+      else { const n = box.querySelector('[data-r="vianum"]'); if (n) n.textContent = "📍 " + viaCountText(left.length); }
+      ctx.ui.toast("📍 Zwischenstopp entfernt – km werden neu berechnet");
+      showKm();
+      const nt = freshTrip();
+      if (nt) road.request(nt);
+    });
+  }
   box.querySelector('[data-r="save"]').addEventListener("click", async () => {
     const kmT = box.querySelector('[data-r="km"]').value;
     const n = parseNum(kmT);
