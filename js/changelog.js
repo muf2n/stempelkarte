@@ -1,6 +1,7 @@
 // Update 10 F – 🖥️ System-Status › Was ist neu: ehrliche Liste aus der Versionsgeschichte (git log des Projekts), neueste zuerst.
 // Beim Veröffentlichen neuer Versionen hier oben ergänzen.
 export const CHANGELOG = [
+  { v: "20261111-2345", items: ["🎓 LAP-Karten an OVE E 8101:2025 angepasst: 15 Karten präzisiert, 3 neue (RCD Typ AC, 30 mA bis 32 A, Leuchten in Wohnräumen)", "⚡ Prüfprotokoll: RCD Typ AC in Neuanlagen wird als Mangel erkannt"] },
   { v: "20261111-2245", items: ["⚡ Prüfprotokoll nach ÖVE/ÖNORM E 8101: Besichtigen, Erproben, Messen mit Grenzwert-Check, PDF, Verknüpfung zur Baustelle", "✨ Claude kennt jetzt Kochen, Vorrat, Müll, Wohnen, Verleih, Haustiere, Karriere, Gruppen, Kleiderschrank und Prüfprotokolle"] },
   { v: "20261111-0745", items: ["🎯 Karte: Knopf „Zu meinem Standort“ springt mit Zoom zu dir"] },
   { v: "20261111-0715", items: ["🗺️ Karte lädt zuverlässiger: Kartenbibliothek in der App, Ersatz-Kartenserver wenn OpenStreetMap blockiert", "👇 Karte: unteren Bereich nach unten wischen zum Einklappen"] },

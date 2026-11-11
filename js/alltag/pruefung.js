@@ -109,6 +109,8 @@ export function mount(el) {
       <tr><td>FI selektiv (S)</td><td>130–500 ms bei IΔn</td></tr>
       <tr><td>Berührungsspannung</td><td>UB ≤ 50 V (AC)</td></tr>
       <tr><td>TT-Erdung</td><td>RA · IΔn ≤ 50 V → bei 30 mA ≤ 1666 Ω, bei 300 mA ≤ 166 Ω</td></tr>
+      <tr><td>RCD-Typ</td><td>Typ AC seit OVE E 8101:2025 in neuen Anlagen und bei Änderungen/Erweiterungen unzulässig – mind. Typ A</td></tr>
+      <tr><td>30-mA-Zusatzschutz</td><td>Steckdosen-Stromkreise bis 32 A, Endstromkreise mit Leuchten in Wohnräumen (seit 2025)</td></tr>
       <tr><td>Schutzleiter</td><td>durchgängig, niederohmig – Richtwert ≤ 1 Ω</td></tr></tbody></table>
       <p class="note">Nach ÖVE/ÖNORM E 8101 Teil 6 (bzw. HD 60364-6). Maßgeblich sind immer die aktuell gültige Norm, Herstellerangaben und die Vorgaben deines Betriebs.</p></div>` });
   }

@@ -25,6 +25,9 @@ test("Stromkreis-Bewertung", () => {
   assert.equal(P.evalCircuit({ schutz: "B", in: 16, riso: 50, rpe: 0.3, zs: 0.5, rcd: "30", rcdT: 20, rcdI: 12 }).state, "fehler", "Auslösestrom < IΔn/2");
   assert.equal(P.evalCircuit({ schutz: "B", in: 16, riso: 50, rpe: 0.3, zs: 0.5, rcd: "30", rcdT: 20, ub: 60 }).state, "fehler", "UB > 50 V");
   assert.equal(P.evalCircuit({ schutz: "B", in: 16 }).state, "offen");
+  const ac = { schutz: "B", in: 16, riso: 50, rpe: 0.3, zs: 0.5, rcd: "30", rcdTyp: "AC", rcdT: 20 };
+  assert.equal(P.evalCircuit(ac, { art: "neu" }).state, "fehler", "Typ AC in Neuanlage unzulässig");
+  assert.equal(P.evalCircuit(ac, { art: "wiederholung" }).state, "knapp", "Typ AC im Bestand: Hinweis");
   assert.ok(!P.evalCircuit({ schutz: "B", in: 16, riso: 50, rpe: 0.2 }, { netz: "TT" }).checks.some((c) => c.key === "zs"), "TT ohne Zs-Prüfung");
 });
 

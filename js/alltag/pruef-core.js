@@ -47,6 +47,7 @@ export const ERPROBEN = [
  *    Weil die Leitung im Betrieb warm wird, ist ein gemessener Wert über 2/3 des Grenzwerts „knapp“ (Hinweis, kein Fehler).
  *  - RCD unverzögert: Auslösezeit bei IΔn ≤ 300 ms; selektiv (S): 130–500 ms. Auslösestrom zwischen 0,5·IΔn und IΔn.
  *  - Berührungsspannung UB ≤ 50 V (AC). TT: RA · IΔn ≤ 50 V.
+ *  - RCD Typ AC: seit OVE E 8101:2025 in neuen Anlagen und bei Änderungen/Erweiterungen unzulässig.
  *  - Schutzleiter-Durchgang: keine feste Grenze – Richtwert ≤ 1 Ω für übliche Hausinstallationen (Hinweis).
  */
 export const UL = 50;
@@ -60,7 +61,7 @@ export function ia(c) {
 export function zsMax(c, u0 = 230) { const a = ia(c); return a ? Math.round((u0 / a) * 100) / 100 : null; }
 
 /** Bewertung eines Stromkreises → { checks: [{ key, label, value, limit, state: ok|knapp|fehler|offen }], state } */
-export function evalCircuit(c0, { netz = "TN-C-S", u0 = 230 } = {}) {
+export function evalCircuit(c0, { netz = "TN-C-S", u0 = 230, art = "" } = {}) {
   const c = normCircuit(c0);
   const out = [];
   const add = (key, label, value, limit, state) => out.push({ key, label, value, limit, state });
@@ -79,6 +80,8 @@ export function evalCircuit(c0, { netz = "TN-C-S", u0 = 230 } = {}) {
   // RCD
   if (c.rcd) {
     const idn = Number(c.rcd);
+    // OVE E 8101:2025: RCD Typ AC in neuen Anlagen sowie bei Änderungen/Erweiterungen nicht mehr zulässig
+    if (c.rcdTyp === "AC") add("rcdTyp", "RCD-Typ", "Typ AC", art === "wiederholung" ? "Bestand – bei Änderung tauschen" : "mind. Typ A (Typ AC unzulässig seit OVE E 8101:2025)", art === "wiederholung" ? "knapp" : "fehler");
     const tMax = c.rcdS ? 500 : 300, tMin = c.rcdS ? 130 : 0;
     if (c.rcdT == null) add("rcdT", "FI-Auslösezeit bei IΔn", null, c.rcdS ? "130–500 ms" : "≤ 300 ms", "offen");
     else add("rcdT", "FI-Auslösezeit bei IΔn", `${fmt(c.rcdT)} ms`, c.rcdS ? "130–500 ms" : "≤ 300 ms", c.rcdT <= tMax && c.rcdT >= tMin ? "ok" : "fehler");

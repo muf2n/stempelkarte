@@ -354,7 +354,7 @@ function fakes() {
   ok(own.length === 2 && own.every((c) => c.source === "foto") && own.some((c) => /in der Installation/.test(c.q) && c.x.length === 3 && c.topic === "leit" && c.year === 1) && own.some((c) => c.x.length === 0 && c.year === 2), "✅ Übernehmen speichert 2 eigene Karten (lap_own, source foto)");
   ok(/2 Karten sind jetzt/.test(await page.textContent(".lap-photohero")), "Erfolgsmeldung");
   h = await head(page);
-  ok(/\/529/.test(h.replace(/\s/g, "")), "Kopfzeile zählt eigene Karten mit (529)");
+  ok(/\/532/.test(h.replace(/\s/g, "")), "Kopfzeile zählt eigene Karten mit (530 + 2 = 532)");
   await shot(page, "lap-own-list-390-light.png", true);
   // bearbeiten
   const lsId = own.find((c) => c.x.length === 0).id;
