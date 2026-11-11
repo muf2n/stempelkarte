@@ -6,8 +6,7 @@ import * as galleryAlbums from "../gallery-albums.js"; // Update 9 (Agent U) –
 import * as SC from "../site-core.js"; // Update 10d – Baustellen-Projektseiten
 import { showSite, closeSite, isOpen as siteOpen, injectSiteCSS } from "./site.js"; // Update 10d
 
-const LEAFLET_CSS = "https://unpkg.com/leaflet@1.9.4/dist/leaflet.css";
-const LEAFLET_JS = "https://unpkg.com/leaflet@1.9.4/dist/leaflet.js";
+import { addTiles, LEAFLET_JS, LEAFLET_CSS } from "../map-tiles.js"; // lokale Leaflet-Kopie + Ersatz-Kacheln
 // M3: Subresource Integrity (sha384 aus npm pack leaflet@1.9.4, dist/leaflet.js bzw. .css) – bei Versionswechsel neu berechnen.
 export const LEAFLET_JS_SRI = "sha384-cxOPjt7s7Iz04uaHJceBmS+qpjv2JkIHNVcuOrM+YHwZOmJGBXI00mdUXEq65HTH";
 export const LEAFLET_CSS_SRI = "sha384-sHL9NAb7lN7rfvG5lfHpm643Xkcjzp4jFvuavGOndn6pjVqS6ny56CAt3nsEVT4H";
@@ -128,9 +127,7 @@ async function ensureMap() {
     const L = await loadLeaflet();
     if (map) return map;
     map = L.map(box, { zoomControl: true, attributionControl: true }).setView(AT_CENTER, AT_ZOOM);
-    L.tileLayer("https://tile.openstreetmap.org/{z}/{x}/{y}.png", {
-      maxZoom: 19, attribution: "© OpenStreetMap",
-    }).addTo(map);
+    addTiles(L, map);
     layer = L.layerGroup().addTo(map);
     showMapNote("");
     box.hidden = false;

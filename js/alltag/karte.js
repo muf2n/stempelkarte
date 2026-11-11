@@ -15,8 +15,7 @@ import * as K from "./kontakte-core.js";
 import * as CC from "../cal-core.js";
 import { siteStatus } from "../site-core.js";
 
-const LEAFLET_CSS = "https://unpkg.com/leaflet@1.9.4/dist/leaflet.css";
-const LEAFLET_JS = "https://unpkg.com/leaflet@1.9.4/dist/leaflet.js";
+import { addTiles, LEAFLET_JS, LEAFLET_CSS } from "../map-tiles.js"; // lokale Leaflet-Kopie + Ersatz-Kacheln
 const LEAFLET_JS_SRI = "sha384-cxOPjt7s7Iz04uaHJceBmS+qpjv2JkIHNVcuOrM+YHwZOmJGBXI00mdUXEq65HTH"; // wie js/views/places.js
 const LEAFLET_CSS_SRI = "sha384-sHL9NAb7lN7rfvG5lfHpm643Xkcjzp4jFvuavGOndn6pjVqS6ny56CAt3nsEVT4H";
 const AT_CENTER = [47.6, 13.8];
@@ -128,6 +127,7 @@ export function mount(el) {
     results: {},         // mode → Ergebnis
     target: "to",        // Suchfeld füllt "to" oder "from"
     expanded: false,
+    collapsed: false, // Update 13: eingeklappt (nur Griff + Titel)
     follow: null,        // watchPosition-ID
     stepIdx: 0,
     locState: "unknown", // granted | prompt | denied | unknown | busy | error
@@ -191,9 +191,7 @@ export function mount(el) {
       map = L.map($("map"), { zoomControl: false, attributionControl: true }).setView(AT_CENTER, 7);
       map.attributionControl.setPosition("topright"); // unten liegt am Handy das Bottom-Sheet drüber
       map.attributionControl.setPrefix('<a href="https://leafletjs.com" target="_blank" rel="noopener">Leaflet</a>');
-      L.tileLayer("https://tile.openstreetmap.org/{z}/{x}/{y}.png", {
-        maxZoom: 19, attribution: '© <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener">OpenStreetMap</a>-Mitwirkende · Routen: <a href="https://routing.openstreetmap.de" target="_blank" rel="noopener">FOSSGIS</a>',
-      }).addTo(map);
+      addTiles(L, map, ' · Routen: <a href="https://routing.openstreetmap.de" target="_blank" rel="noopener">FOSSGIS</a>');
       L.control.zoom({ position: "bottomright", zoomInTitle: "Hineinzoomen", zoomOutTitle: "Herauszoomen" }).addTo(map);
       layers = { route: L.layerGroup().addTo(map), marks: L.layerGroup().addTo(map), me: L.layerGroup().addTo(map), step: L.layerGroup().addTo(map) };
       mapNote("");
@@ -339,6 +337,7 @@ export function mount(el) {
     }
     S.results = {};
     S.expanded = false;
+    S.collapsed = false; // neues Ziel → Sheet wieder halb offen
     stopFollow();
     render();
     await ensureMap();
@@ -530,9 +529,12 @@ export function mount(el) {
     const scroll = body.scrollTop;
     body.innerHTML = S.dest ? routeHTML() : homeHTML();
     if (S.dest) body.scrollTop = scroll;
-    sheet.dataset.expanded = String(S.expanded);
+    sheet.dataset.expanded = String(S.expanded && !S.collapsed);
+    sheet.dataset.collapsed = String(!!S.collapsed);
+    kr.classList.toggle("kr-min", !!S.collapsed);
     sheet.dataset.has = S.dest ? "route" : "home";
-    el.querySelector('[data-k="grip"]').setAttribute("aria-label", S.expanded ? "Bereich verkleinern" : "Bereich vergrößern");
+    el.querySelector('[data-k="grip"]').setAttribute("aria-label", S.collapsed ? "Bereich aufklappen" : S.expanded ? "Bereich verkleinern" : "Bereich vergrößern (nach unten wischen zum Einklappen)");
+    el.querySelector('[data-k="grip"]').setAttribute("aria-expanded", String(!S.collapsed));
     renderFollow();
     if (!suggEl.hidden) renderSugg();
   }
@@ -568,7 +570,7 @@ export function mount(el) {
       case "fromme": S.from = null; S.results = {}; render(); drawMap(true); loadRoutes(); break;
       case "clear": clearDest(); break;
       case "retry": S.results = {}; loadRoutes(); break;
-      case "grip": S.expanded = !S.expanded; render(); break;
+      case "grip": setSize(S.collapsed ? 1 : S.expanded ? 1 : 2); break; // Tippen: zu → halb → groß → halb; einklappen per Wischen nach unten
       case "follow": if (S.follow != null) stopFollow(); else startFollow(); render(); drawMap(S.follow == null); break;
       case "clearrecent": lsSet(R.RECENT_KEY, []); render(); break;
       case "info": openInfo(); break;
@@ -579,15 +581,29 @@ export function mount(el) {
       }
     }
   });
-  // Sheet per Wischen auf/zu (Handy)
-  let dragY = null;
+  // Sheet per Wischen: groß ⇄ halb ⇄ eingeklappt (Handy). Gewischt werden kann am Griff, am Titel – und im Inhalt,
+  // wenn der ganz oben ist und nach unten gezogen wird.
+  function size() { return S.collapsed ? 0 : S.expanded ? 2 : 1; }
+  function setSize(n) { S.collapsed = n === 0; S.expanded = n === 2; render(); setTimeout(() => { if (map) { map.invalidateSize(); } }, 280); }
+  function sizeStep(dir) { setSize(Math.max(0, Math.min(2, size() - dir))); } // dir > 0 = nach unten
   const grip = el.querySelector('[data-k="grip"]');
-  grip.addEventListener("pointerdown", (e) => { dragY = e.clientY; });
-  grip.addEventListener("pointerup", (e) => {
-    if (dragY == null) return;
-    const dy = e.clientY - dragY; dragY = null;
-    if (Math.abs(dy) > 30) { S.expanded = dy < 0; render(); e.preventDefault(); }
-  });
+  let drag = null;
+  const startDrag = (y, fromBody) => { drag = { y, fromBody, moved: false }; };
+  const endDrag = (y) => {
+    if (!drag) return false;
+    const dy = y - drag.y, fromBody = drag.fromBody; drag = null;
+    if (Math.abs(dy) < 40) return false;
+    if (fromBody && (dy < 0 || body.scrollTop > 0)) return false; // im Inhalt nur nach unten und nur ganz oben
+    sizeStep(dy > 0 ? 1 : -1);
+    return true;
+  };
+  grip.addEventListener("pointerdown", (e) => { startDrag(e.clientY, false); try { grip.setPointerCapture(e.pointerId); } catch { /* egal */ } });
+  grip.addEventListener("pointercancel", () => { drag = null; });
+  grip.addEventListener("pointerup", (e) => { if (endDrag(e.clientY)) { e.preventDefault(); grip.dataset.swiped = "1"; setTimeout(() => delete grip.dataset.swiped, 50); } });
+  grip.addEventListener("click", (e) => { if (grip.dataset.swiped) e.stopImmediatePropagation(); }, true);
+  body.addEventListener("click", (e) => { if (S.collapsed) { e.preventDefault(); e.stopImmediatePropagation(); setSize(1); } }, true); // eingeklappt: Tippen öffnet
+  body.addEventListener("touchstart", (e) => { if (body.scrollTop <= 0 && e.touches.length === 1) startDrag(e.touches[0].clientY, true); }, { passive: true });
+  body.addEventListener("touchend", (e) => { const t = e.changedTouches && e.changedTouches[0]; if (t) endDrag(t.clientY); }, { passive: true });
 
   function openInfo() {
     ui.openSheet({

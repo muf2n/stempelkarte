@@ -5,6 +5,7 @@
 //   Update 9 (Agent T) – Hauptkategorien über den Alben: Reiter „Alben“ zeigt große Kategorie-Karten (Mosaik) oder
 //   eine aufgeklappte Liste; Kategorie-Ansicht über #alltag/galerie/k/<id>. Alben-Mehrfachauswahl (langes Drücken).
 import * as photos from "../photos.js";
+import { addTiles, LEAFLET_JS, LEAFLET_CSS } from "../map-tiles.js"; // lokale Leaflet-Kopie + Ersatz-Kacheln
 import * as A from "../gallery-albums.js";
 import * as G from "../gallery-core.js";
 import * as store from "../store.js";
@@ -582,8 +583,7 @@ function renderAlbum() {
 
 /* --- Karte (Leaflet, wie im Reiter „Orte“) --- */
 
-const LEAFLET_CSS = "https://unpkg.com/leaflet@1.9.4/dist/leaflet.css";
-const LEAFLET_JS = "https://unpkg.com/leaflet@1.9.4/dist/leaflet.js";
+
 // M3: Subresource Integrity (wie js/views/places.js)
 const LEAFLET_JS_SRI = "sha384-cxOPjt7s7Iz04uaHJceBmS+qpjv2JkIHNVcuOrM+YHwZOmJGBXI00mdUXEq65HTH";
 const LEAFLET_CSS_SRI = "sha384-sHL9NAb7lN7rfvG5lfHpm643Xkcjzp4jFvuavGOndn6pjVqS6ny56CAt3nsEVT4H";
@@ -623,7 +623,7 @@ function renderMap(soft) {
     if (!box) return;
     box.innerHTML = "";
     S.map = L.map(box, { zoomControl: true, attributionControl: true }).setView([47.07, 15.44], 9);
-    L.tileLayer("https://tile.openstreetmap.org/{z}/{x}/{y}.png", { maxZoom: 19, attribution: "© OpenStreetMap" }).addTo(S.map);
+    addTiles(L, S.map);
     S.layer = L.layerGroup().addTo(S.map);
     drawMarkers(pts, true);
   }).catch(() => {

@@ -1,9 +1,9 @@
 // Service Worker der Stempelkarte: sorgt für automatische Updates und Offline-Nutzung.
 // Eigene Dateien (HTML, JS, CSS, Manifest): zuerst Netz (neue Version kommt sofort an), sonst Cache.
 // Icons und Schriftdateien (fonts.gstatic.com): cache-first.
-// Alle anderen fremden Domains (Firebase, Google APIs, Nominatim, OSM, unpkg) werden nicht angefasst.
+// Alle anderen fremden Domains (Firebase, Google APIs, Nominatim, OSM, CARTO) werden nicht angefasst.
 
-const VERSION = "20261111-0100"; // wird beim Veröffentlichen automatisch ersetzt
+const VERSION = "20261111-0715"; // wird beim Veröffentlichen automatisch ersetzt
 const CACHE = "stempelkarte-" + VERSION;
 const FONT_CACHE = "stempelkarte-fonts"; // versionsunabhängig, bleibt erhalten
 const NET_TIMEOUT_MS = 4000; // bei schlechtem Netz nach dieser Zeit auf den Cache ausweichen
@@ -257,6 +257,14 @@ const SHELL = [
   "js/alltag/kleider.js",
   "js/alltag/gruppen.js",
   "js/alltag/wohnen.js",
+  "js/map-tiles.js",
+  "vendor/leaflet/leaflet.js",
+  "vendor/leaflet/leaflet.css",
+  "vendor/leaflet/images/marker-icon.png",
+  "vendor/leaflet/images/marker-icon-2x.png",
+  "vendor/leaflet/images/marker-shadow.png",
+  "vendor/leaflet/images/layers.png",
+  "vendor/leaflet/images/layers-2x.png",
   "js/sync-guard.js",
   "js/sync-guard-core.js",
   "js/views/sync-conflicts.js",

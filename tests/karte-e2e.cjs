@@ -51,6 +51,7 @@ function osrm(profile, a, b) {
         return route.continue();
       }
       if (/tile\.openstreetmap\.org$/.test(u.hostname)) { reqs.tiles++; return route.abort(); }
+      if (/basemaps\.cartocdn\.com$/.test(u.hostname)) { reqs.carto = (reqs.carto || 0) + 1; return route.abort(); }
       if (u.hostname === "nominatim.openstreetmap.org") {
         const q = (u.searchParams.get("q") || "").toLowerCase();
         reqs.nom.push(q);
@@ -171,6 +172,18 @@ function osrm(profile, a, b) {
   await page.click('.kr-mode[data-mode="car"]');
   await shot(page, "karte-390-sheet-gross.png");
   await page.click('[data-k="grip"]');
+  ok((reqs.carto || 0) > 0, "OSM-Kacheln blockiert → Ersatz-Server CARTO wird verwendet");
+  // Einklappen per Wischen nach unten (Update 13)
+  const gb = await page.$eval('[data-k="grip"]', (g) => { const r = g.getBoundingClientRect(); return { x: r.x + r.width / 2, y: r.y + r.height / 2 }; });
+  await page.mouse.move(gb.x, gb.y); await page.mouse.down(); await page.mouse.move(gb.x, gb.y + 120, { steps: 5 }); await page.mouse.up();
+  await page.waitForTimeout(350);
+  ok(await page.getAttribute('[data-r="sheet"]', "data-collapsed") === "true", "Nach unten wischen klappt den Bereich ein");
+  ok((await page.$eval('[data-r="sheet"]', (s) => s.getBoundingClientRect().height)) <= 95, "Eingeklappt nur noch schmal");
+  await shot(page, "karte-390-eingeklappt.png");
+  const gb2 = await page.$eval('[data-k="grip"]', (g) => { const r = g.getBoundingClientRect(); return { x: r.x + r.width / 2, y: r.y + r.height / 2 }; });
+  await page.mouse.move(gb2.x, gb2.y); await page.mouse.down(); await page.mouse.move(gb2.x, gb2.y - 150, { steps: 5 }); await page.mouse.up();
+  await page.waitForTimeout(350);
+  ok(await page.getAttribute('[data-r="sheet"]', "data-collapsed") === "false", "Nach oben wischen öffnet wieder");
 
   // Mitlaufen
   await page.click('[data-k="follow"]');
@@ -269,6 +282,6 @@ function osrm(profile, a, b) {
   await shot(np, "karte-390-dunkel-frage.png");
 
   ok(errors.length === 0, "keine Konsolenfehler / CSP-Verstöße" + (errors.length ? ":\n" + errors.join("\n") : ""));
-  console.log(`(Kacheln blockiert: ${reqs.tiles}, Leaflet lokal: ${LDIR ? "ja" : "nein"})`);
+  console.log(`(OSM-Kacheln blockiert: ${reqs.tiles}, CARTO-Ersatz: ${reqs.carto || 0}, Leaflet aus vendor/)`);
   await browser.close();
 })().catch(async (e) => { console.error(e); try { await global.__page.screenshot({ path: path.join(OUT, "karte-fehler.png") }); } catch { /* egal */ } process.exit(1); });

@@ -174,3 +174,9 @@
   .kr-sugg { z-index: 1100; }
   .kr-mapwrap { border-left: 1px solid var(--line); }
 }
+
+/* Update 13 – Sheet einklappbar (nach unten wischen): nur Griff + erste Zeile sichtbar, Karte bekommt fast den ganzen Platz. */
+.kr-grip { height: 34px; }
+.kr-sheet[data-collapsed="true"] { max-height: 92px; }
+.kr-sheet[data-collapsed="true"] .kr-sheet-body { overflow: hidden; cursor: pointer; -webkit-mask-image: linear-gradient(#000 55%, transparent); mask-image: linear-gradient(#000 55%, transparent); }
+.kr.kr-min { --kr-sheet-h: 92px; }
