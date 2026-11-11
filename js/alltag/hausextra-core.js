@@ -108,7 +108,7 @@ export function normStock(x = {}) {
   return {
     id: s(x.id), name: s(x.name).slice(0, 60), qty: Math.max(0, r2(num(x.qty))), min: Math.max(0, r2(num(x.min))),
     unit: VUNITS.includes(x.unit) ? x.unit : "Stk", place: placeBy(x.place)[0], best: isKey(x.best) ? x.best : "",
-    note: s(x.note).slice(0, 200), updated: Number(x.updated) || 0,
+    note: s(x.note).slice(0, 200), updated: Number(x.updated) || 0, ean: /^\d{8,14}$/.test(s(x.ean)) ? s(x.ean) : "",
   };
 }
 

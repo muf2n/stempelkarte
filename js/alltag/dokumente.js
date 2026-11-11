@@ -6,6 +6,7 @@
 //   Kein Tresor → „🔒 Tresor-Passwort einrichten“; gesperrt → nur Ordner + Anzahl + Ablauf-Abzeichen; alte Klartext-Dokumente
 //   werden nach dem ersten Entsperren automatisch umgestellt (mit Fortschritt).
 // Reine Logik: ./dokumente-core.js, Verschlüsselung: ./dokumente-crypt.js, entschlüsselter Stand: ./dokumente-store.js, Datei-Ablage: ./doc-files.js
+import * as Inbox from "../inbox.js"; // Update 15
 import { collection, newId } from "./db.js";
 import * as D from "./dokumente-core.js";
 import * as E from "./dokumente-crypt.js";
@@ -363,6 +364,9 @@ export function mount(el, ctx) {
     const f = input.files && input.files[0];
     input.value = "";
     if (!f) return;
+    return onFileObj(f, preLink);
+  }
+  async function onFileObj(f, preLink = null) {
     if (mode() !== "open") { ui.toast(mode() === "setup" ? "🔒 Richte zuerst das Tresor-Passwort ein – dann werden deine Dokumente verschlüsselt." : "🔒 Bitte zuerst entsperren."); return; }
     ui.toast("Datei wird vorbereitet … ⏳", 1500);
     try {
@@ -383,6 +387,17 @@ export function mount(el, ctx) {
     pendingLink = { k: m[1], id };
     history.replaceState(history.state, "", location.href.replace(/\?neu=[^#]*$/, ""));
     queueMicrotask(linkSheet);
+  }
+  // Update 15 – Datei aus 📸 Erfassen / Teilen übernehmen (js/inbox.js)
+  let inboxWait = false;
+  function readInbox() {
+    if (!alive || !Inbox.peek("dokumente")) return;
+    const m = mode();
+    if (m === "setup") { ui.toast("🔒 Richte zuerst das Tresor-Passwort ein – dann kann ich die Datei verschlüsselt ablegen.", 4000); return; }
+    if (m !== "open") { if (!inboxWait) ui.toast("🔒 Entsperr kurz deine Dokumente – dann speichere ich die Datei.", 3500); inboxWait = true; return; }
+    inboxWait = false;
+    const f = Inbox.take("dokumente");
+    if (f) onFileObj(f);
   }
   let linkWait = false; // gesperrt → Blatt nach dem Entsperren öffnen
   function linkSheet() {
@@ -490,6 +505,7 @@ export function mount(el, ctx) {
       return;
     }
     if (linkWait && m === "open") queueMicrotask(linkSheet);
+    if (inboxWait && m === "open") queueMicrotask(readInbox);
     const d = S.id ? byId(S.id) : null;
     if (S.id && !d) {
       home.hidden = true; detailEl.hidden = false;
@@ -540,8 +556,9 @@ export function mount(el, ctx) {
   el.addEventListener("click", onClick);
   el.addEventListener("change", onChange);
   const offs = [DS.watch(queue), Sess.onChange(() => { if (!Sess.isUnlocked()) { closeSheets(); prevUrl = prevImg = null; } queue(); }), ...Object.values(other).map((c) => c.watch(queue))];
-  const offRoute = A.onRoute((h) => { if (/^#alltag\/dokumente/.test(h)) { if (/[?&]neu=/.test(h)) readNew(); queue(); window.scrollTo(0, 0); } });
+  const offRoute = A.onRoute((h) => { if (/^#alltag\/dokumente/.test(h)) { if (/[?&]neu=/.test(h)) readNew(); readInbox(); queue(); window.scrollTo(0, 0); } });
   readNew();
+  setTimeout(readInbox, 300);
   render();
   return () => {
     alive = false;

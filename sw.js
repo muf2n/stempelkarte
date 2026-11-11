@@ -3,7 +3,7 @@
 // Icons und Schriftdateien (fonts.gstatic.com): cache-first.
 // Alle anderen fremden Domains (Firebase, Google APIs, Nominatim, OSM, CARTO) werden nicht angefasst.
 
-const VERSION = "20261111-2345"; // wird beim Veröffentlichen automatisch ersetzt
+const VERSION = "20261112-0030"; // wird beim Veröffentlichen automatisch ersetzt
 const CACHE = "stempelkarte-" + VERSION;
 const FONT_CACHE = "stempelkarte-fonts"; // versionsunabhängig, bleibt erhalten
 const NET_TIMEOUT_MS = 4000; // bei schlechtem Netz nach dieser Zeit auf den Cache ausweichen
@@ -257,6 +257,11 @@ const SHELL = [
   "js/alltag/kleider.js",
   "js/alltag/gruppen.js",
   "js/alltag/wohnen.js",
+  "js/alltag/erfassen.js",
+  "js/alltag/scan-core.js",
+  "css/alltag-erfassen.css",
+  "js/pdf-core.js",
+  "js/inbox.js",
   "js/alltag/pruef-core.js",
   "js/alltag/pruefung.js",
   "css/alltag-pruefung.css",
@@ -414,8 +419,30 @@ self.addEventListener("message", (event) => {
   })());
 });
 
+/* Update 15 – Android-Teilen-Menü (Web Share Target, nur installierte App): geteilte Dateien/Texte kurz im
+   Cache „sk-share-v1“ ablegen und Alltag › 📸 Erfassen öffnen. Dort entscheidet der Nutzer, was damit passiert. */
+const SHARE_CACHE = "sk-share-v1";
+async function handleShare(event) {
+  try {
+    const form = await event.request.formData();
+    const c = await caches.open(SHARE_CACHE);
+    for (const k of await c.keys()) await c.delete(k);
+    const files = form.getAll("files").filter((f) => f && typeof f === "object" && f.size > 0 && f.size <= 25 * 1024 * 1024).slice(0, 20);
+    const meta = { title: String(form.get("title") || "").slice(0, 300), text: String(form.get("text") || "").slice(0, 5000), url: String(form.get("url") || "").slice(0, 2000),
+      files: files.map((f) => ({ name: String(f.name || "").slice(0, 120), type: String(f.type || "") })), at: Date.now() };
+    for (let i = 0; i < files.length; i++) await c.put(new Request(`share/file-${i}`), new Response(files[i], { headers: { "Content-Type": files[i].type || "application/octet-stream" } }));
+    await c.put(new Request("share/meta"), new Response(JSON.stringify(meta), { headers: { "Content-Type": "application/json" } }));
+  } catch (e) { /* trotzdem öffnen */ }
+  return Response.redirect("./#alltag/erfassen?share=1", 303);
+}
+
 self.addEventListener("fetch", (event) => {
   const req = event.request;
+  if (req.method === "POST") {
+    let u; try { u = new URL(req.url); } catch (e) { return; }
+    if (u.origin === self.location.origin && /\/share-target\/?$/.test(u.pathname)) event.respondWith(handleShare(event));
+    return;
+  }
   if (req.method !== "GET") return;
   let url;
   try { url = new URL(req.url); } catch (e) { return; }
