@@ -20,10 +20,10 @@ const REPORT_ID = "sr-root";
 let cur = null;       // { id, el, ctx, unsubs: [], pushed, prevFocus, prevOverflow, state }
 let report = null;
 
-let logCol = null, matCol = null, ktCol = null, dkCol = null;
+let logCol = null, matCol = null, ktCol = null, dkCol = null, ppCol = null; // ppCol: Update 14 – Prüfprotokolle
 const cols = () => {
-  if (!logCol) { logCol = collection("site_log"); matCol = collection("material_items"); ktCol = collection("kontakte"); dkCol = collection("dokumente"); }
-  return { log: logCol, mat: matCol, kt: ktCol, dk: dkCol };
+  if (!logCol) { logCol = collection("site_log"); matCol = collection("material_items"); ktCol = collection("kontakte"); dkCol = collection("dokumente"); ppCol = collection("pruefungen"); }
+  return { log: logCol, mat: matCol, kt: ktCol, dk: dkCol, pp: ppCol };
 };
 
 /* Update 10 E – 👤 Kunde (Kontakte, optional place.customerId) + 📎 Dokumente */
@@ -220,6 +220,13 @@ function timelineHTML(d) {
   </section>`;
 }
 
+/** Update 14 – ⚡ Prüfprotokolle dieser Baustelle (Alltag › Prüfprotokoll). */
+function pruefHTML(place) {
+  const list = cols().pp.all().filter((p) => p && p.placeId === place.id);
+  return `<section class="card st-card"><h3>⚡ Prüfprotokolle</h3>${list.length ? `<ul class="st-pp">${list.map((p) => `<li>${p.status === "fertig" ? "✅" : "📝"} ${esc(p.date ? p.date.split("-").reverse().join(".") : "")} · ${esc(p.kunde || "Protokoll")} · ${(p.circuits || []).length} Stromkreise</li>`).join("")}</ul>` : `<p class="note">Noch keine Prüfung für diese Baustelle.</p>`}
+    <a class="btn ghost sm" href="#alltag/pruefung">⚡ Zu den Prüfprotokollen</a></section>`;
+}
+
 function render() {
   if (!cur) return;
   const place = placeOf(cur.ctx, cur.id);
@@ -237,7 +244,7 @@ function render() {
   const matHost = main.querySelector('[data-st-host="mat"]');
   main.innerHTML = heroHTML(place, d) + statsHTML(d) +
     `<div class="st-cols"><div class="st-col">${timelineHTML(d)}${todosHTML(d)}</div>` +
-    `<div class="st-col">${customerHTML(place)}${workHTML(d)}${matHTML(d)}${photosHTML(d)}${tripsHTML(d)}${linkedDocsHTML("place", place.id, { cls: "st-docs" })}</div></div>`;
+    `<div class="st-col">${customerHTML(place)}${workHTML(d)}${matHTML(d)}${photosHTML(d)}${tripsHTML(d)}${pruefHTML(place)}${linkedDocsHTML("place", place.id, { cls: "st-docs" })}</div></div>`;
   const newHost = main.querySelector('[data-st-host="mat"]');
   if (matHost && matHost.dataset.pid === place.id) newHost.replaceWith(matHost);
   else { newHost.dataset.pid = place.id; try { mountPlaceMaterial(newHost, place); } catch (e) { console.error(e); } }
@@ -629,6 +636,7 @@ export function showSite(id, ctx, { pushed = false } = {}) {
   c.unsubs.push(cols().mat.watch(() => { if (cur === c) queueRender(); }));
   c.unsubs.push(cols().kt.watch(() => { if (cur === c) queueRender(); })); // Update 10 E
   c.unsubs.push(cols().dk.watch(() => { if (cur === c) queueRender(); })); // Update 10 E
+  c.unsubs.push(cols().pp.watch(() => { if (cur === c) queueRender(); })); // Update 14
   c.unsubs.push(watchDocs(() => { if (cur === c) queueRender(); })); // Update 10 – 🔒 Entsperren/Sperren
   c.unsubs.push(photos.onChange(() => { if (cur === c) { c.state.photosLoaded = false; loadPhotos(); } }));
   render();

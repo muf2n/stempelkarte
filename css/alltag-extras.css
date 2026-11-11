@@ -41,3 +41,5 @@
 .xu-hero small { color: var(--muted); }
 .xu-spark { display: flex; align-items: flex-end; gap: 3px; height: 60px; margin-top: 8px; }
 .xu-spark i { flex: 1; min-width: 4px; background: var(--accent); border-radius: 3px 3px 0 0; }
+/* Häkchen in Checklisten nicht wie Eingabefelder darstellen */
+.xu-check input[type="checkbox"] { -webkit-appearance: auto; appearance: auto; flex: none; width: 22px; height: 22px; min-height: 0; margin: 1px 0 0; padding: 0; border: 0; box-shadow: none; background: none; accent-color: var(--accent); }

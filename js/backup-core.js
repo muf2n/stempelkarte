@@ -38,7 +38,8 @@ export const ALLTAG = [
   "lap_cards", "lap_stats", "lap_exams", "lap_own", "jp_cards", "jp_stats", "trash",
   "haushalt", "habits", "routines", "goals", "notes", "ai_memory", "notfall", // Update 10 C
   "freizeit_listen", "muell", "vorrat", "travel_journal",
-  "rezepte", "essensplan", "karriere", "karriere_certs", "karriere_jobs", "spiel", "tiere", "kleidung", "outfits", "gruppen", "wohnen", // Update 12 // Update 11 – Freizeit-Listen, Müll, Vorrat
+  "rezepte", "essensplan", "karriere", "karriere_certs", "karriere_jobs", "spiel", "tiere", "kleidung", "outfits", "gruppen", "wohnen", // Update 12
+  "pruefungen", // Update 14 // Update 11 – Freizeit-Listen, Müll, Vorrat
   "automations", "automation_log", // Update 10 – ⚡ Automationen
   "dokumente", "vertraege", "inventar", "kontakte", "money_wishes", // Update 10 E (Datei-Inhalte a_doc_files bewusst nicht)
   "learn_progress", // Update 10 – 🛤️ Lernpfad (Japanisch + LAP)

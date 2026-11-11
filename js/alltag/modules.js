@@ -26,6 +26,7 @@ export const MODULES = [
   { id: "haushalt", title: "🏡 Haushalt", short: "Haushalt", sub: "Putzplan, Wartung & was heute dran ist", icon: "home", color: "#0f766e", load: () => import("./haushalt.js") }, // Update 10 C
   { id: "routinen", title: "🎯 Routinen & Ziele", short: "Routinen & Ziele", sub: "Gewohnheiten 🔥, Morgen-/Abendroutine, Ziele", icon: "target", color: "#ea580c", load: () => import("./routinen.js") }, // Update 10 C
   { id: "listen", title: "🎬 Freizeit-Listen", short: "Freizeit-Listen", sub: "Serien, Filme, Bücher, Games, Ausflüge & Geschenkideen", icon: "star", color: "#db2777", load: () => import("./listen.js") }, // Update 11
+  { id: "pruefung", title: "⚡ Prüfprotokoll", short: "Prüfprotokoll", sub: "Besichtigen, Erproben, Messen nach ÖVE/ÖNORM E 8101", icon: "bolt", color: "#ca8a04", load: () => import("./pruefung.js") }, // Update 14
   { id: "kochen", title: "🍳 Kochen", short: "Kochen", sub: "Rezepte, Wochen-Essensplan, Was koche ich? & Koch-Timer", icon: "list", color: "#ea580c", load: () => import("./kochen.js") }, // Update 12
   { id: "karriere", title: "💼 Karriere", short: "Karriere", sub: "Ausbildung, Lebenslauf, Zertifikate & Bewerbungen", icon: "briefcase", color: "#1d4ed8", load: () => import("./karriere.js") }, // Update 12
   { id: "leben", title: "📊 Mein Leben", short: "Mein Leben", sub: "Digital Twin, Statistik & Jahresrückblick", icon: "chart", color: "#7c3aed", load: () => import("./leben.js") }, // Update 12

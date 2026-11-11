@@ -1,6 +1,7 @@
 // Update 10 F – 🖥️ System-Status › Was ist neu: ehrliche Liste aus der Versionsgeschichte (git log des Projekts), neueste zuerst.
 // Beim Veröffentlichen neuer Versionen hier oben ergänzen.
 export const CHANGELOG = [
+  { v: "20261111-2245", items: ["⚡ Prüfprotokoll nach ÖVE/ÖNORM E 8101: Besichtigen, Erproben, Messen mit Grenzwert-Check, PDF, Verknüpfung zur Baustelle", "✨ Claude kennt jetzt Kochen, Vorrat, Müll, Wohnen, Verleih, Haustiere, Karriere, Gruppen, Kleiderschrank und Prüfprotokolle"] },
   { v: "20261111-0745", items: ["🎯 Karte: Knopf „Zu meinem Standort“ springt mit Zoom zu dir"] },
   { v: "20261111-0715", items: ["🗺️ Karte lädt zuverlässiger: Kartenbibliothek in der App, Ersatz-Kartenserver wenn OpenStreetMap blockiert", "👇 Karte: unteren Bereich nach unten wischen zum Einklappen"] },
   { v: "20261111-0100", items: ["🍳 Kochen: Rezepte, Wochen-Essensplan, Was koche ich?, Koch-Timer", "💼 Karriere: Ausbildung, Lebenslauf, Zertifikate, Bewerbungen", "📊 Mein Leben: Digital Twin, Statistik, Jahresrückblick", "🎮 Spielwelt: Level, Quests, Erfolge, Shop, Mini-Games", "🐾 Haustiere · 👕 Kleiderschrank · 👥 Freunde & Gruppen · 🏠 Wohnen", "🗑️ Müllkalender & 🥫 Vorrat · 📔 Reisetagebuch · 🔄 Sync-Konflikte"] },

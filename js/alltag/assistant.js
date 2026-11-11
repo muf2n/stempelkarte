@@ -20,6 +20,8 @@ const SUGGEST = [
   "Was steht diese Woche an?",
   "Wofür hab ich diesen Monat Geld ausgegeben?",
   "Welche Prüfungen kommen als Nächstes?",
+  "Was kann ich heute kochen?",
+  "Wo ist mein Reisepass?",
 ];
 
 const lsGet = (k) => { try { return localStorage.getItem(k); } catch { return null; } };
