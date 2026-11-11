@@ -173,6 +173,17 @@ function osrm(profile, a, b) {
   await shot(page, "karte-390-sheet-gross.png");
   await page.click('[data-k="grip"]');
   ok((reqs.carto || 0) > 0, "OSM-Kacheln blockiert → Ersatz-Server CARTO wird verwendet");
+  // „Zu meinem Standort“: Karte wegschieben, Knopf → zurück zum Standort mit Zoom ≥ 16
+  const before = await page.evaluate(() => !!window.L);
+  await page.click('[data-k="locate"]');
+  await page.waitForTimeout(900);
+  const c = await page.evaluate(() => { const map = document.querySelector(".kr .leaflet-container"), r = map.getBoundingClientRect(), sh = document.querySelector('[data-r="sheet"]').getBoundingClientRect();
+    const dot = [...document.querySelectorAll(".kr .leaflet-interactive")].find((p) => p.getAttribute("fill") === "#1a73e8" && p.getAttribute("fill-opacity") === "1"); if (!dot) return null;
+    const d = dot.getBoundingClientRect(), top = r.top + 104, bottom = sh.top; // sichtbarer Bereich zwischen Suchfeld und Sheet
+    return { dx: Math.abs(d.x + d.width / 2 - (r.x + r.width / 2)), dy: Math.abs(d.y + d.height / 2 - (top + bottom) / 2), z: document.querySelector(".kr .leaflet-tile-container") ? 1 : 0 }; });
+  ok(c && c.dx < 30 && c.dy < 30, "Standort-Knopf zentriert die Karte auf mich");
+  ok(!!before, "Leaflet geladen");
+  await shot(page, "karte-390-standort.png");
   // Einklappen per Wischen nach unten (Update 13)
   const gb = await page.$eval('[data-k="grip"]', (g) => { const r = g.getBoundingClientRect(); return { x: r.x + r.width / 2, y: r.y + r.height / 2 }; });
   await page.mouse.move(gb.x, gb.y); await page.mouse.down(); await page.mouse.move(gb.x, gb.y + 120, { steps: 5 }); await page.mouse.up();

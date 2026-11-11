@@ -180,3 +180,10 @@
 .kr-sheet[data-collapsed="true"] { max-height: 92px; }
 .kr-sheet[data-collapsed="true"] .kr-sheet-body { overflow: hidden; cursor: pointer; -webkit-mask-image: linear-gradient(#000 55%, transparent); mask-image: linear-gradient(#000 55%, transparent); }
 .kr.kr-min { --kr-sheet-h: 92px; }
+
+/* Update 13 – „Zu meinem Standort“: Fadenkreuz in Blau, dreht sich während der Ortung */
+.kr-locate { display: grid; place-items: center; color: #1a73e8; }
+.kr[data-loc="busy"] .kr-locate svg { animation: kr-rot 1.2s linear infinite; }
+.kr[data-loc="granted"] .kr-locate { color: #1a73e8; }
+.kr[data-loc="denied"] .kr-locate, .kr[data-loc="error"] .kr-locate { color: var(--muted); }
+@media (prefers-reduced-motion: reduce) { .kr[data-loc="busy"] .kr-locate svg { animation: none; } }

@@ -143,7 +143,7 @@ export function mount(el) {
       <div class="kr-map" data-r="map" role="region" aria-label="Karte"></div>
       <p class="kr-mapnote" data-r="mapnote" hidden></p>
       <div class="kr-follow" data-r="follow" hidden aria-live="polite"></div>
-      <button type="button" class="kr-fab kr-locate" data-k="locate" aria-label="Zu meinem Standort">📍</button>
+      <button type="button" class="kr-fab kr-locate" data-k="locate" aria-label="Zu meinem Standort springen" title="Zu meinem Standort"><svg viewBox="0 0 24 24" width="24" height="24" aria-hidden="true"><circle cx="12" cy="12" r="7" fill="none" stroke="currentColor" stroke-width="2"/><circle cx="12" cy="12" r="3" fill="currentColor"/><path d="M12 1v4M12 19v4M1 12h4M19 12h4" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg></button>
     </div>
     <form class="kr-search" data-r="form" role="search" autocomplete="off">
       <span class="kr-search-ic" data-r="searchic" aria-hidden="true">🔎</span>
@@ -238,8 +238,16 @@ export function mount(el) {
   }
 
   /* ---------- Standort ---------- */
+  /** Karte auf meinen Standort – mittig im sichtbaren Teil (über dem Bottom-Sheet bzw. unter dem Suchfeld). */
+  function centerOnMe() {
+    if (!map || !S.me) return;
+    const z = Math.max(map.getZoom(), 16), p = pad();
+    const dx = (p.paddingTopLeft[0] - p.paddingBottomRight[0]) / 2, dy = (p.paddingTopLeft[1] - p.paddingBottomRight[1]) / 2;
+    const pt = map.project([S.me.lat, S.me.lng], z).subtract([dx, dy]);
+    map.setView(map.unproject(pt, z), z, { animate: true });
+  }
   const origin = () => S.from || (S.me ? { name: "Mein Standort", lat: S.me.lat, lng: S.me.lng } : null);
-  async function locate(ask) {
+  async function locate(ask, center = false) {
     if (!geo.isSupported()) { S.locState = "error"; S.locMsg = "Dieses Gerät kann keinen Standort ermitteln."; render(); return; }
     S.locState = "busy"; render();
     try {
@@ -247,8 +255,9 @@ export function mount(el) {
       if (!alive) return;
       S.me = { lat: p.lat, lng: p.lng, acc: p.acc };
       S.locState = "granted"; S.locMsg = "";
-      drawMap(!S.dest);
-      if (S.dest && !S.from) loadRoutes();
+      if (center && map) { drawMap(false); centerOnMe(); } // Knopf „Zu meinem Standort“
+      else drawMap(!S.dest);
+      if (S.dest && !S.from) loadRoutes(center);
     } catch (e) {
       if (!alive) return;
       S.locState = e && e.code === "denied" ? "denied" : "error";
@@ -351,7 +360,7 @@ export function mount(el) {
     render(); drawMap(true);
   }
 
-  async function loadRoutes() {
+  async function loadRoutes(keepView = false) {
     const from = origin(), to = S.dest;
     if (!from || !to) { render(); return; }
     const my = ++token;
@@ -362,7 +371,7 @@ export function mount(el) {
       if (!alive || my !== token) return;
       S.results[m] = r;
       render();
-      if (m === S.mode) drawMap(true);
+      if (m === S.mode) drawMap(!keepView);
     }));
   }
 
@@ -532,6 +541,7 @@ export function mount(el) {
     sheet.dataset.expanded = String(S.expanded && !S.collapsed);
     sheet.dataset.collapsed = String(!!S.collapsed);
     kr.classList.toggle("kr-min", !!S.collapsed);
+    kr.dataset.loc = S.locState || "";
     sheet.dataset.has = S.dest ? "route" : "home";
     el.querySelector('[data-k="grip"]').setAttribute("aria-label", S.collapsed ? "Bereich aufklappen" : S.expanded ? "Bereich verkleinern" : "Bereich vergrößern (nach unten wischen zum Einklappen)");
     el.querySelector('[data-k="grip"]').setAttribute("aria-expanded", String(!S.collapsed));
@@ -564,7 +574,7 @@ export function mount(el) {
     const k = e.target.closest("[data-k]");
     if (!k) return;
     switch (k.dataset.k) {
-      case "locate": if (S.me && map) { map.setView([S.me.lat, S.me.lng], Math.max(map.getZoom(), 15)); } locate(true); break;
+      case "locate": if (S.me && map) centerOnMe(); locate(true, true); break; // sofort hin, dann genauer nachziehen
       case "allow": locate(true); break;
       case "pickfrom": S.target = "from"; qIn.placeholder = "Von wo?"; qIn.focus(); renderSugg(); break;
       case "fromme": S.from = null; S.results = {}; render(); drawMap(true); loadRoutes(); break;
