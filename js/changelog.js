@@ -1,6 +1,7 @@
 // Update 10 F – 🖥️ System-Status › Was ist neu: ehrliche Liste aus der Versionsgeschichte (git log des Projekts), neueste zuerst.
 // Beim Veröffentlichen neuer Versionen hier oben ergänzen.
 export const CHANGELOG = [
+  { v: "20261113-0115", items: ["🛡️ Sicherheit: Die App lässt sich nicht mehr in fremde Webseiten einbetten (Schutz gegen Clickjacking)"] },
   { v: "20261112-1100", items: ["🗺️ Heute: „Wo warst du heute?“ – Zeit je Ort groß, Farbleiste über den Tag, Abschnitte mit Uhrzeit", "📋 Einträge: unter jedem Tag, wie lange du wo warst (inkl. Fahrten)", "📊 Übersicht: farbige Balken je Ort für Woche und Monat"] },
   { v: "20261112-0715", items: ["🚗 Karte: Standort-Punkt wandert live mit", "🎯 Fadenkreuz = Mitfahren: Karte folgt dir, bis du sie selbst verschiebst", "🔋 Live-Standort pausiert, wenn die App im Hintergrund ist"] },
   { v: "20261112-0030", items: ["📸 Erfassen: QR- & Barcode-Scanner (Werkzeug-/Baustellen-Sticker, Produkte → Vorrat/Einkauf/Material, Links, WLAN)", "📄 Dokument → PDF: Seiten fotografieren oder Bilder wählen, drehen, Dokument-Filter, verschlüsselt ablegen oder teilen", "📥 Teilen-Menü: Bilder, PDFs und Text aus anderen Apps an die Stempelkarte schicken (installierte App)", "⚡ Shortcut „Scannen“ beim langen Drücken aufs App-Symbol"] },
