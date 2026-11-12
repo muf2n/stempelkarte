@@ -182,6 +182,26 @@ function osrm(profile, a, b) {
     const d = dot.getBoundingClientRect(), top = r.top + 104, bottom = sh.top; // sichtbarer Bereich zwischen Suchfeld und Sheet
     return { dx: Math.abs(d.x + d.width / 2 - (r.x + r.width / 2)), dy: Math.abs(d.y + d.height / 2 - (top + bottom) / 2), z: document.querySelector(".kr .leaflet-tile-container") ? 1 : 0 }; });
   ok(c && c.dx < 30 && c.dy < 30, "Standort-Knopf zentriert die Karte auf mich");
+  // Update 16: Live-Punkt + Mitfahren
+  const dotPos = () => page.evaluate(() => { const d = [...document.querySelectorAll(".kr .leaflet-interactive")].find((p) => p.getAttribute("fill") === "#1a73e8" && p.getAttribute("fill-opacity") === "1"); if (!d) return null; const r = d.getBoundingClientRect(); return { x: r.x + r.width / 2, y: r.y + r.height / 2 }; });
+  ok(await page.getAttribute('[data-k="locate"]', "aria-pressed") === "true", "Fadenkreuz aktiv: Mitfahren an");
+  await page.context().setGeolocation({ latitude: ME.latitude + 0.002, longitude: ME.longitude + 0.002 });
+  await page.waitForTimeout(1500);
+  const p1 = await dotPos();
+  ok(!!p1, "Punkt vorhanden");
+  const cen = await page.evaluate(() => { const m = document.querySelector(".kr .leaflet-container").getBoundingClientRect(); return { x: m.x + m.width / 2 }; });
+  ok(Math.abs(p1.x - cen.x) < 30, "Beim Fahren bleibt die Karte auf mir (Mitfahren)");
+  // Karte verschieben → Mitfahren aus
+  const mb = await page.$eval(".kr .leaflet-container", (m) => { const r = m.getBoundingClientRect(); return { x: r.x + r.width / 2, y: r.y + 250 }; });
+  await page.mouse.move(mb.x, mb.y); await page.mouse.down(); await page.mouse.move(mb.x - 120, mb.y + 40, { steps: 6 }); await page.mouse.up();
+  await page.waitForTimeout(300);
+  ok(await page.getAttribute('[data-k="locate"]', "aria-pressed") === "false", "Karte verschoben → Mitfahren aus");
+  const before2 = await dotPos();
+  await page.context().setGeolocation({ latitude: ME.latitude + 0.004, longitude: ME.longitude + 0.004 });
+  await page.waitForTimeout(1500);
+  const after2 = await dotPos();
+  ok(after2 && before2 && (Math.abs(after2.x - before2.x) > 5 || Math.abs(after2.y - before2.y) > 5), "Punkt wandert live mit, ohne dass man tippt");
+  await page.context().setGeolocation(ME); await page.waitForTimeout(800); // zurück zum Ausgangspunkt für die folgenden Prüfungen
   ok(!!before, "Leaflet geladen");
   await shot(page, "karte-390-standort.png");
   // Einklappen per Wischen nach unten (Update 13)

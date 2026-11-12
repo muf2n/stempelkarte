@@ -187,3 +187,6 @@
 .kr[data-loc="granted"] .kr-locate { color: #1a73e8; }
 .kr[data-loc="denied"] .kr-locate, .kr[data-loc="error"] .kr-locate { color: var(--muted); }
 @media (prefers-reduced-motion: reduce) { .kr[data-loc="busy"] .kr-locate svg { animation: none; } }
+/* Update 16 – „Mitfahren“ aktiv: Fadenkreuz ausgefüllt */
+.kr-locate.on { background: #1a73e8; color: #fff; }
+.kr[data-loc] .kr-locate.on { color: #fff; }

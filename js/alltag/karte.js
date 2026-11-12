@@ -129,6 +129,8 @@ export function mount(el) {
     expanded: false,
     collapsed: false, // Update 13: eingeklappt (nur Griff + Titel)
     follow: null,        // watchPosition-ID
+    live: null,          // Update 16: watchPosition-ID für den Live-Punkt (nur solange die Karte sichtbar ist)
+    lock: false,         // Update 16: „Mitfahren“ – Karte folgt meinem Standort (aus, sobald man die Karte verschiebt)
     stepIdx: 0,
     locState: "unknown", // granted | prompt | denied | unknown | busy | error
     locMsg: "",
@@ -194,6 +196,7 @@ export function mount(el) {
       addTiles(L, map, ' · Routen: <a href="https://routing.openstreetmap.de" target="_blank" rel="noopener">FOSSGIS</a>');
       L.control.zoom({ position: "bottomright", zoomInTitle: "Hineinzoomen", zoomOutTitle: "Herauszoomen" }).addTo(map);
       layers = { route: L.layerGroup().addTo(map), marks: L.layerGroup().addTo(map), me: L.layerGroup().addTo(map), step: L.layerGroup().addTo(map) };
+      map.on("dragstart", () => { if (S.lock) { S.lock = false; markLock(); } }); // selbst verschieben = Mitfahren aus
       mapNote("");
       fit();
       drawMap(true);
@@ -251,10 +254,11 @@ export function mount(el) {
     if (!geo.isSupported()) { S.locState = "error"; S.locMsg = "Dieses Gerät kann keinen Standort ermitteln."; render(); return; }
     S.locState = "busy"; render();
     try {
-      const p = await geo.getPosition({ timeout: 12000, maxAge: 60000 });
+      const p = await geo.getPosition({ timeout: 12000, maxAge: center ? 0 : 60000 }); // Fadenkreuz: immer frisch
       if (!alive) return;
       S.me = { lat: p.lat, lng: p.lng, acc: p.acc };
       S.locState = "granted"; S.locMsg = "";
+      startLive();
       if (center && map) { drawMap(false); centerOnMe(); } // Knopf „Zu meinem Standort“
       else drawMap(!S.dest);
       if (S.dest && !S.from) loadRoutes(center);
@@ -270,7 +274,7 @@ export function mount(el) {
     const perm = await geo.permission();
     if (!alive) return;
     S.locState = perm === "granted" ? "granted" : perm === "denied" ? "denied" : "prompt";
-    if (perm === "granted") locate(false); else render();
+    if (perm === "granted") locate(false); else render(); // locate() startet danach den Live-Punkt
   })();
 
   /* ---------- Ziele ---------- */
@@ -434,6 +438,38 @@ export function mount(el) {
     } catch { rec = null; mic.classList.remove("on"); ui.toast("🎤 Spracheingabe geht hier leider nicht.", 2600); }
   });
 
+  /* ---------- Update 16: Live-Punkt & „Mitfahren“ ---------- */
+  // Läuft nur, solange die Karte offen UND sichtbar ist (Akku). Fragt nie selbst nach der Berechtigung –
+  // startet erst, wenn der Standort schon erlaubt ist bzw. nach dem Tippen aufs Fadenkreuz.
+  function startLive() {
+    if (S.live != null || !geo.isSupported() || document.hidden || S.locState !== "granted") return;
+    try {
+      S.live = navigator.geolocation.watchPosition((p) => {
+        if (!alive || S.live == null || S.follow != null) return; // beim Routen-„Mitlaufen“ übernimmt startFollow
+        S.me = { lat: p.coords.latitude, lng: p.coords.longitude, acc: Math.round(p.coords.accuracy || 0) };
+        moveMe();
+        if (S.lock && map) map.panTo(pannedTarget(), { animate: true, duration: 0.6 });
+      }, (e) => { if (e && e.code === 1) { S.locState = "denied"; stopLive(); render(); } }, { enableHighAccuracy: true, maximumAge: 2000, timeout: 30000 });
+    } catch { S.live = null; }
+  }
+  function stopLive() { if (S.live != null) { try { navigator.geolocation.clearWatch(S.live); } catch { /* egal */ } } S.live = null; }
+  /** Nur den blauen Punkt + Genauigkeitskreis verschieben (ohne Route/Marker neu zu zeichnen). */
+  function moveMe() {
+    if (!map || !layers.me || !S.me) return;
+    const ls = layers.me.getLayers();
+    if (ls.length === 2) { ls[0].setLatLng([S.me.lat, S.me.lng]).setRadius(Math.min(S.me.acc || 30, 300)); ls[1].setLatLng([S.me.lat, S.me.lng]); }
+    else drawMap(false);
+  }
+  /** Ziel fürs Mitschwenken: mein Standort mittig im sichtbaren Bereich (über dem Sheet). */
+  function pannedTarget() {
+    const z = map.getZoom(), p = pad();
+    const dx = (p.paddingTopLeft[0] - p.paddingBottomRight[0]) / 2, dy = (p.paddingTopLeft[1] - p.paddingBottomRight[1]) / 2;
+    return map.unproject(map.project([S.me.lat, S.me.lng], z).subtract([dx, dy]), z);
+  }
+  function markLock() { const b = el.querySelector('[data-k="locate"]'); if (b) { b.classList.toggle("on", !!S.lock); b.setAttribute("aria-pressed", String(!!S.lock)); b.title = S.lock ? "Karte fährt mit – zum Beenden die Karte verschieben" : "Zu meinem Standort"; } }
+  const onVis = () => { if (document.hidden) stopLive(); else startLive(); };
+  document.addEventListener("visibilitychange", onVis);
+
   /* ---------- Mitlaufen ---------- */
   function stopFollow() {
     if (S.follow != null) { try { navigator.geolocation.clearWatch(S.follow); } catch { /* egal */ } }
@@ -542,6 +578,7 @@ export function mount(el) {
     sheet.dataset.collapsed = String(!!S.collapsed);
     kr.classList.toggle("kr-min", !!S.collapsed);
     kr.dataset.loc = S.locState || "";
+    markLock();
     sheet.dataset.has = S.dest ? "route" : "home";
     el.querySelector('[data-k="grip"]').setAttribute("aria-label", S.collapsed ? "Bereich aufklappen" : S.expanded ? "Bereich verkleinern" : "Bereich vergrößern (nach unten wischen zum Einklappen)");
     el.querySelector('[data-k="grip"]').setAttribute("aria-expanded", String(!S.collapsed));
@@ -574,7 +611,7 @@ export function mount(el) {
     const k = e.target.closest("[data-k]");
     if (!k) return;
     switch (k.dataset.k) {
-      case "locate": if (S.me && map) centerOnMe(); locate(true, true); break; // sofort hin, dann genauer nachziehen
+      case "locate": S.lock = true; markLock(); if (S.me && map) centerOnMe(); locate(true, true); break; // sofort hin, dann frisch nachziehen; ab jetzt mitfahren
       case "allow": locate(true); break;
       case "pickfrom": S.target = "from"; qIn.placeholder = "Von wo?"; qIn.focus(); renderSugg(); break;
       case "fromme": S.from = null; S.results = {}; render(); drawMap(true); loadRoutes(); break;
@@ -657,6 +694,7 @@ export function mount(el) {
   return () => {
     alive = false;
     stopFollow();
+    stopLive(); document.removeEventListener("visibilitychange", onVis);
     if (rec) { try { rec.abort(); } catch { /* egal */ } }
     window.removeEventListener("resize", onResize);
     window.removeEventListener("hashchange", onHash);

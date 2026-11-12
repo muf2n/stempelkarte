@@ -1,6 +1,7 @@
 // Update 10 F – 🖥️ System-Status › Was ist neu: ehrliche Liste aus der Versionsgeschichte (git log des Projekts), neueste zuerst.
 // Beim Veröffentlichen neuer Versionen hier oben ergänzen.
 export const CHANGELOG = [
+  { v: "20261112-0715", items: ["🚗 Karte: Standort-Punkt wandert live mit", "🎯 Fadenkreuz = Mitfahren: Karte folgt dir, bis du sie selbst verschiebst", "🔋 Live-Standort pausiert, wenn die App im Hintergrund ist"] },
   { v: "20261112-0030", items: ["📸 Erfassen: QR- & Barcode-Scanner (Werkzeug-/Baustellen-Sticker, Produkte → Vorrat/Einkauf/Material, Links, WLAN)", "📄 Dokument → PDF: Seiten fotografieren oder Bilder wählen, drehen, Dokument-Filter, verschlüsselt ablegen oder teilen", "📥 Teilen-Menü: Bilder, PDFs und Text aus anderen Apps an die Stempelkarte schicken (installierte App)", "⚡ Shortcut „Scannen“ beim langen Drücken aufs App-Symbol"] },
   { v: "20261111-2345", items: ["🎓 LAP-Karten an OVE E 8101:2025 angepasst: 15 Karten präzisiert, 3 neue (RCD Typ AC, 30 mA bis 32 A, Leuchten in Wohnräumen)", "⚡ Prüfprotokoll: RCD Typ AC in Neuanlagen wird als Mangel erkannt"] },
   { v: "20261111-2245", items: ["⚡ Prüfprotokoll nach ÖVE/ÖNORM E 8101: Besichtigen, Erproben, Messen mit Grenzwert-Check, PDF, Verknüpfung zur Baustelle", "✨ Claude kennt jetzt Kochen, Vorrat, Müll, Wohnen, Verleih, Haustiere, Karriere, Gruppen, Kleiderschrank und Prüfprotokolle"] },
