@@ -13,6 +13,9 @@ import { mountPhotoBar } from "./gallery.js"; // Update 9 – Fotos
 import { mountTodayButton as mountMaterialBtn } from "../alltag/material.js"; // Update 9 – Material
 import * as privatUi from "./privat-mode.js"; // Update 9 – Privat / Arbeit
 import * as freizeit from "./freizeit.js"; // Update 10 – Freizeit-Stempeluhr (Sport/Zuhause)
+import * as DL from "../dayline-core.js"; // Update 17 – Wo warst du heute?
+import * as DLU from "../dayline-ui.js";
+import { pauseMsNow, segmentsOf } from "../timer.js";
 import * as privDrive from "../privat-drive.js";
 import * as WT from "../worktime-core.js"; // Update 10c – Änderungsprotokoll, GPS-Schutz, Pausenhinweis
 import { isPrivatNow } from "../privat.js";
@@ -318,6 +321,7 @@ export function mount(el, c) {
     <div class="stat stat-ico">${icon("pie", 24)}<span>Monat</span><strong data-r="s-month">0:00</strong></div>
   </div>
   <section data-r="dash"></section>
+  <section data-r="dayline"></section>
   <div class="card today-list" data-r="todaycard">
     <div class="section-h">
       <h2 class="h-ico">${icon("list", 24)}<span>Heute erfasst</span></h2>
@@ -385,6 +389,7 @@ export function update(s) {
   try { privatUi.update(s); } catch (e) { console.error(e); }
   try { viaTrack.onSnap(s); } catch (e) { console.error(e); } // Update 10 – 📍 Zwischenstopps beim App-Start
   try { freizeit.update(s); } catch (e) { console.error(e); }
+  try { renderDayline(s); } catch (e) { console.error(e); }
   try { if (photoBar) photoBar.update(s); } catch (e) { console.error(e); }
   if (s.running) {
     done = null;              // neue/andere Schicht läuft
@@ -1677,6 +1682,25 @@ export function tick() {
   try { driveWatchTick(); } catch (e) { console.error(e); }
   try { privatUi.tick(); privDrive.tick(ctx); } catch (e) { console.error(e); } // Update 9 – Privat
   try { freizeit.update(null, true); } catch (e) { console.error(e); }
+  try { if (snap && snap.running && Date.now() - dlAt > 55000) renderDayline(snap); } catch (e) { console.error(e); }
+}
+
+/* Update 17 – 🗺️ „Wo warst du heute?“: Tagesablauf mit Orten und Dauer (js/dayline-*.js) */
+let dlAt = 0, dlKey = "";
+function renderDayline(s) {
+  const box = root && root.querySelector('[data-r="dayline"]');
+  if (!box || !s) return;
+  dlAt = Date.now();
+  const util = ctx.util, today = util.dayKey(Date.now());
+  const list = (s.entries || []).filter((e) => e && util.dayKey(e.start) === today);
+  if (s.running && util.dayKey(s.running.start) === today) list.push({ ...s.running, segments: segmentsOf(s.running), end: undefined, pauseMin: Math.round(pauseMsNow(s.running) / 60000) });
+  const d = DL.dayline(list, s.places || []);
+  const html = d.blocks.length ? DLU.dayCardHTML(d) : "";
+  if (html === dlKey) return;
+  dlKey = html;
+  if (html) DLU.loadCss();
+  box.innerHTML = html;
+  box.hidden = !html;
 }
 
 export function onShow() {

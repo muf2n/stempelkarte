@@ -1,0 +1,36 @@
+/* Update 17 – „Wie lange war ich wo?“ (js/dayline-ui.js). Präfix .dl- · groß und gut lesbar, auch mit Arbeitshandschuh-Daumen */
+.dl-card { display: flex; flex-direction: column; gap: 12px; }
+.dl-head { display: flex; flex-direction: column; gap: 2px; }
+.dl-head h2 { margin: 0; font-size: 1.15rem; }
+.dl-head small { color: var(--muted); font-size: .92rem; }
+.dl-tot { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 8px; }
+.dl-tot li { display: grid; grid-template-columns: auto 1fr; grid-template-rows: auto auto; column-gap: 8px; align-items: center; padding: 10px 12px; border-radius: 14px;
+  background: color-mix(in srgb, var(--c) 12%, var(--card)); border: 1px solid color-mix(in srgb, var(--c) 40%, var(--line)); min-width: 0; }
+.dl-tot .dl-ic { grid-row: 1 / 3; font-size: 1.5rem; }
+.dl-tot .dl-tn { font-size: .86rem; color: var(--muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.dl-tot b { font-size: 1.35rem; line-height: 1.1; font-variant-numeric: tabular-nums; }
+.dl-bar { position: relative; height: 16px; border-radius: 99px; background: color-mix(in srgb, var(--line) 55%, transparent); overflow: hidden; }
+.dl-bar i { position: absolute; top: 0; bottom: 0; border-radius: 3px; }
+.dl-ax { display: flex; justify-content: space-between; font-size: .8rem; color: var(--muted); margin-top: -6px; font-variant-numeric: tabular-nums; }
+.dl-list { list-style: none; margin: 0; padding: 0; display: grid; gap: 6px; }
+.dl-list li { display: grid; grid-template-columns: 3.4em minmax(0, 1fr) auto; gap: 10px; align-items: center; padding: 10px 12px 10px 10px; border-radius: 12px; background: var(--card); border: 1px solid var(--line); border-left: 5px solid var(--c); }
+.dl-list li.dl-drive { background: color-mix(in srgb, var(--line) 25%, var(--card)); }
+.dl-list li.run { box-shadow: 0 0 0 2px color-mix(in srgb, var(--c) 45%, transparent); }
+.dl-t { display: flex; flex-direction: column; font-weight: 700; font-variant-numeric: tabular-nums; line-height: 1.15; }
+.dl-t small { color: var(--muted); font-weight: 500; }
+.dl-m { display: flex; flex-direction: column; min-width: 0; overflow-wrap: anywhere; }
+.dl-m small { color: var(--muted); font-size: .82rem; }
+.dl-d { font-size: 1.15rem; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.dl-inline { display: flex; flex-wrap: wrap; gap: 4px 10px; font-size: .86rem; color: var(--muted); margin-top: 4px; }
+.dl-inline > span { display: inline-flex; align-items: center; gap: 4px; }
+.dl-inline i { width: 8px; height: 8px; border-radius: 50%; background: var(--c); display: inline-block; }
+.dl-inline b { color: var(--ink); }
+.dl-bars { list-style: none; margin: 0; padding: 0; display: grid; gap: 12px; }
+.dl-bh { display: flex; justify-content: space-between; gap: 10px; align-items: baseline; }
+.dl-bh span { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: 600; }
+.dl-bh b { font-size: 1.15rem; font-variant-numeric: tabular-nums; }
+.dl-bb { display: block; height: 12px; border-radius: 99px; background: color-mix(in srgb, var(--line) 50%, transparent); overflow: hidden; margin: 4px 0 2px; }
+.dl-bb i { display: block; height: 100%; background: var(--c); border-radius: inherit; }
+.dl-bars small { color: var(--muted); font-size: .8rem; }
+.ek-dl { padding: 2px 4px 6px; }
+.dl-bare { margin: 6px 0 12px; }

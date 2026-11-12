@@ -3,7 +3,7 @@
 // Icons und Schriftdateien (fonts.gstatic.com): cache-first.
 // Alle anderen fremden Domains (Firebase, Google APIs, Nominatim, OSM, CARTO) werden nicht angefasst.
 
-const VERSION = "20261112-0715"; // wird beim Veröffentlichen automatisch ersetzt
+const VERSION = "20261112-1100"; // wird beim Veröffentlichen automatisch ersetzt
 const CACHE = "stempelkarte-" + VERSION;
 const FONT_CACHE = "stempelkarte-fonts"; // versionsunabhängig, bleibt erhalten
 const NET_TIMEOUT_MS = 4000; // bei schlechtem Netz nach dieser Zeit auf den Cache ausweichen
@@ -28,6 +28,9 @@ const SHELL = [
   "js/timer.js",
   "js/export.js",
   "js/views/today.js",
+  "js/dayline-core.js",
+  "js/dayline-ui.js",
+  "css/dayline.css",
   "js/views/entries.js",
   "js/views/overview.js",
   "js/views/places.js",

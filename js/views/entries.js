@@ -8,6 +8,8 @@ import { viaPoints } from "../travel.js";
 import { viaListHTML, fillViaAddrs, withoutVia, viaCountText } from "../via-core.js"; // Update 10 – 📍 Zwischenstopps
 import * as WT from "../worktime-core.js"; // Update 10c – Änderungsprotokoll, Monatsabschluss, Pausenhinweis
 import { esc as escH, kindLabel as kindLabelH } from "../util.js";
+import * as DL from "../dayline-core.js"; // Update 17 – Wie lange wo (je Tag)
+import * as DLU from "../dayline-ui.js";
 
 const SEL_KEY = "stempelkarte.selPlace";
 
@@ -514,6 +516,7 @@ function render() {
     return { k, html: `
       <div class="day${hol ? " ek-holday" : ""}">
         <div class="day-h"><span>${esc(fmtDate(items[0].start))}${hol ? ` <span class="ek-hol">${esc(hol)}</span>` : ""}</span><span class="sum">${esc(hm(daySum))} h</span></div>
+        ${dayPlacesHTML(items)}
         ${dayExtraHTML(k, items, tgMap, snap.settings, esc)}
         ${hol ? holRow(hol) : ""}
         ${rows}
@@ -1281,4 +1284,14 @@ async function trashCopy(entry, why) {
       label: `${p2(d.getDate())}.${p2(d.getMonth() + 1)}.${d.getFullYear()} · ${what}`, deletedAt: now, by: "dir", batchId: `app-${now.toString(36)}`,
     });
   } catch (err) { console.warn("Papierkorb-Kopie nicht möglich:", err); }
+}
+
+/* Update 17 – je Tag: „🏗️ Jauk 6 h 10 · 🏢 Firma 35 min · 🚗 50 min“ (gleiche Farben wie bei Heute/Übersicht) */
+function dayPlacesHTML(items) {
+  try {
+    const t = DL.dayline(items, (lastSnap && lastSnap.places) || []).totals;
+    if (!t.length || (t.length === 1 && t[0].key === "none")) return "";
+    DLU.loadCss();
+    return `<div class="ek-dl">${DLU.inlineHTML(t, 4)}</div>`;
+  } catch { return ""; }
 }

@@ -1,5 +1,16 @@
 // Reiter „Übersicht“: Überstundenkonto, Wochenbalken mit Soll/Ist, Monatsauswertung mit CSV-Export und Einstellungen/Konto;
 // am PC als Dashboard mit rechter Spalte (Heute, Wochenziel, Einstempeln, Schnelle Aktionen, Legende).
+import * as DL from "../dayline-core.js"; // Update 17
+import * as DLU from "../dayline-ui.js";
+import { pauseMsNow, segmentsOf } from "../timer.js";
+/** Einträge inkl. laufender Schicht (für „Wo warst du?“). */
+function dlEntries() {
+  const es = (snap && snap.entries) || [];
+  const r = snap && snap.running;
+  if (!r || !r.start || es.some((e) => e.id === r.id && e.end)) return es;
+  let pm = 0; try { pm = Math.round(pauseMsNow(r) / 60000); } catch {}
+  return [...es.filter((e) => e.id !== r.id), { ...r, kind: "work", segments: segmentsOf(r), end: undefined, pauseMin: pm }];
+}
 import { icon } from "../icons.js";
 import { leaves, sparkles } from "../deco.js";
 import * as reminders from "./reminders.js";
@@ -72,6 +83,8 @@ export function mount(el, c) {
           <div class="kv"><span>Ist / Soll</span><b id="ov-week-ist"></b></div>
           <div class="progress"><div id="ov-week-prog"></div></div>
           <div class="kv"><span>Differenz</span><b id="ov-week-diff"></b></div>
+          <div class="lbl">📍 Wo warst du diese Woche?</div>
+          <div id="ov-week-places"></div>
           <button type="button" class="btn ghost ov-wr" id="ov-wr">✨ <span>Wochenbericht fürs Berichtsheft</span></button>
         </div>
 
@@ -89,7 +102,7 @@ export function mount(el, c) {
           <div class="kv"><span>Krankentage</span><b id="ov-month-krank"></b></div>
           <div class="kv"><span id="ov-year-urlaub-l">Urlaubstage im Jahr</span><b id="ov-year-urlaub"></b></div>
           <div class="kv"><span>Pausen gesamt</span><b id="ov-month-pause"></b></div>
-          <div class="lbl">Stunden je Arbeitsort</div>
+          <div class="lbl">📍 Wo warst du wie lange? (inkl. Fahrten)</div>
           <div id="ov-month-places"></div>
           <div class="lbl">Stunden je Tätigkeit</div>
           <div id="ov-month-acts"></div>
@@ -644,6 +657,11 @@ function renderWeek() {
   const diffEl = $("#ov-week-diff");
   diffEl.textContent = `${diff >= 0 ? "+" : ""}${u.hm(diff)} h`;
   diffEl.className = diff >= 0 ? "plus" : "minus";
+  try { // Update 17 – Wo warst du diese Woche?
+    DLU.loadCss();
+    const wsT = new Date(ws).getTime();
+    $("#ov-week-places").innerHTML = DLU.placeBarsHTML(DL.placeTotals(dlEntries(), snap.places || [], wsT, wsT + 7 * 864e5), { bare: true, empty: "Diese Woche noch keine Zeiten." });
+  } catch (err) { console.error(err); }
 }
 
 /* ---------- Monat ---------- */
@@ -706,9 +724,15 @@ function renderMonth() {
   $("#ov-month-pause").textContent = `${hmRound(pause)} h`;
 
   const rows = [...perPlace.entries()].sort((a, b) => b[1] - a[1]);
-  $("#ov-month-places").innerHTML = rows.length
-    ? rows.map(([n, m]) => `<div class="kv"><span>${u.esc(n)}</span><b>${u.esc(hmRound(m))} h</b></div>`).join("")
-    : `<p class="note">Keine Arbeitszeit in diesem Monat.</p>`;
+  // Update 17 – farbige Balken je Ort (gleiche Farben wie Heute/Einträge); alte Zeilen nur als Rückfall
+  try {
+    DLU.loadCss();
+    $("#ov-month-places").innerHTML = DLU.placeBarsHTML(DL.placeTotals(dlEntries(), snap.places || [], from.getTime(), to.getTime()), { bare: true, empty: "Keine Arbeitszeit in diesem Monat." });
+  } catch {
+    $("#ov-month-places").innerHTML = rows.length
+      ? rows.map(([n, m]) => `<div class="kv"><span>${u.esc(n)}</span><b>${u.esc(hmRound(m))} h</b></div>`).join("")
+      : `<p class="note">Keine Arbeitszeit in diesem Monat.</p>`;
+  }
 
   const acts = [...perAct.entries()].filter(([, m]) => m >= 0.5).sort((a, b) => b[1] - a[1]);
   $("#ov-month-acts").innerHTML = acts.length
