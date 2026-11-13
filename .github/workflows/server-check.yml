@@ -1,0 +1,14 @@
+name: Server-Check (manuell)
+on: workflow_dispatch
+permissions:
+  contents: read
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Worker erreichbar? (keine Inhalte, nur Status)
+        run: |
+          U=https://stempelkarte-mcp.lippa-florian.workers.dev
+          echo "GET / → $(curl -s -o /dev/null -w '%{http_code}' --max-time 20 $U/)"
+          echo "OPTIONS /chat (CORS) →"; curl -s -o /dev/null -D - --max-time 20 -X OPTIONS -H 'Origin: https://muf2n.github.io' -H 'Access-Control-Request-Method: POST' -H 'Access-Control-Request-Headers: authorization,content-type' $U/chat | grep -iE '^HTTP|access-control' || true
+          echo "POST /chat ohne Anmeldung → $(curl -s -o /dev/null -w '%{http_code}' --max-time 20 -X POST -H 'Origin: https://muf2n.github.io' $U/chat)"
