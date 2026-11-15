@@ -216,7 +216,8 @@ export function maxBuy(wi, id, lvl, money, s = null) {
   const a = k * genOf(wi, id).cost * Math.pow(GROW, lvl);
   return Math.max(0, Math.floor(Math.log(money * (GROW - 1) / a + 1) / Math.log(GROW) + 1e-9));
 }
-export const mgrCost = (wi, id, s = null) => genOf(wi, id).cost * MGR_FACTOR * (s ? Math.max(0.5, 1 - relicFx(s, "mgr")) : 1);
+/** Elektriker-Preis: im ersten Stollen jeder Welt nur 5× (schneller Einstieg wie im Genre üblich), sonst 25× Grundpreis */
+export const mgrCost = (wi, id, s = null) => genOf(wi, id).cost * (WORLDS[wi].gens[0].id === id ? 5 : MGR_FACTOR) * (s ? Math.max(0.5, 1 - relicFx(s, "mgr")) : 1);
 export const gridCap = (wi, lvl) => 3 * Math.pow(SCALE, wi) * Math.pow(1.55, lvl);
 export const gridCost = (wi, lvl) => 25 * Math.pow(SCALE, wi) * Math.pow(1.75, lvl);
 export const umspCap = (wi, lvl) => 4 * Math.pow(SCALE, wi) * Math.pow(1.6, lvl);
