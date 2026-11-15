@@ -74,7 +74,11 @@ export function mount(el) {
   }
 
   /* ---------- Bausteine ---------- */
-  const amtN = (lvl, id) => (S.amt === "max" ? Math.max(1, T.maxBuy(S.g.cur, id, lvl, S.g.worlds[S.g.cur].money, S.g)) : Number(S.amt));
+  const amtN = (lvl, id, ev) => {
+    if (S.amt !== "max") return Number(S.amt);
+    if (ev) { const E = T.evOf(S.g); return E ? Math.max(1, T.evMaxBuy(E.theme, id, lvl, E.money)) : 1; }
+    return Math.max(1, T.maxBuy(S.g.cur, id, lvl, S.g.worlds[S.g.cur].money, S.g));
+  };
   const readyTours = () => S.g.exp.filter((e) => e.end <= Date.now()).length;
   const invCount = () => Object.values(S.g.inv).reduce((a, b) => a + b, 0);
 
@@ -94,7 +98,8 @@ export function mount(el) {
 
   function mapHTML() {
     const rt = readyTours();
-    return SC.mapHTML(S.g, { opt, badges: { tour: rt || "", rad: S.g.wheelDay !== dayKey() ? "!" : "", shop: invCount() || "" } });
+    const ev = T.evOf(S.g);
+    return SC.mapHTML(S.g, { opt, badges: { tour: rt || "", rad: S.g.wheelDay !== dayKey() ? "!" : "", shop: invCount() || "", ev: ev && T.evClaimable(ev).length ? "🎁" : "" } });
   }
 
   function genHTML(g, wi) {
@@ -167,13 +172,14 @@ export function mount(el) {
     if (!S.alive) return;
     if (!S.g) { el.innerHTML = `<p class="note">Lade …</p>`; return; }
     const wi = S.g.cur;
-    const body = S.view === "karte" ? mapHTML() : S.view === "tour" ? tourHTML() : S.view === "shop" ? shopHTML() : S.view === "mehr" ? moreHTML() : worldHTML();
+    if (S.view === "event" && !T.evOf(S.g)) S.view = "karte";
+    const body = S.view === "event" ? `<div class="ty-amt" role="group" aria-label="Kaufmenge"><span>Kaufen:</span>${["1", "10", "100", "max"].map((a) => `<button type="button" data-a="amt" data-v="${a}" aria-pressed="${S.amt === a}">${a === "max" ? "MAX" : "×" + a}</button>`).join("")}<button type="button" class="ty-all" data-a="view" data-v="karte">🗺️ Karte</button></div>${SC.eventHTML(S.g, T.evOf(S.g), { amtN })}` : S.view === "karte" ? mapHTML() : S.view === "tour" ? tourHTML() : S.view === "shop" ? shopHTML() : S.view === "mehr" ? moreHTML() : worldHTML();
     el.innerHTML = `<div class="ty" style="--wbg:${T.world(wi).bg}">${headHTML()}${navHTML()}<div class="ty-body">${body}</div><div class="ty-fx" aria-hidden="true"></div></div>`;
     S.sig = sig();
     refresh();
   }
   /** Änderungen, die ein komplettes Neuzeichnen brauchen (Expedition fertig, Abklingzeit …). */
-  function sig() { const now = Date.now(); return [S.view, readyTours(), S.g.worlds[S.g.cur].abilCd > now, T.nextWorld(S.g)?.pct >= 1].join("|"); }
+  function sig() { const now = Date.now(), E = T.evOf(S.g); return [S.view, readyTours(), E ? T.evClaimable(E).length : -1, S.g.worlds[S.g.cur].abilCd > now, T.nextWorld(S.g)?.pct >= 1].join("|"); }
 
   function refresh() {
     if (!S.g || !el.querySelector(".ty")) return;
@@ -207,6 +213,18 @@ export function mount(el) {
         const n = Math.max(1, T.maxBuy(wi, b.dataset.id, st.lvl, W.money, g)), c = T.genCost(wi, b.dataset.id, st.lvl, n, g);
         if (b.dataset.cost !== String(c)) { b.dataset.cost = String(c); b.innerHTML = `<b>Stufe ${st.lvl}</b><small>+${n} · ${T.fmt(c)} €</small>`; }
       });
+    }
+    if (S.view === "event") {
+      const E = T.evOf(g); if (E) {
+        const er = T.evRates(g, E, opt());
+        txt("evmoney", T.fmt(E.money)); txt("evrate", T.fmt(er.auto + er.manual));
+        for (const x of E.theme.gens) {
+          const st = E.gens[x.id]; txt(`evout-${x.id}`, T.fmt(er.per[x.id]));
+          if (st.lvl && !st.mgr) { const max = er.per[x.id] * T.BUF_SEC; txt(`evbuf-${x.id}`, T.fmt(st.buf)); const bar = q(`evbuf-bar-${x.id}`); if (bar) { bar.style.height = `${max ? Math.min(100, (st.buf / max) * 100) : 0}%`; bar.parentElement.classList.toggle("full", max > 0 && st.buf >= max - 1e-9); } }
+        }
+        el.querySelectorAll("[data-evcost]").forEach((b) => { b.disabled = E.money + 1e-9 < Number(b.dataset.evcost); });
+        if (S.amt === "max") el.querySelectorAll('[data-a="evbuy"]').forEach((b) => { const st = E.gens[b.dataset.id]; if (!st || !st.lvl) return; const n = Math.max(1, T.evMaxBuy(E.theme, b.dataset.id, st.lvl, E.money)), c = T.evGenCost(E.theme, b.dataset.id, st.lvl, n); if (b.dataset.evcost !== String(c)) { b.dataset.evcost = String(c); b.innerHTML = `<b>Stufe ${st.lvl}</b><small>+${n} · ${T.fmt(c)} 🎫</small>`; } });
+      }
     }
     el.querySelectorAll("[data-until]").forEach((x) => { x.textContent = T.fmtDur((Number(x.dataset.until) - now) / 1000); });
     el.querySelectorAll("[data-prog]").forEach((x) => { const [a, b] = x.dataset.prog.split("-").map(Number); x.style.width = `${Math.min(100, ((now - a) / (b - a)) * 100)}%`; });
@@ -313,6 +331,11 @@ export function mount(el) {
       case "shop": { const B = T.BOOSTS[id], r = T.shopBuy(S.g, id, opt()); if (r && set(r.s, { persist: true })) ui.toast(r.got ? `${B.e} +${T.fmt(r.got)} €!` : `${B.e} ${B.name} aktiv!`, 2000); break; }
       case "akku": if (set(T.buyAkku(S.g), { persist: true })) ui.toast(`🔋 Akku hält jetzt ${T.fmt(T.offlineHours(S.g))} h offline!`, 1800); break;
       case "help": welcome(); break;
+      case "evsoon": { const I = T.eventInfo(); ui.toast(`🎪 Nächstes Event: ${I.nextTheme.e} ${I.nextTheme.name} – am ${new Date(I.nextStart).toLocaleDateString("de-AT")}`, 2600); break; }
+      case "evbuy": { const E = T.evOf(S.g); if (!E) break; const st = E.gens[id], before = st.lvl; if (set(T.evBuy(S.g, id, amtN(st.lvl, id, true), now))) { const x = E.theme.gens.find((y) => y.id === id); if (!before) ui.toast(`${x.e} ${x.name} gebaut!`, 1400); } break; }
+      case "evhire": if (set(T.evHire(S.g, id, now), { persist: true })) ui.toast("🧑‍🔧 Event-Elektriker angestellt!", 1500); break;
+      case "evtap": { const r = T.evCollect(S.g, id, now); if (r.got > 0) { pop(b, `+${T.fmt(r.got)} 🎫`); set(r.s, { redraw: false }); refresh(); } else pop(b, "⏳"); break; }
+      case "evclaim": { const r = T.evClaim(S.g, now); if (r && set(r.s, { persist: true })) info("🎁 Event-Belohnung!", `<div class="ty-back-e" aria-hidden="true">🎪</div><ul class="ty-loot">${r.got.map((x, i) => `<li style="animation-delay:${i * 0.25}s">${esc(x)}</li>`).join("")}</ul>`); break; }
       case "rad": wheelSheet(); break;
       case "relics": S.view = "tour"; lsSet(VIEW_KEY, "tour"); render(); setTimeout(() => el.querySelector(".ty-relics")?.scrollIntoView({ block: "center", behavior: "smooth" }), 50); break;
       case "findme": scrollToMe(true); break;

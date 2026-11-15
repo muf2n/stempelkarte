@@ -47,6 +47,7 @@ export function mapHTML(g, { opt, badges = {} }) {
     <rect width="400" height="${MAP_H}" fill="#2563eb"/><rect width="400" height="${MAP_H}" fill="url(#tyw)"/>
     ${T.WORLDS.map((w, i) => islandSVG(WPOS[i][0], WPOS[i][1], WPOS[i][2], WPOS[i][3], 11 + i * 37, w.bg, i > g.unlocked)).join("")}
     ${Object.values(BPOS).map(([x, y], i) => islandSVG(x, y + 14, 38, 24, 500 + i * 13, "#16a34a", false)).join("")}
+    ${T.eventInfo().active ? islandSVG(228, 400, 62, 44, 4242, T.eventInfo().theme.bg, false) : islandSVG(228, 404, 26, 18, 4243, "#64748b", false)}
   </svg>`;
   const at = (x, y) => `left:${(x / 400) * 100}%;top:${(y / MAP_H) * 100}%`;
   const worlds = T.WORLDS.map((w, i) => {
@@ -62,9 +63,14 @@ export function mapHTML(g, { opt, badges = {} }) {
   }).join("");
   const blds = Object.entries(BPOS).map(([k, [x, y, e, name, v]]) => `<button type="button" class="ty-spot ty-bspot" style="${at(x, y)}" data-a="${k === "rad" ? "rad" : k === "relic" ? "relics" : "view"}" data-v="${v}">
       <span class="ty-land sm" aria-hidden="true">${e}</span><span class="ty-banner sm">${name}</span>${badges[k] ? `<i class="ty-dot">${badges[k]}</i>` : ""}</button>`).join("");
+  const I = T.eventInfo(), EP = [228, 392];
+  const dleft = (t) => { const ms = t - Date.now(), d = Math.floor(ms / 864e5), h = Math.floor((ms % 864e5) / 36e5); return d ? `${d} T ${h} h` : `${h} h`; };
+  const evSpot = I.active
+    ? `<button type="button" class="ty-spot ty-evspot on" style="${at(EP[0], EP[1])}" data-a="view" data-v="event"><span class="ty-land" aria-hidden="true">${I.theme.e}</span><span class="ty-banner" style="--bb:#ca8a04">🎪 ${esc(I.theme.name)}</span><small class="ty-sub">Event · noch ${dleft(I.end)}</small>${badges.ev ? `<i class="ty-dot">${badges.ev}</i>` : ""}</button>`
+    : `<button type="button" class="ty-spot ty-evspot" style="${at(EP[0], EP[1])}" data-a="evsoon"><span class="ty-land sm" aria-hidden="true">🎪</span><small class="ty-sub">Event in ${dleft(I.nextStart)}</small></button>`;
   const clouds = [[30, 180, 0], [220, 640, 8], [60, 1120, 15], [260, 1380, 4]].map(([x, y, d]) => `<span class="ty-cloud" style="${at(x, y)};animation-delay:-${d}s" aria-hidden="true"></span>`).join("");
   return `<div class="ty-mapbar"><button type="button" class="ty-gbtn" data-a="view" data-v="mehr">📜<small>Meisterbrief</small></button><span class="ty-mapt">🗺️ Weltkarte</span><button type="button" class="ty-gbtn" data-a="findme">📍<small>Zu mir</small></button></div>
-    <section class="ty-ocean">${svg}${clouds}${worlds}${blds}</section>`;
+    <section class="ty-ocean">${svg}${clouds}${worlds}${blds}${evSpot}</section>`;
 }
 export const worldTop = (wi) => WPOS[wi][1] / MAP_H;
 
@@ -126,4 +132,30 @@ export function wheelSVG(rot = 0) {
   }).join("");
   return `<div class="ty-wheel"><span class="ty-wptr" aria-hidden="true">▼</span><svg viewBox="0 0 220 220" class="ty-wsvg" style="transform:rotate(${rot}deg)" aria-hidden="true">
     <circle cx="110" cy="110" r="106" fill="#fbbf24" stroke="#b45309" stroke-width="4"/>${parts}<circle cx="110" cy="110" r="16" fill="#fff" stroke="#b45309" stroke-width="4"/></svg></div>`;
+}
+
+/* ---------- 🎪 Event-Ansicht ---------- */
+export function eventHTML(g, ev, { amtN }) {
+  const th = ev.theme, I = ev.info, can = T.evClaimable(ev);
+  const ms = I.end - Date.now(), d = Math.floor(ms / 864e5), h = Math.floor((ms % 864e5) / 36e5);
+  const gens = th.gens.filter((x) => T.evVisible(ev, x.id));
+  const rows = gens.map((x, i) => {
+    const st = ev.gens[x.id];
+    if (!st.lvl) { const c = T.evGenCost(th, x.id, 0); return `<div class="ty-row rock"><span class="ty-num">${i + 1}</span><div class="ty-rock"><span class="ty-rk" aria-hidden="true">🪨🪨</span><div><b>${x.e} ${esc(x.name)}</b><small>${esc(x.joke)}</small></div><button type="button" class="btn sm ty-buy" data-a="evbuy" data-id="${x.id}" data-evcost="${c}">🔨 Bauen<small>${T.fmt(c)} 🎫</small></button></div></div>`; }
+    const n = amtN(st.lvl, x.id, true), c = T.evGenCost(th, x.id, st.lvl, n), mc = T.evMgrCost(th, x.id);
+    return `<div class="ty-row${st.mgr ? " auto" : ""}"><span class="ty-num">${i + 1}</span><div class="ty-stollen">
+      ${st.mgr ? `<span class="ty-pile auto">🎫<b><span data-k="evout-${x.id}"></span>/s</b></span>` : `<button type="button" class="ty-pile" data-a="evtap" data-id="${x.id}"><span class="ty-pf" data-k="evbuf-bar-${x.id}"></span>🎫<b data-k="evbuf-${x.id}"></b></button>`}
+      ${st.mgr ? `<span class="ty-boss" aria-hidden="true">🧑‍🔧</span>` : `<button type="button" class="ty-hire" data-a="evhire" data-id="${x.id}" data-evcost="${mc}">➕🧑‍🔧<small>${T.fmt(mc)} 🎫</small></button>`}
+      <span class="ty-worker" aria-hidden="true">👷</span><span class="ty-gen-e" aria-hidden="true">${x.e}</span>
+      <button type="button" class="ty-lvl" data-a="evbuy" data-id="${x.id}" data-evcost="${c}"><b>Stufe ${st.lvl}</b><small>+${n} · ${T.fmt(c)} 🎫</small></button></div>
+      <div class="ty-rowinfo"><b>${esc(x.name)}</b></div></div>`;
+  }).join("");
+  const max = Math.log10(T.EV_TRACK[T.EV_TRACK.length - 1].at), pos = (v) => Math.max(0, Math.min(100, (Math.log10(Math.max(1, v)) / max) * 100));
+  return `<section class="ty-evhead" style="--ebg:${th.bg}"><div class="ty-evtop"><span class="ty-eve" aria-hidden="true">${th.e}</span><div><b>🎪 ${esc(th.name)}</b><small>Event endet in ${d ? `${d} T ` : ""}${h} h</small></div></div>
+      <div class="ty-evmoney">🎫 <b data-k="evmoney"></b><small><span data-k="evrate"></span> 🎫/s</small></div>
+      <div class="ty-evtrack"><span class="ty-evbar"><i data-k="evbar" style="width:${pos(ev.total)}%"></i></span>${T.EV_TRACK.map((x, i) => `<span class="ty-evm${ev.claimed.includes(i) ? " got" : ev.total >= x.at ? " ready" : ""}" style="left:${pos(x.at)}%" title="${esc(x.t)} (ab ${T.fmt(x.at)} 🎫)">${x.e}</span>`).join("")}</div>
+      ${can.length ? `<button type="button" class="btn primary" data-a="evclaim">🎁 ${can.length} Belohnung${can.length > 1 ? "en" : ""} abholen!</button>` : `<small>Nächste Belohnung: ${(() => { const nx = T.EV_TRACK.find((x, i) => !ev.claimed.includes(i) && ev.total < x.at); return nx ? `${nx.e} ${esc(nx.t)} bei ${T.fmt(nx.at)} 🎫 gesamt` : "alles geholt – Champion! 🏆"; })()}</small>`}
+    </section>
+    <section class="ty-mine" style="--wbg:${th.bg}"><div class="ty-shaftwrap"><div class="ty-shaft" aria-hidden="true"><span class="ty-cabin">${th.e}</span></div><div class="ty-rows">${rows}</div></div></section>
+    <p class="note">🎫 Event-Münzen gibt's nur während des Events. Elektriker arbeiten auch hier offline weiter. Alle 3 Wochen kommt ein neues Event!</p>`;
 }

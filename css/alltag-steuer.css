@@ -1,0 +1,41 @@
+/* 🧾 Steuer-Helfer (js/alltag/steuer.js) */
+.st { display: grid; gap: 12px; }
+.st-years { display: flex; gap: 6px; }
+.st-years button { flex: 1; border: 1px solid var(--line, #e5e7eb); border-radius: 12px; padding: 8px; background: var(--card, #fff); color: inherit; font: inherit; font-weight: 700; cursor: pointer; }
+.st-years button.on { background: #0f766e; color: #fff; border-color: transparent; }
+.st-result { display: grid; gap: 4px; justify-items: center; text-align: center; padding: 18px 14px; border-radius: 20px; color: #fff; background: linear-gradient(135deg, #0f766e, #14b8a6); }
+.st-result.minus { background: linear-gradient(135deg, #b45309, #f59e0b); } .st-result.empty { background: linear-gradient(135deg, #475569, #64748b); }
+.st-result > small { opacity: .9; } .st-result > b { font-size: 40px; line-height: 1.1; }
+.st-result details { width: 100%; text-align: left; margin-top: 6px; } .st-result summary { cursor: pointer; text-align: center; font-weight: 700; }
+.st-calc { list-style: none; padding: 10px 12px; margin: 8px 0 0; border-radius: 12px; background: rgba(255,255,255,.15); display: grid; gap: 4px; font-size: 13px; }
+.st-calc li { display: flex; justify-content: space-between; gap: 10px; } .st-calc li.sum { border-top: 1px solid rgba(255,255,255,.4); padding-top: 4px; font-weight: 700; }
+.st-result .note { color: #fff; opacity: .9; }
+.st-disc { margin: 4px 0 0; font-size: 11px; opacity: .85; }
+.st-card { display: grid; gap: 10px; padding: 14px; border-radius: 16px; background: var(--card, #fff); border: 1px solid var(--line, #e5e7eb); }
+.st-card h3 { margin: 0; display: flex; align-items: center; gap: 8px; font-size: 17px; }
+.st-card h3 span { display: grid; place-items: center; width: 26px; height: 26px; border-radius: 50%; background: #0f766e; color: #fff; font-size: 14px; }
+.st-card label { display: grid; gap: 4px; font-size: 13px; font-weight: 600; } .st-card label small { color: var(--muted, #6b7280); font-weight: 500; }
+.st-card input, .st-card select { font: inherit; padding: 10px 12px; border-radius: 10px; border: 1px solid var(--line, #d1d5db); background: var(--bg, #fff); color: inherit; }
+.st-grid { display: grid; gap: 10px; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); }
+.st-seg { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; }
+.st-seg button { display: grid; gap: 2px; border: 2px solid var(--line, #e5e7eb); border-radius: 12px; padding: 8px; background: var(--card, #fff); color: inherit; font: inherit; font-weight: 700; cursor: pointer; }
+.st-seg button small { font-size: 11px; font-weight: 500; color: var(--muted, #6b7280); } .st-seg button[aria-pressed="true"] { border-color: #0f766e; background: #ccfbf1; color: #134e4a; }
+.st-check { display: flex !important; grid-template-columns: none; align-items: center; gap: 8px; font-weight: 500 !important; }
+.st-check input { width: 20px; height: 20px; padding: 0; }
+.st-months { display: grid; grid-template-columns: repeat(6, 1fr); gap: 6px; }
+.st-months label { display: grid; justify-items: center; gap: 2px; padding: 6px 2px; border-radius: 10px; background: var(--bg2, #f3f4f6); font-size: 11px; }
+.st-months input { width: 100%; max-width: 46px; text-align: center; padding: 4px 2px; font-weight: 700; }
+.st-months label.f3 { background: #ccfbf1; } .st-months label.f2 { background: #e0f2fe; } .st-months label.f1 { background: #fef3c7; }
+.st-pp { display: flex; justify-content: space-between; gap: 8px; flex-wrap: wrap; padding: 10px 12px; border-radius: 12px; background: var(--bg2, #f3f4f6); font-size: 14px; }
+.st-tx { list-style: none; padding: 0; margin: 0; display: grid; gap: 4px; }
+.st-tx li, .st-tx label { display: grid; grid-template-columns: auto 1fr auto auto; gap: 8px; align-items: center; font-weight: 500; }
+.st-tx li > span, .st-tx label > span { grid-column: 2; } .st-tx li:not(:has(label)) { grid-template-columns: 1fr auto auto; }
+.st-tx small { display: block; color: var(--muted, #6b7280); font-size: 11px; }
+.st-del { border: 0; background: none; color: #dc2626; font-size: 16px; cursor: pointer; }
+.st-link { border: 0; background: none; padding: 0; color: #0f766e; text-decoration: underline; font: inherit; cursor: pointer; }
+.st-kz { width: 100%; border-collapse: collapse; font-size: 14px; } .st-kz td { padding: 6px 4px; border-bottom: 1px solid var(--line, #e5e7eb); } .st-kz td:first-child { font-weight: 800; white-space: nowrap; } .st-kz td:last-child { text-align: right; font-weight: 700; white-space: nowrap; }
+.st-steps { margin: 0; padding-left: 20px; display: grid; gap: 4px; font-size: 14px; }
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) .st-seg button[aria-pressed="true"] { background: #134e4a; color: #ccfbf1; } :root:not([data-theme="light"]) .st-months label.f3 { background: #134e4a; } :root:not([data-theme="light"]) .st-months label.f2 { background: #0c4a6e; } :root:not([data-theme="light"]) .st-months label.f1 { background: #713f12; } }
+:root[data-theme="dark"] .st-seg button[aria-pressed="true"] { background: #134e4a; color: #ccfbf1; }
+.st-result, .st-result * { color: #fff !important; }
+.st-card input[type="checkbox"] { -webkit-appearance: auto; appearance: auto; width: 20px; height: 20px; min-height: 0; padding: 0; margin: 0; border: 0; background: none; box-shadow: none; accent-color: #0f766e; flex: 0 0 auto; }

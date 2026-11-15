@@ -298,3 +298,22 @@
 .lap-owntag { font-style: normal; font-size: .72rem; font-weight: 700; color: var(--muted); margin-left: 6px; white-space: nowrap; }
 .lap-pill.soft { background: color-mix(in srgb, var(--line) 45%, transparent); }
 .lap-stick { position: sticky; bottom: 8px; z-index: 2; }
+
+/* Update 21 – LAP-Countdown & Lernplan */
+.lap-plan-set { width: 100%; display: grid; gap: 2px; justify-items: start; border: 2px dashed var(--line, #d1d5db); border-radius: 14px; padding: 10px 14px; background: var(--card, #fff); color: inherit; font: inherit; text-align: left; cursor: pointer; }
+.lap-plan-set small { color: var(--muted, #6b7280); }
+.lap-plan-card { display: grid; gap: 8px; padding: 14px; border-radius: 16px; color: #fff; background: linear-gradient(135deg, #1d4ed8, #7c3aed); }
+.lap-plan-card.endspurt { background: linear-gradient(135deg, #dc2626, #f59e0b); } .lap-plan-card.heute { background: linear-gradient(135deg, #16a34a, #22c55e); } .lap-plan-card.vorbei { background: linear-gradient(135deg, #475569, #64748b); }
+.lap-plan-card small { color: rgba(255,255,255,.85); }
+.lap-plan-top { display: flex; justify-content: space-between; gap: 8px; align-items: center; }
+.lap-plan-h { font-size: 17px; } .lap-plan-h b { font-size: 26px; }
+.lap-plan-edit { border: 0; background: rgba(255,255,255,.2); border-radius: 10px; padding: 6px 10px; cursor: pointer; font-size: 16px; }
+.lap-plan-ready { display: grid; grid-template-columns: auto 1fr auto; gap: 8px; align-items: center; font-size: 13px; }
+.lap-plan-card .lap-bar { display: block; height: 8px; border-radius: 999px; background: rgba(255,255,255,.25); overflow: hidden; }
+.lap-plan-card .lap-bar > span { display: block; height: 100%; background: #fde047; border-radius: inherit; }
+.lap-plan-todo, .lap-plan-pace { margin: 0; font-size: 14px; } .lap-plan-pace { font-size: 12px; opacity: .9; }
+.lap-plan-topics summary { cursor: pointer; font-weight: 700; font-size: 14px; }
+.lap-plan-topics ul { list-style: none; padding: 0; margin: 8px 0 0; display: grid; gap: 6px; }
+.lap-plan-topics li { display: grid; grid-template-columns: 1fr 90px 44px; gap: 8px; align-items: center; font-size: 13px; }
+.lap-plan-topics .lap-bar.low > span { background: #fca5a5; } .lap-plan-topics .lap-bar.mid > span { background: #fde047; } .lap-plan-topics .lap-bar.hi > span { background: #86efac; }
+.lap-plan-card .btn { justify-self: start; }

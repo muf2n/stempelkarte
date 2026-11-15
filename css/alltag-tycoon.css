@@ -287,3 +287,15 @@
 .ty-wres { min-height: 24px; }
 .ty-wlist { list-style: none; padding: 0; margin: 10px 0 0; display: grid; grid-template-columns: 1fr 1fr; gap: 4px 10px; text-align: left; font-size: 12px; }
 .ty-wlist span { display: inline-block; width: 22px; }
+
+/* 🎪 Event */
+.ty-evspot.on .ty-land { font-size: 52px; animation: ty-bounce 1.6s ease-in-out infinite; filter: drop-shadow(0 0 12px #fde047); }
+.ty-evhead { display: grid; gap: 10px; padding: 14px; border-radius: 20px; color: #fff; background: radial-gradient(120% 140% at 50% 0%, color-mix(in srgb, var(--ebg) 65%, #fff), var(--ebg) 60%); }
+.ty-evhead small { color: rgba(255,255,255,.9); }
+.ty-evtop { display: flex; gap: 12px; align-items: center; } .ty-eve { font-size: 46px; } .ty-evtop b { display: block; font-size: 18px; }
+.ty-evmoney { text-align: center; font-size: 30px; font-weight: 900; } .ty-evmoney small { display: block; font-size: 13px; font-weight: 600; }
+.ty-evtrack { position: relative; height: 34px; margin: 0 16px; }
+.ty-evbar { position: absolute; left: 0; right: 0; top: 13px; height: 8px; border-radius: 999px; background: rgba(0,0,0,.25); overflow: hidden; }
+.ty-evbar i { display: block; height: 100%; background: linear-gradient(90deg, #fde047, #f59e0b); }
+.ty-evm { position: absolute; top: 0; transform: translateX(-50%); width: 34px; height: 34px; display: grid; place-items: center; border-radius: 10px; background: #334155; font-size: 18px; filter: grayscale(.6); }
+.ty-evm.ready { background: #f59e0b; filter: none; animation: ty-pulse 1s infinite; } .ty-evm.got { background: #16a34a; filter: none; }

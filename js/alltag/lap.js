@@ -19,6 +19,7 @@ import { createPractice } from "./lap-practice.js";
 import { createExam } from "./lap-exam.js";
 import { createOwn } from "./lap-own.js";
 import { createLapPath } from "./lap-path.js"; // Update 10 – 🛤️ Lernpfad
+import * as LP from "./lap-plan-core.js"; // Update 21 – LAP-Countdown & Lernplan
 
 const TABS = [
   ["pfad", "🛤️", "Lernpfad"], // Update 10 – wie Duolingo (./path-ui.js)
@@ -62,6 +63,7 @@ export function mount(el) {
   el.innerHTML =
     `<div class="lap">` +
       `<div class="lap-head" aria-live="polite"></div>` +
+      `<div class="lap-plan"></div>` +
       `<div class="lap-yearbar" role="group" aria-label="Lehrjahr"></div>` +
       `<div class="lap-weak" hidden></div>` +
       `<div class="lap-tabs" role="tablist" aria-label="LAP-Bereiche">` +
@@ -70,6 +72,7 @@ export function mount(el) {
       `<div class="lap-page" role="tabpanel"></div>` +
     `</div>`;
   const headEl = el.querySelector(".lap-head");
+  const planEl = el.querySelector(".lap-plan");
   const weakEl = el.querySelector(".lap-weak");
   const yearEl = el.querySelector(".lap-yearbar");
   const pageEl = el.querySelector(".lap-page");
@@ -182,12 +185,49 @@ export function mount(el) {
       `<div class="lap-stat lap-goal" title="Übungen heute"><b>🎯 ${n}<i>/${goal}</i></b><small>heute</small><span class="lap-bar"><span style="width:${pct}%"></span></span></div>` +
       `<div class="lap-stat" title="Karten mindestens einmal gewusst"><b>🃏 ${learned}<i>/${all.length}</i></b><small>Karten gelernt</small></div>` +
       `<div class="lap-stat${last ? (last.pct >= 60 ? " ok" : " no") : ""}" title="Letzte Prüfungssimulation"><b>📝 ${last ? `${last.pct}<i>%</i>` : "–"}</b><small>letzte Prüfung</small></div>`;
+    renderPlan(s, states, all);
     const weak = L.weak();
     weakEl.hidden = !weak.length;
     weakEl.innerHTML = weak.length
       ? `<span class="lap-weak-l">💪 Da lohnt sich Üben:</span>` + weak.map((id) => { const tp = TOPICS.find((x) => x.id === id); return tp ? `<button type="button" class="chip lap-weakchip" data-weak="${tp.id}">${tp.emoji} ${esc(tp.name)}</button>` : ""; }).join("")
       : "";
   }
+
+  /* Update 21 – 🎓 LAP-Countdown mit Lernplan */
+  function renderPlan(s, states, all) {
+    const p = LP.lapPlan({ examDate: s.examDate, today: today(), cards: all, states: new Map(states.map((c) => [c.id, c])), topics: TOPICS });
+    if (!p) { planEl.innerHTML = `<button type="button" class="lap-plan-set" data-plan="date">📅 <b>LAP-Termin eintragen</b><small>→ dein persönlicher Lernplan bis zur Prüfung</small></button>`; return; }
+    const head = p.phase === "vorbei" ? `🎓 LAP war am ${LP.fmtDate(s.examDate)} – hoffentlich bestanden! 🎉` : p.phase === "heute" ? "🍀 Heute ist LAP – du schaffst das!" : `🎓 LAP in <b>${p.left}</b> ${p.left === 1 ? "Tag" : "Tagen"} <small>${LP.fmtDate(s.examDate)}</small>`;
+    const todo = p.phase === "lernen" ? `Heute: <b>${p.newPerDay}</b> neue Karten + <b>${p.due}</b> Wiederholungen <small>(≈ ${p.minutes} min)</small>`
+      : p.phase === "endspurt" ? `🔥 Endspurt: jeden Tag 1 Probeprüfung (📝) + ${p.due} Wiederholungen. Neue Karten nur noch, wenn's sein muss.` : "";
+    const paceTxt = { gut: "✅ gut machbar", sportlich: "💪 sportlich", eng: "⚠️ eng – konzentrier dich auf die schwachen Themen" }[p.pace];
+    planEl.innerHTML = `<section class="lap-plan-card ${p.phase}">
+      <div class="lap-plan-top"><div class="lap-plan-h">${head}</div><button type="button" class="lap-plan-edit" data-plan="date" aria-label="Termin ändern">✏️</button></div>
+      ${p.phase !== "vorbei" ? `<div class="lap-plan-ready"><span>Bereit</span><span class="lap-bar"><span style="width:${p.readiness}%"></span></span><b>${p.readiness} %</b></div>
+      ${todo ? `<p class="lap-plan-todo">${todo}</p>` : ""}
+      ${p.phase === "lernen" ? `<p class="lap-plan-pace">${p.learned}/${p.total} Karten gelernt · Tempo: ${paceTxt}</p>` : ""}
+      <details class="lap-plan-topics"><summary>📊 Sicherheit je Thema</summary><ul>${p.topics.map((t) => `<li><span>${t.emoji} ${esc(t.name)}</span><span class="lap-bar ${t.pct < 40 ? "low" : t.pct < 70 ? "mid" : "hi"}"><span style="width:${t.pct}%"></span></span><b>${t.pct} %</b></li>`).join("")}</ul></details>
+      ${p.phase === "lernen" && (s.newPerDay !== p.newPerDay) ? `<button type="button" class="btn sm" data-plan="apply">🎯 Plan übernehmen: ${p.newPerDay} neue Karten pro Tag</button>` : ""}` : ""}
+    </section>`;
+  }
+  planEl.addEventListener("click", (ev) => {
+    const b = ev.target.closest("[data-plan]"); if (!b) return;
+    if (b.dataset.plan === "apply") {
+      const p = LP.lapPlan({ examDate: curStats().examDate, today: today(), cards: L.allCards(), states: L.cards(), topics: TOPICS });
+      if (!p) return;
+      const npd = Math.max(1, Math.min(60, p.newPerDay));
+      stats = { ...curStats(), newPerDay: npd, goal: Math.max(curStats().goal || 15, Math.min(120, p.newPerDay + p.due)) };
+      flushStats(); renderHead(); ui.toast(`🎯 Tagesziel: ${npd} neue Karten`, 1800);
+      return;
+    }
+    const cur = curStats().examDate || "";
+    ui.openSheet({ title: "📅 Wann ist deine LAP?", bodyHTML: `<div class="fields"><label>Prüfungstermin<input type="date" id="lap-ed" value="${esc(cur)}" min="${today()}"></label></div><p class="note">Die App verteilt alle Karten bis eine Woche vor der Prüfung auf die Tage. Die letzte Woche ist Endspurt mit Probeprüfungen.</p>
+      <div class="row" style="gap:8px">${cur ? `<button type="button" class="btn" data-clear>Termin löschen</button>` : ""}<button type="button" class="btn primary" data-save>Speichern</button></div>`,
+      onMount(sh, close) {
+        sh.querySelector("[data-save]").addEventListener("click", () => { const v = sh.querySelector("#lap-ed").value; if (!LP.isKey(v)) { ui.toast("Bitte ein Datum wählen."); return; } close(); stats = { ...curStats(), examDate: v }; flushStats(); renderHead(); });
+        sh.querySelector("[data-clear]")?.addEventListener("click", () => { close(); stats = { ...curStats(), examDate: "" }; flushStats(); renderHead(); });
+      } });
+  });
 
   function show(id, opts) {
     if (!sections[id]) id = "pfad";

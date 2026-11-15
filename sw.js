@@ -3,7 +3,7 @@
 // Icons und Schriftdateien (fonts.gstatic.com): cache-first.
 // Alle anderen fremden Domains (Firebase, Google APIs, Nominatim, OSM, CARTO) werden nicht angefasst.
 
-const VERSION = "20261115-2115"; // wird beim Veröffentlichen automatisch ersetzt
+const VERSION = "20261115-2105-2"; // wird beim Veröffentlichen automatisch ersetzt
 const CACHE = "stempelkarte-" + VERSION;
 const FONT_CACHE = "stempelkarte-fonts"; // versionsunabhängig, bleibt erhalten
 const NET_TIMEOUT_MS = 4000; // bei schlechtem Netz nach dieser Zeit auf den Cache ausweichen
@@ -255,6 +255,16 @@ const SHELL = [
   "js/alltag/spiel.js",
   "js/alltag/tycoon.js",
   "js/alltag/tycoon-scene.js",
+  "js/alltag/schach.js",
+  "js/alltag/schach-core.js",
+  "js/alltag/schach-puzzles.js",
+  "js/chess-engine.js",
+  "js/chess-worker.js",
+  "vendor/chess/chess.js",
+  "css/alltag-schach.css",
+  "js/alltag/steuer.js",
+  "js/alltag/steuer-core.js",
+  "css/alltag-steuer.css",
   "js/tycoon-core.js",
   "css/alltag-tycoon.css",
   "css/alltag-spiel.css",
@@ -322,6 +332,7 @@ const SHELL = [
   "css/alltag-japanisch.css",
   "js/alltag/srs-core.js", // gemeinsames SRS (Japanisch, LAP)
   "js/alltag/lap.js", // Alltag › LAP Elektrotechnik
+  "js/alltag/lap-plan-core.js",
   "js/alltag/lap-core.js",
   "js/alltag/lap-data.js",
   "js/alltag/lap-explain.js",

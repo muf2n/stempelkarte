@@ -147,6 +147,7 @@ export const ACH = [
   { id: "tour25", e: "🧭", t: "Entdecker", d: "25 Expeditionen beendet", f: 15, c: (s) => s.tours >= 25 },
   { id: "relic6", e: "🏺", t: "Sammler", d: "6 verschiedene Fundstücke", f: 15, c: (s) => Object.keys(s.relics).length >= 6 },
   { id: "relic12", e: "👑", t: "Museumsdirektor", d: "Alle 12 Fundstücke", f: 50, c: (s) => Object.keys(s.relics).length >= 12 },
+  { id: "cup1", e: "🏆", t: "Event-Champion", d: "Ersten Event-Pokal geholt", f: 20, c: (s) => (s.cups || 0) >= 1 },
   { id: "meister", e: "📜", t: "Meisterbrief", d: "Ersten Meisterbrief geholt", f: 20, c: (s) => s.resets >= 1 },
   { id: "streak7", e: "📅", t: "Treue Seele", d: "7 Tage in Folge die Truhe geöffnet", f: 10, c: (s) => s.streak >= 7 },
   { id: "tap", e: "👆", t: "Dauerdrücker", d: "500-mal eingespeist", f: 5, c: (s) => s.taps >= 500 },
@@ -163,7 +164,7 @@ export function relicFx(s, fx) { return RELICS.filter((r) => r.fx === fx).reduce
 function newWorld(wi) { return { money: wi === 0 ? START_MONEY : 0, total: 0, grid: 0, umsp: 0, abilUntil: 0, abilCd: 0, gens: Object.fromEntries(WORLDS[wi].gens.map((g) => [g.id, { lvl: 0, mgr: false, buf: 0 }])) }; }
 export function newState(now = Date.now()) {
   return { v: 3, cur: 0, unlocked: 0, worlds: WORLDS.map((_, i) => newWorld(i)), allTime: 0, stars: 0, resets: 0, akku: 0,
-    fuses: 5, boosts: [], inv: {}, tours: 0, exp: [], slots: 1, relics: {}, blitze: 0, taps: 0, ach: [], chestDay: "", streak: 0, wheelDay: "", spins: 0, last: now, created: now };
+    fuses: 5, boosts: [], inv: {}, tours: 0, exp: [], slots: 1, relics: {}, blitze: 0, taps: 0, ach: [], chestDay: "", streak: 0, wheelDay: "", spins: 0, ev: null, cups: 0, last: now, created: now };
 }
 
 export function norm(x = {}, now = Date.now()) {
@@ -194,11 +195,13 @@ export function norm(x = {}, now = Date.now()) {
     ach: Array.isArray(x.ach) ? x.ach.filter((a) => ACH.some((y) => y.id === a)) : [],
     chestDay: /^\d{4}-\d{2}-\d{2}$/.test(String(x.chestDay || "")) ? x.chestDay : "", streak: Math.max(0, Math.floor(num(x.streak))),
     wheelDay: /^\d{4}-\d{2}-\d{2}$/.test(String(x.wheelDay || "")) ? x.wheelDay : "", spins: Math.max(0, Math.floor(num(x.spins))),
+    ev: x.ev && typeof x.ev === "object" && Number.isFinite(Number(x.ev.cycle)) ? { cycle: Number(x.ev.cycle), money: Math.max(0, num(x.ev.money)), total: Math.max(0, num(x.ev.total)), claimed: Array.isArray(x.ev.claimed) ? x.ev.claimed.filter((i) => Number.isInteger(i)) : [], gens: x.ev.gens && typeof x.ev.gens === "object" ? x.ev.gens : {} } : null,
+    cups: Math.max(0, Math.floor(num(x.cups))),
     last: num(x.last, now) || now, created: num(x.created, now) || now,
   };
 }
 const clone = (s) => ({ ...s, worlds: s.worlds.map((w) => ({ ...w, gens: Object.fromEntries(Object.entries(w.gens).map(([k, v]) => [k, { ...v }])) })),
-  boosts: s.boosts.slice(), ach: s.ach.slice(), inv: { ...s.inv }, relics: { ...s.relics }, exp: s.exp.map((e) => ({ ...e })) });
+  boosts: s.boosts.slice(), ach: s.ach.slice(), inv: { ...s.inv }, relics: { ...s.relics }, exp: s.exp.map((e) => ({ ...e })), ev: s.ev ? { ...s.ev, claimed: (s.ev.claimed || []).slice(), gens: Object.fromEntries(Object.entries(s.ev.gens || {}).map(([k, v]) => [k, { ...v }])) } : null });
 
 /* ---------- Preise & Raten ---------- */
 export function genCost(wi, id, lvl, n = 1, s = null) {
@@ -257,6 +260,7 @@ export function tick(s0, dt, opt = {}) {
       if (st.lvl > 0 && !st.mgr) st.buf = Math.min(r.per[g.id] * BUF_SEC, st.buf + r.per[g.id] * dt);
     }
   }
+  evTick(s, dt, { ...opt, now }, !opt.noBuf);
   s.boosts = s.boosts.filter((b) => b.until > now);
   s.last = now;
   return s;
@@ -470,6 +474,94 @@ export function spin(s, today, opt = {}, rnd = Math.random) {
   return { s: n, idx, prize: P, got, relic, free };
 }
 
+
+/* ---------- 🎪 Events: alle 3 Wochen eine Woche lang eine Event-Insel mit eigener Mini-Wirtschaft (🎫 Event-Münzen) ---------- */
+export const EV_EPOCH = new Date(2026, 0, 5, 0, 0, 0).getTime(); // Montag
+export const EV_CYCLE_D = 21, EV_LEN_D = 7;
+const EVB = [[5, 1], [80, 10], [1200, 120], [2e4, 1500], [4e5, 25000]];
+export const EV_THEMES = [
+  { id: "kuerbis", e: "🎃", name: "Kürbis-Kraftwerk", bg: "#c2410c", gens: [["laterne", "🎃", "Kürbis-Laterne", "Grinst und leuchtet. Gleichzeitig."], ["geist", "👻", "Geister-Dynamo", "Spukt mit 230 V."], ["besen", "🧹", "Hexenbesen-Turbine", "Fliegt im Kreis, erzeugt Wind."], ["fleder", "🦇", "Fledermaus-Flügelrad", "Nachtschicht inklusive."], ["schloss", "🏰", "Spukschloss-Reaktor", "Knarrt, aber liefert."]] },
+  { id: "licht", e: "🎄", name: "Lichterketten-Fest", bg: "#15803d", gens: [["kette", "💡", "Lichterkette", "Eine Birne kaputt? Alle aus. Klassiker."], ["rentier", "🦌", "Rentier-Laufband", "Rudolph trainiert für Dezember."], ["lebkuchen", "🍪", "Lebkuchen-Batterie", "Süß und leistungsstark."], ["schnee", "⛄", "Schneemann-Kühlturm", "Kühlt alles. Auch die Stimmung."], ["christkind", "🌟", "Christkind-Kraftwerk", "Liefert pünktlich am 24."]] },
+  { id: "strand", e: "🏖️", name: "Sommer-Strand", bg: "#0284c7", gens: [["eis", "🍦", "Eis-Generator", "Schmilzt schneller als du schaust."], ["welle", "🌊", "Wellenkraftwerk", "Surft auf jeder Welle."], ["creme", "🧴", "Sonnencreme-Solar", "Lichtschutzfaktor 50, Ertrag 100."], ["sandburg", "🏰", "Sandburg-Speicher", "Hält bis zur nächsten Flut."], ["leucht", "🗼", "Leuchtturm-Laser", "Weist Schiffen den Weg zum Geld."]] },
+  { id: "urzeit", e: "🦖", name: "Urzeit-Strom", bg: "#78350f", gens: [["steinrad", "🪨", "Steinrad", "Erfunden vor 10.000 Jahren. Läuft noch."], ["dino", "🦕", "Dino-Laufrad", "Sehr großes Laufrad."], ["vulkan", "🌋", "Vulkan-Wärme", "Heiß. Sehr heiß."], ["mammut", "🦣", "Mammut-Mühle", "Flauschig und stark."], ["meteor", "☄️", "Meteor-Kraftwerk", "Einschlagender Erfolg."]] },
+  { id: "piraten", e: "🏴‍☠️", name: "Piratenhafen", bg: "#1e3a8a", gens: [["kanone", "💣", "Kanonen-Dynamo", "Bumm = Strom."], ["papagei", "🦜", "Papageien-Propeller", "Plappert und dreht."], ["truhe", "💰", "Schatztruhen-Akku", "Arrr, voll geladen!"], ["segel", "⛵", "Segel-Turbine", "Mit dem Wind zum Reichtum."], ["krake", "🐙", "Kraken-Kraft", "Acht Arme, acht Kurbeln."]] },
+  { id: "zirkus", e: "🎪", name: "Zirkus-Zauber", bg: "#be185d", gens: [["clown", "🤡", "Clown-Fahrrad", "Einrad mit Hupe."], ["trampolin", "🤸", "Trampolin-Tritt", "Hoch, runter, Strom."], ["elefant", "🐘", "Elefanten-Lauf", "Vergisst nie eine Kilowattstunde."], ["feuer", "🔥", "Feuerspucker-Wärme", "Bitte nicht nachmachen."], ["kanonier", "🎯", "Kanonenmensch-Kraft", "Fliegt weit, liefert viel."]] },
+].map((t) => ({ ...t, gens: t.gens.map(([id, e, name, joke], i) => ({ id, e, name, joke, cost: EVB[i][0], out: EVB[i][1] })) }));
+export const EV_TRACK = [
+  { at: 1e3, e: "🔩", t: "10 Sicherungen", fuses: 10 },
+  { at: 1e5, e: "🔥", t: "Dreifach-Strom-Booster", inv: "x3" },
+  { at: 1e7, e: "⏭️", t: "Zeitsprung 8 h + 30 🔩", inv: "zeit8", fuses: 30 },
+  { at: 1e9, e: "🏺", t: "Fundstück", relic: true },
+  { at: 1e11, e: "🏆", t: "Event-Pokal + 60 🔩", cup: true, fuses: 60 },
+];
+/** Aktuelles/nächstes Event */
+export function eventInfo(now = Date.now()) {
+  const D = 864e5, cyc = Math.floor((now - EV_EPOCH) / (EV_CYCLE_D * D));
+  const start = EV_EPOCH + cyc * EV_CYCLE_D * D, end = start + EV_LEN_D * D;
+  const active = now >= start && now < end;
+  const theme = EV_THEMES[((cyc % EV_THEMES.length) + EV_THEMES.length) % EV_THEMES.length];
+  const nextStart = active ? start : start + EV_CYCLE_D * D;
+  return { cycle: cyc, theme, start, end, active, nextStart, nextTheme: active ? theme : EV_THEMES[(((cyc + 1) % EV_THEMES.length) + EV_THEMES.length) % EV_THEMES.length] };
+}
+function newEv(cycle, theme) { return { cycle, money: 15, total: 0, claimed: [], gens: Object.fromEntries(theme.gens.map((g) => [g.id, { lvl: 0, mgr: false, buf: 0 }])) }; }
+/** Event-Stand für das laufende Event (neu, wenn ein anderes Event lief). */
+export function evOf(s, now = Date.now()) {
+  const I = eventInfo(now);
+  if (!I.active) return null;
+  const e = s.ev && s.ev.cycle === I.cycle ? s.ev : newEv(I.cycle, I.theme);
+  const gens = {}; for (const g of I.theme.gens) { const q = (e.gens && e.gens[g.id]) || {}; const lvl = Math.max(0, Math.floor(num(q.lvl))); gens[g.id] = { lvl, mgr: !!q.mgr && lvl > 0, buf: Math.max(0, num(q.buf)) }; }
+  return { cycle: I.cycle, money: Math.max(0, num(e.money)), total: Math.max(0, num(e.total)), claimed: (Array.isArray(e.claimed) ? e.claimed : []).filter((i) => Number.isInteger(i)), gens, theme: I.theme, info: I };
+}
+const evGen = (th, id) => th.gens.find((g) => g.id === id);
+export const evGenCost = (th, id, lvl, n = 1) => { const g = evGen(th, id); return g.cost * Math.pow(GROW, lvl) * (Math.pow(GROW, n) - 1) / (GROW - 1); };
+export const evMaxBuy = (th, id, lvl, money) => { const a = evGen(th, id).cost * Math.pow(GROW, lvl); return Math.max(0, Math.floor(Math.log(money * (GROW - 1) / a + 1) / Math.log(GROW) + 1e-9)); };
+export const evMgrCost = (th, id) => evGen(th, id).cost * 15;
+export const evVisible = (ev, id) => { const gs = ev.theme.gens; const i = gs.findIndex((g) => g.id === id); return i <= 0 || ev.gens[gs[i - 1].id].lvl > 0; };
+export function evRates(s, ev, opt = {}) {
+  const k = mult(s, opt); let auto = 0, manual = 0; const per = {};
+  for (const g of ev.theme.gens) { const st = ev.gens[g.id], o = st.lvl ? g.out * st.lvl * milestoneMult(st.lvl) * k : 0; per[g.id] = o; if (st.mgr) auto += o; else manual += o; }
+  return { auto, manual, per };
+}
+const evStrip = (ev) => ({ cycle: ev.cycle, money: ev.money, total: ev.total, claimed: ev.claimed, gens: ev.gens });
+function evTick(s, dt, opt, withBuf) {
+  const ev = evOf(s, opt.now); if (!ev) return;
+  const r = evRates(s, ev, opt);
+  ev.money += r.auto * dt; ev.total += r.auto * dt;
+  if (withBuf) for (const g of ev.theme.gens) { const st = ev.gens[g.id]; if (st.lvl && !st.mgr) st.buf = Math.min(r.per[g.id] * BUF_SEC, st.buf + r.per[g.id] * dt); }
+  s.ev = evStrip(ev);
+}
+function evSet(s, ev) { const n = clone(s); n.ev = evStrip(ev); return n; }
+export function evBuy(s, id, k = 1, now = Date.now()) {
+  const ev = evOf(s, now); if (!ev || k < 1) return null; const st = ev.gens[id]; if (!st) return null;
+  const c = evGenCost(ev.theme, id, st.lvl, k); if (ev.money + 1e-9 < c) return null;
+  ev.money -= c; st.lvl += k; return evSet(s, ev);
+}
+export function evHire(s, id, now = Date.now()) {
+  const ev = evOf(s, now); if (!ev) return null; const st = ev.gens[id]; if (!st || st.mgr || !st.lvl) return null;
+  const c = evMgrCost(ev.theme, id); if (ev.money + 1e-9 < c) return null;
+  ev.money -= c - st.buf; ev.total += st.buf; st.buf = 0; st.mgr = true; return evSet(s, ev);
+}
+export function evCollect(s, id, now = Date.now()) {
+  const ev = evOf(s, now); if (!ev) return { s, got: 0 }; const st = ev.gens[id]; if (!st || !st.buf) return { s, got: 0 };
+  const got = st.buf * (1 + relicFx(s, "tap")); ev.money += got; ev.total += got; st.buf = 0;
+  const n = evSet(s, ev); n.taps++; return { s: n, got };
+}
+export const evClaimable = (ev) => EV_TRACK.map((x, i) => i).filter((i) => ev.total >= EV_TRACK[i].at && !ev.claimed.includes(i));
+export function evClaim(s, now = Date.now(), rnd = Math.random) {
+  const ev = evOf(s, now); if (!ev) return null; const can = evClaimable(ev); if (!can.length) return null;
+  const n = clone(s); const got = [];
+  for (const i of can) {
+    const x = EV_TRACK[i];
+    if (x.fuses) n.fuses += x.fuses;
+    if (x.inv) n.inv[x.inv] = (n.inv[x.inv] || 0) + 1;
+    if (x.cup) n.cups = (n.cups || 0) + 1;
+    if (x.relic) { const open = RELICS.filter((r) => (n.relics[r.id] || 0) < RELIC_MAX); if (open.length) { const r = open[Math.floor(rnd() * open.length)]; n.relics[r.id] = (n.relics[r.id] || 0) + 1; got.push(`${r.e} ${r.name}`); } else n.fuses += 20; }
+    got.push(`${x.e} ${x.t}`);
+  }
+  ev.claimed = [...ev.claimed, ...can]; n.ev = evStrip(ev);
+  return { s: n, got };
+}
+
 /* ---------- Meisterbrief ---------- */
 export const starsFor = (allTime) => Math.floor(Math.sqrt(Math.max(0, allTime) / STAR_BASE));
 export const prestigeGain = (s) => Math.max(0, starsFor(s.allTime) - s.stars);
@@ -477,7 +569,7 @@ export function prestige(s, now = Date.now()) {
   const g = prestigeGain(s);
   if (g < 1) return null;
   const keep = { allTime: s.allTime, stars: s.stars + g, resets: s.resets + 1, akku: s.akku, fuses: s.fuses, blitze: s.blitze, taps: s.taps, ach: s.ach.slice(),
-    chestDay: s.chestDay, streak: s.streak, wheelDay: s.wheelDay, spins: s.spins, created: s.created, inv: { ...s.inv }, relics: { ...s.relics }, slots: s.slots, tours: s.tours, exp: s.exp.map((e) => ({ ...e })) };
+    chestDay: s.chestDay, streak: s.streak, wheelDay: s.wheelDay, spins: s.spins, created: s.created, inv: { ...s.inv }, relics: { ...s.relics }, slots: s.slots, tours: s.tours, exp: s.exp.map((e) => ({ ...e })), ev: s.ev, cups: s.cups };
   return { ...newState(now), ...keep };
 }
 

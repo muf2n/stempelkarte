@@ -93,3 +93,22 @@ test("Glücksrad: 1× gratis, dann 5 🔩", () => {
   assert.equal(T.spin({ ...b.s, fuses: 2 }, "2026-11-15"), null);
   assert.equal(T.norm(JSON.parse(JSON.stringify(b.s))).wheelDay, "2026-11-15");
 });
+
+test("Event alle 3 Wochen, eine Woche lang, eigene Wirtschaft + Belohnungen", () => {
+  const D = 864e5, e0 = T.EV_EPOCH;
+  const a = T.eventInfo(e0 + 2 * D), b = T.eventInfo(e0 + 8 * D), c = T.eventInfo(e0 + 22 * D);
+  assert.equal(a.active, true); assert.equal(b.active, false); assert.equal(b.nextStart, e0 + 21 * D); assert.equal(c.active, true);
+  assert.notEqual(a.theme.id, c.theme.id);
+  const now = e0 + 2 * D;
+  let s = T.newState(now);
+  const ev = T.evOf(s, now); assert.equal(ev.money, 15);
+  const id = ev.theme.gens[0].id;
+  s = T.evBuy(s, id, 1, now); assert.equal(T.evOf(s, now).gens[id].lvl, 1);
+  s.ev.money = 1e6; s = T.evHire(s, id, now);
+  s = T.tick(s, 100, { now: now + 100e3 });
+  assert.ok(T.evOf(s, now + 100e3).total > 0);
+  s.ev.total = 2e5; const r = T.evClaim(s, now);
+  assert.equal(r.s.fuses, 5 + 10); assert.equal(r.s.inv.x3, 1); assert.equal(T.evClaim(r.s, now), null);
+  assert.equal(T.evOf(r.s, e0 + 8 * D), null); // vorbei
+  assert.equal(T.norm(JSON.parse(JSON.stringify(r.s)), now).ev.claimed.length, 2);
+});
