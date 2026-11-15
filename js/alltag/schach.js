@@ -4,6 +4,8 @@
 import { Chess } from "../../vendor/chess/chess.js";
 import { collection } from "./db.js";
 import * as C from "./schach-core.js";
+import * as Coach from "./schach-coach.js";
+import { askClaude, aiAvailable } from "./ai-client.js";
 import * as ui from "../ui.js";
 import { esc } from "../util.js";
 
@@ -276,6 +278,8 @@ export function mount(el) {
   }
   function analysisHTML() {
     const A = S.an, h = me().hist[A.i], B = C.anyBot(h.bot) || C.botById("eva"), D = A.data, ev = h.an.ev;
+    const who = (side) => (side === h.color ? "Du" : B.name);
+    const keyHTML = () => { const sm = Coach.summary({ moves: h.moves, ev, an: D, who }); return `<li>Die Partie hatte <b>${sm.swings}</b> große Wendepunkte. Tippe ▶ oder einen Zug unten.</li>${sm.key.length ? `<li><b>Schlüsselmomente:</b></li>${sm.key.map((x) => `<li><button type="button" class="sc-keymv" data-a="an" data-v="p${x.ply + 1}">🔎 ${esc(x.text)}</button></li>`).join("")}` : "<li>Keine groben Fehler – saubere Partie! 👏</li>"}`; };
     const ch = new Chess(); let last = null;
     for (let k = 0; k < A.ply; k++) { const mv = ch.move(uciToMove(h.moves[k])); last = { from: mv.from, to: mv.to }; }
     const cur = A.ply ? D.moves[A.ply - 1] : null, cls = cur && C.classOf(cur.cls);
@@ -290,7 +294,14 @@ export function mount(el) {
       <table class="sc-antab"><thead><tr><th></th><th>Genauigkeit</th>${C.CLASSES.map((c) => `<th title="${c.t}">${c.e}</th>`).join("")}</tr></thead><tbody>${row(me1, "Du", "🧑‍🔧")}${row(opp, B.name, B.e)}</tbody></table>
       ${evalGraph(ev, A.ply)}
       <div class="sc-anboard"><div class="sc-evalbar" aria-label="Bewertung ${C.fmtEval(e)}"><i style="height:${h.color === "b" ? wp : 100 - wp}%"></i><b>${C.fmtEval(e)}</b></div>${boardHTML(ch, { flip: h.color === "b", last, hint: A.ply < h.moves.length ? hint : null, check: kingSq(ch), lock: true })}</div>
-      <div class="sc-anmove" style="--c:${cls ? cls.c : "#64748b"}">${cur ? `<b>${Math.floor((A.ply - 1) / 2) + 1}.${cur.side === "b" ? ".." : ""} ${esc(san(A.ply - 1))}</b> <span>${cls.e} ${cls.t}</span>${cur.cls !== "best" && sanBest(A.ply - 1) ? `<small>Besser war <b>${esc(sanBest(A.ply - 1))}</b></small>` : ""}` : `<b>Ausgangsstellung</b><small>Tippe ▶ oder einen Zug unten</small>`}${A.ply < h.moves.length && bestNext ? `<small>💡 Bester Zug jetzt (blau): <b>${esc(sanBest(A.ply))}</b></small>` : ""}</div>
+      <div class="sc-anmove" style="--c:${cls ? cls.c : "#64748b"}">${cur ? (() => {
+        const x = Coach.explain({ moves: h.moves, ev, best: h.an.best, an: D, k: A.ply - 1, who });
+        const ai = (A.ai || {})[A.ply];
+        return `<div class="sc-anhd"><b>${Math.floor((A.ply - 1) / 2) + 1}.${cur.side === "b" ? ".." : ""} ${esc(san(A.ply - 1))}</b> <span>${cls.e} ${cls.t}</span><em>${esc(who(cur.side))}</em></div>
+          ${x.tags.length ? `<div class="sc-tags">${x.tags.map((t) => `<i>${esc(t)}</i>`).join("")}</div>` : ""}
+          <ul class="sc-coach">${x.lines.map((l) => `<li>${esc(l).replace(/\*\*(.+?)\*\*/g, "<b>$1</b>")}</li>`).join("")}</ul>
+          ${ai ? `<div class="sc-ai${ai.busy ? " busy" : ""}">${ai.busy ? "🤖 Claude denkt nach …" : esc(ai.text).replace(/\*\*(.+?)\*\*/g, "<b>$1</b>").replace(/\n/g, "<br>")}</div>` : `<button type="button" class="sc-askai" data-a="ancoach">🤖 Claude fragen: Erklär mir diesen Zug genauer</button>`}`;
+      })() : `<div class="sc-anhd"><b>Ausgangsstellung</b></div><ul class="sc-coach">${keyHTML()}</ul>`}</div>
       <div class="sc-ctl"><button type="button" class="btn" data-a="an" data-v="0">⏮</button><button type="button" class="btn" data-a="an" data-v="-1">◀</button><button type="button" class="btn primary" data-a="an" data-v="1">▶</button><button type="button" class="btn" data-a="an" data-v="end">⏭</button><button type="button" class="btn" data-a="home">🏠</button></div>
       <div class="sc-anlist">${D.moves.map((x, k) => `<button type="button" class="${A.ply === k + 1 ? "on" : ""}" data-a="an" data-v="p${k + 1}" style="--c:${C.classOf(x.cls).c}">${k % 2 === 0 ? `<em>${k / 2 + 1}.</em>` : ""}${esc(san(k))}${x.cls === "best" || x.cls === "good" ? "" : C.classOf(x.cls).e}</button>`).join("")}</div>
     </div>`;
@@ -309,6 +320,7 @@ export function mount(el) {
     if (!S.alive) return;
     el.innerHTML = S.an ? analysisHTML() : S.pz ? puzzleHTML() : S.review ? reviewHTML() : S.g ? gameHTML() : homeHTML();
     if (S.anim) { const a = S.anim; S.anim = null; slide(a.from, a.to); }
+    if (S.an) { const on = el.querySelector(".sc-anlist .on"); if (on) on.scrollIntoView({ block: "nearest", inline: "nearest" }); }
   }
   /** Figur gleitet vom Start- aufs Zielfeld (statt zu springen) */
   function slide(from, to) {
@@ -352,8 +364,22 @@ export function mount(el) {
       case "bot": S.sel = b.dataset.v; saveMe({ ...m, last: { ...m.last, bot: S.sel } }); render(); break;
       case "tcopen": S.tcOpen = !S.tcOpen; render(); break;
       case "catopen": S.open = S.open === b.dataset.v ? null : b.dataset.v; render(); break;
+      case "ancoach": {
+        const A = S.an, h = me().hist[A.i], k = A.ply - 1; if (k < 0) break;
+        if (!aiAvailable()) { ui.toast("Claude braucht die Anmeldung mit Google – im lokalen Modus geht das nicht.", 2600); break; }
+        const B = C.anyBot(h.bot) || C.botById("eva"), c = new Chess(); for (let j = 0; j < k; j++) c.move(uciToMove(h.moves[j]));
+        const fen = c.fen(), mv = c.move(uciToMove(h.moves[k])), bc = new Chess(fen), bm = h.an.best[k] ? bc.move(uciToMove(h.an.best[k])) : null;
+        const who = (sd) => (sd === h.color ? "ich (der Spieler)" : `der Bot ${B.name}`), D = A.data;
+        const x = Coach.explain({ moves: h.moves, ev: h.an.ev, best: h.an.best, an: D, k, who: (sd) => (sd === h.color ? "Du" : B.name) });
+        const prompt = `Du bist ein freundlicher Schach-Coach für einen Lehrling (ca. ${me().elo} Elo). Erkläre auf Deutsch, kurz (max. 6 Sätze) und konkret, warum dieser Zug ${C.classOf(D.moves[k].cls).t.toLowerCase()} war, welche Idee der bessere Zug hat und was man daraus allgemein lernen kann.\n\nStellung vor dem Zug (FEN): ${fen}\nGezogen hat ${who(D.moves[k].side)}: ${mv.san}\nEngine-Bester Zug: ${bm ? bm.san : "?"}\nBewertung vorher/nachher (Sicht Weiß, Bauerneinheiten): ${C.fmtEval(h.an.ev[k])} / ${C.fmtEval(h.an.ev[k + 1])}\nHinweise der Engine: ${x.lines.join(" ").replace(/\*\*/g, "")}`;
+        A.ai = { ...(A.ai || {}), [A.ply]: { busy: true } }; render();
+        try { const out = await askClaude([{ role: "user", content: prompt }], { body: { mode: "lehrer" }, timeoutMs: 60000 }); A.ai[A.ply + 0] = { text: String(out.reply || "").trim() || "Keine Antwort – nochmal probieren." }; }
+        catch (err) { A.ai[A.ply] = { text: "⚠️ " + ((err && err.message) || String(err)) }; }
+        if (S.an === A) render();
+        break;
+      }
       case "analyse": { const hi = b.dataset.i != null ? Number(b.dataset.i) : me().hist.length - 1; runAnalysis(hi); break; }
-      case "an": { const A = S.an, n = me().hist[A.i].moves.length, v = b.dataset.v; A.ply = v === "0" ? 0 : v === "end" ? n : v.startsWith("p") ? Number(v.slice(1)) : Math.max(0, Math.min(n, A.ply + Number(v))); A.animFrom = Number(v) === 1; render(); break; }
+      case "an": { const A = S.an, n = me().hist[A.i].moves.length, v = b.dataset.v; const prev = A.ply; A.ply = v === "0" ? 0 : v === "end" ? n : v.startsWith("p") ? Number(v.slice(1)) : Math.max(0, Math.min(n, A.ply + Number(v))); if (A.ply === prev + 1) { const u = me().hist[A.i].moves[prev]; S.anim = { from: u.slice(0, 2), to: u.slice(2, 4) }; } render(); break; }
       case "tc": S.tcOpen = false; saveMe({ ...m, last: { ...m.last, tc: b.dataset.v } }); setTimeout(render, 30); break;
       case "color": saveMe({ ...m, last: { ...m.last, color: b.dataset.v } }); setTimeout(render, 30); break;
       case "play": if (lsGet(CUR_KEY)) { ui.openSheet({ title: "Neue Partie?", bodyHTML: `<p>Die laufende Partie wird dann als Niederlage gewertet … nein, keine Sorge: sie wird einfach verworfen.</p><div class="row" style="gap:8px"><button type="button" class="btn" data-no>Abbrechen</button><button type="button" class="btn primary" data-yes>Neue Partie</button></div>`, onMount(sh, close) { sh.querySelector("[data-no]").onclick = close; sh.querySelector("[data-yes]").onclick = () => { close(); lsSet(CUR_KEY, null); newGame(); }; } }); } else newGame(); break;

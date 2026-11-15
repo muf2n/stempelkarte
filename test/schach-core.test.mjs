@@ -53,3 +53,16 @@ test("Analyse: Patzer erkennen, Genauigkeit, 120 Bots", () => {
   assert.ok(a.acc.w > 90 && a.acc.b < 70);
   assert.equal(C.fmtEval(150), "+1,5"); assert.equal(C.fmtEval(-29997), "−M2");
 });
+test("Coach erklärt: Figur hängt, Matt verpasst, Rochade", async () => {
+  const { explain } = await import("../js/alltag/schach-coach.js");
+  const who = (s) => (s === "w" ? "Du" : "Bot");
+  // 1. e4 e5 2. Nf3 Qh4?? (Dame hängt nicht direkt, aber: 3. Nxh4 schlägt die Dame)
+  const moves = ["e2e4", "e7e5", "g1f3", "d8h4", "f3h4"];
+  const ev = [30, 30, 30, 40, 950, 950];
+  const best = ["e2e4", "e7e5", "g1f3", "b8c6", "f3h4", "a7a6"];
+  const an = C.analyse(moves, ev, best);
+  const e = explain({ moves, ev, best, an, k: 3, who });
+  assert.ok(e.lines.join(" ").includes("Dame") && e.lines.join(" ").includes("h4"), e.lines.join(" | "));
+  const ok = explain({ moves, ev, best, an, k: 4, who });
+  assert.ok(/Schlägt die Dame/.test(ok.lines.join(" ")), ok.lines.join(" | "));
+});

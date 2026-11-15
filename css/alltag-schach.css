@@ -136,3 +136,10 @@
 .sc-anlist { display: flex; flex-wrap: wrap; gap: 4px; max-height: 160px; overflow-y: auto; }
 .sc-anlist button { border: 0; border-radius: 8px; padding: 4px 6px; background: var(--sc-card); color: var(--sc-txt); font: inherit; font-size: 12px; cursor: pointer; border-bottom: 3px solid var(--c); }
 .sc-anlist button.on { background: #81b64c; color: #fff; } .sc-anlist em { font-style: normal; color: var(--sc-mut); margin-right: 2px; }
+/* Coach */
+.sc-anhd { display: flex; align-items: baseline; gap: 8px; flex-wrap: wrap; } .sc-anhd em { margin-left: auto; font-style: normal; font-size: 12px; color: var(--sc-mut); }
+.sc-tags { display: flex; gap: 4px; flex-wrap: wrap; } .sc-tags i { font-style: normal; font-size: 11px; font-weight: 800; padding: 2px 8px; border-radius: 999px; background: var(--c); color: #fff; }
+.sc-coach { margin: 4px 0 0; padding-left: 18px; display: grid; gap: 4px; font-size: 14px; line-height: 1.35; } .sc-coach li:last-child { color: var(--sc-mut); font-size: 12px; list-style: none; margin-left: -18px; }
+.sc-coach li:has(.sc-keymv) { list-style: none; margin-left: -18px; } .sc-keymv { border: 0; border-radius: 8px; padding: 4px 8px; background: #1e2236; color: var(--sc-txt); font: inherit; font-size: 13px; text-align: left; cursor: pointer; }
+.sc-askai { margin-top: 6px; border: 1px dashed #81b64c; border-radius: 10px; padding: 8px 10px; background: transparent; color: #a3e635; font: inherit; font-size: 13px; font-weight: 700; cursor: pointer; text-align: left; }
+.sc-ai { margin-top: 6px; padding: 10px 12px; border-radius: 10px; background: #1e2236; font-size: 14px; line-height: 1.4; } .sc-ai.busy { animation: sc-pulse 1.2s infinite; }
