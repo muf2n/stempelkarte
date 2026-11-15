@@ -1,6 +1,7 @@
 // Update 10 F – 🖥️ System-Status › Was ist neu: ehrliche Liste aus der Versionsgeschichte (git log des Projekts), neueste zuerst.
 // Beim Veröffentlichen neuer Versionen hier oben ergänzen.
 export const CHANGELOG = [
+  { v: "20261115-1945", items: ["🧳 Reise-Ausgaben werden mit dem Zahlungstag gebucht – vorab Bezahltes siehst du sofort in Geld"] },
   { v: "20261113-0115", items: ["🛡️ Sicherheit: Die App lässt sich nicht mehr in fremde Webseiten einbetten (Schutz gegen Clickjacking)"] },
   { v: "20261112-1100", items: ["🗺️ Heute: „Wo warst du heute?“ – Zeit je Ort groß, Farbleiste über den Tag, Abschnitte mit Uhrzeit", "📋 Einträge: unter jedem Tag, wie lange du wo warst (inkl. Fahrten)", "📊 Übersicht: farbige Balken je Ort für Woche und Monat"] },
   { v: "20261112-0715", items: ["🚗 Karte: Standort-Punkt wandert live mit", "🎯 Fadenkreuz = Mitfahren: Karte folgt dir, bis du sie selbst verschiebst", "🔋 Live-Standort pausiert, wenn die App im Hintergrund ist"] },

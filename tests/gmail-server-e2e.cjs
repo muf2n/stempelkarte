@@ -77,7 +77,7 @@ const SERVER_DETS = [
     ok(await page.isVisible(".gm-setup summary"), "Einrichtungs-Anleitung vorhanden");
     await page.click(".gm-setup summary");
     const setup = await page.textContent(".gm-setup");
-    ok(setup.includes("Web client (auto created by Google Service)") && setup.includes("https://stempelkarte-mcp.lippa-florian.workers.dev/gmail/callback") && setup.includes("GOOGLE_OAUTH_CLIENT_ID") && setup.includes("GOOGLE_OAUTH_CLIENT_SECRET") && setup.includes("GMAIL_ENC_KEY"), "Anleitung: Client, Weiterleitungs-URI, Secrets");
+    ok(setup.includes("Web client (auto created by Google Service)") && setup.includes("https://stempelkarte-mcp.lippa-florian.workers.dev/gmail/callback") && setup.includes("GOOGLE_OAUTH_CLIENT_ID") && setup.includes("GOOGLE_OAUTH_CLIENT_SECRET"), "Anleitung: Client, Weiterleitungs-URI, Secrets (Schlüssel automatisch)");
     await page.screenshot({ path: path.join(OUT, "gmail-server-off-390-dark.png"), fullPage: true });
 
     // Verbinden → /gmail/start, neues Fenster mit Google-Adresse

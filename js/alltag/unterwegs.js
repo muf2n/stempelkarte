@@ -339,7 +339,7 @@ export function mount(el, ctx) {
 
   function openExpense(trip, exp = null) {
     const isNew = !exp;
-    const e = exp || { date: C.todayKey() >= trip.from && trip.from ? C.todayKey() : (trip.from || C.todayKey()), amount: "", note: "", booked: lsGet("sk-uw-exp-book") === "1" };
+    const e = exp || { date: C.todayKey() /* Tag der Zahlung → vorab bezahlt sofort in Geld sichtbar */, amount: "", note: "", booked: lsGet("sk-uw-exp-book") === "1" };
     ui.openSheet({
       title: isNew ? "Ausgabe eintragen" : "Ausgabe bearbeiten",
       bodyHTML: `<div class="fields">` +
