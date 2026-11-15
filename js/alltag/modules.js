@@ -32,6 +32,7 @@ export const MODULES = [
   { id: "karriere", title: "💼 Karriere", short: "Karriere", sub: "Ausbildung, Lebenslauf, Zertifikate & Bewerbungen", icon: "briefcase", color: "#1d4ed8", load: () => import("./karriere.js") }, // Update 12
   { id: "leben", title: "📊 Mein Leben", short: "Mein Leben", sub: "Digital Twin, Statistik & Jahresrückblick", icon: "chart", color: "#7c3aed", load: () => import("./leben.js") }, // Update 12
   { id: "spiel", title: "🎮 Spielwelt", short: "Spielwelt", sub: "Level, Quests, Erfolge, Haustier & Mini-Games", icon: "dice", color: "#db2777", load: () => import("./spiel.js") }, // Update 12
+  { id: "tycoon", title: "⚡ Strom-Tycoon", short: "Strom-Tycoon", sub: "Idle-Spiel: 5 Welten, Kraftwerke, Elektriker & goldene Blitze", icon: "bolt", color: "#f59e0b", load: () => import("./tycoon.js") }, // Update 18
   { id: "tiere", title: "🐾 Haustiere", short: "Haustiere", sub: "Füttern, Pflege, Tierarzt, Impfungen & Kosten", icon: "heart", color: "#a16207", load: () => import("./tiere.js") }, // Update 12
   { id: "kleider", title: "👕 Kleiderschrank", short: "Kleiderschrank", sub: "Outfits, Wetter-Vorschlag, Kalender & Packen", icon: "box", color: "#0e7490", load: () => import("./kleider.js") }, // Update 12
   { id: "gruppen", title: "👥 Freunde & Gruppen", short: "Gruppen", sub: "Events, Aufgaben, Kosten teilen & Challenges", icon: "users", color: "#16a34a", load: () => import("./gruppen.js") }, // Update 12

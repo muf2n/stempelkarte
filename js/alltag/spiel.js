@@ -92,7 +92,7 @@ export function mount(el) {
     const n = opts.length, seg = 360 / n;
     const colors = ["#7c3aed", "#db2777", "#f59e0b", "#16a34a", "#2563eb", "#0891b2", "#ea580c", "#dc2626", "#65a30d", "#9333ea", "#0d9488", "#e11d48"];
     const grad = opts.map((_, i) => `${colors[i % colors.length]} ${i * seg}deg ${(i + 1) * seg}deg`).join(",");
-    return `<section class="card"><h3>🎡 Entscheidungsrad</h3><div class="sw-wheel-wrap"><span class="sw-ptr" aria-hidden="true">▼</span>
+    return `<a class="card sw-ty" href="#alltag/tycoon" style="display:flex;gap:12px;align-items:center;text-decoration:none;color:inherit;background:linear-gradient(135deg,#fef3c7,#fde68a)"><span style="font-size:40px" aria-hidden="true">⚡🐹</span><span><b>Strom-Tycoon</b><br><small>Idle-Spiel: von Opas Garage bis in die Galaxie →</small></span></a><section class="card"><h3>🎡 Entscheidungsrad</h3><div class="sw-wheel-wrap"><span class="sw-ptr" aria-hidden="true">▼</span>
         <div class="sw-wheel" style="background:conic-gradient(${grad});transform:rotate(${S.wheelDeg}deg)">${opts.map((o, i) => `<span style="transform:rotate(${i * seg + seg / 2}deg)"><em>${esc(o)}</em></span>`).join("")}</div></div>
         <p class="sw-res" aria-live="polite">${S.wheelRes ? `👉 <b>${esc(S.wheelRes)}</b>` : "&nbsp;"}</p>
         <div class="sw-row"><button type="button" class="btn primary sm" data-sw="spin">🎡 Drehen</button><button type="button" class="btn ghost sm" data-sw="wheel">✏️ Optionen</button></div></section>

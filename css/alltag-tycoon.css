@@ -1,0 +1,190 @@
+/* ⚡ Strom-Tycoon (js/alltag/tycoon.js) */
+.ty { position: relative; display: grid; gap: 12px; padding-bottom: 24px; --gold: #f59e0b; }
+.ty-worlds { display: flex; gap: 6px; overflow-x: auto; padding: 2px 2px 4px; scrollbar-width: none; }
+.ty-worlds::-webkit-scrollbar { display: none; }
+.ty-w { flex: 0 0 auto; display: inline-flex; align-items: center; gap: 6px; padding: 8px 12px; border-radius: 999px; border: 1px solid var(--line, #e5e7eb); background: var(--card, #fff); color: inherit; font: inherit; font-size: 14px; font-weight: 600; cursor: pointer; }
+.ty-w.on { background: var(--wbg); color: #fff; border-color: transparent; box-shadow: 0 4px 14px color-mix(in srgb, var(--wbg) 45%, transparent); }
+.ty-w:disabled { opacity: .5; cursor: default; }
+
+.ty-head { position: relative; overflow: hidden; border-radius: 20px; padding: 16px 18px 14px; color: #fff; text-align: center;
+  background: radial-gradient(120% 140% at 50% 0%, color-mix(in srgb, var(--wbg) 70%, #fff) 0%, var(--wbg) 55%, color-mix(in srgb, var(--wbg) 70%, #000) 100%); }
+.ty-head.boost { animation: ty-glow 1.2s ease-in-out infinite alternate; }
+@keyframes ty-glow { from { box-shadow: 0 0 0 0 rgba(245, 158, 11, .0); } to { box-shadow: 0 0 22px 4px rgba(245, 158, 11, .75); } }
+.ty-wname { font-size: 13px; opacity: .85; font-weight: 600; letter-spacing: .02em; }
+.ty-money { font-size: clamp(30px, 9vw, 42px); font-weight: 800; line-height: 1.1; margin-top: 4px; font-variant-numeric: tabular-nums; text-shadow: 0 2px 10px rgba(0,0,0,.25); }
+.ty-rate { font-size: 15px; opacity: .92; font-variant-numeric: tabular-nums; }
+.ty-chips { display: flex; flex-wrap: wrap; gap: 6px; justify-content: center; margin-top: 10px; font-size: 13px; }
+.ty-chips > span:not(:empty) { background: rgba(255,255,255,.18); padding: 4px 10px; border-radius: 999px; }
+.ty-chips small { opacity: .8; }
+
+.ty-news { overflow: hidden; white-space: nowrap; border-radius: 10px; background: #111827; color: #fde68a; font-size: 13px; padding: 7px 0; }
+.ty-news span { display: inline-block; padding-left: 30%; animation: ty-marquee 12s linear infinite; }
+.ty-news span::before { content: "📰 "; }
+@keyframes ty-marquee { to { transform: translateX(-100%); } }
+
+.ty-shift { font-size: 13px; padding: 8px 12px; border-radius: 12px; background: var(--bg2, #f3f4f6); }
+.ty-shift.on { background: #dcfce7; color: #14532d; }
+.ty-chest { display: flex; flex-direction: column; align-items: center; gap: 2px; width: 100%; border: 0; border-radius: 16px; padding: 12px; cursor: pointer; font: inherit; font-size: 16px; color: #78350f;
+  background: linear-gradient(135deg, #fde68a, #f59e0b); animation: ty-wiggle 2.4s ease-in-out infinite; }
+.ty-chest small { font-size: 12px; }
+@keyframes ty-wiggle { 0%, 80%, 100% { transform: rotate(0); } 84% { transform: rotate(-2deg); } 88% { transform: rotate(2deg); } 92% { transform: rotate(-1deg); } }
+
+.ty-grid, .ty-next, .ty-gen, .ty-more { background: var(--card, #fff); border: 1px solid var(--line, #e5e7eb); border-radius: 16px; padding: 12px 14px; }
+.ty-gh, .ty-gh2 { display: flex; justify-content: space-between; align-items: center; gap: 8px; }
+.ty-gh small, .ty-gh2 small { color: var(--muted, #6b7280); }
+.ty-use { display: block; height: 10px; border-radius: 999px; background: var(--bg2, #f3f4f6); overflow: hidden; margin: 8px 0; }
+.ty-use i { display: block; height: 100%; width: 0; border-radius: inherit; background: linear-gradient(90deg, #22c55e, #84cc16); transition: width .3s; }
+.ty-use i.hot { background: linear-gradient(90deg, #f97316, #dc2626); animation: ty-hot .6s ease-in-out infinite alternate; }
+@keyframes ty-hot { to { filter: brightness(1.3); } }
+
+.ty-amt { display: flex; gap: 6px; align-items: center; flex-wrap: wrap; }
+.ty-amt button { border: 1px solid var(--line, #e5e7eb); background: var(--card, #fff); color: inherit; font: inherit; font-weight: 700; font-size: 13px; padding: 6px 10px; border-radius: 10px; cursor: pointer; }
+.ty-amt button[aria-pressed="true"] { background: var(--wbg); color: #fff; border-color: transparent; }
+.ty-amt .ty-all { margin-left: auto; background: linear-gradient(135deg, #fde047, #f59e0b); color: #78350f; border: 0; }
+
+.ty-gens { display: grid; gap: 10px; }
+.ty-gen { display: grid; grid-template-columns: 52px 1fr; gap: 6px 10px; align-items: start; }
+.ty-gen.new { border-style: dashed; }
+.ty-lock { opacity: .55; }
+.ty-ge { font-size: 38px; line-height: 52px; text-align: center; }
+.ty-gen.auto .ty-ge { animation: ty-bounce 1s ease-in-out infinite; }
+@keyframes ty-bounce { 0%, 100% { transform: translateY(0) scale(1); } 50% { transform: translateY(-4px) scale(1.06); } }
+.ty-gm { min-width: 0; display: grid; gap: 2px; }
+.ty-gm small { display: block; font-size: 12px; color: var(--muted, #6b7280); }
+.ty-joke { font-style: italic; }
+.ty-out b { color: #16a34a; }
+.ty-lv { font-size: 12px; font-weight: 700; color: #fff; background: var(--wbg); border-radius: 999px; padding: 1px 8px; vertical-align: 1px; }
+.ty-ms { display: block; height: 4px; border-radius: 999px; background: var(--bg2, #f3f4f6); overflow: hidden; margin-top: 3px; }
+.ty-ms i { display: block; height: 100%; background: var(--gold); }
+.ty-ga { grid-column: 1 / -1; display: flex; gap: 8px; }
+.ty-ga .btn { flex: 1; display: flex; flex-direction: column; align-items: center; line-height: 1.15; font-weight: 700; }
+.ty-ga .btn small { font-weight: 500; font-size: 11px; opacity: .85; }
+.ty-buy:not(:disabled) { background: #16a34a; color: #fff; border-color: #16a34a; }
+.ty-mgr:not(:disabled) { background: #2563eb; color: #fff; border-color: #2563eb; }
+.ty-tap { grid-column: 1 / -1; position: relative; overflow: hidden; border: 0; border-radius: 12px; min-height: 46px; cursor: pointer; font: inherit; font-weight: 700; color: #78350f; background: #fef3c7; touch-action: manipulation; }
+.ty-tap:active { transform: scale(.97); }
+.ty-tapf { position: absolute; inset: 0 auto 0 0; width: 0; background: linear-gradient(90deg, #fde047, #f59e0b); transition: width .2s linear; }
+.ty-tapt { position: relative; }
+.ty-tap.full { animation: ty-pulse .8s ease-in-out infinite; }
+@keyframes ty-pulse { 50% { box-shadow: 0 0 0 4px rgba(245, 158, 11, .45); } }
+.ty-run { grid-column: 1 / -1; position: relative; overflow: hidden; border-radius: 10px; background: #dbeafe; color: #1e3a8a; font-size: 12px; font-weight: 600; padding: 6px 10px; }
+.ty-run i { position: absolute; inset: 0; background: linear-gradient(90deg, transparent, rgba(255,255,255,.7), transparent); animation: ty-shine 1.6s linear infinite; }
+.ty-run span { position: relative; }
+@keyframes ty-shine { from { transform: translateX(-100%); } to { transform: translateX(100%); } }
+
+.ty-next { display: grid; gap: 4px; }
+.ty-next small { color: var(--muted, #6b7280); }
+.ty-next .ty-use i { background: linear-gradient(90deg, #8b5cf6, #ec4899); }
+.ty-more summary { cursor: pointer; font-weight: 700; }
+.ty-shop { display: grid; gap: 8px; margin: 10px 0 4px; }
+.ty-shop .btn { display: flex; justify-content: space-between; align-items: center; }
+.ty-ach { list-style: none; padding: 0; margin: 10px 0 0; display: grid; gap: 6px; }
+.ty-ach li { display: flex; gap: 10px; align-items: center; opacity: .55; }
+.ty-ach li.got { opacity: 1; }
+.ty-ach li > span { font-size: 24px; width: 32px; text-align: center; }
+.ty-ach small { display: block; color: var(--muted, #6b7280); font-size: 12px; }
+.ty-badge { background: var(--gold); color: #fff; border-radius: 999px; padding: 1px 8px; font-size: 12px; }
+
+.ty-fx { position: absolute; inset: 0; pointer-events: none; overflow: hidden; }
+.ty-pop { position: absolute; transform: translateX(-50%); font-weight: 800; font-size: 18px; color: #16a34a; text-shadow: 0 1px 0 #fff, 0 0 6px rgba(255,255,255,.8); animation: ty-up 1.1s ease-out forwards; white-space: nowrap; }
+.ty-pop.gold { color: #d97706; font-size: 22px; }
+@keyframes ty-up { from { opacity: 1; transform: translate(-50%, 0) scale(1); } to { opacity: 0; transform: translate(-50%, -60px) scale(1.25); } }
+
+.ty-blitz { position: absolute; z-index: 5; width: 62px; height: 62px; border-radius: 50%; border: 0; cursor: pointer; font-size: 34px;
+  background: radial-gradient(circle at 35% 30%, #fff7cc, #fbbf24 55%, #d97706); box-shadow: 0 0 24px 6px rgba(251, 191, 36, .85);
+  animation: ty-float 1.4s ease-in-out infinite alternate, ty-in .3s ease-out; touch-action: manipulation; }
+@keyframes ty-float { from { transform: translateY(0) rotate(-8deg); } to { transform: translateY(-14px) rotate(8deg); } }
+@keyframes ty-in { from { transform: scale(0); } }
+
+.ty-back { text-align: center; }
+.ty-back-e { font-size: 48px; }
+.ty-back-big { font-size: 32px; font-weight: 800; color: #16a34a; margin: 6px 0; }
+.ty-how { text-align: left; padding-left: 20px; display: grid; gap: 6px; }
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) .ty-shift.on { background: #14532d; color: #dcfce7; }
+  :root:not([data-theme="light"]) .ty-tap { background: #451a03; color: #fde68a; }
+  :root:not([data-theme="light"]) .ty-run { background: #1e3a8a; color: #dbeafe; }
+  :root:not([data-theme="light"]) .ty-pop { text-shadow: 0 0 6px rgba(0,0,0,.8); }
+}
+:root[data-theme="dark"] .ty-shift.on { background: #14532d; color: #dcfce7; }
+:root[data-theme="dark"] .ty-tap { background: #451a03; color: #fde68a; }
+:root[data-theme="dark"] .ty-run { background: #1e3a8a; color: #dbeafe; }
+@media (prefers-reduced-motion: reduce) { .ty *, .ty-blitz { animation: none !important; } }
+
+/* ---------- Update 18b: Navigation, Karte, Kette, Expedition, Shop ---------- */
+.ty-nav { position: relative; z-index: 4; display: grid; grid-template-columns: repeat(5, 1fr); gap: 4px; padding: 6px; border-radius: 16px; background: var(--card, #fff); border: 1px solid var(--line, #e5e7eb); box-shadow: 0 4px 14px rgba(0,0,0,.06); }
+.ty-nav button { position: relative; display: flex; flex-direction: column; align-items: center; gap: 2px; border: 0; background: none; color: inherit; font: inherit; font-size: 11px; font-weight: 600; padding: 6px 2px; border-radius: 12px; cursor: pointer; }
+.ty-nav button span { font-size: 20px; }
+.ty-nav button.on { background: var(--wbg); color: #fff; }
+.ty-nav i { position: absolute; top: 0; right: 6px; min-width: 18px; height: 18px; border-radius: 999px; background: #dc2626; color: #fff; font-style: normal; font-size: 11px; line-height: 18px; padding: 0 4px; animation: ty-pulse .9s infinite; }
+.ty-nav i.b { background: #2563eb; animation: none; }
+.ty-body { display: grid; gap: 12px; }
+.ty-card { background: var(--card, #fff); border: 1px solid var(--line, #e5e7eb); border-radius: 16px; padding: 14px; display: grid; gap: 10px; }
+.ty-card h3 { margin: 0; font-size: 17px; display: flex; gap: 8px; align-items: center; }
+.ty-card h3 small { color: var(--muted, #6b7280); font-weight: 600; }
+.ty-big { width: 100%; padding: 14px; font-size: 16px; }
+
+.ty-map { position: relative; display: grid; gap: 0; padding: 24px 16px 16px; border-radius: 22px; overflow: hidden;
+  background: linear-gradient(180deg, #020617 0%, #1e1b4b 22%, #312e81 40%, #1d4ed8 58%, #a16207 78%, #78350f 100%); }
+.ty-stars { position: absolute; inset: 0 0 60% 0; background-image: radial-gradient(1.5px 1.5px at 12% 20%, #fff, transparent), radial-gradient(1px 1px at 30% 8%, #fff, transparent), radial-gradient(1.5px 1.5px at 55% 15%, #fde68a, transparent), radial-gradient(1px 1px at 72% 30%, #fff, transparent), radial-gradient(1.5px 1.5px at 88% 10%, #fff, transparent), radial-gradient(1px 1px at 45% 35%, #fff, transparent); animation: ty-twinkle 3s ease-in-out infinite alternate; }
+@keyframes ty-twinkle { to { opacity: .4; } }
+.ty-node { position: relative; z-index: 1; display: flex; align-items: center; gap: 12px; width: 82%; padding: 10px 14px 10px 10px; border-radius: 999px; border: 3px solid rgba(255,255,255,.85); background: var(--wbg); color: #fff; font: inherit; text-align: left; cursor: pointer; box-shadow: 0 8px 20px rgba(0,0,0,.35); }
+.ty-node.l { justify-self: start; } .ty-node.r { justify-self: end; flex-direction: row-reverse; text-align: right; padding: 10px 10px 10px 14px; }
+.ty-node.locked { background: #374151; border-color: rgba(255,255,255,.35); opacity: .85; }
+.ty-node.here { outline: 4px solid #fde047; outline-offset: 2px; }
+.ty-ne { flex: 0 0 auto; width: 58px; height: 58px; border-radius: 50%; background: rgba(255,255,255,.18); display: grid; place-items: center; font-size: 34px; }
+.ty-node:not(.locked) .ty-ne { animation: ty-bounce 2.2s ease-in-out infinite; }
+.ty-nt { display: grid; gap: 2px; min-width: 0; } .ty-nt b { font-size: 16px; } .ty-nt small { font-size: 12px; opacity: .9; }
+.ty-pin { position: absolute; top: -18px; font-size: 26px; animation: ty-bounce 1s ease-in-out infinite; }
+.ty-node.l .ty-pin { right: 18px; } .ty-node.r .ty-pin { left: 18px; }
+.ty-path { display: block; height: 34px; margin: 0 auto; width: 0; border-left: 5px dashed rgba(255,255,255,.55); }
+.ty-map-hint { position: relative; color: #fff; text-align: center; font-size: 13px; opacity: .85; margin: 14px 0 0; }
+
+.ty-abil { position: relative; overflow: hidden; border: 0; border-radius: 14px; min-height: 48px; font: inherit; cursor: pointer; color: #fff; background: #475569; }
+.ty-abil.ready { background: #16a34a; animation: ty-pulse 1.2s infinite; }
+.ty-abil.on { background: #dc2626; }
+.ty-abil:disabled { cursor: default; }
+.ty-abil-f { position: absolute; inset: 0 auto 0 0; background: rgba(255,255,255,.22); transition: width .2s linear; }
+.ty-abil-t { position: relative; }
+
+.ty-chain { display: grid; grid-template-columns: 1fr auto 1fr; gap: 6px; align-items: stretch; background: var(--card, #fff); border: 1px solid var(--line, #e5e7eb); border-radius: 16px; padding: 12px; }
+.ty-link { display: grid; justify-items: center; text-align: center; gap: 2px; padding: 8px 6px; border-radius: 12px; background: var(--bg2, #f3f4f6); font-size: 13px; }
+.ty-link small { font-size: 11px; color: var(--muted, #6b7280); }
+.ty-link .btn { margin-top: 4px; font-size: 12px; padding: 4px 8px; }
+.ty-link.neck { background: #fee2e2; box-shadow: inset 0 0 0 2px #dc2626; animation: ty-hot .6s ease-in-out infinite alternate; }
+.ty-link.out { background: #dcfce7; }
+.ty-le { font-size: 24px; }
+.ty-arrow { align-self: center; color: var(--muted, #6b7280); font-size: 18px; }
+.ty-chain > .ty-arrow:nth-of-type(2) { grid-column: 1 / -1; justify-self: center; transform: rotate(90deg); }
+.ty-neck { grid-column: 1 / -1; margin: 4px 0 0; font-size: 13px; text-align: center; }
+
+.ty-exp { display: grid; grid-template-columns: 44px 1fr auto; gap: 10px; align-items: center; padding: 10px; border-radius: 14px; background: var(--bg2, #f3f4f6); }
+.ty-exp.done { background: #fef3c7; animation: ty-wiggle 2s infinite; }
+.ty-ee { font-size: 32px; text-align: center; }
+.ty-em { display: grid; gap: 2px; } .ty-em small { color: var(--muted, #6b7280); font-size: 12px; }
+.ty-em .ty-use { margin: 4px 0 0; height: 8px; } .ty-em .ty-use i { background: linear-gradient(90deg, #0ea5e9, #6366f1); }
+.ty-exp .btn small { display: block; font-size: 11px; }
+.ty-tours { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+.ty-tour { display: grid; justify-items: center; gap: 2px; padding: 12px 8px; border-radius: 14px; border: 1px solid var(--line, #e5e7eb); background: var(--card, #fff); color: inherit; font: inherit; text-align: center; cursor: pointer; }
+.ty-tour span { font-size: 30px; } .ty-tour b { font-size: 13px; } .ty-tour small { font-size: 11px; color: var(--muted, #6b7280); }
+.ty-relics { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
+.ty-relic { display: grid; justify-items: center; text-align: center; gap: 2px; padding: 10px 4px; border-radius: 14px; background: linear-gradient(160deg, #fef3c7, #fde68a); color: #78350f; }
+.ty-relic span { font-size: 30px; } .ty-relic b { font-size: 12px; } .ty-relic small { font-size: 10px; }
+.ty-relic.no { background: var(--bg2, #f3f4f6); color: var(--muted, #6b7280); }
+.ty-inv, .ty-shop { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+.ty-item { position: relative; display: grid; justify-items: center; text-align: center; gap: 2px; padding: 12px 6px 10px; border-radius: 14px; border: 1px solid var(--line, #e5e7eb); background: var(--card, #fff); color: inherit; font: inherit; cursor: pointer; }
+.ty-item span { font-size: 30px; } .ty-item b { font-size: 13px; } .ty-item small { font-size: 11px; color: var(--muted, #6b7280); }
+.ty-item i { position: absolute; top: 6px; right: 8px; font-style: normal; font-weight: 800; color: #2563eb; }
+.ty-item em { font-style: normal; font-weight: 700; font-size: 12px; margin-top: 4px; padding: 3px 10px; border-radius: 999px; background: #16a34a; color: #fff; }
+.ty-item:disabled { opacity: .5; cursor: default; } .ty-item:disabled em { background: #9ca3af; }
+.ty-stats { list-style: none; padding: 0; margin: 0; display: grid; gap: 6px; }
+.ty-stats li { display: flex; justify-content: space-between; }
+.ty-loot { list-style: none; padding: 0; margin: 8px 0; display: grid; gap: 6px; text-align: left; }
+.ty-loot li { padding: 8px 12px; border-radius: 12px; background: var(--bg2, #f3f4f6); animation: ty-in .4s ease-out both; }
+.ty-found { margin-top: 8px; padding: 14px; border-radius: 16px; background: linear-gradient(135deg, #fde68a, #f59e0b); color: #78350f; display: grid; gap: 2px; animation: ty-in .5s cubic-bezier(.2,1.6,.4,1) both; }
+.ty-found span { font-size: 44px; }
+:root[data-theme="dark"] .ty-link.neck, :root[data-theme="dark"] .ty-exp.done { color: #111827; }
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) .ty-link.neck, :root:not([data-theme="light"]) .ty-exp.done { color: #111827; } :root:not([data-theme="light"]) .ty-link.out { background: #14532d; } }
+
+.ty-lock > div { display: grid; gap: 2px; } .ty-lock small { color: var(--muted, #6b7280); font-size: 12px; }
