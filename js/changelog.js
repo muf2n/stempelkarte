@@ -1,6 +1,7 @@
 // Update 10 F – 🖥️ System-Status › Was ist neu: ehrliche Liste aus der Versionsgeschichte (git log des Projekts), neueste zuerst.
 // Beim Veröffentlichen neuer Versionen hier oben ergänzen.
 export const CHANGELOG = [
+  { v: "20261115-2330", items: ["⛏️ Strom-Tycoon wie im echten Idle-Bergwerk: Abbauen füllt den Wagen → Lift fährt's rauf ins Umspannwerk → Transporter liefert zur Börse = Geld", "🧑‍🔧 Ohne Manager tippst du jede Station selbst, mit Elektriker, Liftwart und Fahrer läuft alles automatisch"] },
   { v: "20261115-2315", items: ["👑 Schach-Kronen: 3 Kronen für einen Sieg ohne Hilfe (kein Hinweis, kein Rückgängig), 2 mit 1–2 Hilfen, sonst 1"] },
   { v: "20261115-2305", items: ["⚡ Strom-Tycoon: Erster Elektriker jeder Welt kostet nur noch 5× statt 25× – danach läuft der Stollen automatisch (Lift holt ab), „AUTO!“-Hinweis am Anstellen-Platz"] },
   { v: "20261115-2250", items: ["⚡ Strom-Tycoon komplett neu gezeichnet: Bergwerk mit Lift-Kreislauf (Lift holt aus jedem Stollen ab, Umspannwerk, Transporter zur Börse), gezeichnete Welten", "🗺️ Neue Weltkarte: Ozean bis ins All mit detaillierten Inseln, Gebäude-Inseln, Windpark, Leuchtturm", "🎮 Neue Kopfleiste, Menüs, Shop, Fundstück-Museum und Belohnungs-Popups; Spielstand neu gestartet", "♟️ Schach: Bots reden während der Partie, geschlagene Figuren mit Materialvorsprung, Aktionsleiste, Endfenster", "🔍 Partie-Analyse wie bei großen Schach-Apps: Übersicht mit Zugklassen, Spielbewertung, Phasen, Coach Zug für Zug mit Pfeilen, Anzeigen & Wiederholen", "🤖 219 Bots"] },

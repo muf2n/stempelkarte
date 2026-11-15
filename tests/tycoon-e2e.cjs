@@ -32,7 +32,12 @@ const ok = (c, m) => { console.log((c ? "  ✓ " : "  ✗ ") + m); if (!c) failu
   await page.waitForTimeout(2500);
   const m0 = await page.textContent(".ty-money");
   await page.click('[data-a="tap"][data-id="hamster"]'); await page.waitForTimeout(300);
-  ok(await page.textContent(".ty-money") !== m0, "Einspeisen bringt Geld");
+  ok(await page.textContent(".ty-money") === m0 && !/^0/.test(await page.textContent('[data-k="buf-hamster"]')), "Abbauen füllt den Wagen (noch kein Geld)");
+  await page.click('[data-a="lifttap"]'); await page.waitForTimeout(300);
+  ok(!/^0/.test(await page.textContent('[data-k="surf"]')), "Lift bringt es nach oben ins Lager");
+  await page.click('[data-a="transtap"]'); await page.waitForTimeout(300);
+  ok(await page.textContent(".ty-money") !== m0, "Liefern zur Börse bringt Geld");
+  ok(await page.isVisible('[data-a="hirelift"]') && await page.isVisible('[data-a="hiretrans"]'), "Liftwart und Fahrer kaufbar");
   await page.click('[data-a="chest"]'); await page.waitForTimeout(300);
   ok(/Truhe geöffnet/.test(await page.textContent("body")), "Truhe zeigt Belohnung"); await page.click(".sheet [data-close]"); await page.waitForTimeout(200);
   ok(!(await page.$('[data-a="chest"]:not([disabled])')) && /🔩 10/.test(await page.textContent(".ty-chips")), "Truhe +3 🔩 und Erfolg „Erster Strom“ +2 🔩 (5 → 10)");

@@ -76,8 +76,8 @@ export function mount(el) {
     save(true);
   }
   function welcome() {
-    const steps = [["👆", "<b>Einspeisen</b> antippen – Strom wird zu Geld."], ["🛒", "Kraftwerke ausbauen, Stufe 10/25/50 … = <b>Ertrag ×2</b>."],
-      ["🧑‍🔧", "<b>Elektriker anstellen</b> – dann läuft's von selbst, auch wenn die App zu ist."], ["🔌", "Leitung und 🏭 Umspannwerk ausbauen – das schwächste Glied bremst!"],
+    const steps = [["👆", "<b>⛏ Abbauen</b> füllt den Wagen, <b>⬆ Lift</b> bringt's rauf, <b>🚚 Liefern</b> zur Börse = Geld."], ["🛒", "Kraftwerke ausbauen, Stufe 10/25/50 … = <b>Ertrag ×2</b>."],
+      ["🧑‍🔧", "<b>Elektriker, Liftwart & Fahrer anstellen</b> – dann läuft alles von selbst, auch wenn die App zu ist."], ["🔌", "Leitung und 🏭 Umspannwerk ausbauen – das schwächste Glied bremst!"],
       ["🧭", "Trupp auf <b>Expedition</b> schicken – Fundstücke sammeln."], ["⚡", "<b>Goldene Blitze</b> fangen, 🗺️ neue Welten freischalten."], ["💼", "Heute echt gestempelt? Dann läuft alles <b>doppelt</b>."]];
     info("⚡ Willkommen beim Strom-Tycoon!", `<div class="ty-back-e" aria-hidden="true">🐹</div><p>Opa hat dir seine Garage vermacht. Und einen Hamster.</p>
       <ol class="ty-how">${steps.map(([e, t], i) => `<li style="animation-delay:${0.3 + i * 0.08}s"><span aria-hidden="true">${e}</span><div>${t}</div></li>`).join("")}</ol>`, "Los geht's! 🐹", "wide");
@@ -250,7 +250,12 @@ export function mount(el) {
     if (S.view === "welt") {
       txt("cap", T.fmt(r.cap * r.k)); txt("ucap", T.fmt(r.ucap * r.k)); txt("flow", T.fmt(r.auto));
       q("grid-box")?.classList.toggle("neck", r.neck === "grid"); q("umsp-box")?.classList.toggle("neck", r.neck === "umsp");
-      txt("neck", !r.raw ? "Noch keine Elektriker – du speist selbst ein. Stell welche an, dann fließt der Strom automatisch!" : r.neck === "grid" ? "🔥 Die Leitung ist zu schwach – bau sie aus!" : r.neck === "umsp" ? "🔥 Das Umspannwerk schafft's nicht – bau es aus!" : "✅ Alles fließt. Bau mehr Kraftwerke!");
+      // Stationen: Lift & Transporter (Abklingzeit, Bestand)
+      txt("surf", `${T.fmt(W.surf || 0)} €`);
+      const lcd = Math.max(0, (W.liftCd || 0) - now), tcd = Math.max(0, (W.transCd || 0) - now);
+      const lb = q("lift-cd"); if (lb) { lb.style.width = `${lcd ? (1 - lcd / (T.TRIP_S * 1000)) * 100 : 100}%`; const bt = lb.closest("button"); bt.disabled = lcd > 0 || T.cartsOf(W) <= 0; bt.classList.toggle("ready", !lcd && T.cartsOf(W) > 0); }
+      const tb = q("trans-cd"); if (tb) { tb.style.width = `${tcd ? (1 - tcd / (T.TRIP_S * 1000)) * 100 : 100}%`; const bt = tb.closest("button"); bt.disabled = tcd > 0 || (W.surf || 0) <= 0; bt.classList.toggle("ready", !tcd && (W.surf || 0) > 0); }
+      txt("neck", r.neck === "liftmgr" ? "⬆ Der Lift braucht einen Liftwart – sonst fährt er nur, wenn du tippst." : r.neck === "transmgr" ? "🚚 Stell einen Fahrer an – dann wird automatisch zur Börse geliefert." : !r.raw ? "⛏ Tipp auf den Wagen zum Abbauen, dann ⬆ Lift fahren und 🚚 Liefern – oder stell Elektriker an (AUTO!)." : r.neck === "grid" ? "🔥 Die Leitung ist zu schwach – bau sie aus!" : r.neck === "umsp" ? "🔥 Das Umspannwerk schafft's nicht – bau es aus!" : "✅ Alles fließt. Bau mehr Kraftwerke!");
       const ab = W.abilUntil > now, cd = W.abilCd > now;
       txt("abil", ab ? `×${T.ABIL.m} · ${T.fmtDur((W.abilUntil - now) / 1000)}` : cd ? `in ${T.fmtDur((W.abilCd - now) / 1000)}` : `×${T.ABIL.m} für ${T.fmtDur(T.abilDur(g) / 1000)}`);
       const ae = el.querySelector(".ty-boost"); if (ae) { ae.disabled = cd; ae.classList.toggle("on", ab); ae.classList.toggle("ready", !cd); }
@@ -258,10 +263,13 @@ export function mount(el) {
       for (const x of T.WORLDS[wi].gens) {
         const st = W.gens[x.id];
         txt(`out-${x.id}`, T.fmt(r.per[x.id]));
-        if (st.lvl && !st.mgr) {
-          const max = r.per[x.id] * T.BUF_SEC;
-          txt(`buf-${x.id}`, `${T.fmt(st.buf)} €`);
-          const bar = q(`buf-bar-${x.id}`); if (bar) { bar.style.height = `${max ? Math.min(100, (st.buf / max) * 100) : 0}%`; bar.parentElement.classList.toggle("full", max > 0 && st.buf >= max - 1e-9); }
+        if (st.lvl) {
+          txt(`buf-${x.id}`, `${T.fmt(st.buf || 0)} €`);
+          if (!st.mgr) { // Abbau-Knopf: Füllstand = Runde läuft noch (Abklingzeit), voll = bereit
+            const left = Math.max(0, (st.cd || 0) - now), bar = q(`buf-bar-${x.id}`);
+            if (bar) { bar.style.height = `${left ? (1 - left / (T.CYCLE_S * 1000)) * 100 : 100}%`; bar.parentElement.classList.toggle("full", !left); }
+            const btn = bar && bar.closest("button"); if (btn) btn.classList.toggle("busy", left > 0);
+          }
         }
       }
       if (S.amt === "max") el.querySelectorAll('[data-a="buy"]').forEach((b) => {
@@ -354,8 +362,12 @@ export function mount(el) {
       case "view": S.view = b.dataset.v; lsSet(VIEW_KEY, S.view); render(); if (S.view === "karte") scrollToMe(false); else el.querySelector(".ty-nav")?.scrollIntoView({ block: "nearest" }); break;
       case "goto": { const wi = Number(b.dataset.wi); set(T.goWorld(S.g, wi), { redraw: false }); S.view = "welt"; lsSet(VIEW_KEY, "welt"); render(); ui.toast(`🚐 Unterwegs nach ${T.world(wi).e} ${T.world(wi).name}`, 1200); break; }
       case "lockinfo": ui.toast("🔒 Noch gesperrt – verdiene genug in der Welt davor!", 1600); break;
-      case "tap": { const r = T.collect(S.g, id); if (r.got > 0) { pop(b, `+${T.fmt(r.got)} €`); set(r.s, { redraw: false }); refresh(); } else pop(b, "⏳"); break; }
-      case "all": { const r = T.collectAll(S.g); if (r.got > 0) { pop(b, `+${T.fmt(r.got)} €`); set(r.s, { redraw: false }); refresh(); } else ui.toast("Alle Puffer leer – kurz warten ⏳", 1200); break; }
+      case "tap": { const r = T.collect(S.g, id, now); if (r.got > 0) { pop(b, `⛏ +${T.fmt(r.got)}`); set(r.s, { redraw: false }); refresh(); } else pop(b, "⏳"); break; }
+      case "lifttap": { const r = T.liftTap(S.g, now); if (r.got > 0) { pop(b, `⬆ ${T.fmt(r.got)}`); set(r.s, { redraw: false }); refresh(); } else ui.toast(T.cartsOf(S.g.worlds[S.g.cur]) > 0 ? "Der Lift ist noch unterwegs ⏳" : "Die Wagen sind leer – erst abbauen ⛏", 1400); break; }
+      case "transtap": { const r = T.transTap(S.g, now); if (r.got > 0) { pop(b, `+${T.fmt(r.got)} €`); set(r.s, { redraw: false }); refresh(); } else ui.toast((S.g.worlds[S.g.cur].surf || 0) > 0 ? "Der Transporter ist noch unterwegs ⏳" : "Das Umspannwerk ist leer – erst mit dem Lift raufholen ⬆", 1500); break; }
+      case "hirelift": if (set(T.hireLift(S.g), { persist: true })) ui.toast("🧑‍🔧 Liftwart angestellt – der Lift fährt jetzt von selbst!", 2200); break;
+      case "hiretrans": if (set(T.hireTrans(S.g), { persist: true })) ui.toast("🧑‍🔧 Fahrer angestellt – es wird automatisch zur Börse geliefert!", 2200); break;
+      case "all": { const r = T.collectAll(S.g, now); if (r.got > 0) { pop(b, `+${T.fmt(r.got)} €`); set(r.s, { redraw: false }); refresh(); } else { set(r.s, { redraw: false }); refresh(); ui.toast("⛏ Abgebaut und ⬆ raufgeholt – Geld gibt's, wenn geliefert wird 🚚", 1600); } break; }
       case "buy": {
         const st = S.g.worlds[S.g.cur].gens[id], before = st.lvl, n = amtN(st.lvl, id);
         if (set(T.buyGen(S.g, id, n))) {

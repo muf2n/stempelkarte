@@ -57,6 +57,11 @@ export const WORLDS = [
 ].map((w, wi) => ({ ...w, gens: w.gens.map(([id, e, name, joke], gi) => ({ id, e, name, joke, cost: BASE[gi][0] * Math.pow(SCALE, wi), out: BASE[gi][1] * Math.pow(SCALE, wi) })) }));
 
 export const GROW = 1.15, BUF_SEC = 10, MGR_FACTOR = 25, START_MONEY = 15;
+/** Kreislauf wie im Bergwerk: Stollen → Wagen (Bestand) → Lift → Umspannwerk-Lager (surf) → Transporter → Börse (Geld).
+ *  Ohne Manager arbeitet eine Station nur, wenn man tippt (eine Runde); mit Manager dauernd. */
+export const CYCLE_S = 8, TRIP_S = 6;
+export const liftMgrCost = (wi) => 30 * Math.pow(SCALE, wi);
+export const transMgrCost = (wi) => 60 * Math.pow(SCALE, wi);
 export const MILESTONES = [10, 25, 50, 100, 200, 400];
 export const AKKU = [4, 8, 12, 24];
 export const AKKU_COST = [0, 5e3, 5e6, 5e9];
@@ -161,7 +166,7 @@ function mgrs(s) { return s.worlds.reduce((n, w) => n + Object.values(w.gens).fi
 /** Summe eines Fundstück-Effekts (Wert × Stufe). */
 export function relicFx(s, fx) { return RELICS.filter((r) => r.fx === fx).reduce((n, r) => n + r.v * (s.relics[r.id] || 0), 0); }
 
-function newWorld(wi) { return { money: wi === 0 ? START_MONEY : 0, total: 0, grid: 0, umsp: 0, abilUntil: 0, abilCd: 0, gens: Object.fromEntries(WORLDS[wi].gens.map((g) => [g.id, { lvl: 0, mgr: false, buf: 0 }])) }; }
+function newWorld(wi) { return { money: wi === 0 ? START_MONEY : 0, total: 0, grid: 0, umsp: 0, abilUntil: 0, abilCd: 0, liftMgr: false, transMgr: false, surf: 0, liftCd: 0, transCd: 0, gens: Object.fromEntries(WORLDS[wi].gens.map((g) => [g.id, { lvl: 0, mgr: false, buf: 0, cd: 0 }])) }; }
 export function newState(now = Date.now()) {
   return { v: STATE_V, cur: 0, unlocked: 0, worlds: WORLDS.map((_, i) => newWorld(i)), allTime: 0, stars: 0, resets: 0, akku: 0,
     fuses: 5, boosts: [], inv: {}, tours: 0, exp: [], slots: 1, relics: {}, blitze: 0, taps: 0, ach: [], chestDay: "", streak: 0, wheelDay: "", spins: 0, ev: null, cups: 0, last: now, created: now };
@@ -178,10 +183,11 @@ export function norm(x = {}, now = Date.now()) {
     for (const g of W.gens) {
       const q = (r.gens && r.gens[g.id]) || {};
       const lvl = Math.max(0, Math.floor(num(q.lvl)));
-      gens[g.id] = { lvl, mgr: !!q.mgr && lvl > 0, buf: Math.max(0, num(q.buf)) };
+      gens[g.id] = { lvl, mgr: !!q.mgr && lvl > 0, buf: Math.max(0, num(q.buf)), cd: num(q.cd) };
     }
     return { money: Math.max(0, num(r.money, s.worlds[i].money)), total: Math.max(0, num(r.total)), grid: Math.max(0, Math.floor(num(r.grid))),
-      umsp: Math.max(0, Math.floor(num(r.umsp))), abilUntil: num(r.abilUntil), abilCd: num(r.abilCd), gens };
+      umsp: Math.max(0, Math.floor(num(r.umsp))), abilUntil: num(r.abilUntil), abilCd: num(r.abilCd),
+      liftMgr: !!r.liftMgr, transMgr: !!r.transMgr, surf: Math.max(0, num(r.surf)), liftCd: num(r.liftCd), transCd: num(r.transCd), gens };
   });
   const unlocked = Math.min(WORLDS.length - 1, Math.max(0, Math.floor(num(x.unlocked))));
   const inv = {}; for (const k of Object.keys(BOOSTS)) { const n = Math.floor(num(x.inv && x.inv[k])); if (n > 0) inv[k] = Math.min(999, n); }
@@ -245,9 +251,19 @@ export function rates(s, wi, opt = {}) {
     if (st.mgr) raw += o; else manual += o;
   }
   const cap = gridCap(wi, w.grid), ucap = umspCap(wi, w.umsp);
-  const flow = Math.min(raw, cap, ucap);
-  const neck = raw <= flow + 1e-9 ? null : cap <= ucap ? "grid" : "umsp";
-  return { raw, cap, ucap, auto: flow * k, manual: manual * k, capped: !!neck, neck, use: raw ? Math.min(1, raw / cap) : 0, uuse: raw ? Math.min(1, Math.min(raw, cap) / ucap) : 0, per, k };
+  // Automatischer Fluss nur, wenn alle drei Stationen Manager haben
+  const flow = w.liftMgr && w.transMgr ? Math.min(raw, cap, ucap) : 0;
+  const neck = !raw ? null : !w.liftMgr ? "liftmgr" : !w.transMgr ? "transmgr" : raw <= Math.min(cap, ucap) + 1e-9 ? null : cap <= ucap ? "grid" : "umsp";
+  return { raw, cap, ucap, auto: flow * k, manual: manual * k, capped: neck === "grid" || neck === "umsp", neck, use: raw ? Math.min(1, raw / cap) : 0, uuse: raw ? Math.min(1, Math.min(raw, cap) / ucap) : 0, per, k, liftMgr: w.liftMgr, transMgr: w.transMgr };
+}
+/** Bestand aller Wagen einer Welt */
+export const cartsOf = (w) => Object.values(w.gens).reduce((a, g) => a + (g.buf || 0), 0);
+/** Lift: bis zu amount aus den Wagen (anteilig) ins Umspannwerk-Lager */
+function liftMove(w, amount) {
+  const tot = cartsOf(w); if (tot <= 0 || amount <= 0) return 0;
+  const m = Math.min(tot, amount), f = 1 - m / tot;
+  for (const g of Object.values(w.gens)) g.buf = (g.buf || 0) * f;
+  w.surf = (w.surf || 0) + m; return m;
 }
 function earn(s, wi, x) { const w = s.worlds[wi]; w.money += x; w.total += x; s.allTime += x; }
 /** Ertrag pro Sekunde aller Welten zusammen (für Belohnungen). */
@@ -257,12 +273,10 @@ export function tick(s0, dt, opt = {}) {
   const s = clone(s0), now = opt.now ?? Date.now();
   dt = Math.max(0, dt);
   for (let wi = 0; wi <= s.unlocked; wi++) {
-    const r = rates(s, wi, { ...opt, now });
-    earn(s, wi, r.auto * dt);
-    if (wi === s.cur) for (const g of WORLDS[wi].gens) {
-      const st = s.worlds[wi].gens[g.id];
-      if (st.lvl > 0 && !st.mgr) st.buf = Math.min(r.per[g.id] * BUF_SEC, st.buf + r.per[g.id] * dt);
-    }
+    const r = rates(s, wi, { ...opt, now }), w = s.worlds[wi];
+    for (const g of WORLDS[wi].gens) { const st = w.gens[g.id]; if (st.lvl > 0 && st.mgr) st.buf = (st.buf || 0) + r.per[g.id] * dt; }
+    if (w.liftMgr) liftMove(w, r.cap * r.k * dt);
+    if (w.transMgr) { const m = Math.min(w.surf || 0, r.ucap * r.k * dt); w.surf -= m; earn(s, wi, m); }
   }
   evTick(s, dt, { ...opt, now }, !opt.noBuf);
   s.boosts = s.boosts.filter((b) => b.until > now);
@@ -282,18 +296,38 @@ export function offline(s, now = Date.now(), opt = {}) {
 
 /* ---------- Aktionen (neuer Zustand oder null) ---------- */
 function payW(s, wi, cost) { if (s.worlds[wi].money + 1e-9 < cost) return null; const n = clone(s); n.worlds[wi].money = Math.max(0, n.worlds[wi].money - cost); return n; }
-export function collect(s, id) {
+/** Stollen ohne Elektriker antippen: eine Runde Abbau (CYCLE_S Sekunden Ertrag) in den Wagen */
+export function collect(s, id, now = Date.now()) {
   const st = s.worlds[s.cur].gens[id];
-  if (!st || !st.buf) return { s, got: 0 };
-  const got = st.buf * (1 + relicFx(s, "tap"));
-  const n = clone(s); n.worlds[s.cur].gens[id].buf = 0; earn(n, s.cur, got); n.taps++;
+  if (!st || !st.lvl || st.mgr || (st.cd || 0) > now) return { s, got: 0 };
+  const r = rates(s, s.cur, { now }), got = r.per[id] * CYCLE_S * (1 + relicFx(s, "tap"));
+  const n = clone(s), g = n.worlds[s.cur].gens[id]; g.buf = (g.buf || 0) + got; g.cd = now + CYCLE_S * 1000; n.taps++;
   return { s: n, got };
 }
-export function collectAll(s) {
-  let n = s, got = 0;
-  for (const g of WORLDS[s.cur].gens) { const r = collect(n, g.id); n = r.s; got += r.got; }
+/** Lift ohne Liftwart antippen: eine Fahrt (TRIP_S Sekunden Kapazität) */
+export function liftTap(s, now = Date.now()) {
+  const w = s.worlds[s.cur]; if (w.liftMgr || (w.liftCd || 0) > now || cartsOf(w) <= 0) return { s, got: 0 };
+  const r = rates(s, s.cur, { now }), n = clone(s), nw = n.worlds[s.cur];
+  const got = liftMove(nw, r.cap * r.k * TRIP_S); nw.liftCd = now + TRIP_S * 1000; n.taps++;
   return { s: n, got };
 }
+/** Transporter ohne Fahrer antippen: eine Fahrt zur Börse → Geld */
+export function transTap(s, now = Date.now()) {
+  const w = s.worlds[s.cur]; if (w.transMgr || (w.transCd || 0) > now || (w.surf || 0) <= 0) return { s, got: 0 };
+  const r = rates(s, s.cur, { now }), n = clone(s), nw = n.worlds[s.cur];
+  const got = Math.min(nw.surf, r.ucap * r.k * TRIP_S); nw.surf -= got; earn(n, s.cur, got); nw.transCd = now + TRIP_S * 1000; n.taps++;
+  return { s: n, got };
+}
+/** „Alles“: alle bereiten Stollen abbauen, dann Lift, dann Transporter (Geld = was bei der Börse ankommt) */
+export function collectAll(s, now = Date.now()) {
+  let n = s;
+  for (const g of WORLDS[s.cur].gens) n = collect(n, g.id, now).s;
+  n = liftTap(n, now).s;
+  const before = n.worlds[s.cur].money, t = transTap(n, now);
+  return { s: t.s, got: t.s.worlds[s.cur].money - before };
+}
+export function hireLift(s) { const w = s.worlds[s.cur]; if (w.liftMgr) return null; const n = payW(s, s.cur, liftMgrCost(s.cur)); if (n) n.worlds[s.cur].liftMgr = true; return n; }
+export function hireTrans(s) { const w = s.worlds[s.cur]; if (w.transMgr) return null; const n = payW(s, s.cur, transMgrCost(s.cur)); if (n) n.worlds[s.cur].transMgr = true; return n; }
 export function buyGen(s, id, k = 1) {
   const wi = s.cur, st = s.worlds[wi].gens[id];
   if (!st || k < 1) return null;
@@ -306,9 +340,7 @@ export function hire(s, id) {
   if (!st || st.mgr || st.lvl < 1) return null;
   const n = payW(s, wi, mgrCost(wi, id, s));
   if (!n) return null;
-  const buf = n.worlds[wi].gens[id].buf;
-  n.worlds[wi].gens[id] = { ...n.worlds[wi].gens[id], mgr: true, buf: 0 };
-  earn(n, wi, buf);
+  n.worlds[wi].gens[id] = { ...n.worlds[wi].gens[id], mgr: true }; // Wagen-Bestand bleibt, der Lift holt ihn
   return n;
 }
 export function buyGrid(s) { const n = payW(s, s.cur, gridCost(s.cur, s.worlds[s.cur].grid)); if (n) n.worlds[s.cur].grid++; return n; }

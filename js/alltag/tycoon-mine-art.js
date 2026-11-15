@@ -152,7 +152,10 @@ const ms = (lvl) => { const m = T.nextMilestone(lvl), p = T.MILESTONES.filter((x
 function rowHTML({ i, x, st, plan, ev, cost, n, mgrCost }) {
   const cur = ev ? "🎫" : "€", a = ev ? "ev" : "", ck = ev ? "data-evcost" : "data-cost", k = ev ? "evbuf" : "buf", ok = ev ? "evout" : "out";
   const auto = st.mgr, slow = auto ? "" : " slow";
-  const pile = auto
+  const pile = !ev ? (auto
+    ? `<span class="tm-pile auto" aria-label="Wagen – läuft automatisch"><span class="tm-cart"><span class="tm-heap" style="${delay(plan, i)}"></span></span><b class="tm-o" data-k="buf-${x.id}"></b><small class="tm-pr tm-o">+<span data-k="out-${x.id}"></span>/s</small></span>`
+    : `<button type="button" class="tm-pile" data-a="tap" data-id="${x.id}" aria-label="${esc(x.name)}: eine Runde abbauen"><span class="tm-cart"><span class="ty-pf tm-heap tm-cd" data-k="buf-bar-${x.id}"></span><i class="tm-bang" aria-hidden="true">⛏</i></span><b class="tm-o" data-k="buf-${x.id}"></b><small class="tm-pr tm-o">⛏ Abbauen</small></button>`)
+    : auto
     ? `<span class="tm-pile auto" aria-label="läuft automatisch"><span class="tm-cart"><span class="tm-heap" style="${delay(plan, i)}"></span></span><b class="tm-o"><span data-k="${ok}-${x.id}"></span>/s</b>
         <span class="tm-lpop tm-o" style="${delay(plan, i)}" aria-hidden="true">+<span data-k="${ok}-${x.id}"></span> ${cur}</span></span>`
     : `<button type="button" class="tm-pile" data-a="${a}tap" data-id="${x.id}" aria-label="${esc(x.name)}: einsammeln"><span class="tm-cart"><span class="ty-pf tm-heap" data-k="${k}-bar-${x.id}"></span><i class="tm-bang" aria-hidden="true">!</i></span><b class="tm-o" data-k="${k}-${x.id}"></b></button>`;
@@ -189,7 +192,8 @@ function shaftHTML(plan, rider, cargoE) {
 export function mineHTML(g, { amtN, inv, chest }) {
   const wi = g.cur, Wd = T.world(wi), W = g.worlds[wi];
   const gens = Wd.gens.filter((x) => T.visible(g, x.id));
-  const autoIdx = gens.map((x, i) => (W.gens[x.id].lvl && W.gens[x.id].mgr ? i : -1)).filter((i) => i >= 0);
+  // Der Lift fährt dauernd, sobald ein Liftwart angestellt ist – er hält an jedem gebauten Stollen
+  const autoIdx = W.liftMgr ? gens.map((x, i) => (W.gens[x.id].lvl ? i : -1)).filter((i) => i >= 0) : [];
   const plan = liftPlan(autoIdx), live = plan.P > 0;
   const rows = gens.map((x, i) => {
     const st = W.gens[x.id];
@@ -217,6 +221,11 @@ export function mineHTML(g, { amtN, inv, chest }) {
         <span class="tm-art">${KASSE}<span class="tm-coins" aria-hidden="true"><i>🪙</i><i>🪙</i><i>🪙</i></span></span>
       </div>
       <span class="tm-vtrack" aria-hidden="true"><span class="tm-vmove">${VAN}<span class="tm-puff"></span></span></span>
+    </div>
+    <div class="tm-stations">
+      <div class="tm-st">${W.liftMgr ? `<span class="tm-stok">🧑‍🔧 <b>Liftwart</b><small>Lift fährt automatisch</small></span>` : `<button type="button" class="tm-act" data-a="lifttap"><span class="tm-actf" data-k="lift-cd"></span><b>⬆ Lift fahren</b><small>Wagen → Umspannwerk</small></button><button type="button" class="tm-hire2" data-a="hirelift" data-cost="${T.liftMgrCost(wi)}"><span>🧑‍🔧+</span><small>${T.fmt(T.liftMgrCost(wi))} €</small></button>`}</div>
+      <div class="tm-st mid"><span class="tm-stock">📦 <b class="tm-o" data-k="surf"></b><small>im Umspannwerk</small></span></div>
+      <div class="tm-st">${W.transMgr ? `<span class="tm-stok">🧑‍🔧 <b>Fahrer</b><small>liefert automatisch</small></span>` : `<button type="button" class="tm-act" data-a="transtap"><span class="tm-actf" data-k="trans-cd"></span><b>🚚 Liefern</b><small>Umspannwerk → Börse</small></button><button type="button" class="tm-hire2" data-a="hiretrans" data-cost="${T.transMgrCost(wi)}"><span>🧑‍🔧+</span><small>${T.fmt(T.transMgrCost(wi))} €</small></button>`}</div>
     </div>
     <div class="ty-shaftwrap tm-wrap">${shaftHTML(plan, "👷", "⚡")}
       <div class="tm-rows"><div class="tm-top"><p class="ty-neck tm-neck" data-k="neck"></p></div>${rows}</div></div>

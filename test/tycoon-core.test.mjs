@@ -3,31 +3,37 @@ import assert from "node:assert/strict";
 import * as T from "../js/tycoon-core.js";
 
 const NOW = 1_800_000_000_000;
-test("Start, Kaufen, Puffer, Einspeisen", () => {
+test("Kreislauf von Hand: Stollen → Wagen → Lift → Umspannwerk → Transporter → Börse", () => {
   let s = T.newState(NOW);
   assert.equal(s.worlds.length, 5);
   s.worlds[0].money = 0; assert.equal(T.buyGen(s, "hamster"), null); // kein Geld
   s.worlds[0].money = 100;
   s = T.buyGen(s, "hamster", 2);
   assert.equal(s.worlds[0].gens.hamster.lvl, 2);
-  assert.ok(Math.abs(s.worlds[0].money - (100 - 5 - 5 * 1.15)) < 1e-9);
   s = T.tick(s, 100, { now: NOW + 100e3 });
-  assert.equal(s.worlds[0].gens.hamster.buf, 1 * 10); // 2 × 0,5 €/s, Puffer 10 s
-  const before = s.worlds[0].money;
-  const r = T.collect(s, "hamster");
-  assert.equal(r.got, 10); assert.equal(r.s.worlds[0].money, before + 10); assert.equal(r.s.taps, 1);
+  assert.equal(s.worlds[0].gens.hamster.buf, 0); // ohne Elektriker kein Abbau
+  let r = T.collect(s, "hamster", NOW); // eine Runde Abbau: 2 × 0,5 €/s × 8 s
+  assert.equal(r.got, 8); s = r.s; assert.equal(s.worlds[0].gens.hamster.buf, 8);
+  assert.equal(T.collect(s, "hamster", NOW + 1000).got, 0); // Abklingzeit
+  const m0 = s.worlds[0].money;
+  r = T.liftTap(s, NOW); s = r.s; assert.equal(r.got, 8); assert.equal(s.worlds[0].surf, 8); assert.equal(s.worlds[0].money, m0); // noch kein Geld
+  r = T.transTap(s, NOW); s = r.s; assert.equal(r.got, 8); assert.equal(s.worlds[0].money, m0 + 8); assert.equal(s.worlds[0].surf, 0);
+  const all = T.collectAll(s, NOW + 20e3); assert.equal(all.got, 8); // „Alles“ macht die ganze Kette
 });
 
-test("Elektriker + Leitung begrenzt, Offline mit Akku", () => {
+test("Manager: alles automatisch, begrenzt durch Leitung; Offline mit Akku", () => {
   let s = T.newState(NOW);
   s.worlds[0].money = 1e6;
   s = T.buyGen(s, "hamster", 50); s = T.hire(s, "hamster");
+  assert.equal(T.rates(s, 0).auto, 0); assert.equal(T.rates(s, 0).neck, "liftmgr"); // ohne Liftwart kein Fluss
+  s = T.hireLift(s); s = T.hireTrans(s);
   const r = T.rates(s, 0);
   assert.equal(r.raw, 0.5 * 50 * 8); // Meilensteine 10/25/50 → ×8
   assert.ok(r.capped); assert.equal(r.auto, T.gridCap(0, 0));
   const off = T.offline({ ...s, last: NOW }, NOW + 10 * 3600e3);
   assert.equal(off.used, 4 * 3600); // Akku 4 h
   assert.ok(Math.abs(off.earned - T.gridCap(0, 0) * 4 * 3600) < 1e-6);
+  assert.ok(off.s.worlds[0].gens.hamster.buf > 0); // Rest wartet im Wagen
 });
 
 test("Welten freischalten, Blitz, Truhe, Erfolge, Meisterbrief, Laden", () => {
@@ -55,6 +61,7 @@ test("Kette Leitung/Umspannwerk, Vorarbeiter, Booster-Rucksack", () => {
   let s = T.newState(NOW);
   s.worlds[0].money = 1e9;
   s = T.buyGen(s, "hamster", 50); s = T.hire(s, "hamster");
+  s = T.hireLift(s); s = T.hireTrans(s);
   for (let i = 0; i < 5; i++) s = T.buyGrid(s);
   let r = T.rates(s, 0, { now: NOW });
   assert.equal(r.neck, "umsp"); assert.equal(r.auto, T.umspCap(0, 0)); // Leitung ausgebaut → Umspannwerk bremst

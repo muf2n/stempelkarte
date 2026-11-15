@@ -375,3 +375,22 @@
 .tm-hire:not(:disabled)::after { content: "AUTO!"; position: absolute; top: -20px; left: 50%; transform: translateX(-50%); padding: 1px 6px; border: 2px solid var(--ol, #1f1300); border-radius: 8px; background: linear-gradient(#fde047, #f59e0b); color: #3b2300; font-size: 9px; font-weight: 900; letter-spacing: .04em; white-space: nowrap; animation: tm-autohint 1.2s ease-in-out infinite; pointer-events: none; }
 @keyframes tm-autohint { 50% { opacity: .55; } }
 @media (prefers-reduced-motion: reduce) { .tm-hire:not(:disabled)::after { animation: none; } }
+
+/* Stationen: Lift · Lager · Transport */
+.tm-stations { display: grid; grid-template-columns: 1fr .8fr 1fr; gap: 6px; padding: 8px; background: linear-gradient(#5b3a1a, #3f2a14); border-top: 3px solid #2a1a08; border-bottom: 3px solid #2a1a08; }
+.tm-st { display: grid; gap: 4px; align-content: start; }
+.tm-st.mid { align-content: center; }
+.tm-act { position: relative; overflow: hidden; display: grid; justify-items: center; gap: 0; padding: 7px 4px; border: 3px solid #1f1300; border-radius: 12px; background: linear-gradient(#ffd54a, #f59e0b); color: #3b2300; font: inherit; cursor: pointer; box-shadow: 0 4px 0 #1f1300; }
+.tm-act b { position: relative; font-size: 13px; font-weight: 900; } .tm-act small { position: relative; font-size: 9px; font-weight: 700; opacity: .85; }
+.tm-actf { position: absolute; inset: 0 auto 0 0; width: 100%; background: rgba(255,255,255,.35); transition: width .2s linear; }
+.tm-act:disabled { filter: grayscale(.6) brightness(.85); cursor: default; }
+.tm-act.ready { box-shadow: 0 4px 0 #1f1300, 0 0 0 3px rgba(253, 224, 71, .55); }
+.tm-act:active:not(:disabled) { transform: translateY(3px); box-shadow: 0 1px 0 #1f1300; }
+.tm-hire2 { display: flex; align-items: center; justify-content: center; gap: 6px; padding: 4px; border: 2px solid #1f1300; border-radius: 10px; background: linear-gradient(#4fa3ff, #1f6fe5); color: #fff; font: inherit; font-size: 12px; font-weight: 900; cursor: pointer; }
+.tm-hire2 small { font-size: 10px; } .tm-hire2:disabled { filter: grayscale(.8) brightness(.8); cursor: default; }
+.tm-hire2:not(:disabled) { box-shadow: 0 0 0 3px rgba(126, 227, 91, .6); }
+.tm-stok { display: grid; justify-items: center; text-align: center; padding: 6px 4px; border-radius: 12px; background: rgba(22, 163, 74, .35); border: 2px solid #16a34a; color: #fff; font-size: 18px; }
+.tm-stok b { font-size: 12px; } .tm-stok small { font-size: 9px; opacity: .9; }
+.tm-stock { display: grid; justify-items: center; text-align: center; color: #fff; font-size: 22px; } .tm-stock b { font-size: 15px; } .tm-stock small { font-size: 9px; opacity: .85; }
+.tm-pr { display: block; font-size: 9px; font-weight: 900; }
+.tm-pile.busy { filter: brightness(.85); }
