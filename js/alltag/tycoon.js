@@ -269,7 +269,7 @@ export function mount(el) {
           if (!st.mgr) { // Abbau-Knopf: Füllstand = Runde läuft noch (Abklingzeit), voll = bereit
             const left = Math.max(0, (st.cd || 0) - now), bar = q(`buf-bar-${x.id}`);
             if (bar) { bar.style.height = `${left ? (1 - left / (T.CYCLE_S * 1000)) * 100 : 100}%`; bar.parentElement.classList.toggle("full", !left); }
-            const btn = bar && bar.closest("button"); if (btn) btn.classList.toggle("busy", left > 0);
+            const btn = bar && bar.closest("button"); if (btn) btn.classList.toggle("busy", left > 0); const row = bar && bar.closest(".tm-row"); if (row && row.classList.contains("work") !== left > 0) row.classList.toggle("work", left > 0);
           }
         }
       }

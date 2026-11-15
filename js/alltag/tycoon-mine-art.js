@@ -145,6 +145,21 @@ const CAGE = svg("0 0 50 56", `<g stroke="${OL}" stroke-width="2.6" stroke-linej
   <path d="M4 54h42v-5H4z" fill="#78350f"/><path d="M4 8h42v6H4z" fill="#f59e0b"/><path d="M4 14v35M46 14v35" stroke="#f59e0b" stroke-width="5"/><path d="M4 14v35M46 14v35" stroke-width="1.4"/>
   <path d="M8 18l34 28M42 18L8 46" stroke="#f59e0b" stroke-width="1.6" stroke-opacity=".7"/><path d="M18 8l7-6 7 6" fill="none" stroke-width="2.2"/></g>`, "tm-cage");
 
+/** Gezeichneter Bergarbeiter (schaut nach rechts): Beine, Arm mit Spitzhacke, Sack auf dem Rücken. */
+const MINER = `<svg class="tm-mn" viewBox="0 0 34 38" aria-hidden="true"><g stroke="${OL}" stroke-width="1.6" stroke-linejoin="round" stroke-linecap="round">
+  <g class="tm-lb"><path d="M15 24v9" stroke="#1e3a8a" stroke-width="5"/><path d="M15 24v9" stroke-width="0" /><path d="M12.5 34.5h5.5" stroke="#3f2a14" stroke-width="3.6"/></g>
+  <g class="tm-sack"><path d="M3.5 13.5q-2 8 3 10.5q6.5 1.5 7.5-5q.5-6.5-4.5-7.5z" fill="#b7791f"/><path d="M6 12.5l2.5-2.5l2.5 2" fill="none"/><path d="M8 16.5l-1.6 3h2.2l-1.2 3" fill="none" stroke="#fde047" stroke-width="1.4"/></g>
+  <g class="tm-lf"><path d="M16.5 24v9" stroke="#2747b0" stroke-width="5"/><path d="M14.5 34.5h5.5" stroke="#4a3216" stroke-width="3.6"/></g>
+  <path d="M10.5 13.5q5-2 10 0v11h-10z" fill="#f97316"/><path d="M10.6 18.5h9.8" stroke="#fde047" stroke-width="2.2"/><path d="M10.6 18.5h9.8" stroke-width=".6"/>
+  <circle cx="15.5" cy="8.5" r="5" fill="#fcd7b0"/><circle cx="18" cy="8.3" r=".95" fill="${OL}" stroke="none"/><path d="M16.5 11.2q1.6.9 3-.2" fill="none" stroke-width="1.2"/><path d="M12.3 9.6q-1.2.2-1.4 1.5" fill="none" stroke-width="1"/>
+  <path d="M10 7.3a5.6 5.2 0 0 1 11.2 0z" fill="#facc15"/><path d="M9.2 7.3h13.4" stroke-width="2.2"/><circle cx="20.6" cy="5" r="1.7" fill="#fff7c2" class="tm-hl"/>
+  <g class="tm-arm"><path d="M15.5 15.5l5.5 4" stroke="#ea580c" stroke-width="4"/><path d="M15.5 15.5l5.5 4" stroke-width="0"/><circle cx="21.4" cy="19.8" r="1.8" fill="#fcd7b0"/>
+    <path d="M21 21l3-13" stroke="#92400e" stroke-width="2.4"/><path d="M17.2 9.6q6-4.6 12.3-.8l-1 1.3q-5.2-2.6-10.4.6z" fill="#cbd5e1"/></g>
+</g></svg>`;
+/** n Arbeiter, zeitversetzt (mehr Stufen = mehr Leute im Stollen) */
+const walkers = (n, load) => Array.from({ length: n }, (_, k) => `<span class="tm-wk" style="--k:${(k / n).toFixed(3)};--y:${k * 3}px">
+  <span class="tm-wf">${MINER}</span><span class="tm-chips"><i></i><i></i><i></i><b>✦</b></span><span class="tm-drop">+${load}</span>${k ? "" : `<span class="tm-zz">💤</span>`}</span>`).join("");
+
 /* ---------- Bausteine ---------- */
 const ms = (lvl) => { const m = T.nextMilestone(lvl), p = T.MILESTONES.filter((x) => x <= lvl).pop() || 0;
   return m ? `<span class="tm-ms" title="noch ${m - lvl} bis ×2"><i style="width:${(((lvl - p) / (m - p)) * 100).toFixed(1)}%"></i><em>×2 · ${lvl}/${m}</em></span>` : `<span class="tm-ms done"><em>alle Boni ✓</em></span>`; };
@@ -167,7 +182,7 @@ function rowHTML({ i, x, st, plan, ev, cost, n, mgrCost }) {
     <div class="tm-tun">
       <span class="tm-lamp" aria-hidden="true"></span>
       ${pile}${boss}
-      <span class="tm-walk${slow}" aria-hidden="true"><span class="tm-wk"><span class="tm-wb">👷<i>⚡</i></span></span></span>
+      <span class="tm-walk${slow}" aria-hidden="true">${walkers(ev ? 1 : Math.min(3, 1 + Math.floor(st.lvl / 25)), ev ? "🎫" : "⚡")}</span>
       <span class="tm-gen${auto ? " on" : ""}" aria-hidden="true">${machineSVG(i % 3)}<span class="tm-ge">${x.e}</span><span class="tm-spark"></span>${auto ? "" : `<small class="tm-rate"><span data-k="${ok}-${x.id}"></span>/s</small>`}</span>
     </div>
     ${ev ? `<button type="button" class="tm-lvl" data-a="evbuy" data-id="${x.id}" ${ck}="${cost}"><b>Stufe ${st.lvl}</b><small>+${n} · ${T.fmt(cost)} ${cur}</small></button>` : `<button type="button" class="tm-lvl" data-a="lvl" data-id="${x.id}" data-need="${cost}" aria-label="${esc(x.name)}: Stufe ${st.lvl} – Ausbau-Fenster"><b>Stufe ${st.lvl}</b><small>⬆ ${T.fmt(cost)} €</small></button>`}

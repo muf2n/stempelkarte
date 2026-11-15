@@ -219,11 +219,9 @@
 .tm-hire:active:not(:disabled) { transform: scale(.93); }
 
 /* Arbeiter: Maschine → Lore und zurück */
-.tm-walk { position: absolute; left: 108px; right: 66px; bottom: 8px; height: 30px; z-index: 1 !important; pointer-events: none; }
-.tm-wk { position: absolute; inset: 0; animation: tm-walk 4s ease-in-out infinite; will-change: transform; }
+.tm-walk { position: absolute; left: 50px; right: 58px; bottom: 6px; height: 44px; z-index: 3 !important; pointer-events: none; }
 .tm-wb { position: absolute; left: 0; bottom: 0; font-size: 22px; line-height: 1; filter: drop-shadow(0 2px 0 rgba(0,0,0,.35)); animation: tm-step .32s ease-in-out infinite alternate; }
 .tm-wb i { position: absolute; left: -8px; top: 3px; display: grid; place-items: center; width: 15px; height: 15px; border: 2px solid var(--ol); border-radius: 4px; background: #fde047; font-style: normal; font-size: 9px; animation: tm-carry 4s linear infinite; }
-.tm-walk.slow .tm-wk, .tm-walk.slow .tm-wb i { animation-duration: 7s; }
 @keyframes tm-walk { 0%, 12% { transform: translateX(calc(100% - 22px)); } 50%, 60% { transform: translateX(0); } 100% { transform: translateX(calc(100% - 22px)); } }
 @keyframes tm-step { from { transform: translateY(0) rotate(-4deg); } to { transform: translateY(-3px) rotate(4deg); } }
 @keyframes tm-carry { 0%, 11% { opacity: 0; transform: scale(.4); } 14%, 52% { opacity: 1; transform: none; } 55%, 100% { opacity: 0; transform: translateX(-10px) scale(.4); } }
@@ -361,7 +359,7 @@
   .tm-ums { left: 96px; } .tm-wires { width: 156px; } .tm-vtrack { left: 240px; right: 64px; } .tm-ks { right: 14px; }
   .ty-row.tm-row { grid-template-columns: minmax(0, 1fr) 92px; }
   .tm-tun { grid-template-columns: 60px 52px minmax(0, 1fr) 64px; }
-  .tm-walk { left: 122px; right: 74px; }
+  .tm-walk { left: 56px; right: 66px; }
 }
 
 /* ---------- Weniger Bewegung ---------- */
@@ -405,3 +403,42 @@ button.tm-stok { font: inherit; cursor: pointer; }
 .tm-boss.ready::after, .tm-stok.ready { box-shadow: 0 0 0 3px rgba(253, 224, 71, .7); }
 .tm-boss.on span { animation-duration: .5s; filter: drop-shadow(0 0 6px #fde047); }
 .tm-stok.on { background: rgba(245, 158, 11, .5); border-color: #fde047; }
+
+/* ---------- Bergarbeiter: hinlaufen → hacken → mit Sack zurück → ausleeren ---------- */
+.tm-walk { --d: 4s; }
+.tm-walk.slow { --d: 8s; }
+.tm-walk .tm-wk { position: absolute; will-change: transform; inset: auto 0 var(--y, 0) 0; height: 38px; animation: tm-go var(--d) linear infinite; animation-delay: calc(var(--d) * var(--k, 0) * -1); }
+.tm-walk .tm-wk * { animation-duration: var(--d); animation-iteration-count: infinite; animation-timing-function: linear; animation-delay: calc(var(--d) * var(--k, 0) * -1); }
+.tm-wf { position: absolute; left: 0; bottom: 0; width: 36px; height: 40px; animation-name: tm-face; filter: drop-shadow(0 2px 0 rgba(0,0,0,.35)); }
+.tm-mn { display: block; width: 100%; height: 100%; overflow: visible; animation-name: tm-bounce; }
+.tm-mn .tm-lf, .tm-mn .tm-lb { transform-box: view-box; transform-origin: 16px 24px; }
+.tm-mn .tm-lf { animation-name: tm-legf; } .tm-mn .tm-lb { animation-name: tm-legb; }
+.tm-mn .tm-arm { transform-box: view-box; transform-origin: 15.5px 15.5px; animation-name: tm-arm; }
+.tm-mn .tm-sack { animation-name: tm-sack; }
+.tm-mn .tm-hl { animation: none !important; filter: drop-shadow(0 0 3px #fff7c2); }
+.tm-chips { position: absolute; left: 26px; bottom: 14px; width: 0; height: 0; animation-name: tm-chipbox; }
+.tm-chips i { position: absolute; width: 5px; height: 5px; border: 1.4px solid var(--ol); border-radius: 2px; background: var(--rock, #a8a29e); animation-name: tm-chip; }
+.tm-chips i:nth-child(2) { --cx: 9px; --cy: -14px; background: #fde047; } .tm-chips i:nth-child(3) { --cx: -2px; --cy: -18px; }
+.tm-chips b { position: absolute; left: 2px; top: -10px; color: #fde047; font-size: 13px; text-shadow: 0 0 4px #fff; animation-name: tm-spark2; }
+.tm-drop { position: absolute; left: -4px; bottom: 30px; padding: 0 4px; border: 2px solid var(--ol); border-radius: 7px; background: #fde047; color: #3b2300; font-size: 10px; font-weight: 900; white-space: nowrap; opacity: 0; animation-name: tm-dropk; }
+.tm-zz { position: absolute; left: 18px; bottom: 30px; font-size: 12px; opacity: 0; }
+@keyframes tm-go { 0% { transform: translateX(0); } 38%, 62% { transform: translateX(calc(100% - 36px)); } 94%, 100% { transform: translateX(0); } }
+@keyframes tm-face { 0%, 61.9% { transform: scaleX(1); } 62%, 99.9% { transform: scaleX(-1); } }
+@keyframes tm-bounce { 0%, 4%, 8%, 12%, 16%, 20%, 24%, 28%, 32%, 36%, 62%, 66%, 70%, 74%, 78%, 82%, 86%, 90%, 94% { transform: translateY(0); } 2%, 6%, 10%, 14%, 18%, 22%, 26%, 30%, 34%, 64%, 68%, 72%, 76%, 80%, 84%, 88%, 92% { transform: translateY(-2px); } 41%, 49%, 57% { transform: translateY(-1px) rotate(-4deg); } 45%, 53%, 61% { transform: translateY(1px) rotate(6deg); } 97% { transform: rotate(-10deg); } }
+@keyframes tm-legf { 0.00% { transform: rotate(24deg); } 4.22% { transform: rotate(-24deg); } 8.44% { transform: rotate(24deg); } 12.67% { transform: rotate(-24deg); } 16.89% { transform: rotate(24deg); } 21.11% { transform: rotate(-24deg); } 25.33% { transform: rotate(24deg); } 29.56% { transform: rotate(-24deg); } 33.78% { transform: rotate(24deg); } 38.00% { transform: rotate(-24deg); } 40%, 60% { transform: rotate(6deg); } 62.00% { transform: rotate(24deg); } 66.00% { transform: rotate(-24deg); } 70.00% { transform: rotate(24deg); } 74.00% { transform: rotate(-24deg); } 78.00% { transform: rotate(24deg); } 82.00% { transform: rotate(-24deg); } 86.00% { transform: rotate(24deg); } 90.00% { transform: rotate(-24deg); } 94.00% { transform: rotate(24deg); } 97%, 100% { transform: rotate(0); } }
+@keyframes tm-legb { 0.00% { transform: rotate(-24deg); } 4.22% { transform: rotate(24deg); } 8.44% { transform: rotate(-24deg); } 12.67% { transform: rotate(24deg); } 16.89% { transform: rotate(-24deg); } 21.11% { transform: rotate(24deg); } 25.33% { transform: rotate(-24deg); } 29.56% { transform: rotate(24deg); } 33.78% { transform: rotate(-24deg); } 38.00% { transform: rotate(24deg); } 40%, 60% { transform: rotate(-10deg); } 62.00% { transform: rotate(-24deg); } 66.00% { transform: rotate(24deg); } 70.00% { transform: rotate(-24deg); } 74.00% { transform: rotate(24deg); } 78.00% { transform: rotate(-24deg); } 82.00% { transform: rotate(24deg); } 86.00% { transform: rotate(-24deg); } 90.00% { transform: rotate(24deg); } 94.00% { transform: rotate(-24deg); } 97%, 100% { transform: rotate(0); } }
+@keyframes tm-arm { 0.00% { transform: rotate(8deg); } 4.22% { transform: rotate(-8deg); } 8.44% { transform: rotate(8deg); } 12.67% { transform: rotate(-8deg); } 16.89% { transform: rotate(8deg); } 21.11% { transform: rotate(-8deg); } 25.33% { transform: rotate(8deg); } 29.56% { transform: rotate(-8deg); } 33.78% { transform: rotate(8deg); } 38.00% { transform: rotate(-8deg); } 41% { transform: rotate(-75deg); } 45% { transform: rotate(35deg); } 49% { transform: rotate(-75deg); } 53% { transform: rotate(35deg); } 57% { transform: rotate(-75deg); } 61% { transform: rotate(35deg); } 63%, 94% { transform: rotate(-20deg); } 97% { transform: rotate(10deg); } 100% { transform: rotate(8deg); } }
+@keyframes tm-sack { 0%, 61% { opacity: 0; transform: scale(.4); transform-origin: 8px 18px; } 64%, 93% { opacity: 1; transform: none; } 97%, 100% { opacity: 0; transform: translate(-6px, 6px) scale(.5); } }
+@keyframes tm-chipbox { 0%, 44% { opacity: 0; } 45%, 62% { opacity: 1; } 63%, 100% { opacity: 0; } }
+@keyframes tm-chip { 0%, 44.9% { transform: none; opacity: 0; } 45%, 53%, 61% { transform: none; opacity: 1; } 48.5%, 56.5%, 64% { transform: translate(var(--cx, 7px), var(--cy, -10px)) rotate(120deg); opacity: 0; } 100% { opacity: 0; } }
+@keyframes tm-spark2 { 0%, 44.9%, 47%, 52.9%, 55%, 60.9%, 63%, 100% { opacity: 0; transform: scale(.4); } 45%, 53%, 61% { opacity: 1; transform: scale(1.3); } }
+@keyframes tm-dropk { 0%, 94% { opacity: 0; transform: translateY(4px); } 96% { opacity: 1; transform: translateY(-4px); } 100% { opacity: 0; transform: translateY(-14px); } }
+/* Ohne Manager: Arbeiter döst neben dem Wagen, bis du tippst */
+.tm-row:not(.auto):not(.work) .tm-wk { animation: none; }
+.tm-row:not(.auto):not(.work) .tm-wk:not(:first-child) { display: none; }
+.tm-row:not(.auto):not(.work) .tm-wk * { animation-name: none; }
+.tm-row:not(.auto):not(.work) .tm-mn { animation: tm-doze 2.6s ease-in-out infinite; transform-origin: 50% 100%; }
+.tm-row:not(.auto):not(.work) .tm-zz { animation: tm-zzz 2.6s ease-in-out infinite; }
+.tm-row:not(.auto):not(.work) .tm-sack { opacity: 0; }
+@keyframes tm-doze { 50% { transform: rotate(-6deg) translateY(1px); } }
+@keyframes tm-zzz { 0% { opacity: 0; transform: translate(0, 4px) scale(.6); } 40% { opacity: 1; } 100% { opacity: 0; transform: translate(8px, -12px) scale(1.1); } }

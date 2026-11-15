@@ -77,6 +77,8 @@ const ok = (c, m) => { console.log((c ? "  ✓ " : "  ✗ ") + m); if (!c) failu
   ok(/Aktiv/.test(await page.textContent(".sheet")) && /Abbau ×3/.test(await page.textContent(".sheet")), "Manager-Karte: Fähigkeit gestartet");
   await page.screenshot({ path: path.join(OUT, "ty-manager.png") });
   await page.keyboard.press("Escape"); await page.waitForTimeout(300);
+  { const rb = await (await page.$('.tm-row[data-g="hamster"]')).boundingBox(); for (const [i, t] of [[0, 0], [1, 1500], [2, 700], [3, 900]]) { await page.waitForTimeout(t); await page.screenshot({ path: path.join(OUT, `ty-mn${i}.png`), clip: { x: 0, y: rb.y - 4, width: rb.width + 20, height: rb.height + 8 } }); } }
+  ok((await page.$$('.tm-row[data-g="hamster"] .tm-mn')).length >= 1, "Gezeichnete Bergarbeiter im Stollen");
   ok(await page.isVisible('[data-a="unlock"]'), "Welt 2 freischaltbar");
   await page.click('[data-a="unlock"]'); await page.waitForTimeout(400);
   ok(/Neue Welt: Die Baustelle/.test(await page.textContent("body")), "Freischalt-Jubel"); await page.click(".sheet [data-close]"); await page.waitForTimeout(200);

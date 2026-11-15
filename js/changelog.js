@@ -1,6 +1,7 @@
 // Update 10 F – 🖥️ System-Status › Was ist neu: ehrliche Liste aus der Versionsgeschichte (git log des Projekts), neueste zuerst.
 // Beim Veröffentlichen neuer Versionen hier oben ergänzen.
 export const CHANGELOG = [
+  { v: "20261116-0015", items: ["⛏️ Strom-Tycoon: Gezeichnete Bergarbeiter laufen zum Kraftwerk, hacken mit der Spitzhacke (Funken export const CHANGELOG = [ Brocken), tragen den Sack zurück und leeren ihn in den Wagen – mehr Stufen = mehr Arbeiter; ohne Manager dösen sie, bis du tippst", "🧑‍🔧 Manager viel billiger: erster Elektriker je Welt 2× statt 5×, weitere 8× statt 25×, Liftwart 12 €, Fahrer 20 €"] },
   { v: "20261116-0005", items: ["🔋 Strom-Tycoon: Graue Knöpfe im Shop (Akku, Zeitsprung, Expeditions-Platz) sagen jetzt, wie viel noch fehlt"] },
   { v: "20261115-2355", items: ["🧑‍🏫 Schach-Coach erklärt ehrlicher: wenn Zurückschlagen nur scheinbar geht (z. B. wegen einer Gabel), sagt er das jetzt – und lobt bei Fehlern nicht mehr nebenbei die Rochade"] },
   { v: "20261115-2345", items: ["⬆ Strom-Tycoon: Level-Fenster für jeden Stollen, Lift und Transport mit Werten (Abbau, Arbeiter, Tempo, Kapazität) und Kaufmenge ×1/×10/×100/MAX", "🧑‍🔧 Manager-Karten mit Namen und Fähigkeit (×3 für 3 min, dann Pause)", "💰 Welten, in denen du gerade nicht bist, sammeln in ihrer Kasse – auf der Karte abholen, mit Münzregen (×2 für 🔩 3)"] },
