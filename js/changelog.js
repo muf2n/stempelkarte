@@ -1,6 +1,7 @@
 // Update 10 F – 🖥️ System-Status › Was ist neu: ehrliche Liste aus der Versionsgeschichte (git log des Projekts), neueste zuerst.
 // Beim Veröffentlichen neuer Versionen hier oben ergänzen.
 export const CHANGELOG = [
+  { v: "20261116-0030", items: ["🚚 Strom-Tycoon: Alle 10 Stufen Umspannwerk kommt ein Lastwagen dazu (Stufe 10 = 2, Stufe 20 = 3 …) – jeder liefert voll mit und fährt auf der Straße mit"] },
   { v: "20261116-0020", items: ["⚖️ Strom-Tycoon: Elektriker kosten nur noch das Doppelte vom Kraftwerk (der erste je Welt 1,5×) – z. B. Solardach 16 Tsd. statt 64 Tsd. €"] },
   { v: "20261116-0015", items: ["⛏️ Strom-Tycoon: Gezeichnete Bergarbeiter laufen zum Kraftwerk, hacken mit der Spitzhacke (Funken export const CHANGELOG = [ Brocken), tragen den Sack zurück und leeren ihn in den Wagen – mehr Stufen = mehr Arbeiter; ohne Manager dösen sie, bis du tippst", "🧑‍🔧 Manager viel billiger: erster Elektriker je Welt 2× statt 5×, weitere 8× statt 25×, Liftwart 12 €, Fahrer 20 €"] },
   { v: "20261116-0005", items: ["🔋 Strom-Tycoon: Graue Knöpfe im Shop (Akku, Zeitsprung, Expeditions-Platz) sagen jetzt, wie viel noch fehlt"] },

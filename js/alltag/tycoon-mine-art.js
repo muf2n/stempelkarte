@@ -235,7 +235,8 @@ export function mineHTML(g, { amtN, inv, chest }) {
         <span class="tm-flow tm-o">💶 <b data-k="flow"></b> €/s</span>
         <span class="tm-art">${KASSE}<span class="tm-coins" aria-hidden="true"><i>🪙</i><i>🪙</i><i>🪙</i></span></span>
       </div>
-      <span class="tm-vtrack" aria-hidden="true"><span class="tm-vmove">${VAN}<span class="tm-puff"></span></span></span>
+      <span class="tm-vtrack" aria-hidden="true">${(() => { const n = Math.min(6, T.trucksOf(W.umsp)); return Array.from({ length: n }, (_, k) => `<span class="tm-vmove" style="animation-delay:${(-k * 6 / n).toFixed(2)}s">${VAN}<span class="tm-puff"></span></span>`).join(""); })()}</span>
+      ${T.trucksOf(W.umsp) > 1 ? `<span class="tm-trucks tm-o" aria-label="${T.trucksOf(W.umsp)} Lastwagen">🚚×${T.trucksOf(W.umsp)}</span>` : ""}
     </div>
     <div class="tm-stations">
       <div class="tm-st">${W.liftMgr ? `<button type="button" class="tm-stok" data-a="mgr" data-id="lift">🧑‍🔧 <b>Liftwart</b><small>Lift fährt automatisch</small></button>` : `<button type="button" class="tm-act" data-a="lifttap"><span class="tm-actf" data-k="lift-cd"></span><b>⬆ Lift fahren</b><small>Wagen → Umspannwerk</small></button><button type="button" class="tm-hire2" data-a="hirelift" data-cost="${T.liftMgrCost(wi)}"><span>🧑‍🔧+</span><small>${T.fmt(T.liftMgrCost(wi))} €</small></button>`}</div>

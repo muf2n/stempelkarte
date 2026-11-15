@@ -227,6 +227,8 @@ export const mgrCost = (wi, id, s = null) => genOf(wi, id).cost * (WORLDS[wi].ge
 export const gridCap = (wi, lvl) => 3 * Math.pow(SCALE, wi) * Math.pow(1.55, lvl);
 export const gridCost = (wi, lvl, n = 1) => 25 * Math.pow(SCALE, wi) * Math.pow(1.75, lvl) * (Math.pow(1.75, n) - 1) / 0.75;
 export const umspCap = (wi, lvl) => 4 * Math.pow(SCALE, wi) * Math.pow(1.6, lvl);
+/** Lastwagen: alle 10 Stufen Umspannwerk einer mehr (1, 2 ab 10, 3 ab 20 …) – jeder liefert voll mit */
+export const trucksOf = (lvl) => 1 + Math.floor(lvl / 10);
 export const umspCost = (wi, lvl, n = 1) => 40 * Math.pow(SCALE, wi) * Math.pow(1.8, lvl) * (Math.pow(1.8, n) - 1) / 0.8;
 /** Wie viele Stufen Leitung/Umspannwerk gehen sich aus? */
 export function stMaxBuy(wi, key, lvl, money) { const f = key === "lift" ? gridCost : umspCost; let n = 0; while (n < 500 && f(wi, lvl, n + 1) <= money + 1e-9) n++; return n; }
@@ -252,7 +254,7 @@ export function rates(s, wi, opt = {}) {
     per[g.id] = o * k * mabX(w, g.id, opt.now);
     if (st.mgr) raw += o; else manual += o;
   }
-  const cap = gridCap(wi, w.grid) * mabX(w, "lift", opt.now), ucap = umspCap(wi, w.umsp) * mabX(w, "trans", opt.now);
+  const cap = gridCap(wi, w.grid) * mabX(w, "lift", opt.now), ucap = umspCap(wi, w.umsp) * trucksOf(w.umsp) * mabX(w, "trans", opt.now);
   // Automatischer Fluss nur, wenn alle drei Stationen Manager haben
   const flow = w.liftMgr && w.transMgr ? Math.min(raw, cap, ucap) : 0;
   const neck = !raw ? null : !w.liftMgr ? "liftmgr" : !w.transMgr ? "transmgr" : raw <= Math.min(cap, ucap) + 1e-9 ? null : cap <= ucap ? "grid" : "umsp";
@@ -300,8 +302,8 @@ export function shaftStats(s, wi, id, lvl) {
   return { tot: o, workers, walk: 1 + Math.floor(lvl / 40) * 0.5, dig: o / workers, cap: o * CYCLE_S };
 }
 export function stationStats(wi, key, lvl) {
-  const c = key === "lift" ? gridCap(wi, lvl) : umspCap(wi, lvl);
-  return { tot: c, load: c * TRIP_S, speed: 1 + Math.floor(lvl / 10) * 0.25, ...(key === "trans" ? { trucks: Math.min(5, 1 + Math.floor(lvl / 15)) } : {}) };
+  const c = key === "lift" ? gridCap(wi, lvl) : umspCap(wi, lvl) * trucksOf(lvl);
+  return { tot: c, load: c * TRIP_S, speed: 1 + Math.floor(lvl / 10) * 0.25, ...(key === "trans" ? { trucks: trucksOf(lvl) } : {}) };
 }
 /** Ertrag pro Sekunde aller Welten zusammen (für Belohnungen). */
 export function totalRate(s, opt = {}) { let n = 0; for (let wi = 0; wi <= s.unlocked; wi++) { const r = rates(s, wi, opt); n += r.auto + (wi === s.cur ? r.manual * 0.5 : 0); } return n; }

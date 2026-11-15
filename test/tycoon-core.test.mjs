@@ -146,3 +146,10 @@ test("Kasse anderer Welten, Manager-Fähigkeit, Stationen in Mengen", () => {
   s.worlds[0].grid = 2; assert.equal(T.buyGrid(s, 3).worlds[0].grid, 5);
   assert.ok(T.shaftStats(s, 0, "hamster", 30).workers === 2 && T.stationStats(0, "trans", 15).trucks === 2);
 });
+
+test("Lastwagen: alle 10 Stufen einer mehr, jeder liefert voll", () => {
+  assert.deepEqual([0, 9, 10, 19, 20, 35].map(T.trucksOf), [1, 1, 2, 2, 3, 4]);
+  const s = T.newState(0); s.worlds[0].umsp = 10;
+  assert.ok(Math.abs(T.rates(s, 0).ucap / T.umspCap(0, 10) - 2) < 1e-9);
+  assert.equal(T.stationStats(0, "trans", 20).trucks, 3);
+});

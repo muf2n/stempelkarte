@@ -348,7 +348,7 @@ export function mount(el) {
       const cost = (id === "lift" ? T.gridCost : T.umspCost)(wi, lvl, n), a = T.stationStats(wi, id, lvl), b = T.stationStats(wi, id, lvl + n);
       const rows = [statLi("💶", id === "lift" ? "Lift-Leistung" : "Transport insgesamt", `${T.fmt(a.tot)}/s`, plus(a.tot, b.tot)), statLi("📦", id === "lift" ? "Ladung pro Fahrt" : "Ladung pro Lieferung", T.fmt(a.load), plus(a.load, b.load)), statLi("💨", "Geschwindigkeit", `${a.speed.toFixed(2)}×`, plus(a.speed, b.speed, (x) => x.toFixed(2)))];
       if (id === "trans") rows.push(statLi("🚚", "Transporter", a.trucks, plus(a.trucks, b.trucks, String)));
-      return `<div class="tl-head"><span class="tl-av" aria-hidden="true">${id === "lift" ? "🛗" : "🚚"}</span><div><b>${id === "lift" ? "Lift & Leitung" : "Umspannwerk & Transport"} · Stufe ${lvl}</b><small>${id === "lift" ? "Holt den Strom aus allen Stollen nach oben." : "Bringt den Strom aus dem Umspannwerk zur Börse."}</small></div></div>
+      return `<div class="tl-head"><span class="tl-av" aria-hidden="true">${id === "lift" ? "🛗" : "🚚"}</span><div><b>${id === "lift" ? "Lift & Leitung" : "Umspannwerk & Transport"} · Stufe ${lvl}</b><small>${id === "lift" ? "Holt den Strom aus allen Stollen nach oben." : "Bringt den Strom aus dem Umspannwerk zur Börse."}</small>${id === "trans" ? (() => { const nx = (Math.floor(lvl / 10) + 1) * 10; return `<span class="tl-ms" aria-label="noch ${nx - lvl} Stufen bis zum nächsten Lastwagen"><i style="width:${((lvl % 10) / 10) * 100}%"></i></span><small>🚚 Lastwagen Nr. ${T.trucksOf(lvl) + 1} auf Stufe <b>${nx}</b></small>`; })() : ""}</div></div>
         <ul class="tl-stats">${rows.join("")}</ul>${amtBar()}
         <button type="button" class="ty-b3 green tl-buy" data-sa="buy" data-n="${n}"${money + 1e-9 < cost ? " disabled" : ""}><b>⬆ Ausbauen +${n}</b><small>${T.fmt(cost)} €</small></button>`;
     }
@@ -366,7 +366,7 @@ export function mount(el) {
       box.addEventListener("click", (e) => {
         const b = e.target.closest("[data-sa]"); if (!b || b.disabled) return;
         if (b.dataset.sa === "amt") { S.amt = b.dataset.v; lsSet(AMT_KEY, S.amt); render(); redo(); return; }
-        if (id === "lift" || id === "trans") { if (set((id === "lift" ? T.buyGrid : T.buyUmsp)(S.g, Number(b.dataset.n)))) pop(b, "⬆!"); }
+        if (id === "lift" || id === "trans") { { const t0 = T.trucksOf(S.g.worlds[S.g.cur].umsp); if (set((id === "lift" ? T.buyGrid : T.buyUmsp)(S.g, Number(b.dataset.n)))) { pop(b, "⬆!"); const t1 = T.trucksOf(S.g.worlds[S.g.cur].umsp); if (id === "trans" && t1 > t0) ui.toast(`🚚 Neuer Lastwagen! Jetzt ${t1} unterwegs – liefert ${t1}× so viel.`, 2400); } } }
         else { e.stopPropagation(); act(b); }
         redo();
       });
