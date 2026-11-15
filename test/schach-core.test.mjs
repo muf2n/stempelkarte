@@ -43,3 +43,13 @@ test("Wochen-Event: 5 Bots, steigende Stärke, gleich für die ganze Woche, Belo
   const st = C.evState(me, a); assert.equal(st.pts, 35); assert.deepEqual(C.evClaimable(st), [0, 1]);
   assert.equal(C.evState(me, c).pts, 0); // neue Woche → neu
 });
+test("Analyse: Patzer erkennen, Genauigkeit, 120 Bots", () => {
+  assert.ok(C.BOTS.length >= 100); assert.ok(C.BOTS.every((b, i) => !i || b.elo >= C.BOTS[i - 1].elo));
+  const moves = ["e2e4", "e7e5", "d1h5", "g8f6"];
+  const ev = [20, 30, 25, 30, 900];       // nach 4 Halbzügen steht Weiß klar besser → Sf6?? war ein Patzer
+  const best = ["e2e4", "e7e5", "g1f3", "b8c6"];
+  const a = C.analyse(moves, ev, best);
+  assert.equal(a.moves[0].cls, "best"); assert.equal(a.moves[3].cls, "blund");
+  assert.ok(a.acc.w > 90 && a.acc.b < 70);
+  assert.equal(C.fmtEval(150), "+1,5"); assert.equal(C.fmtEval(-29997), "−M2");
+});

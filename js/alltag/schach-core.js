@@ -24,7 +24,24 @@ export const BOTS = [
   { id: "blitz", e: "⚡", name: "Großmeister Blitz", elo: 2100, cat: "Meister", depth: 12, noise: 0, time: 3000,
     hi: "Ich schlage ein wie der Blitz. Bist du bereit?", win: "Donnerwetter – das ging schnell.", lose: "Unglaublich! Du bist ein Gewitter am Brett!", talk: ["⚡", "Gewitter zieht auf.", "Das war vorhersehbar."] },
 ];
-export const CATS = ["Neu im Schach", "Anfänger", "Fortgeschritten", "Profi", "Meister"];
+/* ---------- 110 weitere Bots (eigene Figuren, Stärke steigt mit der Liste) ---------- */
+const MORE = `🐣 Küken Kiki|🐌 Schnecke Turbo|🐶 Dackel Waldi|🐱 Katze Minka|🐰 Hase Hoppel|🐢 Schildkröte Speedy|🦆 Ente Erna|🐷 Schweinchen Rosi|🐑 Schaf Wolle|🐭 Maus Pieps|🦔 Igel Stachi|🐸 Frosch Quaxi|🐝 Biene Summsi|🐞 Käfer Punkti|👶 Baby Ben|👧 Lena (7)|👦 Tobi (9)|🐻 Bär Brummi|🐼 Panda Pauli|🐨 Koala Kuschel|🐧 Pinguin Frack|🦉 Eule Ottilie|🧒 Mia (10)|🦊 Fuchs Fridolin|👩‍🎓 Schülerin Sarah|🧑‍🍳 Koch Karli|👨‍🌾 Bauer Hias|👩‍🌾 Bäuerin Liesl|🧑‍🔧 Installateur Ivo|👷‍♀️ Maurerin Monika|🧑‍🏭 Schlosser Schorsch|💂 Wachmann Willi|👨‍🚒 Feuerwehrmann Flo|👮 Polizistin Petra|🧑‍🎓 Student Stefan|👵 Oma Hilde|👴 Opa Alois|🧓 Tante Trude|🧑‍🎨 Malerin Mona|🧑‍🎤 Sänger Sascha|🤠 Cowboy Charly|🎅 Nikolaus Niki|🤶 Christl|🧚 Fee Flora|🧜 Nixe Nelly|🧟 Zombie Zenzi|🧛 Graf Biss|🤴 Prinz Poldi|👸 Prinzessin Pia|🧝 Elfe Elora|🧞 Dschinn Dino|🦸 Super-Susi|🦹 Schurke Schnauz|🥷 Ninja Nino|🧑‍✈️ Pilotin Paula|👨‍⚕️ Doktor Huber|👩‍⚕️ Schwester Sabine|🧑‍🏫 Lehrerin Lotte|🧑‍💻 Programmierer Paul|👩‍🔬 Forscherin Fanny|🕵️ Detektiv Dreher|🧙 Zauberer Zoltan|🔌 Stecker Steffi|🔋 Akku Anton|💡 Glühbirne Gloria|🧲 Magnet Max|⚙️ Zahnrad Zacharias|📡 Funker Ferdinand|🖥️ Computer Konrad|🛰️ Satellit Sigi|♟️ Bauer Bertl|♞ Springer Sprinzl|♝ Läufer Lukas|♜ Turm Traudl|♛ Dame Daniela|♚ König Konstantin|🎩 Baron von Bauer|👑 Königin Karoline|🧑‍🦳 Hofrat Hödl|🦁 Löwe Leopold|🐯 Tiger Tassilo|🐺 Wolf Wotan|🦅 Adler Adalbert|🦈 Hai Harald|🐙 Krake Kasimir|🦄 Einhorn Elvira|🦖 T-Rex Theo|🐲 Drachin Doris|🐉 Drache Draxl|🌩️ Gewitter Gustl|☢️ Reaktor Rudi|🦾 Cyborg Cyrill|👽 Alien Zorg|🛸 Ufo Udo|👾 Pixel Petz|🤖 Robo Rosa|🌪️ Tornado Tom|🌊 Tsunami Tanja|❄️ Eiskalte Edda|🔥 Feuerfaust Fritz|🌋 Vulkan Vinzenz|🏔️ Bergkönig Benedikt|🌌 Kosmos Kassian|👁️ Allsehender Albert|🧙‍♂️ Schachmagier Merlinus|🎓 Professorin Damenopfer|🧠 Neuronetz NEURA|🏆 Weltmeister Wolfgang|💎 Diamant Dominik|🖲️ Supercomputer DEEP-OHM`.split("|");
+const HI = ["Servus! Lust auf eine Partie?", "Na, bist du bereit?", "Ich hab heute richtig Lust zu spielen!", "Setz dich, ich beiß nicht. Meistens.", "Zeig mal, was du kannst.", "Heute gewinn ich – vielleicht.", "Schach ist mein Lieblingsspiel!", "Mal schauen, wer hier der Chef ist.", "Ich spiel fair – aber nicht nett.", "Konzentration … los geht's!"];
+const WIN = ["Gewonnen! Das war knapp … oder?", "Hehe, diesmal ich!", "Gut gespielt – aber nicht gut genug.", "Revanche jederzeit!", "Schachmatt! Juhu!"];
+const LOSE = ["Respekt, das war stark!", "Na gut, du hast gewonnen.", "Uff. Nächstes Mal krieg ich dich.", "Gratuliere! Wirklich sauber.", "Ich geb's zu: du warst besser."];
+const TALK = ["Hmm …", "Interessant.", "Das hab ich kommen sehen.", "Oh-oh.", "Mutiger Zug!", "Lass mich nachdenken.", "Jetzt wird's spannend!", "Das war aber frech.", "Warte nur ab.", "Hoppla!"];
+const pick = (arr, i, k) => arr[(i * 7 + k * 3) % arr.length];
+const LEVELS = ["Neu im Schach", "Anfänger", "Fortgeschritten", "Profi", "Meister", "Großmeister"];
+function catFor(elo) { return elo < 600 ? LEVELS[0] : elo < 1000 ? LEVELS[1] : elo < 1400 ? LEVELS[2] : elo < 1800 ? LEVELS[3] : elo < 2200 ? LEVELS[4] : LEVELS[5]; }
+const GEN = MORE.map((x, i) => {
+  const sp = x.indexOf(" "), e = x.slice(0, sp), name = x.slice(sp + 1);
+  const elo = Math.round((200 + (i / (MORE.length - 1)) * 2300) / 10) * 10;
+  return { id: "b" + String(i + 1).padStart(3, "0"), e, name, elo, cat: catFor(elo), ...paramsFor(elo), hi: pick(HI, i, 1), win: pick(WIN, i, 2), lose: pick(LOSE, i, 3), talk: [pick(TALK, i, 1), pick(TALK, i, 4), pick(TALK, i, 6)] };
+});
+for (const b of BOTS) b.cat = catFor(b.elo);
+BOTS.push(...GEN);
+BOTS.sort((a, b) => a.elo - b.elo);
+export const CATS = LEVELS;
 export const botById = (id) => BOTS.find((b) => b.id === id) || BOTS[0];
 
 /** Bedenkzeiten: [id, Minuten, Inkrement s] */
@@ -132,7 +149,7 @@ const mondayKey = (now) => { const d = new Date(now); d.setHours(12, 0, 0, 0); d
 function seeded(str) { let h = 2166136261; for (const ch of str) h = Math.imul(h ^ ch.charCodeAt(0), 16777619) >>> 0; return () => { h ^= h << 13; h >>>= 0; h ^= h >>> 17; h ^= h << 5; h >>>= 0; return h / 4294967296; }; }
 /** Engine-Stärke aus der Elo (gleiche Skala wie die festen Bots) */
 export function paramsFor(elo) {
-  const pts = [[250, 1, 450, 300], [450, 1, 260, 400], [650, 2, 170, 600], [850, 2, 95, 700], [1050, 3, 55, 900], [1250, 3, 28, 1000], [1450, 4, 14, 1200], [1650, 5, 8, 1500], [1850, 7, 3, 2000], [2100, 12, 0, 3000]];
+  const pts = [[250, 1, 450, 300], [450, 1, 260, 400], [650, 2, 170, 600], [850, 2, 95, 700], [1050, 3, 55, 900], [1250, 3, 28, 1000], [1450, 4, 14, 1200], [1650, 5, 8, 1500], [1850, 7, 3, 2000], [2100, 12, 0, 3000], [2300, 14, 0, 3800], [2450, 18, 0, 4500]];
   let p = pts[0]; for (const x of pts) if (elo >= x[0]) p = x;
   return { depth: p[1], noise: p[2], time: p[3] };
 }
@@ -163,3 +180,34 @@ export function evWin(me, ev, i) {
   return { me: { ...me, ev: { key: ev.key, won, claimed: st.claimed } }, gained: EV_REWARD[i] };
 }
 export const evClaimable = (st) => EV_TRACK.map((x, i) => i).filter((i) => st.pts >= EV_TRACK[i].at && !st.claimed.includes(i));
+
+/* ---------- 🔍 Partie-Analyse ---------- */
+// ev[k] = Bewertung (Centipawns, Sicht Weiß) der Stellung nach k Halbzügen; best[k] = bester Zug in dieser Stellung (UCI).
+export const MATE_CP = 30000;
+const clampCp = (v) => (Math.abs(v) > MATE_CP - 1000 ? Math.sign(v) * 1500 : Math.max(-1500, Math.min(1500, v)));
+export const winPct = (cp) => 50 + 50 * (2 / (1 + Math.exp(-0.00368208 * clampCp(cp))) - 1);
+export const CLASSES = [
+  { k: "best", e: "⭐", t: "Bester Zug", c: "#16a34a" },
+  { k: "good", e: "✅", t: "Gut", c: "#65a30d" },
+  { k: "inacc", e: "⁉️", t: "Ungenau", c: "#ca8a04" },
+  { k: "mist", e: "❓", t: "Fehler", c: "#ea580c" },
+  { k: "blund", e: "‼️", t: "Patzer", c: "#dc2626" },
+];
+export const classOf = (k) => CLASSES.find((x) => x.k === k);
+/** moves: UCI-Liste, ev/best wie oben → je Zug { ply, side, cls, loss (Gewinn-%), bestUci } + Genauigkeit je Seite */
+export function analyse(moves, ev, best) {
+  const out = [], acc = { w: [], b: [] };
+  for (let i = 0; i < moves.length; i++) {
+    const side = i % 2 === 0 ? "w" : "b", sg = side === "w" ? 1 : -1;
+    const before = winPct(sg * ev[i]), after = winPct(sg * ev[i + 1]);
+    const loss = Math.max(0, before - after);
+    const isBest = best[i] && moves[i].slice(0, 4) === best[i].slice(0, 4);
+    const cls = isBest || loss < 2 ? "best" : loss < 6 ? "good" : loss < 12 ? "inacc" : loss < 22 ? "mist" : "blund";
+    out.push({ ply: i, side, cls, loss: Math.round(loss * 10) / 10, best: best[i] });
+    acc[side].push(Math.max(0, Math.min(100, 103.1668 * Math.exp(-0.04354 * loss) - 3.1669)));
+  }
+  const avg = (a) => (a.length ? Math.round(a.reduce((x, y) => x + y, 0) / a.length * 10) / 10 : 0);
+  const count = (side) => Object.fromEntries(CLASSES.map((c) => [c.k, out.filter((m) => m.side === side && m.cls === c.k).length]));
+  return { moves: out, acc: { w: avg(acc.w), b: avg(acc.b) }, count: { w: count("w"), b: count("b") } };
+}
+export const fmtEval = (cp) => (Math.abs(cp) > MATE_CP - 1000 ? `${cp > 0 ? "+" : "−"}M${Math.ceil((MATE_CP - Math.abs(cp)) / 2)}` : `${cp >= 0 ? "+" : "−"}${(Math.abs(cp) / 100).toFixed(1).replace(".", ",")}`);

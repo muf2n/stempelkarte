@@ -18,6 +18,10 @@ function loadCss() {
   if (document.querySelector('link[data-css="tycoon"]')) return;
   const l = document.createElement("link"); l.rel = "stylesheet"; l.dataset.css = "tycoon";
   l.href = new URL("../../css/alltag-tycoon.css", import.meta.url).href; document.head.appendChild(l);
+  for (const part of ["mine", "map", "ui"]) { // Zusatz-Stile je Bereich (nach dem Grund-Stil geladen)
+    const x = document.createElement("link"); x.rel = "stylesheet"; x.dataset.css = "tycoon-" + part;
+    x.href = new URL(`../../css/alltag-tycoon-${part}.css`, import.meta.url).href; document.head.appendChild(x);
+  }
 }
 function workedToday() {
   try {
