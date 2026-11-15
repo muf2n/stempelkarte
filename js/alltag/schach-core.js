@@ -26,6 +26,7 @@ export const BOTS = [
 ];
 /* ---------- 110 weitere Bots (eigene Figuren, Stärke steigt mit der Liste) ---------- */
 const MORE = `🐣 Küken Kiki|🐌 Schnecke Turbo|🐶 Dackel Waldi|🐱 Katze Minka|🐰 Hase Hoppel|🐢 Schildkröte Speedy|🦆 Ente Erna|🐷 Schweinchen Rosi|🐑 Schaf Wolle|🐭 Maus Pieps|🦔 Igel Stachi|🐸 Frosch Quaxi|🐝 Biene Summsi|🐞 Käfer Punkti|👶 Baby Ben|👧 Lena (7)|👦 Tobi (9)|🐻 Bär Brummi|🐼 Panda Pauli|🐨 Koala Kuschel|🐧 Pinguin Frack|🦉 Eule Ottilie|🧒 Mia (10)|🦊 Fuchs Fridolin|👩‍🎓 Schülerin Sarah|🧑‍🍳 Koch Karli|👨‍🌾 Bauer Hias|👩‍🌾 Bäuerin Liesl|🧑‍🔧 Installateur Ivo|👷‍♀️ Maurerin Monika|🧑‍🏭 Schlosser Schorsch|💂 Wachmann Willi|👨‍🚒 Feuerwehrmann Flo|👮 Polizistin Petra|🧑‍🎓 Student Stefan|👵 Oma Hilde|👴 Opa Alois|🧓 Tante Trude|🧑‍🎨 Malerin Mona|🧑‍🎤 Sänger Sascha|🤠 Cowboy Charly|🎅 Nikolaus Niki|🤶 Christl|🧚 Fee Flora|🧜 Nixe Nelly|🧟 Zombie Zenzi|🧛 Graf Biss|🤴 Prinz Poldi|👸 Prinzessin Pia|🧝 Elfe Elora|🧞 Dschinn Dino|🦸 Super-Susi|🦹 Schurke Schnauz|🥷 Ninja Nino|🧑‍✈️ Pilotin Paula|👨‍⚕️ Doktor Huber|👩‍⚕️ Schwester Sabine|🧑‍🏫 Lehrerin Lotte|🧑‍💻 Programmierer Paul|👩‍🔬 Forscherin Fanny|🕵️ Detektiv Dreher|🧙 Zauberer Zoltan|🔌 Stecker Steffi|🔋 Akku Anton|💡 Glühbirne Gloria|🧲 Magnet Max|⚙️ Zahnrad Zacharias|📡 Funker Ferdinand|🖥️ Computer Konrad|🛰️ Satellit Sigi|♟️ Bauer Bertl|♞ Springer Sprinzl|♝ Läufer Lukas|♜ Turm Traudl|♛ Dame Daniela|♚ König Konstantin|🎩 Baron von Bauer|👑 Königin Karoline|🧑‍🦳 Hofrat Hödl|🦁 Löwe Leopold|🐯 Tiger Tassilo|🐺 Wolf Wotan|🦅 Adler Adalbert|🦈 Hai Harald|🐙 Krake Kasimir|🦄 Einhorn Elvira|🦖 T-Rex Theo|🐲 Drachin Doris|🐉 Drache Draxl|🌩️ Gewitter Gustl|☢️ Reaktor Rudi|🦾 Cyborg Cyrill|👽 Alien Zorg|🛸 Ufo Udo|👾 Pixel Petz|🤖 Robo Rosa|🌪️ Tornado Tom|🌊 Tsunami Tanja|❄️ Eiskalte Edda|🔥 Feuerfaust Fritz|🌋 Vulkan Vinzenz|🏔️ Bergkönig Benedikt|🌌 Kosmos Kassian|👁️ Allsehender Albert|🧙‍♂️ Schachmagier Merlinus|🎓 Professorin Damenopfer|🧠 Neuronetz NEURA|🏆 Weltmeister Wolfgang|💎 Diamant Dominik|🖲️ Supercomputer DEEP-OHM`.split("|");
+const MORE2 = `🐿️ Eichhörnchen Emil|🦦 Otter Olli|🦥 Faultier Fritzi|🐊 Krokodil Kroko|🦒 Giraffe Gisela|🦓 Zebra Zora|🦘 Känguru Kurt|🦩 Flamingo Flo|🐓 Hahn Hansi|🦚 Pfau Pepi|🐄 Kuh Liesl|🐐 Ziege Zilli|🐴 Pony Pünktchen|🐹 Hamster Hanni|🐇 Hase Hermine|🦌 Hirsch Hubert|🐗 Wildschwein Wastl|🦫 Biber Bruno|🦭 Robbe Rudi|🐬 Delfin Daisy|🐳 Wal Walter|🦀 Krabbe Klara|🦞 Hummer Hugo-Max|🐠 Fisch Flossi|🐡 Kugelfisch Kugi|🦑 Tintenfisch Tinto|🦋 Schmetterling Schmetti|🐛 Raupe Rosalie|🦗 Grille Gregor|🕷️ Spinne Spinnifix|🦂 Skorpion Sigi|🐍 Schlange Sissi|🦎 Eidechse Eddi|🐢 Opa Schildkröte|🦕 Brachio Bruni|🐘 Elefant Erwin|🦏 Nashorn Norbert|🦛 Nilpferd Nelli|🐪 Kamel Karl|🦙 Lama Lotti|🧑‍🌾 Gärtnerin Gerda|🧑‍🍼 Papa Peter|👩‍🍼 Mama Maria|🧑‍🔬 Chemiker Chris|🧑‍🚀 Astronautin Anna|🧑‍🚒 Feuerwehrfrau Franzi|🧑‍⚖️ Richterin Renate|🧑‍💼 Chefin Charlotte|👨‍💼 Abteilungsleiter Anton|🧑‍🏭 Elektrikerin Elena|👷 Polier Paul|🧑‍🔧 Monteur Martin|🧑‍✈️ Kapitän Klaus|🧑‍🎓 Doktorandin Dora|🧑‍🏫 Direktor Dietrich|🎤 Rapper MC Matt|🎸 Rocker Roland|🎻 Geigerin Greta|🎺 Trompeter Toni|🥁 Trommler Tobias|🎨 Künstler Kasimir|📸 Fotografin Fanny|🎬 Regisseur Rainer|📚 Bücherwurm Berta|🧩 Rätselfuchs Rafael|🎲 Würfelkönig Wenzel|🃏 Joker Jakob|🎯 Dart-Daniel|🏓 Pingpong-Paula|⛷️ Skifahrer Sepp-Hias|🏂 Snowboarderin Sina|🚴 Radler Raphael|🏊 Schwimmerin Selma|🧗 Kletterer Kilian|🤺 Fechterin Felicitas|🥋 Karate-Kai|🏇 Jockey Jonas|🧘 Yoga-Yvonne|🏋️ Gewichtheber Gerhard|🤹 Jongleurin Julia|🎩 Zauberkünstler Zaro|🧙‍♀️ Hexe Hilda|🧚‍♂️ Waldgeist Wurzel|🧛‍♀️ Vampirin Vera|🧟‍♂️ Untoter Udo|🐲 Glücksdrache Lu|🦅 Falke Falko|🦉 Uhu Ulrich|🐺 Leitwolf Lupo|🦁 Löwin Lara|🐆 Gepard Gerold|🦈 Weißer Hai Wanda|🌪️ Wirbelwind Willi|🌞 Sonnenkönig Sol|🌙 Mondgöttin Luna-Maria|⭐ Sternschnuppe Stella|🌋 Lava-Lothar|🧠 Gedankenleser Gideon|🤖 Robo-Großmeister RGM-9`.split("|");
 const HI = ["Servus! Lust auf eine Partie?", "Na, bist du bereit?", "Ich hab heute richtig Lust zu spielen!", "Setz dich, ich beiß nicht. Meistens.", "Zeig mal, was du kannst.", "Heute gewinn ich – vielleicht.", "Schach ist mein Lieblingsspiel!", "Mal schauen, wer hier der Chef ist.", "Ich spiel fair – aber nicht nett.", "Konzentration … los geht's!"];
 const WIN = ["Gewonnen! Das war knapp … oder?", "Hehe, diesmal ich!", "Gut gespielt – aber nicht gut genug.", "Revanche jederzeit!", "Schachmatt! Juhu!"];
 const LOSE = ["Respekt, das war stark!", "Na gut, du hast gewonnen.", "Uff. Nächstes Mal krieg ich dich.", "Gratuliere! Wirklich sauber.", "Ich geb's zu: du warst besser."];
@@ -33,9 +34,10 @@ const TALK = ["Hmm …", "Interessant.", "Das hab ich kommen sehen.", "Oh-oh.", 
 const pick = (arr, i, k) => arr[(i * 7 + k * 3) % arr.length];
 const LEVELS = ["Neu im Schach", "Anfänger", "Fortgeschritten", "Profi", "Meister", "Großmeister"];
 function catFor(elo) { return elo < 600 ? LEVELS[0] : elo < 1000 ? LEVELS[1] : elo < 1400 ? LEVELS[2] : elo < 1800 ? LEVELS[3] : elo < 2200 ? LEVELS[4] : LEVELS[5]; }
-const GEN = MORE.map((x, i) => {
+const ALLMORE = [...MORE, ...MORE2];
+const GEN = ALLMORE.map((x, i) => {
   const sp = x.indexOf(" "), e = x.slice(0, sp), name = x.slice(sp + 1);
-  const elo = Math.round((200 + (i / (MORE.length - 1)) * 2300) / 10) * 10;
+  const elo = i < MORE.length ? Math.round((200 + (i / (MORE.length - 1)) * 2300) / 10) * 10 : Math.round((220 + (((i - MORE.length) * 0.6180339887) % 1) * 2260) / 10) * 10; // zweite Liste: über alle Stufen verteilt
   return { id: "b" + String(i + 1).padStart(3, "0"), e, name, elo, cat: catFor(elo), ...paramsFor(elo), hi: pick(HI, i, 1), win: pick(WIN, i, 2), lose: pick(LOSE, i, 3), talk: [pick(TALK, i, 1), pick(TALK, i, 4), pick(TALK, i, 6)] };
 });
 for (const b of BOTS) b.cat = catFor(b.elo);
@@ -187,27 +189,45 @@ export const MATE_CP = 30000;
 const clampCp = (v) => (Math.abs(v) > MATE_CP - 1000 ? Math.sign(v) * 1500 : Math.max(-1500, Math.min(1500, v)));
 export const winPct = (cp) => 50 + 50 * (2 / (1 + Math.exp(-0.00368208 * clampCp(cp))) - 1);
 export const CLASSES = [
-  { k: "best", e: "⭐", t: "Bester Zug", c: "#16a34a" },
-  { k: "good", e: "✅", t: "Gut", c: "#65a30d" },
-  { k: "inacc", e: "⁉️", t: "Ungenau", c: "#ca8a04" },
-  { k: "mist", e: "❓", t: "Fehler", c: "#ea580c" },
-  { k: "blund", e: "‼️", t: "Patzer", c: "#dc2626" },
+  { k: "great", e: "‼", t: "Großartig", c: "#26c2a3" },
+  { k: "best", e: "★", t: "Bester Zug", c: "#81b64c" },
+  { k: "exc", e: "👍", t: "Exzellent", c: "#96bc4b" },
+  { k: "good", e: "✓", t: "Gut", c: "#95b776" },
+  { k: "inacc", e: "?!", t: "Ungenau", c: "#f7c631" },
+  { k: "miss", e: "✕", t: "Verpasst", c: "#ff7769" },
+  { k: "mist", e: "?", t: "Fehler", c: "#ffa459" },
+  { k: "blund", e: "??", t: "Patzer", c: "#fa412d" },
 ];
 export const classOf = (k) => CLASSES.find((x) => x.k === k);
-/** moves: UCI-Liste, ev/best wie oben → je Zug { ply, side, cls, loss (Gewinn-%), bestUci } + Genauigkeit je Seite */
-export function analyse(moves, ev, best) {
+const PV = { p: 1, n: 3, b: 3, r: 5, q: 9, k: 0 };
+/**
+ * moves: UCI-Liste, ev/best wie oben; caps (optional): je Zug { piece, captured } (für „Großartig“ = gutes Opfer)
+ * → je Zug { ply, side, cls, loss (Gewinn-%) } + Genauigkeit, Zählung, geschätzte Spielbewertung und Phasen je Seite
+ */
+export function analyse(moves, ev, best, caps = []) {
   const out = [], acc = { w: [], b: [] };
   for (let i = 0; i < moves.length; i++) {
     const side = i % 2 === 0 ? "w" : "b", sg = side === "w" ? 1 : -1;
     const before = winPct(sg * ev[i]), after = winPct(sg * ev[i + 1]);
     const loss = Math.max(0, before - after);
     const isBest = best[i] && moves[i].slice(0, 4) === best[i].slice(0, 4);
-    const cls = isBest || loss < 2 ? "best" : loss < 6 ? "good" : loss < 12 ? "inacc" : loss < 22 ? "mist" : "blund";
+    const prevOpp = i > 0 ? winPct(sg * ev[i - 1]) : 50; // Stand vor dem gegnerischen Zug
+    const c = caps[i] || {};
+    let cls = isBest || loss < 1 ? "best" : loss < 3 ? "exc" : loss < 6 ? "good" : loss < 12 ? "inacc" : loss < 22 ? "mist" : "blund";
+    // Verpasst: Gegner hatte gerade einen Fehler gemacht (Chance war da), du nutzt sie nicht, stehst aber nicht schlechter als vorher
+    if ((cls === "mist" || cls === "blund") && before - prevOpp > 15 && after >= prevOpp - 3) cls = "miss";
+    // Großartig: bester Zug, der Material hergibt (Figur zieht auf ein Feld, wo sie geschlagen werden kann, oder schlägt Kleineres) und gut steht
+    if (cls === "best" && c.sac && after >= 50) cls = "great";
     out.push({ ply: i, side, cls, loss: Math.round(loss * 10) / 10, best: best[i] });
     acc[side].push(Math.max(0, Math.min(100, 103.1668 * Math.exp(-0.04354 * loss) - 3.1669)));
   }
   const avg = (a) => (a.length ? Math.round(a.reduce((x, y) => x + y, 0) / a.length * 10) / 10 : 0);
-  const count = (side) => Object.fromEntries(CLASSES.map((c) => [c.k, out.filter((m) => m.side === side && m.cls === c.k).length]));
-  return { moves: out, acc: { w: avg(acc.w), b: avg(acc.b) }, count: { w: count("w"), b: count("b") } };
+  const count = (side) => Object.fromEntries(CLASSES.map((cc) => [cc.k, out.filter((m) => m.side === side && m.cls === cc.k).length]));
+  // Phasen: Eröffnung bis Halbzug 20, Endspiel ab dem Zeitpunkt, wo wenig Material übrig ist (caps[i].endgame)
+  const phaseOf = (i) => ((caps[i] || {}).endgame ? "end" : i < 20 ? "open" : "mid");
+  const phase = (side) => Object.fromEntries(["open", "mid", "end"].map((ph) => { const a = out.filter((m, i) => m.side === side && phaseOf(i) === ph).map((m) => m.loss); if (!a.length) return [ph, null]; const av = a.reduce((x, y) => x + y, 0) / a.length; return [ph, av < 4 ? "good" : av < 9 ? "inacc" : "bad"]; }));
+  const rating = (a) => Math.max(100, Math.min(2800, Math.round(((a - 40) * 38) / 50) * 50));
+  const A = { w: avg(acc.w), b: avg(acc.b) };
+  return { moves: out, acc: A, count: { w: count("w"), b: count("b") }, rating: { w: rating(A.w), b: rating(A.b) }, phase: { w: phase("w"), b: phase("b") } };
 }
 export const fmtEval = (cp) => (Math.abs(cp) > MATE_CP - 1000 ? `${cp > 0 ? "+" : "−"}M${Math.ceil((MATE_CP - Math.abs(cp)) / 2)}` : `${cp >= 0 ? "+" : "−"}${(Math.abs(cp) / 100).toFixed(1).replace(".", ",")}`);
