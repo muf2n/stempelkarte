@@ -1,1 +1,146 @@
-/* ⚡ Strom-Tycoon – Zusatz-Stile: map (wird nach css/alltag-tycoon.css geladen) */
+/* ⚡ Strom-Tycoon – Zusatz-Stile: map (wird nach css/alltag-tycoon.css geladen)
+   🗺️ Weltkarte: Ozean → Abendhimmel → Weltall. Kunst im SVG (js/alltag/tycoon-map-art.js), hier nur Rahmen, Knöpfe, Schilder, Bewegung. */
+
+/* ---------- Kopfleiste (liegt über dem oberen Kartenrand) ---------- */
+.ty-mapbar.tm-bar { position: relative; z-index: 6; display: flex; align-items: flex-start; justify-content: space-between; gap: 8px;
+  width: 100%; max-width: 520px; margin: 0 auto -78px; padding: 10px 10px 0; box-sizing: border-box; pointer-events: none; }
+.tm-bar > * { pointer-events: auto; }
+.tm-gbtn { --c1: #60a5fa; --c2: #1d4ed8; position: relative; display: grid; justify-items: center; align-content: center; gap: 1px; min-width: 78px; height: 60px; padding: 4px 8px 6px;
+  border: 3px solid #1f2a44; border-radius: 18px; background: linear-gradient(180deg, var(--c1), var(--c2)); color: #fff; font: inherit; cursor: pointer;
+  box-shadow: inset 0 3px 0 rgba(255,255,255,.45), inset 0 -5px 0 rgba(0,0,0,.22), 0 4px 0 #1f2a44, 0 9px 16px rgba(2,6,23,.45);
+  -webkit-tap-highlight-color: transparent; transition: transform .08s ease, box-shadow .08s ease; }
+.tm-gbtn::after { content: ""; position: absolute; left: 9px; right: 9px; top: 4px; height: 7px; border-radius: 99px; background: rgba(255,255,255,.3); pointer-events: none; }
+.tm-gbtn > * { position: relative; z-index: 1; }
+.tm-gbtn.gold { --c1: #fde047; --c2: #f59e0b; color: #1f2a44; }
+.tm-gbtn.blue { --c1: #67e8f9; --c2: #0284c7; }
+.tm-gi { font-size: 25px; line-height: 1; filter: drop-shadow(0 2px 0 rgba(31,42,68,.55)); }
+.tm-gbtn small { font-size: 11.5px; font-weight: 900; letter-spacing: .01em; line-height: 1.1; }
+.tm-gbtn.blue small { text-shadow: 0 1.5px 0 #1f2a44, 0 0 2px #1f2a44; }
+.tm-gbtn.gold small { text-shadow: 0 1px 0 rgba(255,255,255,.6); }
+.tm-gbtn:hover { filter: brightness(1.06); }
+.tm-gbtn:active { transform: translateY(3px); box-shadow: inset 0 3px 0 rgba(255,255,255,.45), inset 0 -3px 0 rgba(0,0,0,.22), 0 1px 0 #1f2a44, 0 4px 8px rgba(2,6,23,.4); }
+.tm-gbtn:focus-visible, .tm-spot:focus-visible { outline: 3px solid #fde047; outline-offset: 3px; }
+.tm-title { margin-top: 10px; min-width: 0; }
+.tm-title > span { position: relative; display: inline-block; padding: 7px 16px 8px; border: 3px solid #1f2a44; border-radius: 14px;
+  background: linear-gradient(180deg, #fff7d6 0 18%, #fde68a 18% 70%, #f59e0b 100%); color: #7c2d12; font-weight: 900; font-size: 16px; letter-spacing: .02em; white-space: nowrap;
+  box-shadow: 0 4px 0 #1f2a44, 0 9px 16px rgba(2,6,23,.4); }
+.tm-title > span::before { content: "🗺️"; margin-right: 6px; }
+
+/* ---------- Karte ---------- */
+.ty-ocean.tm-map { position: relative; width: 100%; max-width: 520px; margin: 0 auto; border-radius: 26px; overflow: hidden; isolation: isolate; contain: paint;
+  background: #0b1030; box-shadow: 0 0 0 3px #1f2a44, 0 0 0 6px rgba(255,255,255,.65), 0 14px 30px rgba(2,6,23,.35); }
+.tm-sea { display: block; width: 100%; height: auto; }
+.tm-fx { position: absolute; inset: 0; width: 100%; height: 100%; z-index: 1; pointer-events: none; }
+.tm-isl.locked { filter: grayscale(.9) brightness(.78) contrast(.95); }
+
+/* Effekte im SVG */
+.tm-foam { fill: none; stroke: #fff; stroke-width: 2.4; stroke-linecap: round; stroke-dasharray: 9 15; opacity: .75; animation: tm-foam 9s linear infinite; }
+@keyframes tm-foam { to { stroke-dashoffset: -96; } }
+.tm-glint { fill: none; stroke: #fff; stroke-width: 1.8; stroke-linecap: round; opacity: 0; animation: tm-glint 5s ease-in-out infinite; }
+@keyframes tm-glint { 0%, 100% { opacity: 0; transform: translateX(-2px); } 50% { opacity: .85; transform: translateX(3px); } }
+.tm-tw { fill: #fff; transform-box: fill-box; transform-origin: center; animation: tm-tw 3s ease-in-out infinite; }
+@keyframes tm-tw { 0%, 100% { opacity: .1; transform: scale(.4); } 50% { opacity: 1; transform: scale(1.15); } }
+.tm-flow { fill: none; stroke: #fffbe0; stroke-width: 2.6; stroke-linecap: round; stroke-dasharray: 1 11; animation: tm-flow 1.1s linear infinite; }
+@keyframes tm-flow { to { stroke-dashoffset: -24; } }
+.tm-shoot { fill: none; stroke: #fff; stroke-width: 1.8; stroke-linecap: round; stroke-dasharray: 16 200; stroke-dashoffset: 16; opacity: 0; animation: tm-shoot 9s ease-in infinite; }
+.tm-shoot.b { animation-delay: -4.5s; animation-duration: 11s; }
+@keyframes tm-shoot { 0% { stroke-dashoffset: 16; opacity: 0; } 2% { opacity: 1; } 9% { stroke-dashoffset: -50; opacity: 0; } 100% { stroke-dashoffset: -50; opacity: 0; } }
+.tm-spk { fill: #fef08a; stroke: #fff; stroke-width: .6; animation: tm-spk 2.4s ease-in-out infinite; }
+@keyframes tm-spk { 0%, 100% { opacity: 0; transform: scale(.3) rotate(0); } 50% { opacity: 1; transform: scale(1.1) rotate(45deg); } }
+
+.tm-rot path { fill: #f8fafc; stroke: #1f2a44; stroke-width: 1.1; stroke-linejoin: round; }
+.tm-rot { animation: tm-spin 3s linear infinite; }
+@keyframes tm-spin { to { transform: rotate(360deg); } }
+.tm-beam { fill: url(#tmBeam); opacity: .5; animation: tm-beam 4s ease-in-out infinite; }
+@keyframes tm-beam { 0%, 100% { transform: scaleX(1); opacity: .6; } 50% { transform: scaleX(-1); opacity: .35; } }
+
+/* Wolken & Möwen ziehen über die ganze Breite */
+.tm-lane { position: absolute; left: 0; width: 100%; height: 0; z-index: 2; pointer-events: none; animation: tm-drift 80s linear infinite; will-change: transform; }
+.tm-lane > span { position: absolute; left: 0; top: 0; display: block; transform: translate(-100%, -50%); }
+.tm-lane svg { display: block; width: 100%; height: auto; }
+@keyframes tm-drift { from { transform: translateX(0); } to { transform: translateX(132%); } }
+.tm-cloud > span { opacity: .93; }
+.tm-gull > span { display: flex; gap: 14%; align-items: flex-start; }
+.tm-gull svg { width: 43%; transform-origin: 50% 50%; animation: tm-flap .42s ease-in-out infinite alternate; }
+.tm-gull svg.b { width: 34%; margin-top: 18%; animation-delay: -.2s; }
+@keyframes tm-flap { from { transform: scaleY(1); } to { transform: scaleY(.35) translateY(4px); } }
+
+/* ---------- Hotspots (Inseln & Gebäude) ---------- */
+.tm-spot { position: absolute; z-index: 3; transform: translate(-50%, -50%); margin: 0; padding: 0; border: 0; border-radius: 45%; background: none;
+  font: inherit; color: #fff; cursor: pointer; -webkit-tap-highlight-color: transparent; }
+.tm-lab { position: absolute; left: 50%; top: var(--lt, 100%); transform: translate(-50%, -50%); display: grid; justify-items: center; gap: 4px; transition: transform .12s ease; }
+.tm-lab.sm { top: 104%; }
+.tm-spot:hover .tm-lab { transform: translate(-50%, -50%) scale(1.05); }
+.tm-spot:active .tm-lab { transform: translate(-50%, -46%) scale(.97); }
+
+/* Bänder-Schild */
+.tm-rib { --rb: #2563eb; position: relative; display: inline-flex; align-items: center; gap: 6px; padding: 4px 14px 5px; border: 2.5px solid #1f2a44; border-radius: 7px;
+  background: linear-gradient(180deg, color-mix(in srgb, var(--rb) 55%, #fff) 0 14%, var(--rb) 14% 72%, color-mix(in srgb, var(--rb) 78%, #000) 100%);
+  color: #fff; font-weight: 900; font-size: 14px; line-height: 1.15; white-space: nowrap; letter-spacing: .01em;
+  text-shadow: 0 1.5px 0 #1f2a44, 1px 0 0 #1f2a44, -1px 0 0 #1f2a44, 0 -1px 0 #1f2a44; box-shadow: 0 3px 0 #1f2a44; }
+.tm-rib::before, .tm-rib::after { content: ""; position: absolute; top: 6px; z-index: -1; width: 18px; height: calc(100% + 1px); box-sizing: border-box;
+  background: color-mix(in srgb, var(--rb) 62%, #000); border: 2.5px solid #1f2a44; }
+.tm-rib::before { left: -13px; clip-path: polygon(0 0, 100% 0, 100% 100%, 0 100%, 45% 50%); }
+.tm-rib::after { right: -13px; clip-path: polygon(0 0, 100% 0, 55% 50%, 100% 100%, 0 100%); }
+.tm-rib.sm { font-size: 12px; padding: 3px 10px 4px; border-radius: 6px; }
+.tm-rib.sm::before, .tm-rib.sm::after { top: 5px; width: 14px; }
+.tm-rib.sm::before { left: -10px; } .tm-rib.sm::after { right: -10px; }
+.tm-num { display: inline-grid; place-items: center; width: 19px; height: 19px; margin-left: -6px; border-radius: 50%; background: #fff; color: #1f2a44; border: 2px solid #1f2a44;
+  font-size: 11px; font-weight: 900; text-shadow: none; }
+
+/* Chips */
+.tm-chip { display: inline-flex; align-items: center; gap: 5px; padding: 2px 10px 2px 3px; border: 2px solid #1f2a44; border-radius: 999px; background: rgba(15,23,42,.88);
+  color: #fff; font-weight: 800; font-size: 12px; line-height: 1.3; white-space: nowrap; box-shadow: 0 2px 0 rgba(15,23,42,.5); }
+.tm-coin { display: inline-grid; place-items: center; width: 18px; height: 18px; border-radius: 50%; border: 1.5px solid #7c2d12; box-sizing: border-box;
+  background: radial-gradient(circle at 35% 30%, #fff7c2, #fbbf24 55%, #b45309); color: #7c2d12; font-style: normal; font-size: 10.5px; font-weight: 900; }
+.tm-chip.lock { display: inline-grid; justify-items: center; gap: 2px; padding: 3px 12px 4px; border-radius: 12px; background: rgba(30,41,59,.92); color: #e2e8f0; }
+.tm-chip.lock small { font-size: 10.5px; font-weight: 800; color: #fde68a; line-height: 1; }
+.tm-prog { display: block; width: 104px; height: 8px; border-radius: 99px; background: #0f172a; border: 1.5px solid #475569; overflow: hidden; }
+.tm-prog i { display: block; height: 100%; border-radius: 99px; background: linear-gradient(180deg, #fef08a, #f59e0b); }
+.tm-chip.go { padding: 4px 12px; background: linear-gradient(180deg, #86efac, #16a34a); text-shadow: 0 1px 0 #14532d; animation: tm-glow 1s ease-in-out infinite alternate; }
+.tm-chip.ev { padding: 2px 10px; color: #fde68a; }
+.tm-chip.soon { padding: 3px 10px; font-size: 11.5px; }
+@keyframes tm-glow { from { box-shadow: 0 2px 0 #14532d, 0 0 0 0 rgba(74,222,128,.0); } to { box-shadow: 0 2px 0 #14532d, 0 0 14px 4px rgba(74,222,128,.75); } }
+
+/* Gesperrt */
+.tm-lock { position: absolute; left: 50%; top: 40%; width: 44px; transform: translate(-50%, -50%); filter: drop-shadow(0 4px 0 rgba(15,23,42,.45)); }
+.tm-lock svg { display: block; width: 100%; height: auto; }
+.ty-wspot.next .tm-lock { animation: tm-wobble 2.8s ease-in-out infinite; }
+.ty-wspot.ready .tm-lock { width: auto; font-size: 40px; line-height: 1; animation: tm-bob 1s ease-in-out infinite; }
+.ty-wspot.locked .tm-rib { color: #e2e8f0; }
+@keyframes tm-wobble { 0%, 80%, 100% { transform: translate(-50%, -50%) rotate(0); } 85% { transform: translate(-50%, -50%) rotate(-9deg); } 90% { transform: translate(-50%, -50%) rotate(8deg); } 95% { transform: translate(-50%, -50%) rotate(-4deg); } }
+
+/* Du bist hier */
+.tm-here { position: absolute; left: 50%; top: var(--pt, 0%); z-index: 2; transform: translate(-50%, -100%); pointer-events: none; }
+.tm-here > span { position: relative; display: block; padding: 4px 11px 5px; border: 2.5px solid #1f2a44; border-radius: 999px; background: #fff; color: #1f2a44;
+  font-weight: 900; font-size: 12.5px; white-space: nowrap; box-shadow: 0 3px 0 #1f2a44, 0 8px 14px rgba(2,6,23,.35); animation: tm-bob 1.1s ease-in-out infinite; }
+.tm-here > span::after { content: ""; position: absolute; left: 50%; bottom: -8px; width: 11px; height: 11px; margin-left: -6px; background: #fff;
+  border-right: 2.5px solid #1f2a44; border-bottom: 2.5px solid #1f2a44; transform: rotate(45deg); }
+.ty-wspot.here::before { content: ""; position: absolute; inset: -9% -7%; border-radius: 50%; border: 3px dashed rgba(254,240,138,.9); pointer-events: none;
+  box-shadow: 0 0 22px rgba(253,224,71,.35), inset 0 0 22px rgba(253,224,71,.25); animation: tm-ring 2.4s ease-in-out infinite; }
+@keyframes tm-ring { 0%, 100% { opacity: .55; transform: scale(.98); } 50% { opacity: 1; transform: scale(1.02); } }
+@keyframes tm-bob { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-6px); } }
+
+/* Event */
+.tm-evicon { position: absolute; left: 50%; top: -16%; font-size: 34px; line-height: 1; transform: translateX(-50%); filter: drop-shadow(0 0 8px #fde047) drop-shadow(0 3px 0 rgba(15,23,42,.4)); }
+.tm-evicon { animation: tm-evb 1.6s ease-in-out infinite; }
+@keyframes tm-evb { 0%, 100% { transform: translateX(-50%) translateY(0) rotate(-4deg); } 50% { transform: translateX(-50%) translateY(-7px) rotate(4deg); } }
+.tm-lab.ev { top: 104%; }
+
+/* Abzeichen */
+.tm-dot { position: absolute; top: 2%; right: 4%; display: grid; place-items: center; min-width: 22px; height: 22px; padding: 0 5px; box-sizing: border-box; border: 2.5px solid #fff; border-radius: 999px;
+  background: #ef4444; color: #fff; font-style: normal; font-weight: 900; font-size: 12px; line-height: 1; box-shadow: 0 2px 0 #1f2a44; animation: tm-pop 1.3s ease-in-out infinite; }
+@keyframes tm-pop { 0%, 100% { transform: scale(1); } 50% { transform: scale(1.15); } }
+
+/* ---------- Dunkles Design: Karte bleibt bunt, nur der Rahmen passt sich an ---------- */
+:root[data-theme="dark"] .ty-ocean.tm-map { box-shadow: 0 0 0 3px #1f2a44, 0 0 0 6px rgba(148,163,184,.35), 0 14px 30px rgba(0,0,0,.55); }
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) .ty-ocean.tm-map { box-shadow: 0 0 0 3px #1f2a44, 0 0 0 6px rgba(148,163,184,.35), 0 14px 30px rgba(0,0,0,.55); }
+}
+
+/* ---------- Weniger Bewegung ---------- */
+@media (prefers-reduced-motion: reduce) {
+  .tm-map *, .tm-map *::before, .tm-map *::after, .tm-bar * { animation: none !important; transition: none !important; }
+  .tm-lane:nth-of-type(odd) { transform: translateX(48%); } .tm-lane:nth-of-type(even) { transform: translateX(104%); }
+  .tm-glint, .tm-shoot { display: none; }
+}

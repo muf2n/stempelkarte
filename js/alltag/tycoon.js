@@ -30,10 +30,15 @@ function workedToday() {
     return ((s && s.entries) || []).some((e) => e && (!e.kind || e.kind === "work") && dayKey(new Date(Number(e.start))) === t);
   } catch { return false; }
 }
-const sheetBtn = (label) => `<button type="button" class="btn primary" data-close style="width:100%;margin-top:8px">${label}</button>`;
-function info(title, html, label = "Super!") {
-  ui.openSheet({ title, bodyHTML: `<div class="ty-back">${html}</div>${sheetBtn(label)}`, onMount(sh, close) { sh.querySelector("[data-close]").addEventListener("click", close); } });
+const sheetBtn = (label) => `<button type="button" class="ty-b3 gold ty-cta" data-close>${label}</button>`;
+/** Belohnungs-Bühne: Lichtstrahlen + Banderole + Inhalt (der Sheet-Titel bleibt für Screenreader). */
+const ribbonText = (title) => esc(String(title).replace(/^[^\p{L}\p{N}]+/u, ""));
+const stage = (title, html, cls = "") => `<div class="ty-reward ${cls}"><div class="ty-rays" aria-hidden="true"></div><div class="ty-ribbon" aria-hidden="true"><span>${ribbonText(title)}</span></div><div class="ty-back">${html}</div></div>`;
+function info(title, html, label = "Super!", cls = "") {
+  ui.openSheet({ title, bodyHTML: `${stage(title, html, cls)}${sheetBtn(label)}`, onMount(sh, close) { sh.querySelector("[data-close]").addEventListener("click", close); } });
 }
+/** Beute-Kachel für Popups (springt nacheinander herein). */
+const lootLi = (i, ic, val, lbl) => `<li style="animation-delay:${0.35 + i * 0.22}s"><span class="ty-lic" aria-hidden="true">${ic}</span><b>${val}</b><small>${lbl}</small></li>`;
 
 export function mount(el) {
   loadCss();
@@ -67,14 +72,15 @@ export function mount(el) {
     S.g = off.s;
     render();
     if (!raw) welcome();
-    else if (off.earned > 0 && off.secs > 60) info("👋 Willkommen zurück, Chef!", `<div class="ty-back-e" aria-hidden="true">🧑‍🔧💰</div><p>Du warst <b>${T.fmtDur(off.secs)}</b> weg.${off.used < off.secs ? ` Dein Akku hat <b>${T.fmtDur(off.used)}</b> gehalten.` : ""}</p><p>Deine Elektriker haben in der Zeit</p><div class="ty-back-big">+${T.fmt(off.earned)} €</div><p class="note">verdient. Und den Kaffee leer getrunken.</p>`, "Kassieren 💶");
+    else if (off.earned > 0 && off.secs > 60) info("👋 Willkommen zurück, Chef!", `<div class="ty-back-e" aria-hidden="true">🧑‍🔧</div><p>Du warst <b>${T.fmtDur(off.secs)}</b> weg.${off.used < off.secs ? ` Dein Akku hat <b>${T.fmtDur(off.used)}</b> gehalten.` : ""}</p><p>Deine Elektriker haben in der Zeit</p><div class="ty-back-big"><span class="ty-coin" aria-hidden="true"></span>+${T.fmt(off.earned)} €</div><p class="note">verdient. Und den Kaffee leer getrunken.</p>`, "Kassieren 💶");
     save(true);
   }
   function welcome() {
-    info("⚡ Willkommen beim Strom-Tycoon!", `<div class="ty-back-e" aria-hidden="true">🏚️🐹</div><p>Opa hat dir seine Garage vermacht. Und einen Hamster.</p>
-      <ol class="ty-how"><li>👆 <b>Einspeisen</b> antippen – Strom wird zu Geld.</li><li>🛒 Kraftwerke ausbauen, Stufe 10/25/50 … = <b>Ertrag ×2</b>.</li>
-      <li>🧑‍🔧 <b>Elektriker anstellen</b> – dann läuft's von selbst, auch wenn die App zu ist.</li><li>🔌 Leitung und 🏭 Umspannwerk ausbauen – das schwächste Glied bremst!</li>
-      <li>🧭 Trupp auf <b>Expedition</b> schicken – Fundstücke sammeln.</li><li>⚡ <b>Goldene Blitze</b> fangen, 🗺️ neue Welten freischalten.</li><li>💼 Heute echt gestempelt? Dann läuft alles <b>doppelt</b>.</li></ol>`, "Los geht's! 🐹");
+    const steps = [["👆", "<b>Einspeisen</b> antippen – Strom wird zu Geld."], ["🛒", "Kraftwerke ausbauen, Stufe 10/25/50 … = <b>Ertrag ×2</b>."],
+      ["🧑‍🔧", "<b>Elektriker anstellen</b> – dann läuft's von selbst, auch wenn die App zu ist."], ["🔌", "Leitung und 🏭 Umspannwerk ausbauen – das schwächste Glied bremst!"],
+      ["🧭", "Trupp auf <b>Expedition</b> schicken – Fundstücke sammeln."], ["⚡", "<b>Goldene Blitze</b> fangen, 🗺️ neue Welten freischalten."], ["💼", "Heute echt gestempelt? Dann läuft alles <b>doppelt</b>."]];
+    info("⚡ Willkommen beim Strom-Tycoon!", `<div class="ty-back-e" aria-hidden="true">🐹</div><p>Opa hat dir seine Garage vermacht. Und einen Hamster.</p>
+      <ol class="ty-how">${steps.map(([e, t], i) => `<li style="animation-delay:${0.3 + i * 0.08}s"><span aria-hidden="true">${e}</span><div>${t}</div></li>`).join("")}</ol>`, "Los geht's! 🐹", "wide");
   }
 
   /* ---------- Bausteine ---------- */
@@ -87,18 +93,27 @@ export function mount(el) {
   const invCount = () => Object.values(S.g.inv).reduce((a, b) => a + b, 0);
 
   function headHTML() {
-    const g = S.g, Wd = T.world(g.cur);
+    const g = S.g, Wd = T.world(g.cur), now = Date.now();
+    const act = g.boosts.filter((b) => b.until > now);
+    const bIcon = (b) => (b.k === "mega" ? "⚡" : b.k === "turbo" ? "🚀" : (T.BOOSTS[b.k] || {}).e || "✨");
     return `<section class="ty-head">
-      <div class="ty-wname">${Wd.e} ${esc(Wd.name)}</div>
-      <div class="ty-money"><b data-k="money"></b> €</div>
-      <div class="ty-rate"><span data-k="rate"></span> €/s</div>
-      <div class="ty-chips"><span title="Sicherungen">🔩 <b data-k="fuses"></b></span>${g.stars ? `<span title="Sterne aus Meisterbriefen">⭐ ${g.stars}</span>` : ""}<span data-k="boosts"></span></div>
+      <div class="ty-hw"><span class="ty-wmed" aria-hidden="true">${Wd.e}</span><div class="ty-wtx"><small>Welt ${g.cur + 1}</small><div class="ty-wname">${esc(Wd.name)}</div></div></div>
+      <div class="ty-chips">
+        <span class="ty-pill ty-pfuse" title="Sicherungen"><i class="ty-pico" aria-hidden="true">🔩</i> <b data-k="fuses"></b></span>
+        ${g.stars ? `<span class="ty-pill ty-pstar" title="Sterne aus Meisterbriefen"><i class="ty-pico" aria-hidden="true">⭐</i> <b>${g.stars}</b></span>` : ""}
+        <span class="ty-boosts">${act.map((b) => `<span class="ty-bchip" aria-hidden="true"><i>${bIcon(b)}</i><b>×${b.m}</b><span data-until="${b.until}"></span></span>`).join("")}<span class="ty-sr" data-k="boosts"></span></span>
+      </div>
+      <div class="ty-cash"><span class="ty-coin" aria-hidden="true"></span><div class="ty-cashv"><div class="ty-money"><b data-k="money"></b><small> €</small></div>
+        <div class="ty-rate"><i aria-hidden="true">⚡</i>+<span data-k="rate"></span> €/s</div></div></div>
+      <div class="ty-news" aria-live="off"><em aria-hidden="true">NEWS</em><div class="ty-led"><span data-k="news">${esc(T.NEWS[S.newsI % T.NEWS.length])}</span></div></div>
     </section>`;
   }
   function navHTML() {
     const rt = readyTours(), inv = invCount();
-    return `<nav class="ty-nav" role="tablist">${VIEWS.map(([id, e, l]) => `<button type="button" role="tab" aria-selected="${S.view === id}" class="${S.view === id ? "on" : ""}" data-a="view" data-v="${id}"><span aria-hidden="true">${e}</span>${l}${id === "tour" && rt ? `<i>${rt}</i>` : ""}${id === "shop" && inv ? `<i class="b">${inv}</i>` : ""}${id === "welt" && S.g.chestDay !== dayKey() ? `<i>🎁</i>` : ""}</button>`).join("")}</nav>`;
+    return `<nav class="ty-nav" role="tablist">${VIEWS.map(([id, e, l]) => `<button type="button" role="tab" aria-selected="${S.view === id}" class="${S.view === id ? "on" : ""}" data-a="view" data-v="${id}"><span class="ty-nic" aria-hidden="true">${e}</span><span class="ty-nl">${l}</span>${id === "tour" && rt ? `<i>${rt}</i>` : ""}${id === "shop" && inv ? `<i class="b">${inv}</i>` : ""}${id === "welt" && S.g.chestDay !== dayKey() ? `<i>🎁</i>` : ""}</button>`).join("")}</nav>`;
   }
+  /** Abschnitts-Kopf: Symbol-Kachel + Titel + rechts eine Info. */
+  const secHead = (ic, title, meta = "", tone = "") => `<header class="ty-sh ${tone}"><span class="ty-shi" aria-hidden="true">${ic}</span><h3>${title}</h3>${meta ? `<span class="ty-shm">${meta}</span>` : ""}</header>`;
 
   function mapHTML() {
     const rt = readyTours();
@@ -126,50 +141,87 @@ export function mount(el) {
 
   function worldHTML() {
     const g = S.g;
-    return `<div class="ty-news" aria-live="off"><span data-k="news">${esc(T.NEWS[S.newsI % T.NEWS.length])}</span></div>
-      ${S.shift ? `<div class="ty-shift on">💼 <b>Schicht-Bonus ×2</b> – du warst heute arbeiten. Respekt!</div>` : `<div class="ty-shift">💼 Heute noch nicht gestempelt – mit echter Arbeit läuft alles <b>doppelt</b>.</div>`}
+    return `${S.shift ? `<div class="ty-shift on">💼 <b>Schicht-Bonus ×2</b> – du warst heute arbeiten. Respekt!</div>` : `<div class="ty-shift">💼 Heute noch nicht gestempelt – mit echter Arbeit läuft alles <b>doppelt</b>.</div>`}
       <div class="ty-amt" role="group" aria-label="Kaufmenge"><span>Kaufen:</span>${["1", "10", "100", "max"].map((a) => `<button type="button" data-a="amt" data-v="${a}" aria-pressed="${S.amt === a}">${a === "max" ? "MAX" : "×" + a}</button>`).join("")}</div>
       ${SC.mineHTML(g, { amtN, inv: invCount(), chest: g.chestDay !== dayKey() })}`;
   }
 
   function tourHTML() {
-    const g = S.g, now = Date.now();
+    const g = S.g, now = Date.now(), maxSlots = T.SLOT_COST.length;
     const running = g.exp.map((e, i) => {
       const t = T.TOURS.find((x) => x.k === e.k), done = e.end <= now;
-      return `<div class="ty-exp${done ? " done" : ""}"><span class="ty-ee" aria-hidden="true">${done ? "🎒" : t.e}</span>
-        <div class="ty-em"><b>${esc(t.name)}</b>${done ? `<small>Zurück! Der Trupp hat was gefunden 👀</small>` : `<small>noch <span data-until="${e.end}"></span></small><span class="ty-use"><i data-prog="${e.start}-${e.end}"></i></span>`}</div>
-        ${done ? `<button type="button" class="btn primary sm" data-a="claim" data-i="${i}">Auspacken!</button>` : `<button type="button" class="btn sm" data-a="rush" data-i="${i}" data-fuse="${T.rushCost(e, now)}">⚡ Sofort<small>${T.rushCost(e, now)} 🔩</small></button>`}</div>`;
+      if (done) return `<div class="ty-exp done"><span class="ty-ee" aria-hidden="true"><span class="ty-eray"></span>🎒</span>
+        <div class="ty-em"><b>${esc(t.name)}</b><small>Zurück! Der Trupp hat was gefunden 👀</small></div>
+        <button type="button" class="ty-b3 green" data-a="claim" data-i="${i}">Auspacken!</button></div>`;
+      return `<div class="ty-exp"><div class="ty-exph"><span class="ty-ee" aria-hidden="true">${t.e}</span>
+          <div class="ty-em"><b>${esc(t.name)}</b><small class="ty-left">⏱ noch <span data-until="${e.end}"></span></small></div>
+          <button type="button" class="ty-b3 purple ty-rush" data-a="rush" data-i="${i}" data-fuse="${T.rushCost(e, now)}"><span>⚡ Sofort</span><small>${T.rushCost(e, now)} 🔩</small></button></div>
+        <div class="ty-trail" aria-hidden="true"><span class="ty-tpt">🏠</span><span class="ty-track"><i data-prog="${e.start}-${e.end}"><b class="ty-walker">🚶</b></i></span><span class="ty-tpt">🚩</span></div></div>`;
     }).join("");
     const free = g.slots - g.exp.length;
-    return `<section class="ty-card"><h3>🧭 Dein Expeditionstrupp</h3><p class="note">Schick deinen Trupp los – in Echtzeit, auch wenn die App zu ist. Je länger die Reise, desto besser die Beute: 💶 Geld, 🔩 Sicherungen, 🎒 Booster und seltene 🏺 Fundstücke.</p>
-        ${running || ""}${free > 0 ? `<div class="ty-tours">${T.TOURS.map((t) => `<button type="button" class="ty-tour" data-a="tour" data-k="${t.k}"><span aria-hidden="true">${t.e}</span><b>${esc(t.name)}</b><small>${T.fmtDur(T.tourMs(g, t) / 1000)} · Fundstück ${Math.round(t.relic * 100)} %</small></button>`).join("")}</div>` : `<p class="note">Alle Plätze sind unterwegs. ${g.slots < T.SLOT_COST.length ? "Mehr Plätze unten." : ""}</p>`}
-        ${g.slots < T.SLOT_COST.length ? `<button type="button" class="btn" data-a="slot" data-fuse="${T.SLOT_COST[g.slots]}" style="width:100%">➕ ${g.slots + 1}. Expeditions-Platz <small>${T.SLOT_COST[g.slots]} 🔩</small></button>` : ""}</section>
+    const pips = Array.from({ length: maxSlots }, (_, i) => `<i class="${i < g.exp.length ? "busy" : i < g.slots ? "free" : "lock"}"></i>`).join("");
+    const boostsOf = (t) => (t.min >= 720 ? "×3" : t.min >= 240 ? "×2" : t.min >= 60 ? "×1" : "30 %");
+    return `<section class="ty-card ty-trupp">${secHead("🧭", "Dein Expeditionstrupp", `<span class="ty-slots" title="Expeditions-Plätze: ${g.exp.length} unterwegs von ${g.slots}">${pips}</span>`, "teal")}
+        <p class="note">Schick deinen Trupp los – in Echtzeit, auch wenn die App zu ist. Je länger die Reise, desto besser die Beute.</p>
+        ${running ? `<div class="ty-exps">${running}</div>` : ""}
+        ${free > 0 ? `<div class="ty-legend" aria-hidden="true"><span>💶 Ertrag</span><span>🔩 Sicherungen</span><span>🎒 Booster</span><span>🏺 Fundstück-Chance</span></div>
+        <div class="ty-tours">${T.TOURS.map((t, i) => `<button type="button" class="ty-tour" data-a="tour" data-k="${t.k}">
+          <span class="ty-tstamp" aria-hidden="true">${t.e}</span>
+          <span class="ty-tinfo"><b>${esc(t.name)}</b><span class="ty-tmeta"><span class="ty-tdur">⏱ ${T.fmtDur(T.tourMs(g, t) / 1000)}</span><span class="ty-tdiff" aria-label="Schwierigkeit ${i + 1} von ${T.TOURS.length}">${"★".repeat(i + 1)}<s>${"★".repeat(T.TOURS.length - i - 1)}</s></span></span></span>
+          <span class="ty-tgo" aria-hidden="true">Los!</span>
+          <span class="ty-tloot"><span title="Geld: ${t.cash} min Ertrag">💶 ${t.cash} min</span><span title="Sicherungen">🔩 ${t.fuse[0]}–${t.fuse[1]}</span><span title="Booster">🎒 ${boostsOf(t)}</span><span class="rel" title="Chance auf ein Fundstück">🏺 ${Math.round(t.relic * 100)} %</span></span>
+        </button>`).join("")}</div>` : `<p class="ty-allout">🥾 Alle Plätze sind unterwegs. ${g.slots < maxSlots ? "Mehr Plätze gibt's hier:" : ""}</p>`}
+        ${g.slots < maxSlots ? `<button type="button" class="ty-b3 purple ty-wide" data-a="slot" data-fuse="${T.SLOT_COST[g.slots]}">➕ ${g.slots + 1}. Expeditions-Platz <span class="ty-pr">🔩 ${T.SLOT_COST[g.slots]}</span></button>` : ""}</section>
       ${relicsHTML()}`;
   }
   function relicsHTML() {
-    const g = S.g, have = Object.keys(g.relics).length;
-    return `<section class="ty-card"><h3>🏺 Fundstücke <small>${have}/${T.RELICS.length}</small></h3><p class="note">Bringt der Trupp mit. Doppelte machen das Fundstück stärker (bis Stufe ${T.RELIC_MAX}).</p>
-      <div class="ty-relics">${T.RELICS.map((r) => { const l = g.relics[r.id] || 0; return `<div class="ty-relic${l ? "" : " no"}"><span aria-hidden="true">${l ? r.e : "❔"}</span><b>${l ? esc(r.name) : "???"}</b><small>${l ? `${esc(r.d)} · Stufe ${l}` : "noch nicht gefunden"}</small></div>`; }).join("")}</div></section>`;
+    const g = S.g, have = Object.keys(g.relics).length, M = T.RELIC_MAX;
+    const tier = (l) => (!l ? "no" : l >= M ? "t5" : l >= 4 ? "t4" : l >= 2 ? "t2" : "t1");
+    return `<section class="ty-card ty-museum">${secHead("🏺", "Fundstücke", `<b>${have}</b>/${T.RELICS.length}`, "wine")}
+      <p class="note">Bringt der Trupp mit. Doppelte machen das Fundstück stärker (bis Stufe ${M}).</p>
+      <div class="ty-relics">${T.RELICS.map((r) => { const l = g.relics[r.id] || 0; return `<div class="ty-relic ${tier(l)}">
+        <span class="ty-case" aria-hidden="true"><span class="ty-rglow"></span><span class="ty-remo">${r.e}</span><span class="ty-ped"></span>${l >= M ? "<em>MAX</em>" : ""}${l ? "" : "<u>?</u>"}</span>
+        <b>${l ? esc(r.name) : "???"}</b><small>${l ? esc(r.d) : "noch nicht gefunden"}</small>
+        ${l ? `<span class="ty-pips" role="img" aria-label="Stufe ${l} von ${M}">${Array.from({ length: M }, (_, i) => `<i${i < l ? ' class="on"' : ""}></i>`).join("")}</span>` : ""}</div>`; }).join("")}</div></section>`;
   }
 
   function shopHTML() {
     const g = S.g, wi = g.cur, inv = Object.entries(g.inv);
-    return `<section class="ty-card"><h3>🎒 Dein Rucksack</h3>${inv.length ? `<div class="ty-inv">${inv.map(([k, n]) => { const B = T.BOOSTS[k]; return `<button type="button" class="ty-item" data-a="use" data-k="${k}"><span aria-hidden="true">${B.e}</span><b>${esc(B.name)}</b><small>${esc(B.d)}</small><i>×${n}</i><em>Einsetzen</em></button>`; }).join("")}</div>` : `<p class="note">Leer. Booster findest du auf Expeditionen und in der Truhe – oder kauf sie unten.</p>`}</section>
-      <section class="ty-card"><h3>🛒 Booster-Shop <small>🔩 ${g.fuses}</small></h3><div class="ty-shop">${T.SHOP.map((it) => { const B = T.BOOSTS[it.id]; return `<button type="button" class="ty-item" data-a="shop" data-id="${it.id}" data-fuse="${it.cost}"><span aria-hidden="true">${B.e}</span><b>${esc(B.name)}</b><small>${esc(B.d)}</small><em>${it.cost} 🔩</em></button>`; }).join("")}</div>
-        <p class="note">🔩 Sicherungen gibt's aus der Truhe, von goldenen Blitzen, Expeditionen und für Erfolge. Kein echtes Geld – nie.</p></section>
-      <section class="ty-card"><h3>🔋 Akku</h3><p class="note">Wie lange deine Elektriker offline weiterarbeiten: <b>${T.fmt(T.offlineHours(g))} h</b>.</p>
-        ${g.akku < T.AKKU.length - 1 ? `<button type="button" class="btn" style="width:100%" data-a="akku" data-cost="${T.AKKU_COST[g.akku + 1] * Math.pow(1000, wi)}">🔋 ${T.AKKU[g.akku]} h → ${T.AKKU[g.akku + 1]} h · ${T.fmt(T.AKKU_COST[g.akku + 1] * Math.pow(1000, wi))} €</button>` : `<p class="note">Voll ausgebaut ✓</p>`}</section>`;
+    // „x Wert“-Aufkleber: ehrlich berechnet aus Preis/Leistung im Vergleich zum günstigsten Angebot derselben Art
+    const worth = (it) => { const B = T.BOOSTS[it.id], h = /^zeit(\d+)/.exec(it.id); return B.m ? ((B.m - 1) * B.dur) / it.cost : h ? Number(h[1]) / it.cost : 0; };
+    const base = (it) => { const B = T.BOOSTS[it.id]; return T.SHOP.filter((x) => (B.m ? T.BOOSTS[x.id].m : /^zeit/.test(x.id) && /^zeit/.test(it.id))).reduce((a, x) => Math.min(a, worth(x)), Infinity); };
+    const sticker = (it) => { const w = worth(it), b = base(it); const r = b && w ? w / b : 0; return r >= 1.25 ? `<span class="ty-stk" aria-label="${r.toFixed(1).replace(".", ",")}-facher Wert">${r.toFixed(1).replace(".", ",")}× Wert</span>` : ""; };
+    const ak = g.akku, akMax = T.AKKU.length - 1, akCost = ak < akMax ? T.AKKU_COST[ak + 1] * Math.pow(1000, wi) : 0;
+    return `<section class="ty-card ty-pack">${secHead("🎒", "Dein Rucksack", inv.length ? `${invCount()} Booster` : "", "brown")}
+        ${inv.length ? `<div class="ty-inv">${inv.map(([k, n]) => { const B = T.BOOSTS[k]; return `<button type="button" class="ty-item ty-invit" data-a="use" data-k="${k}"><span class="ty-iic" aria-hidden="true"><span class="ty-irays"></span><span class="ty-iem">${B.e}</span></span><i>×${n}</i><b>${esc(B.name)}</b><small>${esc(B.d)}</small><em>Einsetzen</em></button>`; }).join("")}</div>` : `<p class="ty-empty"><span aria-hidden="true">🕸️</span> Leer. Booster findest du auf Expeditionen und in der Truhe – oder kauf sie unten.</p>`}</section>
+      <section class="ty-card ty-store">${secHead("🛒", "Booster-Shop", `<span class="ty-pill sm ty-pfuse"><i class="ty-pico" aria-hidden="true">🔩</i> <b>${g.fuses}</b></span>`, "purple")}
+        <div class="ty-shop">${T.SHOP.map((it) => { const B = T.BOOSTS[it.id]; return `<button type="button" class="ty-item ty-sit" data-a="shop" data-id="${it.id}" data-fuse="${it.cost}">${sticker(it)}<span class="ty-iic" aria-hidden="true"><span class="ty-irays"></span><span class="ty-iem">${B.e}</span></span><b>${esc(B.name)}</b><small>${esc(B.d)}</small><em><span aria-hidden="true">🔩</span> ${it.cost}</em></button>`; }).join("")}</div>
+        <p class="ty-fair"><span aria-hidden="true">🔩</span> Sicherungen gibt's aus der Truhe, von goldenen Blitzen, Expeditionen und für Erfolge. <b>Kein echtes Geld – nie.</b></p></section>
+      <section class="ty-card ty-akku">${secHead("🔋", "Akku", `${T.fmt(T.offlineHours(g))} h offline`, "green")}
+        <div class="ty-batt" role="img" aria-label="Akku-Stufe ${ak + 1} von ${akMax + 1}"><span class="ty-cells">${T.AKKU.map((h, i) => `<i class="${i <= ak ? "on" : ""}"><small>${h} h</small></i>`).join("")}</span><span class="ty-tip"></span></div>
+        <p class="note">So lange arbeiten deine Elektriker weiter, wenn die App zu ist.</p>
+        ${ak < akMax ? `<button type="button" class="ty-b3 green ty-wide" data-a="akku" data-cost="${akCost}">🔋 ${T.AKKU[ak]} h → ${T.AKKU[ak + 1]} h <span class="ty-pr">${T.fmt(akCost)} €</span></button>` : `<p class="ty-done">✓ Voll ausgebaut</p>`}</section>`;
   }
 
   function moreHTML() {
-    const g = S.g, gain = T.prestigeGain(g);
-    return `<section class="ty-card"><h3>📜 Meisterbrief ${gain ? `<span class="ty-badge">+${gain} ⭐</span>` : ""}</h3>
-        <p>Fang alle Welten von vorne an und bekomm dafür <b>Sterne</b>: jeder Stern = <b>+${Math.round((T.STAR_BONUS + T.relicFx(g, "star")) * 100)} % Ertrag für immer</b>. Sicherungen, Rucksack, Fundstücke, Erfolge und Akku bleiben.</p>
-        <p class="note">Insgesamt verdient: ${T.fmt(g.allTime)} € · nächster Stern bei ${T.fmt(Math.pow(T.starsFor(g.allTime) + 1, 2) * T.STAR_BASE)} €</p>
-        ${gain ? `<button type="button" class="btn primary" data-a="prestige" style="width:100%">📜 Meisterbrief holen (+${gain} ⭐)</button>` : `<p class="note">Noch zu wenig verdient – weiter schuften! 💪</p>`}</section>
-      <section class="ty-card"><h3>🏆 Erfolge <small>${g.ach.length}/${T.ACH.length}</small></h3><ul class="ty-ach">${T.ACH.map((a) => `<li class="${g.ach.includes(a.id) ? "got" : ""}"><span aria-hidden="true">${g.ach.includes(a.id) ? a.e : "🔒"}</span><div><b>${esc(a.t)}</b><small>${esc(a.d)} · +${a.f} 🔩</small></div></li>`).join("")}</ul></section>
-      <section class="ty-card"><h3>📊 Statistik</h3><ul class="ty-stats"><li>💶 Insgesamt verdient <b>${T.fmt(g.allTime)} €</b></li><li>⚡ Blitze gefangen <b>${g.blitze}</b></li><li>🧭 Expeditionen <b>${g.tours}</b></li><li>👆 Eingespeist <b>${g.taps}×</b></li><li>📜 Meisterbriefe <b>${g.resets}</b></li><li>📅 Truhen-Serie <b>${g.streak} Tage</b></li></ul>
-        <button type="button" class="btn" data-a="help" style="width:100%">❓ Wie geht das Spiel?</button></section>`;
+    const g = S.g, gain = T.prestigeGain(g), sf = T.starsFor(g.allTime);
+    const lo = sf * sf * T.STAR_BASE, hi = Math.pow(sf + 1, 2) * T.STAR_BASE, pct = Math.max(0, Math.min(100, ((g.allTime - lo) / (hi - lo)) * 100));
+    const got = (a) => g.ach.includes(a.id);
+    const stats = [["💶", `${T.fmt(g.allTime)} €`, "Insgesamt verdient"], ["⚡", g.blitze, "Blitze gefangen"], ["🧭", g.tours, "Expeditionen"], ["👆", `${g.taps}×`, "Eingespeist"], ["📜", g.resets, "Meisterbriefe"], ["📅", `${g.streak} Tage`, "Truhen-Serie"]];
+    return `<section class="ty-card ty-certcard">
+        <div class="ty-cert"><span class="ty-seal" aria-hidden="true">⭐</span>
+          <h3>Meisterbrief</h3><p class="ty-certsub">Urkunde der Elektro-Innung</p>
+          ${gain ? `<div class="ty-gain"><b>+${gain}</b> <span aria-hidden="true">⭐</span><small>bereit zum Abholen</small></div>` : ""}
+          <p>Fang alle Welten von vorne an und bekomm dafür <b>Sterne</b>: jeder Stern = <b>+${Math.round((T.STAR_BONUS + T.relicFx(g, "star")) * 100)} % Ertrag für immer</b>. Sicherungen, Rucksack, Fundstücke, Erfolge und Akku bleiben.</p>
+          <div class="ty-sbar" role="img" aria-label="Fortschritt zum nächsten Stern: ${Math.round(pct)} Prozent"><i style="width:${pct}%"></i><span>⭐ ${sf + 1}</span></div>
+          <p class="note">Insgesamt verdient: ${T.fmt(g.allTime)} € · nächster Stern bei ${T.fmt(hi)} €</p>
+          ${gain ? `<button type="button" class="ty-b3 gold ty-wide" data-a="prestige">📜 Meisterbrief holen (+${gain} ⭐)</button>` : `<p class="ty-done">Noch zu wenig verdient – weiter schuften! 💪</p>`}
+        </div></section>
+      <section class="ty-card">${secHead("🏆", "Erfolge", `<b>${g.ach.length}</b>/${T.ACH.length}`, "gold")}
+        <div class="ty-sbar thin" aria-hidden="true"><i style="width:${(g.ach.length / T.ACH.length) * 100}%"></i></div>
+        <ul class="ty-ach">${T.ACH.map((a) => `<li class="${got(a) ? "got" : "lock"}"><span class="ty-medal" aria-hidden="true"><span>${a.e}</span>${got(a) ? "" : "<u>🔒</u>"}</span><b>${esc(a.t)}</b><small>${esc(a.d)}</small><em>${got(a) ? "✓ " : "+"}${a.f} 🔩</em></li>`).join("")}</ul></section>
+      <section class="ty-card">${secHead("📊", "Statistik", "", "blue")}<ul class="ty-stats">${stats.map(([e, v, l]) => `<li><span aria-hidden="true">${e}</span><b>${v}</b><small>${l}</small></li>`).join("")}</ul>
+        <button type="button" class="ty-b3 blue ty-wide" data-a="help">❓ Wie geht das Spiel?</button></section>`;
   }
 
   function render() {
@@ -183,7 +235,7 @@ export function mount(el) {
     refresh();
   }
   /** Änderungen, die ein komplettes Neuzeichnen brauchen (Expedition fertig, Abklingzeit …). */
-  function sig() { const now = Date.now(), E = T.evOf(S.g); return [S.view, readyTours(), E ? T.evClaimable(E).length : -1, S.g.worlds[S.g.cur].abilCd > now, T.nextWorld(S.g)?.pct >= 1].join("|"); }
+  function sig() { const now = Date.now(), E = T.evOf(S.g); return [S.view, readyTours(), S.g.boosts.filter((b) => b.until > now).length, E ? T.evClaimable(E).length : -1, S.g.worlds[S.g.cur].abilCd > now, T.nextWorld(S.g)?.pct >= 1].join("|"); }
 
   function refresh() {
     if (!S.g || !el.querySelector(".ty")) return;
@@ -246,7 +298,7 @@ export function mount(el) {
   function spawnBlitz() {
     const host = el.querySelector(".ty"); if (!host || S.blitzEl) return;
     const b = document.createElement("button");
-    b.type = "button"; b.className = "ty-blitz"; b.setAttribute("aria-label", "Goldener Blitz – schnell antippen!"); b.textContent = "⚡";
+    b.type = "button"; b.className = "ty-blitz"; b.setAttribute("aria-label", "Goldener Blitz – schnell antippen!"); b.innerHTML = `<span class="ty-brays" aria-hidden="true"></span><span class="ty-bcore" aria-hidden="true">⚡</span>`;
     b.style.left = `${8 + Math.random() * 70}%`; b.style.top = `${200 + Math.random() * Math.max(150, host.offsetHeight - 450)}px`;
     b.addEventListener("click", () => {
       const r = T.blitz(S.g, opt());
@@ -265,9 +317,9 @@ export function mount(el) {
   function wheelSheet() {
     let rot = 0, busy = false;
     const body = () => { const free = S.g.wheelDay !== dayKey(); return `<div class="ty-back">${SC.wheelSVG(rot)}<p class="ty-wres" aria-live="polite">${free ? "Heute 1× <b>gratis</b> drehen!" : `Nochmal drehen kostet <b>${T.WHEEL_COST} 🔩</b> (du hast ${S.g.fuses}).`}</p>
-      <button type="button" class="btn primary" data-spin style="width:100%"${!free && S.g.fuses < T.WHEEL_COST ? " disabled" : ""}>🎡 ${free ? "Gratis drehen!" : `Drehen (${T.WHEEL_COST} 🔩)`}</button>
-      <ul class="ty-wlist">${T.WHEEL.map((w) => `<li><span>${w.e}</span>${esc(w.t)}</li>`).join("")}</ul></div>`; };
-    ui.openSheet({ title: "🎡 Glücksrad", bodyHTML: `<div data-wbody>${body()}</div>`, onMount(sh) {
+      <button type="button" class="ty-b3 ${free ? "green" : "purple"} ty-cta" data-spin${!free && S.g.fuses < T.WHEEL_COST ? " disabled" : ""}>🎡 ${free ? "Gratis drehen!" : `Drehen · ${T.WHEEL_COST} 🔩`}</button>
+      <ul class="ty-wlist">${T.WHEEL.map((w) => `<li style="--c:${w.c}"><span aria-hidden="true">${w.e}</span>${esc(w.t)}</li>`).join("")}</ul></div>`; };
+    ui.openSheet({ title: "🎡 Glücksrad", bodyHTML: `<div class="ty-reward ty-wheelstage"><div class="ty-rays" aria-hidden="true"></div><div class="ty-ribbon" aria-hidden="true"><span>Glücksrad</span></div><div data-wbody>${body()}</div></div>`, onMount(sh) {
       sh.addEventListener("click", (ev) => {
         if (!ev.target.closest("[data-spin]") || busy) return;
         const r = T.spin(S.g, dayKey(), opt()); if (!r) return;
@@ -289,10 +341,9 @@ export function mount(el) {
   }
   function lootSheet(loot) {
     const R = loot.relic && T.RELICS.find((x) => x.id === loot.relic), lvl = R ? S.g.relics[R.id] : 0;
-    const items = [`<li>💶 <b>+${T.fmt(loot.cash)} €</b></li>`, `<li>🔩 <b>+${loot.fuses}</b> Sicherungen</li>`,
-      ...loot.boosts.map((k) => `<li>${T.BOOSTS[k].e} <b>${esc(T.BOOSTS[k].name)}</b> in den Rucksack</li>`)];
-    info("🎒 Der Trupp ist zurück!", `<div class="ty-back-e" aria-hidden="true">🥾🎒</div><ul class="ty-loot">${items.map((x, i) => x.replace("<li>", `<li style="animation-delay:${i * 0.25}s">`)).join("")}</ul>
-      ${R ? `<div class="ty-found" style="animation-delay:${items.length * 0.25 + 0.2}s"><span aria-hidden="true">${R.e}</span><b>${lvl > 1 ? "Fundstück verbessert!" : "Neues Fundstück!"}</b><div>${esc(R.name)} ${lvl > 1 ? `→ Stufe ${lvl}` : ""}</div><small>${esc(R.d)}${lvl > 1 ? ` (×${lvl})` : ""}</small></div>` : ""}`, "Einpacken 🎒");
+    const items = [["💶", `+${T.fmt(loot.cash)} €`, "Geld"], ["🔩", `+${loot.fuses}`, "Sicherungen"], ...loot.boosts.map((k) => [T.BOOSTS[k].e, esc(T.BOOSTS[k].name), "in den Rucksack"])];
+    info("🎒 Der Trupp ist zurück!", `<div class="ty-back-e" aria-hidden="true">🎒</div><ul class="ty-loot">${items.map((x, i) => lootLi(i, ...x)).join("")}</ul>
+      ${R ? `<div class="ty-found" style="animation-delay:${0.45 + items.length * 0.22}s"><span class="ty-fic" aria-hidden="true"><span class="ty-eray"></span><span>${R.e}</span></span><div class="ty-ftx"><em>${lvl > 1 ? "Fundstück verbessert!" : "Neues Fundstück!"}</em><b>${esc(R.name)}${lvl > 1 ? ` → Stufe ${lvl}` : ""}</b><small>${esc(R.d)}${lvl > 1 ? ` (×${lvl})` : ""}</small></div></div>` : ""}`, "Einpacken 🎒");
   }
 
   /* ---------- Bedienung ---------- */
@@ -320,11 +371,11 @@ export function mount(el) {
       case "umsp": if (set(T.buyUmsp(S.g))) ui.toast("🏭 Umspannwerk ausgebaut!", 1000); break;
       case "abil": if (set(T.abil(S.g, now), { persist: true })) { ui.toast(`🧑‍🔧 „Hackln, Burschen!“ – ×${T.ABIL.m} für ${T.fmtDur(T.abilDur(S.g) / 1000)}`, 2200); pop(b, `×${T.ABIL.m}!`, "gold"); } break;
       case "amt": S.amt = b.dataset.v; lsSet(AMT_KEY, S.amt); render(); break;
-      case "unlock": { const n = T.tryUnlock(S.g); if (set(n, { persist: true, redraw: false })) { S.view = "welt"; lsSet(VIEW_KEY, "welt"); render(); const w = T.world(n.cur); info(`🚀 Neue Welt: ${w.name}!`, `<div class="ty-back-e" aria-hidden="true">${w.e}</div><p>Willkommen in <b>${esc(w.name)}</b>! Neue Kraftwerke, neue Verrücktheiten.</p><p class="note">Deine alten Welten verdienen mit ihren Elektrikern weiter – schau ab und zu auf der 🗺️ Karte vorbei.</p>`, "Los! 🚀"); } break; }
+      case "unlock": { const n = T.tryUnlock(S.g); if (set(n, { persist: true, redraw: false })) { S.view = "welt"; lsSet(VIEW_KEY, "welt"); render(); const w = T.world(n.cur); info(`🚀 Neue Welt: ${w.name}!`, `<div class="ty-back-e" aria-hidden="true">${w.e}</div><p class="ty-kicker">Welt ${n.cur + 1} freigeschaltet</p><p>Willkommen in <b>${esc(w.name)}</b>! Neue Kraftwerke, neue Verrücktheiten.</p><p class="note">Deine alten Welten verdienen mit ihren Elektrikern weiter – schau ab und zu auf der 🗺️ Karte vorbei.</p>`, "Los! 🚀"); } break; }
       case "chest": {
         const d = new Date(); d.setDate(d.getDate() - 1);
         const r = T.chest(S.g, dayKey(), dayKey(d));
-        if (r && set(r.s, { persist: true })) info("🎁 Truhe geöffnet!", `<div class="ty-back-e" aria-hidden="true">🎁</div><ul class="ty-loot"><li>🔩 <b>+${r.fuses}</b> Sicherungen</li>${r.boost ? `<li style="animation-delay:.25s">${T.BOOSTS[r.boost].e} <b>${esc(T.BOOSTS[r.boost].name)}</b> in den Rucksack</li>` : ""}</ul><p>${r.streak > 1 ? `🔥 ${r.streak} Tage in Folge! Morgen gibt's noch mehr.` : "Komm morgen wieder – die Serie bringt mehr!"}</p>`);
+        if (r && set(r.s, { persist: true })) info("🎁 Truhe geöffnet!", `<div class="ty-back-e" aria-hidden="true">🎁</div><ul class="ty-loot">${lootLi(0, "🔩", `+${r.fuses}`, "Sicherungen")}${r.boost ? lootLi(1, T.BOOSTS[r.boost].e, esc(T.BOOSTS[r.boost].name), "in den Rucksack") : ""}</ul><p class="ty-streak">${r.streak > 1 ? `🔥 <b>${r.streak} Tage in Folge!</b> Morgen gibt's noch mehr.` : "Komm morgen wieder – die Serie bringt mehr!"}</p>`);
         break;
       }
       case "tour": { const t = T.TOURS.find((x) => x.k === b.dataset.k); if (set(T.startTour(S.g, b.dataset.k, now), { persist: true })) ui.toast(`${t.e} Trupp ist losgezogen – zurück in ${T.fmtDur(T.tourMs(S.g, t) / 1000)}`, 2200); break; }
@@ -339,13 +390,13 @@ export function mount(el) {
       case "evbuy": { const E = T.evOf(S.g); if (!E) break; const st = E.gens[id], before = st.lvl; if (set(T.evBuy(S.g, id, amtN(st.lvl, id, true), now))) { const x = E.theme.gens.find((y) => y.id === id); if (!before) ui.toast(`${x.e} ${x.name} gebaut!`, 1400); } break; }
       case "evhire": if (set(T.evHire(S.g, id, now), { persist: true })) ui.toast("🧑‍🔧 Event-Elektriker angestellt!", 1500); break;
       case "evtap": { const r = T.evCollect(S.g, id, now); if (r.got > 0) { pop(b, `+${T.fmt(r.got)} 🎫`); set(r.s, { redraw: false }); refresh(); } else pop(b, "⏳"); break; }
-      case "evclaim": { const r = T.evClaim(S.g, now); if (r && set(r.s, { persist: true })) info("🎁 Event-Belohnung!", `<div class="ty-back-e" aria-hidden="true">🎪</div><ul class="ty-loot">${r.got.map((x, i) => `<li style="animation-delay:${i * 0.25}s">${esc(x)}</li>`).join("")}</ul>`); break; }
+      case "evclaim": { const r = T.evClaim(S.g, now); if (r && set(r.s, { persist: true })) info("🎁 Event-Belohnung!", `<div class="ty-back-e" aria-hidden="true">🎪</div><ul class="ty-loot list">${r.got.map((x, i) => `<li style="animation-delay:${0.35 + i * 0.22}s">${esc(x)}</li>`).join("")}</ul>`); break; }
       case "rad": wheelSheet(); break;
       case "relics": S.view = "tour"; lsSet(VIEW_KEY, "tour"); render(); setTimeout(() => el.querySelector(".ty-relics")?.scrollIntoView({ block: "center", behavior: "smooth" }), 50); break;
       case "findme": scrollToMe(true); break;
       case "prestige": {
         const gain = T.prestigeGain(S.g);
-        ui.openSheet({ title: "📜 Meisterbrief holen?", bodyHTML: `<p>Alle Welten, Kraftwerke, Elektriker und dein Geld starten <b>neu</b>. Dafür bekommst du <b>+${gain} ⭐</b> – mehr Ertrag für immer.</p><p class="note">Sicherungen, Rucksack, Fundstücke, Erfolge und Akku bleiben.</p><div class="row" style="gap:8px"><button type="button" class="btn" data-no>Doch nicht</button><button type="button" class="btn primary" data-yes>📜 Ja, Meisterbrief!</button></div>`,
+        ui.openSheet({ title: "📜 Meisterbrief holen?", bodyHTML: `${stage("📜 Meisterbrief holen?", `<div class="ty-back-e" aria-hidden="true">📜</div><div class="ty-back-big star">+${gain} ⭐</div><p>Alle Welten, Kraftwerke, Elektriker und dein Geld starten <b>neu</b>. Dafür bekommst du <b>+${gain} ⭐</b> – mehr Ertrag für immer.</p><p class="note">Sicherungen, Rucksack, Fundstücke, Erfolge und Akku bleiben.</p>`)}<div class="ty-yesno"><button type="button" class="ty-b3 grey" data-no>Doch nicht</button><button type="button" class="ty-b3 gold" data-yes>📜 Ja, Meisterbrief!</button></div>`,
           onMount(sh, close) {
             sh.querySelector("[data-no]").addEventListener("click", close);
             sh.querySelector("[data-yes]").addEventListener("click", () => { close(); if (set(T.prestige(S.g, Date.now()), { persist: true })) ui.toast(`📜 Herzlichen Glückwunsch, Meister! ⭐ ${S.g.stars}`, 2800); });

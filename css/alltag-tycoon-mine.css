@@ -1,1 +1,367 @@
-/* ⚡ Strom-Tycoon – Zusatz-Stile: mine (wird nach css/alltag-tycoon.css geladen) */
+/* ⚡ Strom-Tycoon – Zusatz-Stile: mine (wird nach css/alltag-tycoon.css geladen)
+   ⛏️ Bergwerk-Ansicht (js/alltag/tycoon-mine-art.js). Eigene Klassen „tm-…“; alte .ty-…-Regeln werden hier überstimmt.
+   Feste Maße (müssen zu ROW_H/TOP_H/CAB_H/CAB_STOP im JS passen): Stollen 128px, Kopfleiste 40px, Kabine 56px, Stollen-Boden bei 116px. */
+
+.tm, .tm-dock, .tm-evhead { --ol: #24160c; font-family: ui-rounded, "SF Pro Rounded", "Arial Rounded MT Bold", Nunito, system-ui, sans-serif; }
+.tm-o { color: #fff; text-shadow: 0 2px 0 var(--ol, #24160c), 2px 0 0 var(--ol, #24160c), -2px 0 0 var(--ol, #24160c), 0 -2px 0 var(--ol, #24160c),
+  1.4px 1.4px 0 var(--ol, #24160c), -1.4px 1.4px 0 var(--ol, #24160c), 1.4px -1.4px 0 var(--ol, #24160c), -1.4px -1.4px 0 var(--ol, #24160c), 0 3.5px 0 var(--ol, #24160c); }
+
+/* ---------- Welt-Farben ---------- */
+.tm { --e1: #a8693a; --e2: #6f4020; --cv1: #3b2312; --cv2: #1e1108; --g1: #86d65c; --g2: #4f9a2c; --gd: #8a5a30; --tm-m1: #e8613a;
+  --w1: #d39a5a; --w2: #93592a; --sky: #6cc0f5;
+  --peb: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='140' height='128'%3E%3Cg stroke='rgba(0,0,0,.38)' stroke-width='2' fill='rgba(0,0,0,.15)'%3E%3Cellipse cx='18' cy='20' rx='9' ry='6'/%3E%3Cellipse cx='96' cy='10' rx='6' ry='4'/%3E%3Cellipse cx='62' cy='70' rx='11' ry='7'/%3E%3Cellipse cx='126' cy='88' rx='8' ry='5'/%3E%3Cellipse cx='30' cy='114' rx='7' ry='5'/%3E%3Cellipse cx='102' cy='120' rx='5' ry='3.5'/%3E%3C/g%3E%3Cg fill='rgba(255,255,255,.17)'%3E%3Cellipse cx='15' cy='17' rx='4' ry='2'/%3E%3Cellipse cx='58' cy='66' rx='5' ry='2.4'/%3E%3Cellipse cx='123' cy='85' rx='3.5' ry='1.8'/%3E%3C/g%3E%3Cg fill='rgba(0,0,0,.25)'%3E%3Ccircle cx='44' cy='36' r='1.6'/%3E%3Ccircle cx='80' cy='44' r='1.2'/%3E%3Ccircle cx='118' cy='40' r='1.8'/%3E%3Ccircle cx='12' cy='72' r='1.3'/%3E%3Ccircle cx='84' cy='92' r='1.5'/%3E%3Ccircle cx='56' cy='100' r='1.1'/%3E%3C/g%3E%3C/svg%3E");
+  --gem: none; }
+.tm.w-baustelle { --e1: #c98a44; --e2: #8d5a28; --g1: #ecc27a; --g2: #c4964c; --gd: #b07a3c; --tm-m1: #f5b700; }
+.tm.w-stadt { --e1: #8b7869; --e2: #54473d; --cv1: #2c2622; --cv2: #141110; --g1: #a3a9b4; --g2: #6b7280; --gd: #4b5563; --tm-m1: #3b82f6; }
+.tm.w-mond { --e1: #8a8ea4; --e2: #4f5368; --cv1: #23233c; --cv2: #0f0f1e; --g1: #cfd2de; --g2: #8d91a5; --gd: #6b6f84; --tm-m1: #8b5cf6; --w1: #b6bccb; --w2: #6f7689;
+  --gem: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='170' height='128'%3E%3Cg stroke='rgb(36,22,12)' stroke-width='1.6' stroke-linejoin='round'%3E%3Cpath d='M40 30l5-12 5 12-5 5z' fill='rgb(103,232,249)'/%3E%3Cpath d='M150 100l4-9 4 9-4 4z' fill='rgb(196,181,253)'/%3E%3Cpath d='M12 92l3-7 3 7-3 3z' fill='rgb(103,232,249)'/%3E%3C/g%3E%3C/svg%3E"); }
+.tm.w-galaxie { --e1: #4c3b86; --e2: #241b4d; --cv1: #1a1240; --cv2: #08061a; --g1: #7c6be0; --g2: #463a9a; --gd: #33296e; --tm-m1: #ec4899; --w1: #8b7fd4; --w2: #4b3f95;
+  --gem: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='170' height='128'%3E%3Cg stroke='rgb(36,22,12)' stroke-width='1.6' stroke-linejoin='round'%3E%3Cpath d='M40 30l5-12 5 12-5 5z' fill='rgb(244,114,182)'/%3E%3Cpath d='M150 100l4-9 4 9-4 4z' fill='rgb(103,232,249)'/%3E%3Cpath d='M12 92l3-7 3 7-3 3z' fill='rgb(250,204,21)'/%3E%3Cpath d='M98 60l3-8 3 8-3 3z' fill='rgb(167,139,250)'/%3E%3C/g%3E%3C/svg%3E"); }
+.tm.w-ev { --e1: color-mix(in srgb, var(--wbg) 45%, #a8693a); --e2: color-mix(in srgb, var(--wbg) 35%, #3b2412); --tm-m1: color-mix(in srgb, var(--wbg) 80%, #fff); }
+
+/* ---------- Rahmen ---------- */
+.ty-mine.tm { position: relative; width: 100%; max-width: 760px; justify-self: center; box-sizing: border-box; border-radius: 24px; overflow: hidden;
+  border: 3px solid var(--ol); background: var(--e2); box-shadow: 0 12px 26px -8px rgba(0,0,0,.45), 0 0 0 3px rgba(255,255,255,.5); }
+
+/* ---------- Oberfläche ---------- */
+.ty-surface.tm-surf { position: relative; display: block; height: 240px; min-height: 0; padding: 0; gap: 0; border: 0; background: var(--sky); overflow: hidden; isolation: isolate; }
+.tm-scene { position: absolute; left: 0; top: 0; width: 100%; height: calc(100% - 70px); display: block; }
+.tm-ground { position: absolute; left: 0; right: 0; bottom: 0; height: 70px; border-top: 3px solid var(--ol);
+  background: linear-gradient(var(--g1) 0 9px, var(--g2) 9px 12px, transparent 12px), var(--peb) 0 6px / 140px 128px, linear-gradient(var(--gd), color-mix(in srgb, var(--gd), #000 25%)); }
+.tm-road { position: absolute; left: 62px; right: 0; bottom: 4px; height: 18px; border-block: 2.5px solid var(--ol);
+  background: linear-gradient(90deg, #fde68a 0 14px, transparent 14px) 0 50% / 26px 2px repeat-x, linear-gradient(#4b5563, #374151); }
+.tm-hole { position: absolute; left: 0; top: 12px; bottom: 0; width: 62px; border-right: 3px solid var(--ol);
+  background: linear-gradient(90deg, transparent 8px, #8b95a5 8px 11px, transparent 11px calc(100% - 11px), #8b95a5 calc(100% - 11px) calc(100% - 8px), transparent 0),
+    linear-gradient(180deg, rgba(0,0,0,.65), rgba(0,0,0,.2) 40%, rgba(0,0,0,.45)), linear-gradient(90deg, #1a1410, #33271d 30% 70%, #1a1410); }
+.tm-b { position: absolute; bottom: 70px; display: flex; flex-direction: column; align-items: center; z-index: 2; }
+.tm-lei { left: 0; width: 62px; }
+.tm-ums { left: 72px; width: 132px; }
+.tm-ks { right: 4px; width: 96px; }
+.tm-pylon { display: block; width: 56px; height: 116px; margin-bottom: -2px; filter: drop-shadow(0 3px 0 rgba(0,0,0,.18)); }
+.tm-art { position: relative; display: block; line-height: 0; }
+.tm-umsp { display: block; width: 132px; height: 96px; margin-bottom: -2px; }
+.tm-kasse { display: block; width: 92px; height: 80px; margin-bottom: -2px; }
+.tm-plate { position: relative; z-index: 3; display: grid; justify-items: center; margin-bottom: 4px; padding: 2px 8px 3px; border: 2.5px solid var(--ol); border-radius: 9px;
+  background: linear-gradient(#2c3e66, #1b2747); color: #fff; line-height: 1.05; box-shadow: inset 0 2px 0 rgba(255,255,255,.18), 0 3px 0 rgba(0,0,0,.3); white-space: nowrap; }
+.tm-plate b { font-size: 11px; font-weight: 900; letter-spacing: .01em; }
+.tm-plate small { font-size: 10px; font-weight: 800; color: #fde68a; font-variant-numeric: tabular-nums; }
+.tm-lei .tm-plate { padding-inline: 5px; }
+.tm-b.neck .tm-plate { background: linear-gradient(#ef4444, #b91c1c); animation: tm-alarm .7s ease-in-out infinite alternate; }
+.tm-b.neck .tm-plate small { color: #fff; }
+@keyframes tm-alarm { to { transform: scale(1.08); box-shadow: 0 0 0 3px rgba(254,202,202,.8), 0 3px 0 rgba(0,0,0,.3); } }
+.tm-up { position: absolute; top: calc(100% + 14px); left: 50%; transform: translateX(-50%); z-index: 4; display: grid; justify-items: center; min-width: 66px; padding: 3px 7px 4px; line-height: 1.1;
+  border: 2.5px solid var(--ol); border-radius: 11px; color: #fff; font: inherit; cursor: pointer; white-space: nowrap; touch-action: manipulation;
+  background: linear-gradient(#7ee35b, #2fae3d 55%, #23912f); box-shadow: inset 0 2px 0 rgba(255,255,255,.55), inset 0 -3px 0 rgba(0,0,0,.18), 0 4px 0 var(--ol); }
+.tm-up b { font-size: 11.5px; font-weight: 900; text-shadow: 0 1.5px 0 rgba(0,0,0,.45); }
+.tm-up small { font-size: 10px; font-weight: 900; text-shadow: 0 1px 0 rgba(0,0,0,.4); }
+.tm-up:active:not(:disabled) { transform: translate(-50%, 3px); box-shadow: inset 0 2px 0 rgba(255,255,255,.55), 0 1px 0 var(--ol); }
+.tm-up:disabled { cursor: default; background: linear-gradient(#a3acb9, #7b8597); box-shadow: inset 0 2px 0 rgba(255,255,255,.35), 0 4px 0 var(--ol); color: #eef2f7; }
+.tm-lei .tm-up { left: 31px; }
+.tm-flow { margin-bottom: 4px; padding: 2px 9px; border: 2.5px solid var(--ol); border-radius: 999px; background: linear-gradient(#ffe36b, #f5b400); font-size: 11.5px; font-weight: 900; white-space: nowrap; box-shadow: inset 0 2px 0 rgba(255,255,255,.6), 0 3px 0 rgba(0,0,0,.3); font-variant-numeric: tabular-nums; }
+.tm-flow b { font-weight: 900; }
+.tm-wires { position: absolute; left: 30px; top: 98px; width: 132px; height: 34px; z-index: 1; overflow: visible; }
+.tm-wires path { fill: none; stroke: #1f2937; stroke-width: 1.6; vector-effect: non-scaling-stroke; }
+.tm-wires .tm-flowln { stroke: #fde047; stroke-width: 3; stroke-dasharray: 3 14; opacity: 0; vector-effect: non-scaling-stroke; }
+.tm.live .tm-wires .tm-flowln { opacity: 1; animation: tm-dash 1.1s linear infinite; }
+@keyframes tm-dash { to { stroke-dashoffset: -17; } }
+/* Abladen am Umspannwerk + Münzen an der Börse */
+.tm-unpop { position: absolute; left: 30%; top: 40%; z-index: 5; font-size: 16px; font-weight: 900; line-height: 1; opacity: 0; pointer-events: none; }
+.tm.live .tm-unpop { animation: tm-unpop var(--tm-P, 8s) linear infinite; }
+.tm-coins { position: absolute; left: 0; right: 0; top: 22px; display: flex; justify-content: center; gap: 4px; pointer-events: none; }
+.tm-coins i { font-style: normal; font-size: 15px; line-height: 1; opacity: 0; }
+.tm.live .tm-coins i { animation: tm-coin 6s ease-out infinite; }
+.tm.live .tm-coins i:nth-child(2) { animation-delay: .12s; } .tm.live .tm-coins i:nth-child(3) { animation-delay: .24s; }
+@keyframes tm-coin { 0%, 47% { opacity: 0; transform: translateY(8px) scale(.5); } 52% { opacity: 1; transform: translateY(-14px) scale(1.15) rotate(12deg); } 64% { opacity: 0; transform: translateY(-34px) scale(.9) rotate(-10deg); } 100% { opacity: 0; } }
+/* E-Transporter Umspannwerk → Börse */
+.tm-vtrack { position: absolute; left: 186px; right: 54px; bottom: 15px; height: 30px; z-index: 1; pointer-events: none; }
+.tm-vmove { position: absolute; inset: 0; animation: tm-drive 6s ease-in-out infinite; }
+.tm-van { position: absolute; left: 0; bottom: 0; width: 44px; height: 28px; overflow: visible; animation: tm-turn 6s linear infinite; filter: drop-shadow(0 2px 0 rgba(0,0,0,.25)); }
+.tm-van .tm-crates { animation: tm-load 6s linear infinite; }
+.tm:not(.live) .tm-vmove, .tm:not(.live) .tm-van, .tm:not(.live) .tm-crates { animation: none; }
+.tm:not(.live) .tm-crates { opacity: 0; }
+@keyframes tm-drive { 0%, 8% { transform: translateX(0); } 46%, 58% { transform: translateX(calc(100% - 44px)); } 96%, 100% { transform: translateX(0); } }
+@keyframes tm-turn { 0%, 51.9% { transform: scaleX(1); } 52%, 99.9% { transform: scaleX(-1); } }
+@keyframes tm-load { 0%, 4% { opacity: 0; transform: translateY(-6px); } 8%, 50% { opacity: 1; transform: none; } 54%, 100% { opacity: 0; } }
+.tm-puff { position: absolute; left: -6px; bottom: 8px; width: 12px; height: 12px; border-radius: 50%; background: #e5e7eb; opacity: 0; }
+/* Engpass sichtbar: Lift / Transporter überlastet */
+.tm:has(.tm-ums.neck) .tm-vmove { animation-duration: 10s; }
+.tm:has(.tm-ums.neck) .tm-van, .tm:has(.tm-ums.neck) .tm-van .tm-crates { animation-duration: 10s; }
+.tm:has(.tm-ums.neck) .tm-crates { transform-origin: 15px 9px; scale: 1.35; }
+.tm.live:has(.tm-ums.neck) .tm-puff { animation: tm-puff .9s ease-out infinite; }
+@keyframes tm-puff { 0% { opacity: .9; transform: translate(0, 0) scale(.5); } 100% { opacity: 0; transform: translate(-12px, -14px) scale(1.6); } }
+.tm:has(.tm-lei.neck) .tm-cab .tm-cage { filter: drop-shadow(0 0 5px #ef4444) drop-shadow(0 0 2px #ef4444); }
+.tm:has(.tm-lei.neck) .tm-cargo { scale: 1.25 1.4; transform-origin: bottom; }
+.tm:has(.tm-lei.neck) .tm-rider::after { content: "💦"; position: absolute; right: -8px; top: -6px; font-size: 11px; animation: tm-bob .5s ease-in-out infinite; }
+/* Szenen-Animationen */
+.tm-drift { animation: tm-drift 40s linear infinite alternate; }
+@keyframes tm-drift { to { transform: translateX(46px); } }
+.tm-swing { transform-origin: 230px 31px; animation: tm-swing 3.4s ease-in-out infinite alternate; }
+@keyframes tm-swing { from { transform: rotate(-6deg); } to { transform: rotate(6deg); } }
+.tm-blink { animation: tm-blink 1.2s steps(2) infinite; }
+@keyframes tm-blink { 50% { opacity: .15; } }
+.tm-twinkle { animation: tm-tw 2.6s ease-in-out infinite alternate; }
+@keyframes tm-tw { to { opacity: .45; } }
+.tm-comet { animation: tm-comet 9s linear infinite; }
+@keyframes tm-comet { 0% { transform: translate(-80px, -10px); opacity: 0; } 8% { opacity: 1; } 40% { transform: translate(260px, 70px); opacity: 0; } 100% { transform: translate(260px, 70px); opacity: 0; } }
+.tm-sunr { transform-origin: 340px 34px; animation: tm-sun 3s ease-in-out infinite alternate; }
+@keyframes tm-sun { to { transform: scale(1.25); opacity: .6; } }
+.tm.live .tm-wheel { animation: tm-spin 1.4s linear infinite; }
+@keyframes tm-spin { to { transform: rotate(360deg); } }
+.tm-zap { opacity: 0; }
+.tm.live .tm-zap { animation: tm-zap 1.8s steps(1) infinite; }
+@keyframes tm-zap { 0%, 60% { opacity: 0; } 62%, 70% { opacity: 1; } 72%, 80% { opacity: 0; } 82%, 88% { opacity: 1; } 90% { opacity: 0; } }
+
+/* ---------- Schacht + Stollen ---------- */
+.ty-shaftwrap.tm-wrap { position: relative; display: grid; grid-template-columns: 62px 1fr; }
+.tm-shaft { position: relative; overflow: hidden; border-right: 3px solid var(--ol);
+  background: linear-gradient(90deg, transparent 8px, #8b95a5 8px 11px, rgba(0,0,0,.25) 11px 12px, transparent 12px calc(100% - 12px), rgba(0,0,0,.25) calc(100% - 12px) calc(100% - 11px), #8b95a5 calc(100% - 11px) calc(100% - 8px), transparent 0),
+    repeating-linear-gradient(180deg, transparent 0 22px, rgba(0,0,0,.4) 22px 25px),
+    linear-gradient(90deg, #120d09, #2c2119 28% 72%, #120d09); }
+.tm-shaft::before { content: ""; position: absolute; left: 0; right: 0; top: 40px; bottom: 0; pointer-events: none;
+  background: repeating-linear-gradient(180deg, transparent 0 116px, var(--w2) 116px 118px, var(--w1) 118px 122px, var(--ol) 122px 124px, transparent 124px 128px); clip-path: inset(0 0 0 70%); }
+.tm-cable { position: absolute; left: 50%; top: 0; bottom: 0; width: 0; }
+.tm-cab { position: absolute; left: 5px; top: 0; z-index: 3; width: 50px; height: 56px; will-change: transform; }
+.tm.live .tm-cab { animation: tm-lift var(--tm-P, 8s) linear infinite; }
+.tm-cbl { position: absolute; left: 24px; bottom: 54px; width: 2px; height: 1400px; background: #0b0b0b; box-shadow: 1px 0 0 rgba(255,255,255,.15); }
+.tm-cage { position: absolute; inset: 0; width: 50px; height: 56px; z-index: 2; overflow: visible; }
+.tm-rider { position: absolute; left: 6px; bottom: 6px; z-index: 1; font-size: 22px; line-height: 1; filter: drop-shadow(0 1px 0 rgba(0,0,0,.4)); }
+.tm-cargo { position: absolute; right: 6px; bottom: 6px; z-index: 1; width: 16px; height: 30px; transform-origin: bottom; border: 2px solid var(--ol); border-radius: 3px; overflow: hidden;
+  background: radial-gradient(circle, #fde047 0 3px, #b45309 3.6px, transparent 4.2px) 0 0 / 8px 7px, linear-gradient(#fbbf24, #d97706); }
+.tm.live .tm-cargo { animation: tm-cargo var(--tm-P, 8s) linear infinite; }
+.tm:not(.live) .tm-cargo { transform: scaleY(.06); }
+.tm-cargo i { display: none; }
+.tm-shaft.idle .tm-rider::before { content: "💤"; position: absolute; right: -10px; top: -10px; font-size: 11px; animation: tm-bob 1.6s ease-in-out infinite; }
+
+.tm-rows { display: grid; min-width: 0; }
+.tm-top { height: 40px; box-sizing: border-box; display: flex; align-items: center; padding: 0 8px; border-bottom: 3px solid var(--ol);
+  background: linear-gradient(rgba(255,255,255,.08), transparent 40%), repeating-linear-gradient(0deg, transparent 0 6px, rgba(0,0,0,.1) 6px 7px), linear-gradient(#3a2a1e, #22170f); }
+.tm-neck, .tm .ty-neck.tm-neck { margin: 0; padding: 0; background: none; text-align: left; color: #fde68a; font-size: 11px; font-weight: 800; line-height: 1.25;
+  display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; text-shadow: 0 1px 0 #000; }
+
+.ty-row.tm-row { position: relative; box-sizing: border-box; height: 128px; display: grid; grid-template-columns: minmax(0, 1fr) 78px; grid-template-rows: 24px 1fr; gap: 4px 6px; padding: 5px 6px 8px 0;
+  border: 0; border-bottom: 3px solid color-mix(in srgb, var(--e2), #000 30%);
+  background: var(--gem) 30px 0 / 170px 128px, var(--peb) calc(var(--i) * 37px) 0 / 140px 128px, linear-gradient(rgba(255,255,255,.08), transparent 30%, rgba(0,0,0,.12)),
+    color-mix(in srgb, var(--e1), #000 calc(var(--i) * 6%)); }
+.tm-sign { grid-column: 1; grid-row: 1; justify-self: start; max-width: calc(100% - 6px); margin-left: 6px; min-width: 0; display: flex; align-items: center; gap: 5px; height: 24px; box-sizing: border-box; padding: 0 4px 0 3px;
+  border: 2.5px solid var(--ol); border-radius: 7px; color: #fff8e6;
+  background: linear-gradient(rgba(255,255,255,.22), transparent 45%, rgba(0,0,0,.15)), repeating-linear-gradient(0deg, transparent 0 4px, rgba(0,0,0,.08) 4px 5px), var(--w1); box-shadow: 0 3px 0 rgba(0,0,0,.28); }
+.tm-sign b { flex: 0 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 12px; font-weight: 900; text-shadow: 0 1.5px 0 var(--ol), 1px 0 0 var(--ol), -1px 0 0 var(--ol), 0 -1px 0 var(--ol); }
+.tm-num { flex: 0 0 auto; display: inline-grid; place-items: center; width: 17px; height: 17px; border-radius: 50%; background: var(--ol); color: #fde68a; font-size: 10.5px; font-weight: 900; font-variant-numeric: tabular-nums; }
+.tm-ms { position: relative; flex: 0 0 62px; height: 14px; border: 2px solid var(--ol); border-radius: 999px; background: #3a2414; overflow: hidden; box-sizing: border-box; }
+.tm-ms i { position: absolute; inset: 0 auto 0 0; background: linear-gradient(#fde047, #f59e0b); box-shadow: inset 0 -2px 0 rgba(0,0,0,.2); }
+.tm-ms em { position: relative; display: block; text-align: center; font-style: normal; font-size: 8.5px; line-height: 10px; font-weight: 900; color: #fff; text-shadow: 0 1px 0 #000, 1px 0 0 #000, -1px 0 0 #000, 0 -1px 0 #000; white-space: nowrap; font-variant-numeric: tabular-nums; }
+.tm-ms.done { background: #15803d; flex-basis: 66px; }
+
+/* Stollen (Tunnel) */
+.tm-tun { grid-column: 1; grid-row: 2; position: relative; display: grid; grid-template-columns: 56px 46px minmax(0, 1fr) 58px; align-items: end; gap: 0 4px; padding: 0 4px 7px 5px; min-width: 0;
+  border: 3px solid var(--ol); border-left: 0; border-radius: 0 16px 10px 0;
+  background: radial-gradient(70% 85% at 50% 4%, rgba(255,205,120,.42), rgba(255,180,80,.12) 55%, transparent 75%),
+    linear-gradient(to top, transparent 2px, #9aa3b0 2px 4px, rgba(0,0,0,.4) 4px 5px, transparent 5px),
+    repeating-linear-gradient(90deg, #4a2d14 0 5px, transparent 5px 15px) 0 100% / 100% 6px no-repeat,
+    linear-gradient(var(--cv1), var(--cv2));
+  box-shadow: inset 0 9px 14px rgba(0,0,0,.55), inset 0 -2px 0 rgba(0,0,0,.4), 0 2px 0 rgba(255,255,255,.14); }
+.tm-tun::before { content: ""; position: absolute; left: -3px; right: -3px; top: -3px; height: 9px; z-index: 1; border: 2.5px solid var(--ol); border-radius: 3px 14px 3px 3px; box-sizing: border-box;
+  background: linear-gradient(rgba(255,255,255,.3), transparent 50%, rgba(0,0,0,.2)), var(--w1); }
+.tm-tun::after { content: ""; position: absolute; inset: 6px 0 0; z-index: 0; pointer-events: none;
+  background: linear-gradient(90deg, var(--ol) 0 2px, var(--w1) 2px 7px, var(--w2) 7px 8px, var(--ol) 8px 10px, transparent 10px) 0 0 / 10px 100% no-repeat,
+    linear-gradient(90deg, var(--ol) 0 2px, var(--w1) 2px 7px, var(--w2) 7px 8px, var(--ol) 8px 10px, transparent 10px) 100% 0 / 10px 100% no-repeat; }
+.tm-tun > * { position: relative; z-index: 2; }
+.tm-lamp { position: absolute; left: 46%; top: 6px; z-index: 2; width: 10px; height: 12px; border: 2px solid var(--ol); border-radius: 45% 45% 50% 50%; box-sizing: border-box; background: radial-gradient(circle at 40% 35%, #fff, #fde047 60%, #f59e0b); }
+.tm-lamp::before { content: ""; position: absolute; left: 50%; bottom: 100%; width: 2px; height: 2px; margin-left: -1px; background: var(--ol); }
+.tm-lamp::after { content: ""; position: absolute; left: 50%; top: 50%; width: 90px; height: 70px; margin: -26px 0 0 -45px; border-radius: 50%; background: radial-gradient(closest-side, rgba(255,226,140,.38), transparent); pointer-events: none; animation: tm-flick 4s steps(1) infinite; }
+@keyframes tm-flick { 0%, 100% { opacity: 1; } 31% { opacity: .55; } 33% { opacity: 1; } 71% { opacity: .75; } 72% { opacity: 1; } }
+
+/* Lore (Puffer) – zum Antippen */
+.tm-pile { grid-column: 1; grid-row: 1; justify-self: center; display: grid; justify-items: center; gap: 4px; padding: 0; margin: 0; border: 0; background: none; color: #fff; font: inherit; cursor: pointer; touch-action: manipulation; -webkit-tap-highlight-color: transparent; }
+.tm-pile.auto { cursor: default; }
+.tm-pile b { font-size: 11px; font-weight: 900; line-height: 1; white-space: nowrap; font-variant-numeric: tabular-nums; min-height: 11px; }
+.tm-cart { position: relative; display: block; width: 52px; height: 32px; box-sizing: border-box; margin-bottom: 6px; border: 3px solid var(--ol); border-radius: 4px 4px 10px 10px;
+  background: linear-gradient(90deg, rgba(0,0,0,.25), transparent 25% 75%, rgba(0,0,0,.25)), linear-gradient(#7d8796, #4b5563); box-shadow: inset 0 3px 0 rgba(255,255,255,.3); }
+.tm-cart::before { content: ""; position: absolute; left: 3px; right: 3px; bottom: -10px; height: 10px; pointer-events: none;
+  background: radial-gradient(circle 5px at 7px 4px, #cbd5e1 0 2px, #1f2937 2.2px 4px, var(--ol) 4.2px 5px, transparent 5.2px), radial-gradient(circle 5px at calc(100% - 7px) 4px, #cbd5e1 0 2px, #1f2937 2.2px 4px, var(--ol) 4.2px 5px, transparent 5.2px); }
+.tm-cart::after { content: ""; position: absolute; left: -5px; right: -5px; top: -5px; height: 6px; border: 2.5px solid var(--ol); border-radius: 3px; background: linear-gradient(#a3adbb, #64748b); box-sizing: border-box; z-index: 2; }
+.tm-heap { position: absolute; left: 1px; right: 1px; bottom: 1px; height: 0; border-radius: 10px 10px 7px 7px; transform-origin: bottom;
+  background: radial-gradient(circle at 35% 30%, rgba(255,255,255,.75) 0 1.4px, transparent 2px) 0 0 / 9px 7px, radial-gradient(circle, #fde047 0 3px, #b45309 3.5px, transparent 4.1px) 0 0 / 9px 7px, linear-gradient(#fcd34d, #d97706);
+  transition: height .2s linear; }
+.tm-pile.auto .tm-heap { height: calc(100% + 4px); }
+.tm.live .tm-pile.auto .tm-heap { animation: tm-heap var(--tm-P, 8s) linear infinite; }
+.tm-bang { position: absolute; right: -10px; top: -16px; z-index: 3; display: grid; place-items: center; width: 18px; height: 18px; border: 2.5px solid var(--ol); border-radius: 50%; background: #ef4444; color: #fff; font-style: normal; font-size: 11px; font-weight: 900; opacity: 0; transform: scale(0); transition: transform .25s cubic-bezier(.3,1.8,.5,1), opacity .2s; }
+.tm-cart.full { animation: tm-full .8s ease-in-out infinite alternate; }
+.tm-cart.full .tm-heap { border-radius: 16px 16px 7px 7px; }
+.tm-cart.full::after { background: linear-gradient(#fde68a, #f59e0b); }
+.tm-cart.full .tm-bang { opacity: 1; transform: scale(1); animation: tm-bob .6s ease-in-out infinite; }
+@keyframes tm-full { from { box-shadow: inset 0 3px 0 rgba(255,255,255,.3), 0 0 0 0 rgba(253,224,71,0); } to { box-shadow: inset 0 3px 0 rgba(255,255,255,.3), 0 0 12px 4px rgba(253,224,71,.9); } }
+.tm-pile:not(.auto):active .tm-cart { transform: scale(.9) rotate(-4deg); }
+.tm-pile:not(.auto):focus-visible { outline: 3px solid #fde047; outline-offset: 2px; border-radius: 8px; }
+.tm-lpop { position: absolute; left: 50%; top: -10px; z-index: 6; font-size: 13px; font-weight: 900; white-space: nowrap; color: #ffe14d; opacity: 0; pointer-events: none; }
+.tm.live .tm-lpop { animation: tm-lpop var(--tm-P, 8s) linear infinite; }
+
+/* Elektriker (Manager) */
+.ty-boss.tm-boss { grid-column: 2; grid-row: 1; justify-self: center; position: relative; display: grid; place-items: end center; width: 44px; height: 46px; font-size: 30px; line-height: 1; text-align: center; }
+.tm-boss::before { content: ""; position: absolute; bottom: -2px; left: 8px; right: 8px; height: 7px; border-radius: 50%; background: rgba(0,0,0,.45); }
+.tm-boss span { position: relative; filter: drop-shadow(0 2px 0 rgba(0,0,0,.35)); animation: tm-boss 2.4s ease-in-out infinite; transform-origin: bottom; }
+.tm-boss::after { content: "★"; position: absolute; top: -4px; right: 0; display: grid; place-items: center; width: 15px; height: 15px; border: 2px solid var(--ol); border-radius: 50%; background: #fde047; color: var(--ol); font-size: 9px; line-height: 1; }
+@keyframes tm-boss { 0%, 100% { transform: rotate(0); } 25% { transform: rotate(-5deg) translateY(-1px); } 50% { transform: rotate(0) translateY(0); } 75% { transform: rotate(4deg) translateY(-1px); } }
+.tm-hire { grid-column: 2; grid-row: 1; justify-self: center; position: relative; display: grid; justify-items: center; gap: 2px; width: 46px; padding: 0; border: 0; background: none; color: #fff; font: inherit; cursor: pointer; touch-action: manipulation; }
+.tm-hf { display: grid; place-items: center; width: 38px; height: 38px; box-sizing: border-box; border: 2.5px dashed rgba(255,255,255,.75); border-radius: 50%; background: rgba(0,0,0,.35); font-size: 22px; line-height: 1; filter: grayscale(.2); }
+.tm-hire em { position: absolute; top: -3px; right: -1px; display: grid; place-items: center; width: 18px; height: 18px; border: 2.5px solid var(--ol); border-radius: 50%; background: linear-gradient(#7ee35b, #23912f); color: #fff; font-style: normal; font-weight: 900; font-size: 14px; line-height: 1; }
+.tm-hire small { padding: 1px 5px; border: 2px solid var(--ol); border-radius: 7px; background: linear-gradient(#4fa3ff, #1f6fe5); font-size: 9px; font-weight: 900; line-height: 1.2; white-space: nowrap; text-shadow: 0 1px 0 rgba(0,0,0,.4); }
+.tm-hire:not(:disabled) .tm-hf { border-style: solid; border-color: #86efac; background: radial-gradient(circle, rgba(134,239,172,.35), rgba(0,0,0,.3)); animation: tm-call 1.4s ease-in-out infinite; }
+@keyframes tm-call { 50% { transform: scale(1.08); box-shadow: 0 0 10px 3px rgba(134,239,172,.6); } }
+.tm-hire:disabled { cursor: default; }
+.tm-hire:disabled .tm-hf { opacity: .65; filter: grayscale(1); }
+.tm-hire:disabled em { background: linear-gradient(#a3acb9, #6b7280); }
+.tm-hire:disabled small { background: linear-gradient(#8b95a5, #5b6577); }
+.tm-hire:active:not(:disabled) { transform: scale(.93); }
+
+/* Arbeiter: Maschine → Lore und zurück */
+.tm-walk { position: absolute; left: 108px; right: 66px; bottom: 8px; height: 30px; z-index: 1 !important; pointer-events: none; }
+.tm-wk { position: absolute; inset: 0; animation: tm-walk 4s ease-in-out infinite; will-change: transform; }
+.tm-wb { position: absolute; left: 0; bottom: 0; font-size: 22px; line-height: 1; filter: drop-shadow(0 2px 0 rgba(0,0,0,.35)); animation: tm-step .32s ease-in-out infinite alternate; }
+.tm-wb i { position: absolute; left: -8px; top: 3px; display: grid; place-items: center; width: 15px; height: 15px; border: 2px solid var(--ol); border-radius: 4px; background: #fde047; font-style: normal; font-size: 9px; animation: tm-carry 4s linear infinite; }
+.tm-walk.slow .tm-wk, .tm-walk.slow .tm-wb i { animation-duration: 7s; }
+@keyframes tm-walk { 0%, 12% { transform: translateX(calc(100% - 22px)); } 50%, 60% { transform: translateX(0); } 100% { transform: translateX(calc(100% - 22px)); } }
+@keyframes tm-step { from { transform: translateY(0) rotate(-4deg); } to { transform: translateY(-3px) rotate(4deg); } }
+@keyframes tm-carry { 0%, 11% { opacity: 0; transform: scale(.4); } 14%, 52% { opacity: 1; transform: none; } 55%, 100% { opacity: 0; transform: translateX(-10px) scale(.4); } }
+@keyframes tm-bob { 50% { transform: translateY(-3px); } }
+
+/* Kraftwerk */
+.tm-gen { grid-column: 4; grid-row: 1; justify-self: end; position: relative; width: 58px; height: 70px; }
+.tm-mach { position: absolute; inset: 0; width: 58px; height: 70px; overflow: visible; filter: drop-shadow(0 3px 0 rgba(0,0,0,.35)); }
+.tm-ge { position: absolute; left: 0; right: 0; top: 29px; text-align: center; font-size: 22px; line-height: 22px; }
+.tm-gen.on .tm-ge { animation: tm-pulse 1s ease-in-out infinite; }
+@keyframes tm-pulse { 50% { transform: scale(1.14); } }
+.tm-led { fill: #f59e0b; }
+.tm-gen.on .tm-led { fill: #4ade80; animation: tm-blink 1s steps(2) infinite; }
+.tm-smoke { animation: tm-smoke 2.2s ease-out infinite; }
+@keyframes tm-smoke { 0% { transform: translateY(4px) scale(.6); opacity: 0; } 30% { opacity: .9; } 100% { transform: translateY(-10px) scale(1.6); opacity: 0; } }
+.tm-spark { position: absolute; left: -6px; top: 30px; width: 14px; height: 14px; pointer-events: none; opacity: 0;
+  background: radial-gradient(circle, #fff 0 2px, #fde047 3px, transparent 5px), conic-gradient(from 0deg, transparent 0 10%, #fde047 10% 14%, transparent 14% 35%, #fde047 35% 39%, transparent 39% 60%, #fde047 60% 64%, transparent 64% 85%, #fde047 85% 89%, transparent 89%);
+  border-radius: 50%; animation: tm-spark 4s linear infinite; }
+.tm-row:not(.auto) .tm-spark { animation-duration: 7s; }
+@keyframes tm-spark { 0% { opacity: 0; transform: scale(.4) rotate(0); } 3% { opacity: 1; transform: scale(1.2) rotate(40deg); } 6% { opacity: 0; transform: scale(.6); } 7% { opacity: 1; transform: scale(1.1) rotate(90deg); } 11% { opacity: 0; } 100% { opacity: 0; } }
+.tm-rate { position: absolute; left: 50%; bottom: -5px; transform: translateX(-50%); z-index: 3; padding: 0 4px; border: 2px solid var(--ol); border-radius: 6px; background: #1e293b; color: #bbf7d0; font-size: 9px; font-weight: 900; line-height: 1.25; white-space: nowrap; font-variant-numeric: tabular-nums; }
+
+/* Stufen-Knopf (MAX-Modus schreibt <b>Stufe N</b><small>+n · x €</small> hinein) */
+.tm-lvl { grid-column: 2; grid-row: 1 / 3; position: relative; overflow: hidden; display: flex; flex-direction: column; align-items: center; justify-content: flex-end; gap: 4px; margin: 0 0 3px; padding: 26px 3px 6px;
+  border: 3px solid var(--ol); border-radius: 15px; color: #fff; font: inherit; cursor: pointer; touch-action: manipulation; line-height: 1.05;
+  background: linear-gradient(#5db4ff, #2a7ef0 45%, #1a5fd0); box-shadow: inset 0 3px 0 rgba(255,255,255,.5), inset 0 -5px 0 rgba(0,0,0,.22), 0 4px 0 var(--ol); }
+.tm-lvl::before { content: ""; position: absolute; top: 6px; left: 50%; width: 24px; height: 18px; margin-left: -12px;
+  background: linear-gradient(#7ee35b, #23912f); clip-path: polygon(50% 0, 100% 62%, 70% 62%, 70% 100%, 30% 100%, 30% 62%, 0 62%); filter: drop-shadow(0 0 0 var(--ol)); }
+.tm-lvl::after { content: ""; position: absolute; top: 0; bottom: 0; left: -60%; width: 40%; background: linear-gradient(100deg, transparent, rgba(255,255,255,.45), transparent); transform: skewX(-15deg); pointer-events: none; animation: tm-shine 3.6s ease-in-out infinite; }
+@keyframes tm-shine { 0%, 70% { left: -60%; } 100% { left: 130%; } }
+.tm-lvl b { font-size: 14px; font-weight: 900; white-space: nowrap; text-shadow: 0 2px 0 var(--ol), 1.5px 0 0 var(--ol), -1.5px 0 0 var(--ol), 0 -1.5px 0 var(--ol); }
+.tm-lvl small { display: block; max-width: 100%; box-sizing: border-box; padding: 2px 4px; border-radius: 7px; background: rgba(8,20,60,.42); font-size: 10px; font-weight: 900; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; font-variant-numeric: tabular-nums; }
+.tm-lvl:active:not(:disabled) { transform: translateY(3px); box-shadow: inset 0 3px 0 rgba(255,255,255,.5), inset 0 -3px 0 rgba(0,0,0,.22), 0 1px 0 var(--ol); }
+.tm-lvl:disabled { cursor: default; background: linear-gradient(#93a3bd, #64748b 50%, #526077); }
+.tm-lvl:disabled::before { background: linear-gradient(#cbd5e1, #94a3b8); }
+.tm-lvl:disabled::after { display: none; }
+.tm-lvl:focus-visible, .tm-up:focus-visible, .tm-build:focus-visible, .tm-db:focus-visible, .tm-boost:focus-visible, .tm-hire:focus-visible { outline: 3px solid #fde047; outline-offset: 2px; }
+
+/* Fels (nächstes Kraftwerk bauen) */
+.ty-row.rock.tm-rock { position: relative; box-sizing: border-box; display: grid; grid-template-columns: minmax(0, 1fr) 96px; align-items: center; gap: 8px; min-height: 104px; padding: 12px 8px 12px 10px; border: 0; border-bottom: 3px solid var(--ol);
+  background: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='84' height='60'%3E%3Cg stroke='rgb(36,22,12)' stroke-width='2.4' stroke-linejoin='round'%3E%3Cpath d='M4 26l8-14 18-3 10 12-4 15-17 4z' fill='rgb(140,132,124)'/%3E%3Cpath d='M44 8l16-6 18 6 2 16-14 9-18-4z' fill='rgb(120,113,106)'/%3E%3Cpath d='M30 42l14-8 20 4 6 14-12 8H36z' fill='rgb(150,142,133)'/%3E%3Cpath d='M70 34l12 2 2 14-10 6z' fill='rgb(110,104,98)'/%3E%3C/g%3E%3Cg fill='rgba(255,255,255,.25)'%3E%3Cpath d='M12 14l14-2 4 4-16 2z'/%3E%3Cpath d='M50 7l10-3 8 3-10 3z'/%3E%3Cpath d='M38 40l8-4 10 2-10 3z'/%3E%3C/g%3E%3C/svg%3E") 0 0 / 84px 60px,
+    color-mix(in srgb, #57534e, #000 calc(var(--i) * 4%)); }
+.tm-rwall { position: absolute; inset: 0; pointer-events: none; background: radial-gradient(70% 90% at 45% 50%, rgba(0,0,0,.05), rgba(0,0,0,.45)); }
+.tm-crack { position: absolute; left: 38%; top: 10%; width: 40px; height: 70%; border-left: 3px solid rgba(20,12,6,.75); transform: skewX(-20deg); border-radius: 50%; }
+.tm-pick { position: absolute; left: calc(100% - 118px); bottom: 6px; font-size: 26px; transform-origin: 80% 80%; animation: tm-pick 2.6s ease-in-out infinite; filter: drop-shadow(0 2px 0 rgba(0,0,0,.4)); }
+@keyframes tm-pick { 0%, 60%, 100% { transform: rotate(0); } 70% { transform: rotate(-28deg); } 78% { transform: rotate(6deg); } }
+.tm-rsign { position: relative; z-index: 1; display: grid; gap: 3px; min-width: 0; padding: 7px 10px 8px; border: 2.5px solid var(--ol); border-radius: 10px; color: #fff8e6;
+  background: linear-gradient(rgba(255,255,255,.22), transparent 40%, rgba(0,0,0,.18)), repeating-linear-gradient(0deg, transparent 0 5px, rgba(0,0,0,.08) 5px 6px), #b07a45; box-shadow: 0 4px 0 rgba(0,0,0,.35); }
+.tm-rsign b { display: flex; align-items: center; gap: 5px; font-size: 13px; font-weight: 900; line-height: 1.15; text-shadow: 0 1.5px 0 var(--ol), 1px 0 0 var(--ol), -1px 0 0 var(--ol), 0 -1px 0 var(--ol); }
+.tm-rsign small { font-size: 11px; font-weight: 600; line-height: 1.25; opacity: .95; color: #fff3d6; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+.tm-build { position: relative; z-index: 1; display: grid; justify-items: center; gap: 3px; padding: 9px 4px 8px; border: 3px solid var(--ol); border-radius: 15px; color: #fff; font: inherit; cursor: pointer; touch-action: manipulation;
+  background: linear-gradient(#86ea5f, #2fae3d 50%, #23912f); box-shadow: inset 0 3px 0 rgba(255,255,255,.55), inset 0 -5px 0 rgba(0,0,0,.2), 0 5px 0 var(--ol); }
+.tm-build b { font-size: 15px; font-weight: 900; white-space: nowrap; text-shadow: 0 2px 0 var(--ol), 1.5px 0 0 var(--ol), -1.5px 0 0 var(--ol), 0 -1.5px 0 var(--ol); }
+.tm-build small { padding: 1px 6px; border-radius: 7px; background: rgba(0,40,10,.35); font-size: 11px; font-weight: 900; white-space: nowrap; }
+.tm-build:not(:disabled) { animation: tm-ready 1.4s ease-in-out infinite; }
+@keyframes tm-ready { 50% { transform: scale(1.05); } }
+.tm-build:active:not(:disabled) { transform: translateY(4px); box-shadow: inset 0 3px 0 rgba(255,255,255,.55), 0 1px 0 var(--ol); animation: none; }
+.tm-build:disabled { cursor: default; background: linear-gradient(#a3acb9, #7b8597); }
+
+/* Tiefe: nächste Welt */
+.ty-deep.tm-deep { display: grid; justify-items: center; gap: 6px; padding: 16px 16px 18px; color: #fff; text-align: center; border-top: 3px solid var(--ol);
+  background: radial-gradient(60% 80% at 50% 0%, rgba(167,139,250,.25), transparent 70%),
+    url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='120' height='80'%3E%3Cg stroke='rgb(10,6,3)' stroke-width='1.8' stroke-linejoin='round'%3E%3Cpath d='M14 60l5-14 5 14-5 5z' fill='rgb(103,232,249)'/%3E%3Cpath d='M92 24l4-10 4 10-4 4z' fill='rgb(244,114,182)'/%3E%3Cpath d='M60 74l3-8 3 8-3 3z' fill='rgb(250,204,21)'/%3E%3C/g%3E%3C/svg%3E") 0 0 / 120px 80px,
+    linear-gradient(#1f1712, #0d0906); }
+.tm-gems { font-size: 28px; line-height: 1; filter: drop-shadow(0 0 10px rgba(103,232,249,.8)); animation: tm-bob 2s ease-in-out infinite; }
+.tm-deep > b { font-size: 16px; font-weight: 900; }
+.tm-deep > small { font-size: 12px; opacity: .9; }
+.ty-use.tm-bar { width: 100%; max-width: 420px; height: 16px; margin: 2px 0; border: 3px solid var(--ol); border-radius: 999px; background: #3a2a1e; box-sizing: border-box; box-shadow: 0 2px 0 rgba(255,255,255,.12); }
+.ty-use.tm-bar i { background: linear-gradient(#c4b5fd, #8b5cf6 55%, #6d28d9); box-shadow: inset 0 2px 0 rgba(255,255,255,.4); }
+.tm-go { display: inline-flex; align-items: center; gap: 6px; padding: 10px 20px 11px; border: 3px solid var(--ol); border-radius: 16px; color: #fff; font: inherit; font-size: 16px; font-weight: 900; cursor: pointer;
+  background: linear-gradient(#ffd75e, #f59e0b 55%, #e07b06); box-shadow: inset 0 3px 0 rgba(255,255,255,.6), inset 0 -5px 0 rgba(0,0,0,.18), 0 5px 0 var(--ol);
+  text-shadow: 0 2px 0 var(--ol), 1.5px 0 0 var(--ol), -1.5px 0 0 var(--ol), 0 -1.5px 0 var(--ol); animation: tm-ready 1.2s ease-in-out infinite; }
+.tm-go:active { transform: translateY(4px); box-shadow: inset 0 3px 0 rgba(255,255,255,.6), 0 1px 0 var(--ol); animation: none; }
+
+/* ---------- Dock ---------- */
+.ty-dock.tm-dock { width: 100%; max-width: 760px; justify-self: center; box-sizing: border-box; grid-template-columns: repeat(2, minmax(0, 1fr)) minmax(0, 1.9fr) repeat(2, minmax(0, 1fr)); gap: 6px; padding: 7px 7px 9px; border: 3px solid var(--ol); border-radius: 22px;
+  background: linear-gradient(rgba(255,255,255,.1), transparent 30%), repeating-linear-gradient(90deg, transparent 0 22px, rgba(0,0,0,.12) 22px 23px), linear-gradient(#5a3c25, #3a2615);
+  box-shadow: inset 0 2px 0 rgba(255,255,255,.15), 0 10px 22px rgba(0,0,0,.4); }
+.tm-db { --c1: #5db4ff; --c2: #2a7ef0; --c3: #1a5fd0; position: relative; display: grid; justify-items: center; align-content: center; gap: 1px; min-width: 0; min-height: 56px; padding: 4px 0 5px;
+  border: 3px solid var(--ol); border-radius: 15px; color: #fff; font: inherit; cursor: pointer; touch-action: manipulation;
+  background: linear-gradient(var(--c1), var(--c2) 50%, var(--c3)); box-shadow: inset 0 3px 0 rgba(255,255,255,.5), inset 0 -4px 0 rgba(0,0,0,.2), 0 4px 0 var(--ol); }
+.tm-db.o { --c1: #ff9d6b; --c2: #f0642a; --c3: #cf4a14; }
+.tm-db.y { --c1: #ffe36b; --c2: #f5b400; --c3: #d99100; }
+.tm-db.t { --c1: #5ee0d0; --c2: #14b8a6; --c3: #0d8f82; }
+.tm-db > span { font-size: 23px; line-height: 1; filter: drop-shadow(0 2px 0 rgba(0,0,0,.35)); }
+.tm-db small { font-size: 10.5px; font-weight: 900; text-shadow: 0 1.5px 0 var(--ol), 1px 0 0 var(--ol), -1px 0 0 var(--ol), 0 -1px 0 var(--ol); }
+.tm-db i { position: absolute; top: -8px; right: -6px; min-width: 20px; height: 20px; box-sizing: border-box; padding: 0 4px; border: 2.5px solid var(--ol); border-radius: 999px; background: #ef4444; color: #fff; font-style: normal; font-size: 11px; font-weight: 900; line-height: 15px; text-align: center; }
+.tm-db.has > span { animation: tm-wig 2.2s ease-in-out infinite; }
+@keyframes tm-wig { 0%, 70%, 100% { transform: rotate(0); } 76% { transform: rotate(-14deg) scale(1.1); } 84% { transform: rotate(12deg) scale(1.1); } 92% { transform: rotate(-6deg); } }
+.tm-db:active:not(:disabled) { transform: translateY(3px); box-shadow: inset 0 3px 0 rgba(255,255,255,.5), 0 1px 0 var(--ol); }
+.tm-db:disabled { cursor: default; filter: saturate(.25) brightness(.8); }
+.ty-boost.tm-boost { position: relative; overflow: hidden; display: grid; place-items: center; min-height: 56px; padding: 0 4px; border: 3px solid var(--ol); border-radius: 17px; color: #fff; font: inherit; cursor: pointer; touch-action: manipulation; text-shadow: none;
+  background: linear-gradient(#8af06a, #34c24a 50%, #1f9a35); box-shadow: inset 0 3px 0 rgba(255,255,255,.55), inset 0 -5px 0 rgba(0,0,0,.2), 0 4px 0 var(--ol); animation: none; }
+.tm-bf { position: absolute; left: 0; top: 0; bottom: 0; width: 0; background: linear-gradient(rgba(255,255,255,.35), rgba(255,255,255,.12)); transition: width .2s linear; }
+.tm-bt { position: relative; display: grid; justify-items: center; line-height: 1.05; }
+.tm-bt b { font-size: 19px; font-weight: 900; letter-spacing: .02em; white-space: nowrap; }
+.tm-bt small { display: block; margin-top: 2px; font-size: 10px; font-weight: 900; text-shadow: 0 1px 0 rgba(0,0,0,.55); white-space: nowrap; font-variant-numeric: tabular-nums; }
+.tm-boost.ready:not(.on) { animation: tm-ready 1.3s ease-in-out infinite; }
+.tm-boost.ready:not(.on)::after { content: ""; position: absolute; top: 0; bottom: 0; left: -60%; width: 40%; background: linear-gradient(100deg, transparent, rgba(255,255,255,.6), transparent); transform: skewX(-15deg); animation: tm-shine 2.4s ease-in-out infinite; }
+.tm-boost.on { background: linear-gradient(#ffd166, #ff7a1a 50%, #e0420b); }
+.tm-boost.on .tm-bf { background: linear-gradient(rgba(255,255,160,.55), rgba(255,255,255,.2)); }
+.tm-boost.on .tm-bt b { animation: tm-pulse .7s ease-in-out infinite; }
+.ty-boost.tm-boost:disabled:not(.on) { filter: none; cursor: default; background: linear-gradient(#8f9bb0, #5b6880 50%, #4a556b); }
+.ty-boost.tm-boost:disabled:not(.on) .tm-bf { background: linear-gradient(rgba(126,227,91,.75), rgba(47,174,61,.75)); }
+.tm-boost:active:not(:disabled) { transform: translateY(3px); box-shadow: inset 0 3px 0 rgba(255,255,255,.55), 0 1px 0 var(--ol); animation: none; }
+
+/* ---------- Event-Kopf ---------- */
+.ty-evhead.tm-evhead { border: 3px solid var(--ol); border-radius: 22px; box-shadow: inset 0 3px 0 rgba(255,255,255,.25), 0 10px 22px -8px rgba(0,0,0,.45); }
+.tm-evhead .ty-evtop b { font-size: 19px; font-weight: 900; }
+.tm-evhead .ty-eve { filter: drop-shadow(0 3px 0 rgba(0,0,0,.35)); animation: tm-bob 2s ease-in-out infinite; }
+.tm-evhead .ty-evmoney { font-size: 32px; } .tm-evhead .ty-evmoney small { text-shadow: 0 1px 0 rgba(0,0,0,.5); }
+.tm-evhead .ty-evbar { height: 12px; top: 11px; border: 2.5px solid var(--ol); box-sizing: border-box; }
+.tm-evhead .ty-evm { border: 2.5px solid var(--ol); box-sizing: border-box; }
+.tm-evhead .tm-go { justify-self: center; }
+.tm-top.ev { background: linear-gradient(rgba(255,255,255,.12), transparent 50%), color-mix(in srgb, var(--wbg) 55%, #1a0f08); }
+.tm-top.ev .tm-neck { color: #fff; }
+
+/* ---------- Geld-Popups beim Antippen (tycoon.js pop()) ---------- */
+.ty-fx .ty-pop { font-family: ui-rounded, "SF Pro Rounded", "Arial Rounded MT Bold", Nunito, system-ui, sans-serif; font-size: 21px; font-weight: 900; color: #ffe14d; z-index: 20;
+  text-shadow: 0 2px 0 #24160c, 2px 0 0 #24160c, -2px 0 0 #24160c, 0 -2px 0 #24160c, 1.4px 1.4px 0 #24160c, -1.4px 1.4px 0 #24160c, 1.4px -1.4px 0 #24160c, -1.4px -1.4px 0 #24160c, 0 4px 0 #24160c;
+  animation: tm-popup 1.1s cubic-bezier(.2,.9,.3,1) forwards; }
+.ty-fx .ty-pop::before, .ty-fx .ty-pop::after { content: "🪙"; position: absolute; top: 6px; font-size: 15px; text-shadow: none; animation: tm-coinL .9s ease-out forwards; }
+.ty-fx .ty-pop::before { left: -14px; } .ty-fx .ty-pop::after { right: -14px; animation-name: tm-coinR; }
+.ty-fx .ty-pop.gold { font-size: 26px; color: #fff3a0; }
+@keyframes tm-popup { 0% { opacity: 0; transform: translate(-50%, 6px) scale(.5); } 18% { opacity: 1; transform: translate(-50%, -12px) scale(1.2); } 35% { transform: translate(-50%, -20px) scale(1); } 100% { opacity: 0; transform: translate(-50%, -62px) scale(1); } }
+@keyframes tm-coinL { from { transform: translate(0, 0) rotate(0); opacity: 1; } to { transform: translate(-26px, 30px) rotate(-200deg); opacity: 0; } }
+@keyframes tm-coinR { from { transform: translate(0, 0) rotate(0); opacity: 1; } to { transform: translate(26px, 26px) rotate(220deg); opacity: 0; } }
+
+/* ---------- Dunkles App-Thema: Rahmen etwas weicher (die Szene selbst bleibt ein Spiel-Bild) ---------- */
+:root[data-theme="dark"] .ty-mine.tm { box-shadow: 0 12px 26px -8px rgba(0,0,0,.8), 0 0 0 3px rgba(255,255,255,.08); }
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) .ty-mine.tm { box-shadow: 0 12px 26px -8px rgba(0,0,0,.8), 0 0 0 3px rgba(255,255,255,.08); } }
+
+/* ---------- Breite Bildschirme ---------- */
+@media (min-width: 560px) {
+  .tm-ums { left: 96px; } .tm-wires { width: 156px; } .tm-vtrack { left: 240px; right: 64px; } .tm-ks { right: 14px; }
+  .ty-row.tm-row { grid-template-columns: minmax(0, 1fr) 92px; }
+  .tm-tun { grid-template-columns: 60px 52px minmax(0, 1fr) 64px; }
+  .tm-walk { left: 122px; right: 74px; }
+}
+
+/* ---------- Weniger Bewegung ---------- */
+@media (prefers-reduced-motion: reduce) {
+  .tm *, .tm *::before, .tm *::after, .tm-dock *, .tm-dock *::after, .tm-evhead *, .ty-fx .ty-pop::before, .ty-fx .ty-pop::after { animation: none !important; transition: none !important; }
+  .tm .tm-lpop, .tm .tm-unpop { opacity: 0 !important; }
+}
