@@ -160,7 +160,7 @@ function rowHTML({ i, x, st, plan, ev, cost, n, mgrCost }) {
         <span class="tm-lpop tm-o" style="${delay(plan, i)}" aria-hidden="true">+<span data-k="${ok}-${x.id}"></span> ${cur}</span></span>`
     : `<button type="button" class="tm-pile" data-a="${a}tap" data-id="${x.id}" aria-label="${esc(x.name)}: einsammeln"><span class="tm-cart"><span class="ty-pf tm-heap" data-k="${k}-bar-${x.id}"></span><i class="tm-bang" aria-hidden="true">!</i></span><b class="tm-o" data-k="${k}-${x.id}"></b></button>`;
   const boss = auto
-    ? `<span class="ty-boss tm-boss" title="Elektriker angestellt" aria-hidden="true"><span>🧑‍🔧</span></span>`
+    ? (ev ? `<span class="ty-boss tm-boss" title="Elektriker angestellt" aria-hidden="true"><span>🧑‍🔧</span></span>` : `<button type="button" class="ty-boss tm-boss" data-a="mgr" data-id="${x.id}" aria-label="Manager von ${esc(x.name)}"><span>🧑‍🔧</span></button>`)
     : `<button type="button" class="tm-hire" data-a="${a}hire" data-id="${x.id}" ${ck}="${mgrCost}" aria-label="Elektriker anstellen"><span class="tm-hf" aria-hidden="true">🧑‍🔧</span><em aria-hidden="true">+</em><small>${T.fmt(mgrCost)} ${cur}</small></button>`;
   return `<div class="ty-row tm-row${auto ? " auto" : ""}" data-g="${x.id}" style="--i:${i}">
     <div class="tm-sign"><span class="tm-num">${i + 1}</span><b>${esc(x.name)}</b>${ev ? "" : ms(st.lvl)}</div>
@@ -170,7 +170,7 @@ function rowHTML({ i, x, st, plan, ev, cost, n, mgrCost }) {
       <span class="tm-walk${slow}" aria-hidden="true"><span class="tm-wk"><span class="tm-wb">👷<i>⚡</i></span></span></span>
       <span class="tm-gen${auto ? " on" : ""}" aria-hidden="true">${machineSVG(i % 3)}<span class="tm-ge">${x.e}</span><span class="tm-spark"></span>${auto ? "" : `<small class="tm-rate"><span data-k="${ok}-${x.id}"></span>/s</small>`}</span>
     </div>
-    <button type="button" class="tm-lvl" data-a="${a}buy" data-id="${x.id}" ${ck}="${cost}"><b>Stufe ${st.lvl}</b><small>+${n} · ${T.fmt(cost)} ${cur}</small></button>
+    ${ev ? `<button type="button" class="tm-lvl" data-a="evbuy" data-id="${x.id}" ${ck}="${cost}"><b>Stufe ${st.lvl}</b><small>+${n} · ${T.fmt(cost)} ${cur}</small></button>` : `<button type="button" class="tm-lvl" data-a="lvl" data-id="${x.id}" data-need="${cost}" aria-label="${esc(x.name)}: Stufe ${st.lvl} – Ausbau-Fenster"><b>Stufe ${st.lvl}</b><small>⬆ ${T.fmt(cost)} €</small></button>`}
   </div>`;
 }
 
@@ -209,12 +209,12 @@ export function mineHTML(g, { amtN, inv, chest }) {
       <svg class="tm-wires" viewBox="0 0 100 40" preserveAspectRatio="none" aria-hidden="true"><path d="M0 4 Q50 22 100 14" /><path d="M0 22 Q50 36 100 26" /><path class="tm-flowln" d="M0 4 Q50 22 100 14" /><path class="tm-flowln" d="M0 22 Q50 36 100 26" /></svg>
       <div class="tm-b tm-lei" data-k="grid-box">
         <span class="tm-plate"><b>Leitung</b><small><span data-k="cap"></span>/s</small></span>${PYLON}
-        <button type="button" class="tm-up" data-a="grid" data-cost="${gc}" aria-label="Leitung ausbauen"><b>Stufe ${W.grid}</b><small>⬆ ${T.fmt(gc)} €</small></button>
+        <button type="button" class="tm-up" data-a="lvl" data-id="lift" data-need="${gc}" aria-label="Lift und Leitung ausbauen"><b>Stufe ${W.grid}</b><small>⬆ ${T.fmt(gc)} €</small></button>
       </div>
       <div class="tm-b tm-ums" data-k="umsp-box">
         <span class="tm-plate"><b>Umspannwerk</b><small><span data-k="ucap"></span>/s</small></span>
         <span class="tm-art">${UMSP}<span class="tm-unpop tm-o" aria-hidden="true">+⚡</span></span>
-        <button type="button" class="tm-up" data-a="umsp" data-cost="${uc}" aria-label="Umspannwerk ausbauen"><b>Stufe ${W.umsp}</b><small>⬆ ${T.fmt(uc)} €</small></button>
+        <button type="button" class="tm-up" data-a="lvl" data-id="trans" data-need="${uc}" aria-label="Umspannwerk und Transport ausbauen"><b>Stufe ${W.umsp}</b><small>⬆ ${T.fmt(uc)} €</small></button>
       </div>
       <div class="tm-b tm-ks">
         <span class="tm-flow tm-o">💶 <b data-k="flow"></b> €/s</span>
@@ -223,9 +223,9 @@ export function mineHTML(g, { amtN, inv, chest }) {
       <span class="tm-vtrack" aria-hidden="true"><span class="tm-vmove">${VAN}<span class="tm-puff"></span></span></span>
     </div>
     <div class="tm-stations">
-      <div class="tm-st">${W.liftMgr ? `<span class="tm-stok">🧑‍🔧 <b>Liftwart</b><small>Lift fährt automatisch</small></span>` : `<button type="button" class="tm-act" data-a="lifttap"><span class="tm-actf" data-k="lift-cd"></span><b>⬆ Lift fahren</b><small>Wagen → Umspannwerk</small></button><button type="button" class="tm-hire2" data-a="hirelift" data-cost="${T.liftMgrCost(wi)}"><span>🧑‍🔧+</span><small>${T.fmt(T.liftMgrCost(wi))} €</small></button>`}</div>
+      <div class="tm-st">${W.liftMgr ? `<button type="button" class="tm-stok" data-a="mgr" data-id="lift">🧑‍🔧 <b>Liftwart</b><small>Lift fährt automatisch</small></button>` : `<button type="button" class="tm-act" data-a="lifttap"><span class="tm-actf" data-k="lift-cd"></span><b>⬆ Lift fahren</b><small>Wagen → Umspannwerk</small></button><button type="button" class="tm-hire2" data-a="hirelift" data-cost="${T.liftMgrCost(wi)}"><span>🧑‍🔧+</span><small>${T.fmt(T.liftMgrCost(wi))} €</small></button>`}</div>
       <div class="tm-st mid"><span class="tm-stock">📦 <b class="tm-o" data-k="surf"></b><small>im Umspannwerk</small></span></div>
-      <div class="tm-st">${W.transMgr ? `<span class="tm-stok">🧑‍🔧 <b>Fahrer</b><small>liefert automatisch</small></span>` : `<button type="button" class="tm-act" data-a="transtap"><span class="tm-actf" data-k="trans-cd"></span><b>🚚 Liefern</b><small>Umspannwerk → Börse</small></button><button type="button" class="tm-hire2" data-a="hiretrans" data-cost="${T.transMgrCost(wi)}"><span>🧑‍🔧+</span><small>${T.fmt(T.transMgrCost(wi))} €</small></button>`}</div>
+      <div class="tm-st">${W.transMgr ? `<button type="button" class="tm-stok" data-a="mgr" data-id="trans">🧑‍🔧 <b>Fahrer</b><small>liefert automatisch</small></button>` : `<button type="button" class="tm-act" data-a="transtap"><span class="tm-actf" data-k="trans-cd"></span><b>🚚 Liefern</b><small>Umspannwerk → Börse</small></button><button type="button" class="tm-hire2" data-a="hiretrans" data-cost="${T.transMgrCost(wi)}"><span>🧑‍🔧+</span><small>${T.fmt(T.transMgrCost(wi))} €</small></button>`}</div>
     </div>
     <div class="ty-shaftwrap tm-wrap">${shaftHTML(plan, "👷", "⚡")}
       <div class="tm-rows"><div class="tm-top"><p class="ty-neck tm-neck" data-k="neck"></p></div>${rows}</div></div>

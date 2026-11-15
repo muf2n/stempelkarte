@@ -118,7 +118,8 @@ export function mount(el) {
   function mapHTML() {
     const rt = readyTours();
     const ev = T.evOf(S.g);
-    return SC.mapHTML(S.g, { opt, badges: { tour: rt || "", rad: S.g.wheelDay !== dayKey() ? "!" : "", shop: invCount() || "", ev: ev && T.evClaimable(ev).length ? "🎁" : "" } });
+    const idle = T.idleOf(S.g);
+    return `<button type="button" class="ty-idle${idle > 0 ? " has" : ""}" data-a="idle"><span aria-hidden="true">💰</span><b>${idle > 0 ? `${T.fmt(idle)} € abholen` : "Kassen leer"}</b><small>Alle Welten</small></button>` + SC.mapHTML(S.g, { opt, badges: { tour: rt || "", rad: S.g.wheelDay !== dayKey() ? "!" : "", shop: invCount() || "", ev: ev && T.evClaimable(ev).length ? "🎁" : "" } });
   }
 
   function genHTML(g, wi) {
@@ -272,6 +273,11 @@ export function mount(el) {
           }
         }
       }
+      if (S.amt === "max") el.querySelectorAll('[data-a="lvl"]').forEach((b) => {
+        const st = W.gens[b.dataset.id]; if (!st || !st.lvl) return;
+        const n = Math.max(1, T.maxBuy(wi, b.dataset.id, st.lvl, W.money, g)), c = T.genCost(wi, b.dataset.id, st.lvl, n, g);
+        if (b.dataset.need !== String(c)) { b.dataset.need = String(c); b.innerHTML = `<b>Stufe ${st.lvl}</b><small>⬆ ${T.fmt(c)} €</small>`; }
+      });
       if (S.amt === "max") el.querySelectorAll('[data-a="buy"]').forEach((b) => {
         const st = W.gens[b.dataset.id]; if (!st || !st.lvl) return;
         const n = Math.max(1, T.maxBuy(wi, b.dataset.id, st.lvl, W.money, g)), c = T.genCost(wi, b.dataset.id, st.lvl, n, g);
@@ -293,6 +299,8 @@ export function mount(el) {
     el.querySelectorAll("[data-until]").forEach((x) => { x.textContent = T.fmtDur((Number(x.dataset.until) - now) / 1000); });
     el.querySelectorAll("[data-prog]").forEach((x) => { const [a, b] = x.dataset.prog.split("-").map(Number); x.style.width = `${Math.min(100, ((now - a) / (b - a)) * 100)}%`; });
     el.querySelectorAll("[data-cost]").forEach((b) => { b.disabled = W.money + 1e-9 < Number(b.dataset.cost); });
+    el.querySelectorAll("[data-need]").forEach((b) => { b.classList.toggle("can", W.money + 1e-9 >= Number(b.dataset.need)); });
+    el.querySelectorAll('[data-a="mgr"]').forEach((b) => { const m = W.mab && W.mab[b.dataset.id]; b.classList.toggle("on", !!m && m.u > now); b.classList.toggle("ready", !m || m.cd <= now); });
     el.querySelectorAll("[data-fuse]").forEach((b) => { b.disabled = g.fuses < Number(b.dataset.fuse); });
   }
 
@@ -321,6 +329,77 @@ export function mount(el) {
     const oc = el.querySelector(".ty-ocean"); if (!oc) return;
     const y = oc.getBoundingClientRect().top + window.scrollY + oc.offsetHeight * SC.worldTop(S.g.cur) - window.innerHeight / 2;
     window.scrollTo({ top: Math.max(0, y), behavior: smooth ? "smooth" : "auto" });
+  }
+  /* ---------- Level-Fenster (Stollen, Lift, Transport) ---------- */
+  const amtBar = () => `<div class="ty-amt tl-amt" role="group" aria-label="Kaufmenge">${["1", "10", "100", "max"].map((a) => `<button type="button" data-sa="amt" data-v="${a}" aria-pressed="${S.amt === a}">${a === "max" ? "MAX" : "×" + a}</button>`).join("")}</div>`;
+  const statLi = (ic, t, v, d) => `<li><span class="tl-ic" aria-hidden="true">${ic}</span><em>${t}</em><b>${v}</b>${d ? `<small>${d}</small>` : "<small></small>"}</li>`;
+  const plus = (a, b, f = T.fmt) => (b - a > 1e-9 ? `+${f(b - a)}` : "");
+  function lvlBody(id) {
+    const g = S.g, wi = g.cur, W = g.worlds[wi], money = W.money;
+    if (id === "lift" || id === "trans") {
+      const lvl = id === "lift" ? W.grid : W.umsp, n = S.amt === "max" ? Math.max(1, T.stMaxBuy(wi, id, lvl, money)) : Number(S.amt);
+      const cost = (id === "lift" ? T.gridCost : T.umspCost)(wi, lvl, n), a = T.stationStats(wi, id, lvl), b = T.stationStats(wi, id, lvl + n);
+      const rows = [statLi("💶", id === "lift" ? "Lift-Leistung" : "Transport insgesamt", `${T.fmt(a.tot)}/s`, plus(a.tot, b.tot)), statLi("📦", id === "lift" ? "Ladung pro Fahrt" : "Ladung pro Lieferung", T.fmt(a.load), plus(a.load, b.load)), statLi("💨", "Geschwindigkeit", `${a.speed.toFixed(2)}×`, plus(a.speed, b.speed, (x) => x.toFixed(2)))];
+      if (id === "trans") rows.push(statLi("🚚", "Transporter", a.trucks, plus(a.trucks, b.trucks, String)));
+      return `<div class="tl-head"><span class="tl-av" aria-hidden="true">${id === "lift" ? "🛗" : "🚚"}</span><div><b>${id === "lift" ? "Lift & Leitung" : "Umspannwerk & Transport"} · Stufe ${lvl}</b><small>${id === "lift" ? "Holt den Strom aus allen Stollen nach oben." : "Bringt den Strom aus dem Umspannwerk zur Börse."}</small></div></div>
+        <ul class="tl-stats">${rows.join("")}</ul>${amtBar()}
+        <button type="button" class="ty-b3 green tl-buy" data-sa="buy" data-n="${n}"${money + 1e-9 < cost ? " disabled" : ""}><b>⬆ Ausbauen +${n}</b><small>${T.fmt(cost)} €</small></button>`;
+    }
+    const x = T.WORLDS[wi].gens.find((y) => y.id === id), st = W.gens[id], i = T.WORLDS[wi].gens.indexOf(x);
+    const n = amtN(st.lvl, id), cost = T.genCost(wi, id, st.lvl, n, g), a = T.shaftStats(g, wi, id, st.lvl), b = T.shaftStats(g, wi, id, st.lvl + n);
+    const m = T.nextMilestone(st.lvl), p0 = T.MILESTONES.filter((v) => v <= st.lvl).pop() || 0;
+    return `<div class="tl-head"><span class="tl-av" aria-hidden="true">${x.e}</span><div><b>Stollen ${i + 1} · Stufe ${st.lvl}</b><small>${esc(x.name)}</small>
+        ${m ? `<span class="tl-ms" aria-label="noch ${m - st.lvl} Stufen bis zum nächsten Boost"><i style="width:${(((st.lvl - p0) / (m - p0)) * 100).toFixed(1)}%"></i></span><small>Neuer Boost auf Stufe <b>${m}</b>: Ertrag ×2</small>` : `<small>Alle Boosts geholt ✓</small>`}</div></div>
+      <ul class="tl-stats">${[statLi("💶", "Abbau insgesamt", `${T.fmt(a.tot)}/s`, plus(a.tot, b.tot)), statLi("👷", "Minenarbeiter", a.workers, plus(a.workers, b.workers, String)), statLi("👟", "Laufgeschwindigkeit", `${a.walk.toFixed(1)}×`, plus(a.walk, b.walk, (v) => v.toFixed(1))), statLi("⛏️", "Abbaugeschwindigkeit", `${T.fmt(a.dig)}/s`, plus(a.dig, b.dig)), statLi("🛒", "Wagenkapazität", T.fmt(a.cap), plus(a.cap, b.cap))].join("")}</ul>${amtBar()}
+      <button type="button" class="ty-b3 green tl-buy" data-a="buy" data-id="${id}" data-sa="buy"${W.money + 1e-9 < cost ? " disabled" : ""}><b>⬆ Ausbauen +${n}</b><small>${T.fmt(cost)} €</small></button>`;
+  }
+  function lvlSheet(id) {
+    ui.openSheet({ title: "⬆ Ausbauen", bodyHTML: `<div class="tl" data-lv>${lvlBody(id)}</div>`, onMount(sh) {
+      const box = sh.querySelector("[data-lv]"), redo = () => { box.innerHTML = lvlBody(id); };
+      box.addEventListener("click", (e) => {
+        const b = e.target.closest("[data-sa]"); if (!b || b.disabled) return;
+        if (b.dataset.sa === "amt") { S.amt = b.dataset.v; lsSet(AMT_KEY, S.amt); render(); redo(); return; }
+        if (id === "lift" || id === "trans") { if (set((id === "lift" ? T.buyGrid : T.buyUmsp)(S.g, Number(b.dataset.n)))) pop(b, "⬆!"); }
+        else { e.stopPropagation(); act(b); }
+        redo();
+      });
+      const t = setInterval(() => { if (!box.isConnected) clearInterval(t); else { const bb = box.querySelector(".tl-buy"); if (bb && bb.disabled) redo(); } }, 1000);
+    } });
+  }
+  /* ---------- Manager-Karte mit Fähigkeit ---------- */
+  function mgrBody(id) {
+    const I = T.mgrInfo(S.g, S.g.cur, id), now = Date.now(), mm = (ms) => T.fmtDur(Math.ceil(ms / 1000));
+    const where = id === "lift" ? "Liftwart" : id === "trans" ? "Fahrer" : `Stollen-Manager · ${esc(T.WORLDS[S.g.cur].gens.find((x) => x.id === id).name)}`;
+    const btn = I.until > now ? `<button type="button" class="ty-b3 gold tl-buy" disabled><b>⚡ Aktiv</b><small>noch ${mm(I.until - now)}</small></button>`
+      : I.cd > now ? `<button type="button" class="ty-b3 grey tl-buy" disabled><b>😴 Ruht sich aus</b><small>wieder bereit in ${mm(I.cd - now)}</small></button>`
+      : `<button type="button" class="ty-b3 gold tl-buy" data-sa="mab"><b>⚡ Fähigkeit starten</b><small>${I.ab} für ${mm(T.MAB.dur)}</small></button>`;
+    return `<p class="tl-k">${where}</p><div class="tl-card"><span class="tl-face" aria-hidden="true">🧑‍🔧</span><div><b>${esc(I.name)}</b><small class="tl-rank">${I.rank}</small><span class="tl-ab">⚡ ${I.ab} · ${mm(T.MAB.dur)}</span><small>Arbeitet automatisch für dich – auch offline.</small></div></div>${btn}`;
+  }
+  function mgrSheet(id) {
+    ui.openSheet({ title: "🧑‍🔧 Manager", bodyHTML: `<div class="tl" data-mg>${mgrBody(id)}</div>`, onMount(sh) {
+      const box = sh.querySelector("[data-mg]");
+      box.addEventListener("click", (e) => { const b = e.target.closest('[data-sa="mab"]'); if (!b) return; if (set(T.mabUse(S.g, id, Date.now()), { persist: true })) { ui.toast(`⚡ ${T.mgrInfo(S.g, S.g.cur, id).name}: „Gemma, gemma!“`, 1800); } box.innerHTML = mgrBody(id); });
+      const t = setInterval(() => { if (!box.isConnected) clearInterval(t); else box.innerHTML = mgrBody(id); }, 1000);
+    } });
+  }
+  /* ---------- Kasse aller Welten (Karte) ---------- */
+  function coinBurst(from) {
+    const r = from ? from.getBoundingClientRect() : { left: innerWidth / 2, top: innerHeight / 2, width: 0, height: 0 };
+    const box = document.createElement("div"); box.className = "ty-burst"; box.setAttribute("aria-hidden", "true");
+    box.innerHTML = Array.from({ length: 18 }, (_, i) => `<i style="left:${r.left + r.width / 2}px;top:${r.top + r.height / 2}px;--dx:${Math.round(Math.cos(i * 0.7) * (60 + (i % 5) * 22))}px;--dy:${Math.round(-60 - (i % 7) * 26)}px;animation-delay:${(i % 6) * 0.04}s">🪙</i>`).join("");
+    document.body.appendChild(box); setTimeout(() => box.remove(), 1400);
+  }
+  function idleSheet() {
+    const body = () => {
+      const rows = S.g.worlds.map((w, i) => i <= S.g.unlocked ? `<li><span class="tl-ic" aria-hidden="true">${T.world(i).e}</span><em>${esc(T.world(i).name)}${i === S.g.cur ? " <small>(hier bist du)</small>" : ""}</em><b>${T.fmt(w.idle || 0)} €</b><small></small></li>` : "").join("");
+      const tot = T.idleOf(S.g);
+      return `<p class="tl-k">Während du woanders bist, sammelt jede Welt ihr Geld in der Kasse.</p><ul class="tl-stats">${rows}</ul>
+        <div class="ty-yesno"><button type="button" class="ty-b3 green" data-sa="get"${tot > 0 ? "" : " disabled"}><b>💰 Sammeln</b><small>${T.fmt(tot)} €</small></button><button type="button" class="ty-b3 gold" data-sa="get2"${tot > 0 && S.g.fuses >= T.IDLE_X2_COST ? "" : " disabled"}><b>💰 ×2</b><small>${T.fmt(tot * 2)} € · 🔩 ${T.IDLE_X2_COST}</small></button></div>`;
+    };
+    ui.openSheet({ title: "💰 Alle Welten", bodyHTML: `<div class="tl" data-id>${body()}</div>`, onMount(sh, close) {
+      const box = sh.querySelector("[data-id]");
+      box.addEventListener("click", (e) => { const b = e.target.closest("[data-sa]"); if (!b || b.disabled) return; const r = T.collectIdle(S.g, null, b.dataset.sa === "get2"); if (r && set(r.s, { persist: true })) { coinBurst(b); ui.toast(`💰 ${T.fmt(r.got)} € gesammelt!`, 1800); setTimeout(close, 500); } });
+    } });
   }
   function wheelSheet() {
     let rot = 0, busy = false;
@@ -355,8 +434,8 @@ export function mount(el) {
   }
 
   /* ---------- Bedienung ---------- */
-  el.addEventListener("click", (ev) => {
-    const b = ev.target.closest("[data-a]"); if (!b || !S.g || b.disabled) return;
+  function act(b) {
+    if (!b || !S.g || b.disabled) return;
     const id = b.dataset.id, now = Date.now();
     switch (b.dataset.a) {
       case "view": S.view = b.dataset.v; lsSet(VIEW_KEY, S.view); render(); if (S.view === "karte") scrollToMe(false); else el.querySelector(".ty-nav")?.scrollIntoView({ block: "nearest" }); break;
@@ -379,6 +458,9 @@ export function mount(el) {
         break;
       }
       case "hire": { const g = T.WORLDS[S.g.cur].gens.find((x) => x.id === id); if (set(T.hire(S.g, id), { persist: true })) ui.toast(`🧑‍🔧 Elektriker für ${g.e} angestellt – läuft jetzt von selbst!`, 2200); break; }
+      case "lvl": lvlSheet(id); break;
+      case "mgr": mgrSheet(id); break;
+      case "idle": idleSheet(); break;
       case "grid": if (set(T.buyGrid(S.g))) ui.toast("🔌 Leitung verstärkt!", 1000); break;
       case "umsp": if (set(T.buyUmsp(S.g))) ui.toast("🏭 Umspannwerk ausgebaut!", 1000); break;
       case "abil": if (set(T.abil(S.g, now), { persist: true })) { ui.toast(`🧑‍🔧 „Hackln, Burschen!“ – ×${T.ABIL.m} für ${T.fmtDur(T.abilDur(S.g) / 1000)}`, 2200); pop(b, `×${T.ABIL.m}!`, "gold"); } break;
@@ -416,7 +498,8 @@ export function mount(el) {
         break;
       }
     }
-  });
+  }
+  el.addEventListener("click", (ev) => act(ev.target.closest("[data-a]")));
 
   /* ---------- Spielschleife ---------- */
   let last = Date.now(), newsT = Date.now();

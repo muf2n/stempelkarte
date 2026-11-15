@@ -51,7 +51,7 @@ const ok = (c, m) => { console.log((c ? "  ✓ " : "  ✗ ") + m); if (!c) failu
   await page.evaluate(() => {
     const all = JSON.parse(localStorage.getItem("sk-a-spiel") || "[]").filter((d) => d.id !== "tycoon");
     const w = (m, t) => ({ money: m, total: t, grid: 0, gens: {} });
-    all.push({ id: "tycoon", v: 4, cur: 0, unlocked: 0, worlds: [{ ...w(5e5, 2e6), gens: { hamster: { lvl: 9 } } }, w(0, 0), w(0, 0), w(0, 0), w(0, 0)], allTime: 2e6, fuses: 20, chestDay: "2099-01-01", last: Date.now() - 3600e3, created: Date.now() });
+    all.push({ id: "tycoon", v: 4, cur: 0, unlocked: 0, worlds: [{ ...w(5e5, 2e6), liftMgr: true, transMgr: true, gens: { hamster: { lvl: 9 } } }, w(0, 0), w(0, 0), w(0, 0), w(0, 0)], allTime: 2e6, fuses: 20, chestDay: "2099-01-01", last: Date.now() - 3600e3, created: Date.now() });
     sessionStorage.setItem("tyInject", JSON.stringify(all)); // erst beim Neuladen schreiben (das Spiel speichert beim Verlassen)
   });
   await page.reload(); await page.waitForTimeout(800);
@@ -60,10 +60,23 @@ const ok = (c, m) => { console.log((c ? "  ✓ " : "  ✗ ") + m); if (!c) failu
   await page.waitForSelector(".ty-money");
   ok(/Willkommen zurück/.test(await page.textContent("body")) || true, "Rückkehr (Offline-Ertrag nur mit Elektrikern)");
   const close = await page.$(".sheet [data-close]"); if (close) { await close.click(); await page.waitForTimeout(300); }
-  await page.click('[data-a="buy"][data-id="hamster"]'); await page.waitForTimeout(300);
+  await page.click('[data-a="lvl"][data-id="hamster"]'); await page.waitForTimeout(300);
+  ok(/Minenarbeiter/.test(await page.textContent(".sheet")) && /Neuer Boost auf Stufe 10/.test(await page.textContent(".sheet")), "Level-Fenster mit Werten und nächstem Boost");
+  await page.click('.sheet [data-a="buy"]'); await page.waitForTimeout(300);
+  ok(/Stollen 1 · Stufe 10/.test(await page.textContent(".sheet")), "Im Level-Fenster ausgebaut");
+  await page.screenshot({ path: path.join(OUT, "ty-level.png") });
+  await page.keyboard.press("Escape"); await page.waitForTimeout(300);
+  await page.click('[data-a="lvl"][data-id="lift"]'); await page.waitForTimeout(300);
+  ok(/Lift & Leitung · Stufe 0/.test(await page.textContent(".sheet")) && /Ladung pro Fahrt/.test(await page.textContent(".sheet")), "Level-Fenster für den Lift");
+  await page.keyboard.press("Escape"); await page.waitForTimeout(300);
   ok(/Stufe 10/.test(await page.textContent('[data-g="hamster"]')), "Stufe 10 erreicht (Meilenstein ×2)");
   await page.click('[data-a="hire"][data-id="hamster"]'); await page.waitForTimeout(300);
   ok(await page.isVisible('.ty-row.auto[data-g="hamster"] .ty-boss'), "Elektriker angestellt – läuft automatisch");
+  await page.click('.ty-row[data-g="hamster"] [data-a="mgr"]'); await page.waitForTimeout(300);
+  await page.click('.sheet [data-sa="mab"]'); await page.waitForTimeout(300);
+  ok(/Aktiv/.test(await page.textContent(".sheet")) && /Abbau ×3/.test(await page.textContent(".sheet")), "Manager-Karte: Fähigkeit gestartet");
+  await page.screenshot({ path: path.join(OUT, "ty-manager.png") });
+  await page.keyboard.press("Escape"); await page.waitForTimeout(300);
   ok(await page.isVisible('[data-a="unlock"]'), "Welt 2 freischaltbar");
   await page.click('[data-a="unlock"]'); await page.waitForTimeout(400);
   ok(/Neue Welt: Die Baustelle/.test(await page.textContent("body")), "Freischalt-Jubel"); await page.click(".sheet [data-close]"); await page.waitForTimeout(200);
@@ -73,6 +86,12 @@ const ok = (c, m) => { console.log((c ? "  ✓ " : "  ✗ ") + m); if (!c) failu
   // Karte
   await page.click('[data-a="view"][data-v="karte"]'); await page.waitForTimeout(300);
   ok((await page.$$(".ty-wspot")).length === 5 && (await page.$$(".ty-wspot.locked")).length === 3 && (await page.$$(".ty-bspot")).length === 6, "Ozean-Karte: 5 Insel-Welten (3 gesperrt) + 6 Gebäude");
+  await page.waitForTimeout(1500);
+  ok(await page.isVisible(".ty-idle.has"), "Karte: Kasse der anderen Welt wartet");
+  await page.click(".ty-idle"); await page.waitForTimeout(300);
+  ok(/Opas Garage/.test(await page.textContent(".sheet")), "Kassen-Fenster listet die Welten");
+  await page.click('.sheet [data-sa="get"]'); await page.waitForTimeout(250);
+  ok(/gesammelt/.test(await page.textContent("body")), "Kasse abgeholt (Münzregen)");
   await page.click('.ty-bspot[data-a="rad"]'); await page.waitForTimeout(300);
   await page.click(".sheet [data-spin]"); await page.waitForTimeout(3600);
   ok(/🎉/.test(await page.textContent(".sheet")), "Glücksrad gedreht – Gewinn");

@@ -119,3 +119,30 @@ test("Event alle 3 Wochen, eine Woche lang, eigene Wirtschaft + Belohnungen", ()
   assert.equal(T.evOf(r.s, e0 + 8 * D), null); // vorbei
   assert.equal(T.norm(JSON.parse(JSON.stringify(r.s)), now).ev.claimed.length, 2);
 });
+
+test("Kasse anderer Welten, Manager-Fähigkeit, Stationen in Mengen", () => {
+  let s = T.newState(0);
+  s.unlocked = 1; s.worlds[0].gens.hamster = { lvl: 10, mgr: true, buf: 0, cd: 0 }; s.worlds[0].liftMgr = true; s.worlds[0].transMgr = true; s.worlds[0].surf = 50;
+  s.cur = 1; // woanders unterwegs → Welt 1 sammelt in der Kasse
+  const m0 = s.worlds[0].money;
+  s = T.tick(s, 10, { now: 0 });
+  assert.equal(s.worlds[0].money, m0); assert.ok(s.worlds[0].idle > 0);
+  const idle = s.worlds[0].idle, r = T.collectIdle(s);
+  assert.ok(Math.abs(r.s.worlds[0].money - (m0 + idle)) < 1e-6 && r.s.worlds[0].idle === 0);
+  s.fuses = 5; const r2 = T.collectIdle(s, 0, true); assert.ok(Math.abs(r2.got - idle * 2) < 1e-6 && r2.s.fuses === 2);
+  assert.ok(T.goWorld(s, 0).worlds[0].money > m0, "Hinfahren holt die Kasse ab");
+  // Fähigkeit nur mit Manager, danach Abklingzeit
+  s.cur = 0;
+  assert.equal(T.mabUse(s, "kurbel", 0), null);
+  const a = T.mabUse(s, "hamster", 1000); assert.ok(a);
+  assert.ok(Math.abs(T.rates(a, 0, { now: 2000 }).per.hamster / T.rates(s, 0, { now: 2000 }).per.hamster - T.MAB.m) < 1e-9);
+  assert.equal(T.mabUse(a, "hamster", 5000), null);
+  assert.ok(T.rates(T.mabUse(s, "lift", 0), 0, { now: 1 }).cap > T.rates(s, 0, { now: 1 }).cap);
+  assert.ok(T.mgrInfo(s, 0, "lift").name && T.mgrInfo(s, 0, "trans").ab === "Liefern ×3");
+  // Mehrere Stufen auf einmal = Summe der Einzelpreise
+  const c3 = T.gridCost(0, 2, 3), sum = T.gridCost(0, 2) + T.gridCost(0, 3) + T.gridCost(0, 4);
+  assert.ok(Math.abs(c3 - sum) / sum < 1e-9);
+  s.worlds[0].money = sum; assert.equal(T.stMaxBuy(0, "lift", 2, sum), 3);
+  s.worlds[0].grid = 2; assert.equal(T.buyGrid(s, 3).worlds[0].grid, 5);
+  assert.ok(T.shaftStats(s, 0, "hamster", 30).workers === 2 && T.stationStats(0, "trans", 15).trucks === 2);
+});

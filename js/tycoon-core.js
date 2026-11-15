@@ -166,7 +166,7 @@ function mgrs(s) { return s.worlds.reduce((n, w) => n + Object.values(w.gens).fi
 /** Summe eines Fundstück-Effekts (Wert × Stufe). */
 export function relicFx(s, fx) { return RELICS.filter((r) => r.fx === fx).reduce((n, r) => n + r.v * (s.relics[r.id] || 0), 0); }
 
-function newWorld(wi) { return { money: wi === 0 ? START_MONEY : 0, total: 0, grid: 0, umsp: 0, abilUntil: 0, abilCd: 0, liftMgr: false, transMgr: false, surf: 0, liftCd: 0, transCd: 0, gens: Object.fromEntries(WORLDS[wi].gens.map((g) => [g.id, { lvl: 0, mgr: false, buf: 0, cd: 0 }])) }; }
+function newWorld(wi) { return { money: wi === 0 ? START_MONEY : 0, total: 0, grid: 0, umsp: 0, abilUntil: 0, abilCd: 0, liftMgr: false, transMgr: false, surf: 0, liftCd: 0, transCd: 0, idle: 0, mab: {}, gens: Object.fromEntries(WORLDS[wi].gens.map((g) => [g.id, { lvl: 0, mgr: false, buf: 0, cd: 0 }])) }; }
 export function newState(now = Date.now()) {
   return { v: STATE_V, cur: 0, unlocked: 0, worlds: WORLDS.map((_, i) => newWorld(i)), allTime: 0, stars: 0, resets: 0, akku: 0,
     fuses: 5, boosts: [], inv: {}, tours: 0, exp: [], slots: 1, relics: {}, blitze: 0, taps: 0, ach: [], chestDay: "", streak: 0, wheelDay: "", spins: 0, ev: null, cups: 0, last: now, created: now };
@@ -187,7 +187,7 @@ export function norm(x = {}, now = Date.now()) {
     }
     return { money: Math.max(0, num(r.money, s.worlds[i].money)), total: Math.max(0, num(r.total)), grid: Math.max(0, Math.floor(num(r.grid))),
       umsp: Math.max(0, Math.floor(num(r.umsp))), abilUntil: num(r.abilUntil), abilCd: num(r.abilCd),
-      liftMgr: !!r.liftMgr, transMgr: !!r.transMgr, surf: Math.max(0, num(r.surf)), liftCd: num(r.liftCd), transCd: num(r.transCd), gens };
+      liftMgr: !!r.liftMgr, transMgr: !!r.transMgr, surf: Math.max(0, num(r.surf)), liftCd: num(r.liftCd), transCd: num(r.transCd), idle: Math.max(0, num(r.idle)), mab: r.mab && typeof r.mab === "object" ? Object.fromEntries(Object.entries(r.mab).filter(([, v]) => v && typeof v === "object").map(([k, v]) => [k, { u: num(v.u), cd: num(v.cd) }])) : {}, gens };
   });
   const unlocked = Math.min(WORLDS.length - 1, Math.max(0, Math.floor(num(x.unlocked))));
   const inv = {}; for (const k of Object.keys(BOOSTS)) { const n = Math.floor(num(x.inv && x.inv[k])); if (n > 0) inv[k] = Math.min(999, n); }
@@ -225,9 +225,11 @@ export function maxBuy(wi, id, lvl, money, s = null) {
 /** Elektriker-Preis: im ersten Stollen jeder Welt nur 5× (schneller Einstieg wie im Genre üblich), sonst 25× Grundpreis */
 export const mgrCost = (wi, id, s = null) => genOf(wi, id).cost * (WORLDS[wi].gens[0].id === id ? 5 : MGR_FACTOR) * (s ? Math.max(0.5, 1 - relicFx(s, "mgr")) : 1);
 export const gridCap = (wi, lvl) => 3 * Math.pow(SCALE, wi) * Math.pow(1.55, lvl);
-export const gridCost = (wi, lvl) => 25 * Math.pow(SCALE, wi) * Math.pow(1.75, lvl);
+export const gridCost = (wi, lvl, n = 1) => 25 * Math.pow(SCALE, wi) * Math.pow(1.75, lvl) * (Math.pow(1.75, n) - 1) / 0.75;
 export const umspCap = (wi, lvl) => 4 * Math.pow(SCALE, wi) * Math.pow(1.6, lvl);
-export const umspCost = (wi, lvl) => 40 * Math.pow(SCALE, wi) * Math.pow(1.8, lvl);
+export const umspCost = (wi, lvl, n = 1) => 40 * Math.pow(SCALE, wi) * Math.pow(1.8, lvl) * (Math.pow(1.8, n) - 1) / 0.8;
+/** Wie viele Stufen Leitung/Umspannwerk gehen sich aus? */
+export function stMaxBuy(wi, key, lvl, money) { const f = key === "lift" ? gridCost : umspCost; let n = 0; while (n < 500 && f(wi, lvl, n + 1) <= money + 1e-9) n++; return n; }
 export const milestoneMult = (lvl) => Math.pow(2, MILESTONES.filter((m) => lvl >= m).length);
 export const nextMilestone = (lvl) => MILESTONES.find((m) => lvl < m) || null;
 export const genOut = (wi, id, lvl) => (lvl > 0 ? genOf(wi, id).out * lvl * milestoneMult(lvl) : 0);
@@ -247,10 +249,10 @@ export function rates(s, wi, opt = {}) {
   const per = {};
   for (const g of WORLDS[wi].gens) {
     const st = w.gens[g.id], o = genOut(wi, g.id, st.lvl);
-    per[g.id] = o * k;
+    per[g.id] = o * k * mabX(w, g.id, opt.now);
     if (st.mgr) raw += o; else manual += o;
   }
-  const cap = gridCap(wi, w.grid), ucap = umspCap(wi, w.umsp);
+  const cap = gridCap(wi, w.grid) * mabX(w, "lift", opt.now), ucap = umspCap(wi, w.umsp) * mabX(w, "trans", opt.now);
   // Automatischer Fluss nur, wenn alle drei Stationen Manager haben
   const flow = w.liftMgr && w.transMgr ? Math.min(raw, cap, ucap) : 0;
   const neck = !raw ? null : !w.liftMgr ? "liftmgr" : !w.transMgr ? "transmgr" : raw <= Math.min(cap, ucap) + 1e-9 ? null : cap <= ucap ? "grid" : "umsp";
@@ -265,7 +267,42 @@ function liftMove(w, amount) {
   for (const g of Object.values(w.gens)) g.buf = (g.buf || 0) * f;
   w.surf = (w.surf || 0) + m; return m;
 }
-function earn(s, wi, x) { const w = s.worlds[wi]; w.money += x; w.total += x; s.allTime += x; }
+// Welten, in denen du gerade nicht bist, sammeln ihr Geld in der Kasse (auf der Karte abholen)
+function earn(s, wi, x) { const w = s.worlds[wi]; if (wi === s.cur) w.money += x; else w.idle = (w.idle || 0) + x; w.total += x; s.allTime += x; }
+/* ---------- Manager-Fähigkeiten (je Station) ---------- */
+export const MAB = { m: 3, dur: 180e3, cd: 20 * 60e3 };
+const mabX = (w, key, now = Date.now()) => (w.mab && w.mab[key] && w.mab[key].u > now ? MAB.m : 1);
+export const MGR_NAMES = ["Sepp Kabelbinder", "Gerti Volt", "Ferdl Watt", "Resi Ampere", "Hansi Ohm", "Mitzi Schuko", "Toni Phasenprüfer", "Burgi Lüsterklemme", "Poldi Sicherung", "Vroni Erdung", "Schorsch Steckdose", "Kathi Kurzschluss"];
+const MAB_TXT = { gen: "Abbau ×3", lift: "Lift ×3", trans: "Liefern ×3" };
+export function mgrInfo(s, wi, key) {
+  const w = s.worlds[wi], has = key === "lift" ? w.liftMgr : key === "trans" ? w.transMgr : !!(w.gens[key] && w.gens[key].mgr);
+  const idx = key === "lift" ? 0 : key === "trans" ? 1 : 2 + WORLDS[wi].gens.findIndex((g) => g.id === key);
+  const m = (w.mab && w.mab[key]) || { u: 0, cd: 0 };
+  return { has, name: MGR_NAMES[(idx * 5 + wi * 3) % MGR_NAMES.length], rank: ["Junior", "Senior", "Meister"][(idx + wi) % 3], ab: MAB_TXT[key === "lift" || key === "trans" ? key : "gen"], until: m.u, cd: m.cd };
+}
+export function mabUse(s, key, now = Date.now()) {
+  const I = mgrInfo(s, s.cur, key); if (!I.has || I.cd > now) return null;
+  const n = clone(s), w = n.worlds[n.cur]; w.mab = { ...(w.mab || {}), [key]: { u: now + MAB.dur, cd: now + MAB.cd } }; return n;
+}
+/** Kasse anderer Welten abholen (×2 kostet 🔩 3). wi = null → alle. */
+export const IDLE_X2_COST = 3;
+export const idleOf = (s) => s.worlds.reduce((a, w, i) => a + (i <= s.unlocked ? w.idle || 0 : 0), 0);
+export function collectIdle(s, wi = null, x2 = false) {
+  const tot = wi == null ? idleOf(s) : s.worlds[wi].idle || 0; if (tot <= 0) return null;
+  if (x2 && s.fuses < IDLE_X2_COST) return null;
+  const n = clone(s), f = x2 ? 2 : 1; if (x2) n.fuses -= IDLE_X2_COST;
+  n.worlds.forEach((w, i) => { if ((wi == null && i <= n.unlocked) || i === wi) { const v = (w.idle || 0) * f; w.money += v; if (x2) { w.total += v / 2; n.allTime += v / 2; } w.idle = 0; } });
+  return { s: n, got: tot * f };
+}
+/* ---------- Werte fürs Level-Fenster ---------- */
+export function shaftStats(s, wi, id, lvl) {
+  const o = genOut(wi, id, lvl) * mult(s, { wi }), workers = Math.min(6, 1 + Math.floor(lvl / 25));
+  return { tot: o, workers, walk: 1 + Math.floor(lvl / 40) * 0.5, dig: o / workers, cap: o * CYCLE_S };
+}
+export function stationStats(wi, key, lvl) {
+  const c = key === "lift" ? gridCap(wi, lvl) : umspCap(wi, lvl);
+  return { tot: c, load: c * TRIP_S, speed: 1 + Math.floor(lvl / 10) * 0.25, ...(key === "trans" ? { trucks: Math.min(5, 1 + Math.floor(lvl / 15)) } : {}) };
+}
 /** Ertrag pro Sekunde aller Welten zusammen (für Belohnungen). */
 export function totalRate(s, opt = {}) { let n = 0; for (let wi = 0; wi <= s.unlocked; wi++) { const r = rates(s, wi, opt); n += r.auto + (wi === s.cur ? r.manual * 0.5 : 0); } return n; }
 
@@ -287,10 +324,10 @@ export function offline(s, now = Date.now(), opt = {}) {
   const secs = Math.max(0, (now - s.last) / 1000);
   const used = Math.min(secs, offlineHours(s) * 3600);
   const before = s.allTime;
-  const base = { ...s, boosts: [], worlds: s.worlds.map((w) => ({ ...w, abilUntil: 0 })) };
+  const base = { ...s, boosts: [], worlds: s.worlds.map((w) => ({ ...w, abilUntil: 0, mab: {} })) };
   const n = tick(base, used, { boost: opt.boost || 1, now });
   n.boosts = s.boosts.filter((b) => b.until > now);
-  n.worlds.forEach((w, i) => { w.abilUntil = s.worlds[i].abilUntil; });
+  n.worlds.forEach((w, i) => { w.abilUntil = s.worlds[i].abilUntil; w.mab = s.worlds[i].mab; });
   return { s: n, earned: n.allTime - before, secs, used };
 }
 
@@ -343,8 +380,8 @@ export function hire(s, id) {
   n.worlds[wi].gens[id] = { ...n.worlds[wi].gens[id], mgr: true }; // Wagen-Bestand bleibt, der Lift holt ihn
   return n;
 }
-export function buyGrid(s) { const n = payW(s, s.cur, gridCost(s.cur, s.worlds[s.cur].grid)); if (n) n.worlds[s.cur].grid++; return n; }
-export function buyUmsp(s) { const n = payW(s, s.cur, umspCost(s.cur, s.worlds[s.cur].umsp)); if (n) n.worlds[s.cur].umsp++; return n; }
+export function buyGrid(s, k = 1) { if (k < 1) return null; const n = payW(s, s.cur, gridCost(s.cur, s.worlds[s.cur].grid, k)); if (n) n.worlds[s.cur].grid += k; return n; }
+export function buyUmsp(s, k = 1) { if (k < 1) return null; const n = payW(s, s.cur, umspCost(s.cur, s.worlds[s.cur].umsp, k)); if (n) n.worlds[s.cur].umsp += k; return n; }
 export function buyAkku(s) {
   if (s.akku >= AKKU.length - 1) return null;
   const n = payW(s, s.cur, AKKU_COST[s.akku + 1] * Math.pow(SCALE, s.cur));
@@ -371,7 +408,7 @@ export function tryUnlock(s) {
   const n = clone(s); n.unlocked = nw.wi; n.cur = nw.wi; n.worlds[nw.wi].money = Math.max(n.worlds[nw.wi].money, WORLDS[nw.wi].gens[0].cost * 3);
   return n;
 }
-export function goWorld(s, wi) { if (wi < 0 || wi > s.unlocked) return null; const n = clone(s); n.cur = wi; return n; }
+export function goWorld(s, wi) { if (wi < 0 || wi > s.unlocked) return null; const n = clone(s); n.cur = wi; const w = n.worlds[wi]; w.money += w.idle || 0; w.idle = 0; return n; }
 
 /* ---------- Booster: einsetzen, kaufen ---------- */
 function applyBoost(s, k, opt = {}) {
