@@ -9,7 +9,7 @@ test("Elo, Kronen, Ergebnis", () => {
   assert.equal(C.eloAfter(800, 800, 0, 20), 788);
   const r = C.recordGame({}, { bot: "eva", res: "win", color: "w", tc: "5", moves: ["e2e4"] });
   assert.equal(r.me.games, 1); assert.equal(r.me.bots.eva.w, 1); assert.ok(r.diff > 0);
-  assert.equal(C.crowns({ w: 0, d: 1, l: 0 }), 1); assert.equal(C.crowns({ w: 3, d: 0, l: 0 }), 3);
+  assert.equal(r.me.bots.eva.c, 3); assert.equal(C.recordGame({}, { bot: "eva", res: "win", moves: ["e2e4"], helps: 2 }).me.bots.eva.c, 2); assert.equal(C.recordGame({}, { bot: "eva", res: "win", moves: ["e2e4"], helps: 5 }).me.bots.eva.c, 1); assert.equal(C.recordGame({}, { bot: "eva", res: "loss", moves: ["e2e4"] }).me.bots.eva.c, 0);
   assert.equal(C.tcById("15+10").inc, 10); assert.equal(C.fmtClock(65000), "1:05"); assert.equal(C.fmtClock(9500), "9,5");
 });
 test("Engine-Züge sind für chess.js legal, Bots unterschiedlich stark", () => {

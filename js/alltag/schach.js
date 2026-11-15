@@ -121,19 +121,19 @@ export function mount(el) {
     const m = me(), L = m.last, b0 = C.anyBot(S.sel || L.bot), bot = b0 && (!b0.ev || b0.id.startsWith("ev-" + C.weekEvent().key)) ? b0 : C.botById("eva"), tc = C.tcById(L.tc);
     const color = L.color === "r" ? (Math.random() < 0.5 ? "w" : "b") : L.color;
     S.g = { ch: new Chess(), bot, tc, color, moves: [], clock: tc.min ? { w: tc.min * 60e3, b: tc.min * 60e3 } : null, turnAt: Date.now(), sel: null, targets: [], last: null, hint: null,
-      over: null, flip: color === "b", say: bot.hi, thinking: false, undos: 0 };
+      over: null, flip: color === "b", say: bot.hi, thinking: false, undos: 0, helps: 0 };
     persist(); render(); maybeBot();
   }
   function persist() {
     const g = S.g; if (!g || g.over) { lsSet(CUR_KEY, null); return; }
-    lsSet(CUR_KEY, JSON.stringify({ bot: g.bot.id, tc: g.tc.id, color: g.color, moves: g.moves, clock: g.clock, at: Date.now() }));
+    lsSet(CUR_KEY, JSON.stringify({ bot: g.bot.id, tc: g.tc.id, color: g.color, moves: g.moves, clock: g.clock, helps: g.helps || 0, at: Date.now() }));
   }
   function resume() {
     try {
       const x = JSON.parse(lsGet(CUR_KEY)), ch = new Chess();
       for (const u of x.moves) ch.move(uciToMove(u));
       const last = ch.history({ verbose: true }).slice(-1)[0];
-      S.g = { ch, bot: C.anyBot(x.bot) || C.botById("eva"), tc: C.tcById(x.tc), color: x.color, moves: x.moves, clock: x.clock, turnAt: Date.now(), sel: null, targets: [], last: last ? { from: last.from, to: last.to } : null, hint: null, over: null, flip: x.color === "b", say: "Weiter geht's!", thinking: false, undos: 0 };
+      S.g = { ch, bot: C.anyBot(x.bot) || C.botById("eva"), tc: C.tcById(x.tc), color: x.color, moves: x.moves, clock: x.clock, turnAt: Date.now(), sel: null, targets: [], last: last ? { from: last.from, to: last.to } : null, hint: null, over: null, flip: x.color === "b", say: "Weiter geht's!", thinking: false, undos: 0, helps: Number(x.helps) || 0 };
       render(); maybeBot();
     } catch { lsSet(CUR_KEY, null); render(); }
   }
@@ -172,7 +172,7 @@ export function mount(el) {
     g.over = { res, why };
     const pgnHdr = `[White "${g.color === "w" ? "Du" : g.bot.name}"]\n[Black "${g.color === "b" ? "Du" : g.bot.name}"]\n`;
     if (g.moves.length >= 2) {
-      const r = C.recordGame(me(), { bot: g.bot.id, res, color: g.color, tc: g.tc.id, moves: g.moves, pgn: pgnHdr + g.ch.pgn() });
+      const r = C.recordGame(me(), { bot: g.bot.id, res, color: g.color, tc: g.tc.id, moves: g.moves, pgn: pgnHdr + g.ch.pgn(), helps: g.helps || 0 });
       let m2 = r.me;
       if (g.bot.ev && res === "win") {
         const ev = C.weekEvent(), i = Number(g.bot.id.slice(-1));
@@ -187,6 +187,7 @@ export function mount(el) {
       const title = res === "win" ? "Du hast gewonnen! 🏆" : res === "draw" ? "Remis 🤝" : `${g.bot.name} hat gewonnen`;
       ui.openSheet({ title, bodyHTML: `<div class="sc-endm"><div class="sc-endav"><span>🧑‍🔧</span><b>${res === "win" ? "1" : res === "draw" ? "½" : "0"} – ${res === "loss" ? "1" : res === "draw" ? "½" : "0"}</b><span>${g.bot.e}</span></div>
         <p>durch ${esc(g.over.why.split(" ·")[0])}</p>${g.over.diff != null ? `<p class="sc-endelo ${g.over.diff >= 0 ? "up" : "down"}">Elo ${me().elo} <b>${g.over.diff >= 0 ? "+" : ""}${g.over.diff}</b></p>` : ""}
+        ${res === "win" ? `<p class="sc-endcr">${"👑".repeat(C.crownsForWin(g.helps || 0))}<span>${"👑".repeat(3 - C.crownsForWin(g.helps || 0))}</span><br><small>${(g.helps || 0) ? `${g.helps}× Hilfe genutzt – ohne Hinweis & Rückgängig gibt's 3 Kronen` : "Ohne Hilfe gewonnen – 3 Kronen!"}</small></p>` : ""}
         ${/💵/.test(g.over.why) ? `<p class="sc-endev">🎪 ${esc(g.over.why.split("·").pop().trim())} fürs Wochen-Event</p>` : ""}
         <button type="button" class="sc-play" data-e="an"${g.moves.length >= 2 ? "" : " disabled"}>🔍 Partie-Analyse</button>
         <div class="row" style="gap:8px;margin-top:8px"><button type="button" class="btn" data-e="new">Neuer Bot</button><button type="button" class="btn" data-e="re">Revanche</button></div></div>`,
@@ -513,8 +514,8 @@ export function mount(el) {
       case "rematch": newGame(); break;
       case "opts": ui.openSheet({ title: "Optionen", bodyHTML: `<div class="sc-optl"><button type="button" class="btn" data-o="flip">🔄 Brett drehen</button><button type="button" class="btn" data-o="moves">📜 Zugliste ${S.showMoves ? "ausblenden" : "einblenden"}</button></div>`, onMount(sh, close) { sh.addEventListener("click", (ev) => { const o = ev.target.closest("[data-o]"); if (!o) return; close(); if (o.dataset.o === "flip") { S.g.flip = !S.g.flip; } else S.showMoves = !S.showMoves; render(); }); } }); break;
       case "flip": { const c = S.pz || S.g; c.flip = !c.flip; render(); break; }
-      case "undo": { const g = S.g; if (g.thinking) break; const n = g.ch.turn() === g.color ? 2 : 1; for (let k = 0; k < n && g.moves.length; k++) { g.ch.undo(); g.moves.pop(); } const l = g.ch.history({ verbose: true }).slice(-1)[0]; g.last = l ? { from: l.from, to: l.to } : null; g.sel = null; g.targets = []; g.undos++; persist(); render(); maybeBot(); break; }
-      case "hint": { const g = S.g; b.disabled = true; const r = await engine(g.ch.fen(), { depth: 6, timeMs: 1200 }); if (S.g === g && r.move) { g.hint = { from: r.move.slice(0, 2), to: r.move.slice(2, 4) }; g.say = "💡 Schau dir die markierten Felder an."; render(); } break; }
+      case "undo": { const g = S.g; if (g.thinking) break; const n = g.ch.turn() === g.color ? 2 : 1; for (let k = 0; k < n && g.moves.length; k++) { g.ch.undo(); g.moves.pop(); } const l = g.ch.history({ verbose: true }).slice(-1)[0]; g.last = l ? { from: l.from, to: l.to } : null; g.sel = null; g.targets = []; g.undos++; g.helps = (g.helps || 0) + 1; persist(); render(); maybeBot(); break; }
+      case "hint": { const g = S.g; b.disabled = true; g.helps = (g.helps || 0) + 1; persist(); const r = await engine(g.ch.fen(), { depth: 6, timeMs: 1200 }); if (S.g === g && r.move) { g.hint = { from: r.move.slice(0, 2), to: r.move.slice(2, 4) }; g.say = "💡 Schau dir die markierten Felder an."; render(); } break; }
       case "resign": ui.openSheet({ title: "Aufgeben?", bodyHTML: `<div class="row" style="gap:8px"><button type="button" class="btn" data-no>Weiterspielen</button><button type="button" class="btn primary" data-yes>🏳️ Aufgeben</button></div>`, onMount(sh, close) { sh.querySelector("[data-no]").onclick = close; sh.querySelector("[data-yes]").onclick = () => { close(); finish("loss", "Aufgegeben"); }; } }); break;
       case "puzzle": { const P = await loadPuzzles(); startPuzzle(C.nextPuzzle(P, me())); break; }
       case "daily": { const P = await loadPuzzles(); startPuzzle(C.dailyPuzzle(P, dayKey()), true); break; }

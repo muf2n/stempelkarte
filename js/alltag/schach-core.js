@@ -73,7 +73,7 @@ export function eloAfter(me, opp, score, games) {
 const num = (v, d = 0) => (Number.isFinite(Number(v)) ? Number(v) : d);
 export function normMe(x = {}) {
   const bots = {};
-  for (const b of BOTS) { const r = (x.bots && x.bots[b.id]) || {}; bots[b.id] = { w: Math.max(0, num(r.w)), d: Math.max(0, num(r.d)), l: Math.max(0, num(r.l)) }; }
+  for (const b of BOTS) { const r = (x.bots && x.bots[b.id]) || {}; bots[b.id] = { w: Math.max(0, num(r.w)), d: Math.max(0, num(r.d)), l: Math.max(0, num(r.l)), c: Math.max(0, Math.min(3, Math.floor(num(r.c)))) }; }
   const pz = x.pz || {};
   return {
     elo: Math.round(num(x.elo, 800)), games: Math.max(0, num(x.games)), wins: Math.max(0, num(x.wins)), draws: Math.max(0, num(x.draws)), losses: Math.max(0, num(x.losses)),
@@ -86,19 +86,21 @@ export function normMe(x = {}) {
   };
 }
 /** Ergebnis eintragen. res: "win" | "draw" | "loss" (aus Sicht des Spielers) */
-export function recordGame(me0, { bot, res, color, tc, moves, pgn, date }) {
+/** Kronen für einen Sieg: ohne Hilfe (kein Hinweis, kein Rückgängig) 3, mit 1–2 Hilfen 2, sonst 1 */
+export const crownsForWin = (helps) => (helps <= 0 ? 3 : helps <= 2 ? 2 : 1);
+export function recordGame(me0, { bot, res, color, tc, moves, pgn, date, helps = 0 }) {
   const me = normMe(me0), B = anyBot(bot), sc = res === "win" ? 1 : res === "draw" ? 0.5 : 0;
   const before = me.elo, elo = eloAfter(me.elo, B.elo, sc, me.games);
-  const b = me.bots[bot] || { w: 0, d: 0, l: 0 };
+  const b = me.bots[bot] || { w: 0, d: 0, l: 0, c: 0 };
   return {
     me: { ...me, elo, games: me.games + 1, wins: me.wins + (sc === 1), draws: me.draws + (sc === 0.5), losses: me.losses + (sc === 0),
-      bots: { ...me.bots, [bot]: { w: b.w + (sc === 1), d: b.d + (sc === 0.5), l: b.l + (sc === 0) } },
+      bots: { ...me.bots, [bot]: { w: b.w + (sc === 1), d: b.d + (sc === 0.5), l: b.l + (sc === 0), c: Math.max(b.c || 0, sc === 1 ? crownsForWin(helps) : 0) } },
       hist: [...me.hist, { bot, res, color, tc, moves, pgn: String(pgn || "").slice(0, 6000), date: date || Date.now(), elo }].slice(-30) },
     diff: elo - before,
   };
 }
 /** Kronen je Bot (wie Sterne): 1 = Remis geschafft, 2 = 1 Sieg, 3 = 3 Siege */
-export const crowns = (r) => (r.w >= 3 ? 3 : r.w >= 1 ? 2 : r.d >= 1 ? 1 : 0);
+export const crowns = (r) => (!r ? 0 : r.c ? r.c : r.w ? 2 : 0); // alte Siege ohne Hilfe-Info: 2
 
 /* ---------- Rätsel ---------- */
 export function puzzleResult(me0, p, ok, today) {

@@ -190,3 +190,4 @@
 .sc-strip { display: grid; grid-template-columns: 30px 1fr 30px; align-items: center; gap: 4px; }
 .sc-strip .sc-anlist { flex-wrap: nowrap; overflow-x: auto; max-height: none; scrollbar-width: none; }
 .sc-arr { border: 0; border-radius: 8px; height: 32px; background: #3c3a38; color: #fff; font-size: 22px; cursor: pointer; }
+.sc-endcr { font-size: 30px; letter-spacing: 2px; margin: 0; } .sc-endcr span { filter: grayscale(1) opacity(.3); } .sc-endcr small { font-size: 12px; letter-spacing: 0; color: #6b7280; }
