@@ -56,7 +56,7 @@ export const WORLDS = [
     ["urknall", "🎆", "Urknall-Wiederholung", "Einmal pro Tag. Nicht weitersagen."]] },
 ].map((w, wi) => ({ ...w, gens: w.gens.map(([id, e, name, joke], gi) => ({ id, e, name, joke, cost: BASE[gi][0] * Math.pow(SCALE, wi), out: BASE[gi][1] * Math.pow(SCALE, wi) })) }));
 
-export const GROW = 1.15, BUF_SEC = 10, MGR_FACTOR = 8, START_MONEY = 15;
+export const GROW = 1.15, BUF_SEC = 10, MGR_FACTOR = 2, START_MONEY = 15;
 /** Kreislauf wie im Bergwerk: Stollen → Wagen (Bestand) → Lift → Umspannwerk-Lager (surf) → Transporter → Börse (Geld).
  *  Ohne Manager arbeitet eine Station nur, wenn man tippt (eine Runde); mit Manager dauernd. */
 export const CYCLE_S = 8, TRIP_S = 6;
@@ -223,7 +223,7 @@ export function maxBuy(wi, id, lvl, money, s = null) {
   return Math.max(0, Math.floor(Math.log(money * (GROW - 1) / a + 1) / Math.log(GROW) + 1e-9));
 }
 /** Elektriker-Preis: im ersten Stollen jeder Welt nur 5× (schneller Einstieg wie im Genre üblich), sonst 25× Grundpreis */
-export const mgrCost = (wi, id, s = null) => genOf(wi, id).cost * (WORLDS[wi].gens[0].id === id ? 2 : MGR_FACTOR) * (s ? Math.max(0.5, 1 - relicFx(s, "mgr")) : 1);
+export const mgrCost = (wi, id, s = null) => genOf(wi, id).cost * (WORLDS[wi].gens[0].id === id ? 1.5 : MGR_FACTOR) * (s ? Math.max(0.5, 1 - relicFx(s, "mgr")) : 1);
 export const gridCap = (wi, lvl) => 3 * Math.pow(SCALE, wi) * Math.pow(1.55, lvl);
 export const gridCost = (wi, lvl, n = 1) => 25 * Math.pow(SCALE, wi) * Math.pow(1.75, lvl) * (Math.pow(1.75, n) - 1) / 0.75;
 export const umspCap = (wi, lvl) => 4 * Math.pow(SCALE, wi) * Math.pow(1.6, lvl);
