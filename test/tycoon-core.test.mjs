@@ -83,3 +83,13 @@ test("Expedition: Start, Belohnung fest, Abholen, Fundstück-Effekt, Beschleunig
   t = T.rushTour(t, 0, NOW); assert.ok(T.claimTour(t, 0, { now: NOW }));
   const sl = T.buySlot({ ...c.s, fuses: 40 }); assert.equal(sl.slots, 2); assert.equal(sl.fuses, 0);
 });
+
+test("Glücksrad: 1× gratis, dann 5 🔩", () => {
+  let s = T.newState(NOW); s.fuses = 6;
+  const a = T.spin(s, "2026-11-15", { now: NOW }, () => 0.01); // 1. Feld: 3 🔩
+  assert.equal(a.free, true); assert.equal(a.s.fuses, 9); assert.equal(a.s.wheelDay, "2026-11-15");
+  const b = T.spin(a.s, "2026-11-15", { now: NOW }, () => 0.01);
+  assert.equal(b.free, false); assert.equal(b.s.fuses, 9 - 5 + 3);
+  assert.equal(T.spin({ ...b.s, fuses: 2 }, "2026-11-15"), null);
+  assert.equal(T.norm(JSON.parse(JSON.stringify(b.s))).wheelDay, "2026-11-15");
+});

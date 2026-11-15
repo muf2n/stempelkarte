@@ -3,7 +3,7 @@
 // Icons und Schriftdateien (fonts.gstatic.com): cache-first.
 // Alle anderen fremden Domains (Firebase, Google APIs, Nominatim, OSM, CARTO) werden nicht angefasst.
 
-const VERSION = "20261115-2030"; // wird beim Veröffentlichen automatisch ersetzt
+const VERSION = "20261115-2115"; // wird beim Veröffentlichen automatisch ersetzt
 const CACHE = "stempelkarte-" + VERSION;
 const FONT_CACHE = "stempelkarte-fonts"; // versionsunabhängig, bleibt erhalten
 const NET_TIMEOUT_MS = 4000; // bei schlechtem Netz nach dieser Zeit auf den Cache ausweichen
@@ -254,6 +254,7 @@ const SHELL = [
   "css/alltag-leben.css",
   "js/alltag/spiel.js",
   "js/alltag/tycoon.js",
+  "js/alltag/tycoon-scene.js",
   "js/tycoon-core.js",
   "css/alltag-tycoon.css",
   "css/alltag-spiel.css",

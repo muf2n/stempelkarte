@@ -163,7 +163,7 @@ export function relicFx(s, fx) { return RELICS.filter((r) => r.fx === fx).reduce
 function newWorld(wi) { return { money: wi === 0 ? START_MONEY : 0, total: 0, grid: 0, umsp: 0, abilUntil: 0, abilCd: 0, gens: Object.fromEntries(WORLDS[wi].gens.map((g) => [g.id, { lvl: 0, mgr: false, buf: 0 }])) }; }
 export function newState(now = Date.now()) {
   return { v: 3, cur: 0, unlocked: 0, worlds: WORLDS.map((_, i) => newWorld(i)), allTime: 0, stars: 0, resets: 0, akku: 0,
-    fuses: 5, boosts: [], inv: {}, tours: 0, exp: [], slots: 1, relics: {}, blitze: 0, taps: 0, ach: [], chestDay: "", streak: 0, last: now, created: now };
+    fuses: 5, boosts: [], inv: {}, tours: 0, exp: [], slots: 1, relics: {}, blitze: 0, taps: 0, ach: [], chestDay: "", streak: 0, wheelDay: "", spins: 0, last: now, created: now };
 }
 
 export function norm(x = {}, now = Date.now()) {
@@ -193,6 +193,7 @@ export function norm(x = {}, now = Date.now()) {
     blitze: Math.max(0, Math.floor(num(x.blitze))), taps: Math.max(0, Math.floor(num(x.taps))),
     ach: Array.isArray(x.ach) ? x.ach.filter((a) => ACH.some((y) => y.id === a)) : [],
     chestDay: /^\d{4}-\d{2}-\d{2}$/.test(String(x.chestDay || "")) ? x.chestDay : "", streak: Math.max(0, Math.floor(num(x.streak))),
+    wheelDay: /^\d{4}-\d{2}-\d{2}$/.test(String(x.wheelDay || "")) ? x.wheelDay : "", spins: Math.max(0, Math.floor(num(x.spins))),
     last: num(x.last, now) || now, created: num(x.created, now) || now,
   };
 }
@@ -435,6 +436,40 @@ export function checkAch(s) {
   return { s: n, fresh };
 }
 
+
+/* ---------- Glücksrad (1× täglich gratis, sonst 5 🔩) ---------- */
+export const WHEEL = [
+  { k: "fuse", n: 3, e: "🔩", t: "3 Sicherungen", w: 24, c: "#64748b" },
+  { k: "cash", e: "💶", t: "30 Min. Ertrag", w: 22, c: "#16a34a" },
+  { k: "boost", b: "x2", e: "⚡", t: "Doppelstrom", w: 15, c: "#f59e0b" },
+  { k: "fuse", n: 10, e: "🔩", t: "10 Sicherungen", w: 8, c: "#475569" },
+  { k: "boost", b: "koffer", e: "💼", t: "Geldkoffer", w: 10, c: "#0891b2" },
+  { k: "boost", b: "x3", e: "🔥", t: "Dreifach-Strom", w: 8, c: "#ea580c" },
+  { k: "boost", b: "x5", e: "💥", t: "Fünffach-Kracher", w: 6, c: "#dc2626" },
+  { k: "relic", e: "🏺", t: "Fundstück!", w: 4, c: "#7c3aed" },
+  { k: "boost", b: "zeit8", e: "⏭️", t: "Zeitsprung 8 h", w: 3, c: "#db2777" },
+];
+export const WHEEL_COST = 5;
+export function spin(s, today, opt = {}, rnd = Math.random) {
+  const free = s.wheelDay !== today;
+  if (!free && s.fuses < WHEEL_COST) return null;
+  const tot = WHEEL.reduce((a, x) => a + x.w, 0);
+  let x = rnd() * tot, idx = 0;
+  for (let i = 0; i < WHEEL.length; i++) { if (x < WHEEL[i].w) { idx = i; break; } x -= WHEEL[i].w; }
+  const P = WHEEL[idx], n = clone(s);
+  if (free) n.wheelDay = today; else n.fuses -= WHEEL_COST;
+  n.spins = (n.spins || 0) + 1;
+  let got = 0, relic = null;
+  if (P.k === "fuse") n.fuses += P.n;
+  else if (P.k === "cash") { got = Math.max(totalRate(s, opt) * 1800, WORLDS[s.cur].gens[0].cost * 10); earn(n, s.cur, got); }
+  else if (P.k === "boost") n.inv[P.b] = (n.inv[P.b] || 0) + 1;
+  else if (P.k === "relic") {
+    const open = RELICS.filter((r) => (s.relics[r.id] || 0) < RELIC_MAX);
+    if (open.length) { relic = open[Math.floor(rnd() * open.length)].id; n.relics[relic] = (n.relics[relic] || 0) + 1; } else n.fuses += 20;
+  }
+  return { s: n, idx, prize: P, got, relic, free };
+}
+
 /* ---------- Meisterbrief ---------- */
 export const starsFor = (allTime) => Math.floor(Math.sqrt(Math.max(0, allTime) / STAR_BASE));
 export const prestigeGain = (s) => Math.max(0, starsFor(s.allTime) - s.stars);
@@ -442,7 +477,7 @@ export function prestige(s, now = Date.now()) {
   const g = prestigeGain(s);
   if (g < 1) return null;
   const keep = { allTime: s.allTime, stars: s.stars + g, resets: s.resets + 1, akku: s.akku, fuses: s.fuses, blitze: s.blitze, taps: s.taps, ach: s.ach.slice(),
-    chestDay: s.chestDay, streak: s.streak, created: s.created, inv: { ...s.inv }, relics: { ...s.relics }, slots: s.slots, tours: s.tours, exp: s.exp.map((e) => ({ ...e })) };
+    chestDay: s.chestDay, streak: s.streak, wheelDay: s.wheelDay, spins: s.spins, created: s.created, inv: { ...s.inv }, relics: { ...s.relics }, slots: s.slots, tours: s.tours, exp: s.exp.map((e) => ({ ...e })) };
   return { ...newState(now), ...keep };
 }
 

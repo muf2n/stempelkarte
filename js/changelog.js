@@ -1,6 +1,7 @@
 // Update 10 F – 🖥️ System-Status › Was ist neu: ehrliche Liste aus der Versionsgeschichte (git log des Projekts), neueste zuerst.
 // Beim Veröffentlichen neuer Versionen hier oben ergänzen.
 export const CHANGELOG = [
+  { v: "20261115-2115", items: ["🗺️ Strom-Tycoon: Ozean-Karte mit Insel-Welten, Wolken und Gebäude-Inseln (Shop, Expeditionen, Fundstücke, Glücksrad, Erfolge)", "⛏️ Welt-Ansicht als Bergwerk: Leitungsschacht mit Kabine, Stollen mit Arbeitern, Elektrikern und Geldstapeln, BOOST!-Knopf", "🎡 Glücksrad: täglich 1× gratis"] },
   { v: "20261115-2030", items: ["⚡ Neu: Strom-Tycoon – Idle-Spiel mit 5 Welten auf einer Karte, je 8 verrückten Kraftwerken, Elektrikern, Leitung & Umspannwerk", "🧭 Expeditionen mit 12 Fundstücken, 🎒 Booster-Rucksack & Shop, Vorarbeiter-Turbo, goldene Blitze, tägliche Truhe, Erfolge & Meisterbrief", "💼 Echte Arbeit zählt: Wer heute stempelt, verdient im Spiel doppelt"] },
   { v: "20261115-1945", items: ["🧳 Reise-Ausgaben werden mit dem Zahlungstag gebucht – vorab Bezahltes siehst du sofort in Geld"] },
   { v: "20261113-0115", items: ["🛡️ Sicherheit: Die App lässt sich nicht mehr in fremde Webseiten einbetten (Schutz gegen Clickjacking)"] },

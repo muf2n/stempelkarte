@@ -4,6 +4,7 @@
 // Echte Arbeit zählt: Wenn du heute gestempelt hast, läuft alles doppelt (Schicht-Bonus).
 import { collection } from "./db.js";
 import * as T from "../tycoon-core.js";
+import * as SC from "./tycoon-scene.js";
 import * as store from "../store.js";
 import * as ui from "../ui.js";
 import { esc } from "../util.js";
@@ -92,17 +93,8 @@ export function mount(el) {
   }
 
   function mapHTML() {
-    const g = S.g, nw = T.nextWorld(g);
-    const nodes = T.WORLDS.map((w, i) => {
-      const open = i <= g.unlocked, r = open ? T.rates(g, i, opt()) : null;
-      const side = i % 2 ? "r" : "l";
-      return `<button type="button" class="ty-node ${side}${open ? "" : " locked"}${i === g.cur ? " here" : ""}" style="--wbg:${w.bg}" data-a="${open ? "goto" : "lockinfo"}" data-wi="${i}">
-        <span class="ty-ne" aria-hidden="true">${open ? w.e : "🔒"}</span>
-        <span class="ty-nt"><b>${open ? esc(w.name) : "???"}</b>${open ? `<small>${T.fmt(r.auto)} €/s automatisch</small>` : nw && nw.wi === i ? `<small>${Math.floor(nw.pct * 100)} % – noch ${T.fmt(Math.max(0, nw.need - nw.have))} € in „${esc(T.world(g.unlocked).name)}“</small>` : `<small>Erst die Welt davor</small>`}</span>
-        ${i === g.cur ? `<span class="ty-pin" aria-label="Du bist hier">📍</span>` : ""}</button>`;
-    }).reverse().join(`<span class="ty-path" aria-hidden="true"></span>`);
-    return `<section class="ty-map"><div class="ty-stars" aria-hidden="true"></div>${nodes}<p class="ty-map-hint">Tippe eine Welt an, um hinzufahren 🚐</p></section>
-      ${nw && nw.pct >= 1 ? `<button type="button" class="btn primary ty-big" data-a="unlock">🚀 ${esc(T.world(nw.wi).name)} freischalten!</button>` : ""}`;
+    const rt = readyTours();
+    return SC.mapHTML(S.g, { opt, badges: { tour: rt || "", rad: S.g.wheelDay !== dayKey() ? "!" : "", shop: invCount() || "" } });
   }
 
   function genHTML(g, wi) {
@@ -124,29 +116,11 @@ export function mount(el) {
   }
 
   function worldHTML() {
-    const g = S.g, wi = g.cur, Wd = T.world(wi), W = g.worlds[wi], nw = T.nextWorld(g), chestOpen = g.chestDay !== dayKey();
+    const g = S.g;
     return `<div class="ty-news" aria-live="off"><span data-k="news">${esc(T.NEWS[S.newsI % T.NEWS.length])}</span></div>
       ${S.shift ? `<div class="ty-shift on">💼 <b>Schicht-Bonus ×2</b> – du warst heute arbeiten. Respekt!</div>` : `<div class="ty-shift">💼 Heute noch nicht gestempelt – mit echter Arbeit läuft alles <b>doppelt</b>.</div>`}
-      ${chestOpen ? `<button type="button" class="ty-chest" data-a="chest">🎁 <b>Tägliche Truhe öffnen!</b><small>${g.streak ? `Serie: ${g.streak} ${g.streak === 1 ? "Tag" : "Tage"} 🔥` : "Jeden Tag mehr 🔩"}</small></button>` : ""}
-      <button type="button" class="ty-abil" data-a="abil"><span class="ty-abil-f" data-k="abil-bar"></span><span class="ty-abil-t">🧑‍🔧 <b>Vorarbeiter-Turbo</b> <span data-k="abil"></span></span></button>
-      <section class="ty-chain" aria-label="Stromkette">
-        <div class="ty-link"><span class="ty-le" aria-hidden="true">⚡</span><b>Kraftwerke</b><small><span data-k="raw"></span> €/s</small></div>
-        <span class="ty-arrow" aria-hidden="true">➜</span>
-        <div class="ty-link" data-k="grid-box"><span class="ty-le" aria-hidden="true">🔌</span><b>Leitung</b><small>Stufe ${W.grid} · <span data-k="cap"></span> €/s</small>
-          <button type="button" class="btn sm" data-a="grid" data-cost="${T.gridCost(wi, W.grid)}">⬆ ${T.fmt(T.gridCost(wi, W.grid))} €</button></div>
-        <span class="ty-arrow" aria-hidden="true">➜</span>
-        <div class="ty-link" data-k="umsp-box"><span class="ty-le" aria-hidden="true">🏭</span><b>Umspannwerk</b><small>Stufe ${W.umsp} · <span data-k="ucap"></span> €/s</small>
-          <button type="button" class="btn sm" data-a="umsp" data-cost="${T.umspCost(wi, W.umsp)}">⬆ ${T.fmt(T.umspCost(wi, W.umsp))} €</button></div>
-        <span class="ty-arrow" aria-hidden="true">➜</span>
-        <div class="ty-link out"><span class="ty-le" aria-hidden="true">💶</span><b>Verkauf</b><small><span data-k="flow"></span> €/s</small></div>
-        <p class="ty-neck" data-k="neck"></p>
-      </section>
-      <div class="ty-amt" role="group" aria-label="Kaufmenge">${["1", "10", "100", "max"].map((a) => `<button type="button" data-a="amt" data-v="${a}" aria-pressed="${S.amt === a}">${a === "max" ? "MAX" : "×" + a}</button>`).join("")}
-        <button type="button" class="ty-all" data-a="all">⚡ Alles einspeisen</button></div>
-      <div class="ty-gens">${Wd.gens.map((x) => genHTML(x, wi)).join("")}</div>
-      ${nw ? `<section class="ty-next"><b>${wi === g.unlocked ? T.world(nw.wi).e : "🗺️"} Nächste Welt: ${wi === g.unlocked ? esc(T.world(nw.wi).name) : "???"}</b><small>Verdiene in „${esc(T.world(g.unlocked).name)}“ insgesamt ${T.fmt(nw.need)} €</small>
-        <span class="ty-use"><i data-k="next" style="width:${nw.pct * 100}%"></i></span>
-        ${nw.pct >= 1 ? `<button type="button" class="btn primary" data-a="unlock">🚀 ${esc(T.world(nw.wi).name)} freischalten!</button>` : ""}</section>` : `<section class="ty-next"><b>🌌 Du besitzt das Universum.</b><small>Opa wäre stolz. Der Hamster auch.</small></section>`}`;
+      <div class="ty-amt" role="group" aria-label="Kaufmenge"><span>Kaufen:</span>${["1", "10", "100", "max"].map((a) => `<button type="button" data-a="amt" data-v="${a}" aria-pressed="${S.amt === a}">${a === "max" ? "MAX" : "×" + a}</button>`).join("")}</div>
+      ${SC.mineHTML(g, { amtN, inv: invCount(), chest: g.chestDay !== dayKey() })}`;
   }
 
   function tourHTML() {
@@ -206,18 +180,18 @@ export function mount(el) {
     if (sig() !== S.sig) { render(); return; }
     const g = S.g, wi = g.cur, W = g.worlds[wi], r = T.rates(g, wi, opt()), now = Date.now();
     const q = (k) => el.querySelector(`[data-k="${k}"]`);
-    const txt = (k, v) => { const x = q(k); if (x && x.textContent !== v) x.textContent = v; };
+    const txt = (k, v) => { el.querySelectorAll(`[data-k="${k}"]`).forEach((x) => { if (x.textContent !== v) x.textContent = v; }); };
     txt("money", T.fmt(W.money)); txt("rate", T.fmt(r.auto + r.manual)); txt("fuses", String(g.fuses));
     const act = g.boosts.filter((b) => b.until > now);
     txt("boosts", act.map((b) => `${b.k === "mega" ? "⚡" : b.k === "turbo" ? "🚀" : (T.BOOSTS[b.k] || {}).e || "✨"}×${b.m} ${T.fmtDur((b.until - now) / 1000)}`).join(" · "));
     el.querySelector(".ty-head")?.classList.toggle("boost", act.length > 0 || W.abilUntil > now);
     if (S.view === "welt") {
-      txt("raw", T.fmt(r.raw * r.k)); txt("cap", T.fmt(r.cap * r.k)); txt("ucap", T.fmt(r.ucap * r.k)); txt("flow", T.fmt(r.auto));
+      txt("cap", T.fmt(r.cap * r.k)); txt("ucap", T.fmt(r.ucap * r.k)); txt("flow", T.fmt(r.auto));
       q("grid-box")?.classList.toggle("neck", r.neck === "grid"); q("umsp-box")?.classList.toggle("neck", r.neck === "umsp");
       txt("neck", !r.raw ? "Noch keine Elektriker – du speist selbst ein. Stell welche an, dann fließt der Strom automatisch!" : r.neck === "grid" ? "🔥 Die Leitung ist zu schwach – bau sie aus!" : r.neck === "umsp" ? "🔥 Das Umspannwerk schafft's nicht – bau es aus!" : "✅ Alles fließt. Bau mehr Kraftwerke!");
       const ab = W.abilUntil > now, cd = W.abilCd > now;
-      txt("abil", ab ? `×${T.ABIL.m} läuft noch ${T.fmtDur((W.abilUntil - now) / 1000)}` : cd ? `wieder bereit in ${T.fmtDur((W.abilCd - now) / 1000)}` : `bereit! ×${T.ABIL.m} für ${T.fmtDur(T.abilDur(g) / 1000)}`);
-      const ae = el.querySelector(".ty-abil"); if (ae) { ae.disabled = cd && !ab ? true : ab; ae.classList.toggle("on", ab); ae.classList.toggle("ready", !cd); }
+      txt("abil", ab ? `×${T.ABIL.m} · ${T.fmtDur((W.abilUntil - now) / 1000)}` : cd ? `in ${T.fmtDur((W.abilCd - now) / 1000)}` : `×${T.ABIL.m} für ${T.fmtDur(T.abilDur(g) / 1000)}`);
+      const ae = el.querySelector(".ty-boost"); if (ae) { ae.disabled = cd; ae.classList.toggle("on", ab); ae.classList.toggle("ready", !cd); }
       const ab2 = q("abil-bar"); if (ab2) ab2.style.width = ab ? `${((W.abilUntil - now) / T.abilDur(g)) * 100}%` : cd ? `${(1 - (W.abilCd - now) / T.ABIL.cd) * 100}%` : "100%";
       for (const x of T.WORLDS[wi].gens) {
         const st = W.gens[x.id];
@@ -225,13 +199,13 @@ export function mount(el) {
         if (st.lvl && !st.mgr) {
           const max = r.per[x.id] * T.BUF_SEC;
           txt(`buf-${x.id}`, `${T.fmt(st.buf)} €`);
-          const bar = q(`buf-bar-${x.id}`); if (bar) { bar.style.width = `${max ? Math.min(100, (st.buf / max) * 100) : 0}%`; bar.parentElement.classList.toggle("full", max > 0 && st.buf >= max - 1e-9); }
+          const bar = q(`buf-bar-${x.id}`); if (bar) { bar.style.height = `${max ? Math.min(100, (st.buf / max) * 100) : 0}%`; bar.parentElement.classList.toggle("full", max > 0 && st.buf >= max - 1e-9); }
         }
       }
       if (S.amt === "max") el.querySelectorAll('[data-a="buy"]').forEach((b) => {
         const st = W.gens[b.dataset.id]; if (!st || !st.lvl) return;
         const n = Math.max(1, T.maxBuy(wi, b.dataset.id, st.lvl, W.money, g)), c = T.genCost(wi, b.dataset.id, st.lvl, n, g);
-        if (b.dataset.cost !== String(c)) { b.dataset.cost = String(c); b.innerHTML = `+${n}<small>${T.fmt(c)} €</small>`; }
+        if (b.dataset.cost !== String(c)) { b.dataset.cost = String(c); b.innerHTML = `<b>Stufe ${st.lvl}</b><small>+${n} · ${T.fmt(c)} €</small>`; }
       });
     }
     el.querySelectorAll("[data-until]").forEach((x) => { x.textContent = T.fmtDur((Number(x.dataset.until) - now) / 1000); });
@@ -261,6 +235,36 @@ export function mount(el) {
     host.appendChild(b); S.blitzEl = b;
     setTimeout(() => { if (S.blitzEl === b) { b.remove(); S.blitzEl = null; } }, 11e3);
   }
+  function scrollToMe(smooth) {
+    const oc = el.querySelector(".ty-ocean"); if (!oc) return;
+    const y = oc.getBoundingClientRect().top + window.scrollY + oc.offsetHeight * SC.worldTop(S.g.cur) - window.innerHeight / 2;
+    window.scrollTo({ top: Math.max(0, y), behavior: smooth ? "smooth" : "auto" });
+  }
+  function wheelSheet() {
+    let rot = 0, busy = false;
+    const body = () => { const free = S.g.wheelDay !== dayKey(); return `<div class="ty-back">${SC.wheelSVG(rot)}<p class="ty-wres" aria-live="polite">${free ? "Heute 1× <b>gratis</b> drehen!" : `Nochmal drehen kostet <b>${T.WHEEL_COST} 🔩</b> (du hast ${S.g.fuses}).`}</p>
+      <button type="button" class="btn primary" data-spin style="width:100%"${!free && S.g.fuses < T.WHEEL_COST ? " disabled" : ""}>🎡 ${free ? "Gratis drehen!" : `Drehen (${T.WHEEL_COST} 🔩)`}</button>
+      <ul class="ty-wlist">${T.WHEEL.map((w) => `<li><span>${w.e}</span>${esc(w.t)}</li>`).join("")}</ul></div>`; };
+    ui.openSheet({ title: "🎡 Glücksrad", bodyHTML: `<div data-wbody>${body()}</div>`, onMount(sh) {
+      sh.addEventListener("click", (ev) => {
+        if (!ev.target.closest("[data-spin]") || busy) return;
+        const r = T.spin(S.g, dayKey(), opt()); if (!r) return;
+        busy = true;
+        const seg = 360 / T.WHEEL.length;
+        rot += 360 * 5 + (360 - ((r.idx + 0.5) * seg) - (rot % 360));
+        const svg = sh.querySelector(".ty-wsvg"); svg.style.transition = "transform 3.2s cubic-bezier(.15,.85,.2,1)"; svg.style.transform = `rotate(${rot}deg)`;
+        sh.querySelector("[data-spin]").disabled = true;
+        setTimeout(() => {
+          set(r.s, { persist: true });
+          const R = r.relic && T.RELICS.find((x) => x.id === r.relic);
+          const txt = r.prize.k === "cash" ? `💶 +${T.fmt(r.got)} €` : R ? `🏺 Fundstück: ${R.e} ${R.name}!` : r.prize.k === "boost" ? `${r.prize.e} ${r.prize.t} in den Rucksack!` : `${r.prize.e} ${r.prize.t}!`;
+          ui.toast(`🎉 ${txt}`, 2600);
+          busy = false;
+          const b = sh.querySelector("[data-wbody]"); if (b) { b.innerHTML = body(); b.querySelector(".ty-wres").innerHTML = `🎉 <b>${esc(txt)}</b>`; }
+        }, 3300);
+      });
+    } });
+  }
   function lootSheet(loot) {
     const R = loot.relic && T.RELICS.find((x) => x.id === loot.relic), lvl = R ? S.g.relics[R.id] : 0;
     const items = [`<li>💶 <b>+${T.fmt(loot.cash)} €</b></li>`, `<li>🔩 <b>+${loot.fuses}</b> Sicherungen</li>`,
@@ -274,7 +278,7 @@ export function mount(el) {
     const b = ev.target.closest("[data-a]"); if (!b || !S.g || b.disabled) return;
     const id = b.dataset.id, now = Date.now();
     switch (b.dataset.a) {
-      case "view": S.view = b.dataset.v; lsSet(VIEW_KEY, S.view); render(); el.querySelector(".ty-nav")?.scrollIntoView({ block: "nearest" }); break;
+      case "view": S.view = b.dataset.v; lsSet(VIEW_KEY, S.view); render(); if (S.view === "karte") scrollToMe(false); else el.querySelector(".ty-nav")?.scrollIntoView({ block: "nearest" }); break;
       case "goto": { const wi = Number(b.dataset.wi); set(T.goWorld(S.g, wi), { redraw: false }); S.view = "welt"; lsSet(VIEW_KEY, "welt"); render(); ui.toast(`🚐 Unterwegs nach ${T.world(wi).e} ${T.world(wi).name}`, 1200); break; }
       case "lockinfo": ui.toast("🔒 Noch gesperrt – verdiene genug in der Welt davor!", 1600); break;
       case "tap": { const r = T.collect(S.g, id); if (r.got > 0) { pop(b, `+${T.fmt(r.got)} €`); set(r.s, { redraw: false }); refresh(); } else pop(b, "⏳"); break; }
@@ -309,6 +313,9 @@ export function mount(el) {
       case "shop": { const B = T.BOOSTS[id], r = T.shopBuy(S.g, id, opt()); if (r && set(r.s, { persist: true })) ui.toast(r.got ? `${B.e} +${T.fmt(r.got)} €!` : `${B.e} ${B.name} aktiv!`, 2000); break; }
       case "akku": if (set(T.buyAkku(S.g), { persist: true })) ui.toast(`🔋 Akku hält jetzt ${T.fmt(T.offlineHours(S.g))} h offline!`, 1800); break;
       case "help": welcome(); break;
+      case "rad": wheelSheet(); break;
+      case "relics": S.view = "tour"; lsSet(VIEW_KEY, "tour"); render(); setTimeout(() => el.querySelector(".ty-relics")?.scrollIntoView({ block: "center", behavior: "smooth" }), 50); break;
+      case "findme": scrollToMe(true); break;
       case "prestige": {
         const gain = T.prestigeGain(S.g);
         ui.openSheet({ title: "📜 Meisterbrief holen?", bodyHTML: `<p>Alle Welten, Kraftwerke, Elektriker und dein Geld starten <b>neu</b>. Dafür bekommst du <b>+${gain} ⭐</b> – mehr Ertrag für immer.</p><p class="note">Sicherungen, Rucksack, Fundstücke, Erfolge und Akku bleiben.</p><div class="row" style="gap:8px"><button type="button" class="btn" data-no>Doch nicht</button><button type="button" class="btn primary" data-yes>📜 Ja, Meisterbrief!</button></div>`,

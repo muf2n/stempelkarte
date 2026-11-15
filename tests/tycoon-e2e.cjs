@@ -35,9 +35,10 @@ const ok = (c, m) => { console.log((c ? "  ✓ " : "  ✗ ") + m); if (!c) failu
   ok(await page.textContent(".ty-money") !== m0, "Einspeisen bringt Geld");
   await page.click('[data-a="chest"]'); await page.waitForTimeout(300);
   ok(/Truhe geöffnet/.test(await page.textContent("body")), "Truhe zeigt Belohnung"); await page.click(".sheet [data-close]"); await page.waitForTimeout(200);
-  ok(!(await page.$('[data-a="chest"]')) && /🔩 10/.test(await page.textContent(".ty-chips")), "Truhe +3 🔩 und Erfolg „Erster Strom“ +2 🔩 (5 → 10)");
-  ok(/Kraftwerke/.test(await page.textContent(".ty-chain")) && /Umspannwerk/.test(await page.textContent(".ty-chain")), "Stromkette Kraftwerke → Leitung → Umspannwerk → Verkauf");
-  ok((await page.$$(".ty-gen")).length === 8, "8 Kraftwerke pro Welt");
+  ok(!(await page.$('[data-a="chest"]:not([disabled])')) && /🔩 10/.test(await page.textContent(".ty-chips")), "Truhe +3 🔩 und Erfolg „Erster Strom“ +2 🔩 (5 → 10)");
+  ok(/Leitung/.test(await page.textContent(".ty-surface")) && /Umspannwerk/.test(await page.textContent(".ty-surface")), "Bergwerk: Leitung + Umspannwerk oben");
+  ok(await page.isVisible(".ty-row.rock") && /Fahrrad-Dynamo/.test(await page.textContent(".ty-row.rock")), "Nächstes Kraftwerk als Fels zum Bauen");
+  ok(await page.isVisible(".ty-dock .ty-boost"), "Dock mit BOOST-Knopf");
   // Viel Geld + Elektriker + Welt 2 (über gespeicherten Zustand)
   await page.evaluate(() => { window.__tyBlitz = true; });
   const st = await page.evaluate(() => JSON.parse(localStorage.getItem("sk-a-spiel") || "[]"));
@@ -57,19 +58,25 @@ const ok = (c, m) => { console.log((c ? "  ✓ " : "  ✗ ") + m); if (!c) failu
   await page.click('[data-a="buy"][data-id="hamster"]'); await page.waitForTimeout(300);
   ok(/Stufe 10/.test(await page.textContent('[data-g="hamster"]')), "Stufe 10 erreicht (Meilenstein ×2)");
   await page.click('[data-a="hire"][data-id="hamster"]'); await page.waitForTimeout(300);
-  ok(await page.isVisible('[data-g="hamster"] .ty-run'), "Elektriker angestellt – läuft automatisch");
+  ok(await page.isVisible('.ty-row.auto[data-g="hamster"] .ty-boss'), "Elektriker angestellt – läuft automatisch");
   ok(await page.isVisible('[data-a="unlock"]'), "Welt 2 freischaltbar");
   await page.click('[data-a="unlock"]'); await page.waitForTimeout(400);
   ok(/Neue Welt: Die Baustelle/.test(await page.textContent("body")), "Freischalt-Jubel"); await page.click(".sheet [data-close]"); await page.waitForTimeout(200);
-  ok(/Die Baustelle/.test(await page.textContent(".ty-wname")) && /Lehrling an der Kurbel/.test(await page.textContent(".ty-gens")), "Welt 2: Baustelle mit eigenen Kraftwerken");
-  await page.click('[data-a="abil"]'); await page.waitForTimeout(300);
-  ok(/×3 läuft/.test(await page.textContent(".ty-abil")), "Vorarbeiter-Turbo ×3 läuft");
+  ok(/Die Baustelle/.test(await page.textContent(".ty-wname")) && /Lehrling an der Kurbel/.test(await page.textContent(".ty-mine")), "Welt 2: Baustelle mit eigenen Kraftwerken");
+  await page.click('.ty-boost'); await page.waitForTimeout(300);
+  ok(/×3 ·/.test(await page.textContent(".ty-boost")), "Boost (Vorarbeiter ×3) läuft");
   // Karte
   await page.click('[data-a="view"][data-v="karte"]'); await page.waitForTimeout(300);
-  ok((await page.$$(".ty-node")).length === 5 && (await page.$$(".ty-node.locked")).length === 3, "Karte: 5 Welten, 3 gesperrt");
+  ok((await page.$$(".ty-wspot")).length === 5 && (await page.$$(".ty-wspot.locked")).length === 3 && (await page.$$(".ty-bspot")).length === 6, "Ozean-Karte: 5 Insel-Welten (3 gesperrt) + 6 Gebäude");
+  await page.click('.ty-bspot[data-a="rad"]'); await page.waitForTimeout(300);
+  await page.click(".sheet [data-spin]"); await page.waitForTimeout(3600);
+  ok(/🎉/.test(await page.textContent(".sheet")), "Glücksrad gedreht – Gewinn");
+  await page.screenshot({ path: path.join(OUT, "ty-rad.png") });
+  await page.keyboard.press("Escape"); await page.waitForTimeout(300);
+  if (await page.$(".sheet")) { const c = await page.$(".sheet .sheet-close, .sheet [aria-label='Schließen']"); if (c) await c.click(); await page.waitForTimeout(300); }
   await page.screenshot({ path: path.join(OUT, "ty-karte.png"), fullPage: true });
-  await page.click('.ty-node[data-wi="0"]'); await page.waitForTimeout(300);
-  ok(/Opas Garage/.test(await page.textContent(".ty-wname")) && await page.isVisible(".ty-gens"), "Karte → Opas Garage");
+  await page.click('.ty-wspot[data-wi="0"]'); await page.waitForTimeout(300);
+  ok(/Opas Garage/.test(await page.textContent(".ty-wname")) && await page.isVisible(".ty-mine"), "Karte → Opas Garage");
   // Expedition
   await page.click('[data-a="view"][data-v="tour"]'); await page.waitForTimeout(300);
   await page.click('[data-a="tour"][data-k="bach"]'); await page.waitForTimeout(300);
