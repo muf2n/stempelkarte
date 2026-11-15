@@ -107,3 +107,32 @@
 .sc-evf { display: flex; justify-content: space-between; align-items: center; gap: 8px; flex-wrap: wrap; font-size: 13px; }
 .sc-ev > small { color: rgba(255,255,255,.8) !important; font-size: 11px; }
 .sc-evtag { font-size: 13px; background: #be185d; color: #fff; padding: 2px 8px; border-radius: 8px; vertical-align: middle; }
+
+/* 120 Bots: 5 pro Reihe */
+.sc-bots { grid-template-columns: repeat(5, minmax(0, 1fr)) !important; gap: 6px; }
+.sc-bot { padding: 6px 2px 4px; border-width: 2px; min-width: 0; }
+.sc-bot .sc-ava { font-size: clamp(24px, 7vw, 36px); }
+.sc-bot small { font-size: 10px; line-height: 1.15; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 100%; }
+.sc-cr { font-size: 9px; }
+.sc-cat { display: flex; align-items: baseline; gap: 6px; }
+.sc-more { margin-left: auto; border: 0; background: none; color: #a3e635; font: inherit; font-size: 13px; font-weight: 700; cursor: pointer; }
+.pc { display: inline-block; will-change: transform; position: relative; }
+
+/* 🔍 Analyse */
+.sc-anprog { display: grid; justify-items: center; gap: 8px; padding: 40px 10px; text-align: center; }
+.sc-anprog > span:first-child { font-size: 48px; animation: sc-pulse 1s infinite; }
+.sc-anbar { width: 100%; height: 10px; border-radius: 999px; background: #1e2236; overflow: hidden; } .sc-anbar i { display: block; height: 100%; background: #81b64c; transition: width .3s; }
+.sc-antab { width: 100%; border-collapse: collapse; font-size: 13px; text-align: center; }
+.sc-antab th, .sc-antab td { padding: 4px 2px; } .sc-antab td:first-child { text-align: left; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 110px; }
+.sc-antab tbody tr { background: var(--sc-card); } .sc-antab td b { color: #a3e635; }
+.sc-graph { width: 100%; height: 70px; border-radius: 10px; display: block; }
+.sc-anboard { display: grid; grid-template-columns: 18px minmax(0, 1fr); gap: 6px; }
+.sc-anboard .sc-board { width: 100%; min-width: 0; }
+.sc-evalbar { position: relative; border-radius: 6px; overflow: hidden; background: #f1f5f9; }
+.sc-evalbar i { position: absolute; left: 0; right: 0; top: 0; background: #1f2937; transition: height .3s; }
+.sc-evalbar b { position: absolute; left: 50%; bottom: 2px; transform: translateX(-50%) rotate(-90deg); transform-origin: center; font-size: 9px; color: #111827; white-space: nowrap; }
+.sc-anmove { display: grid; gap: 2px; padding: 10px 12px; border-radius: 12px; background: var(--sc-card); border-left: 5px solid var(--c); }
+.sc-anmove span { color: var(--c); font-weight: 800; filter: brightness(1.3); }
+.sc-anlist { display: flex; flex-wrap: wrap; gap: 4px; max-height: 160px; overflow-y: auto; }
+.sc-anlist button { border: 0; border-radius: 8px; padding: 4px 6px; background: var(--sc-card); color: var(--sc-txt); font: inherit; font-size: 12px; cursor: pointer; border-bottom: 3px solid var(--c); }
+.sc-anlist button.on { background: #81b64c; color: #fff; } .sc-anlist em { font-style: normal; color: var(--sc-mut); margin-right: 2px; }

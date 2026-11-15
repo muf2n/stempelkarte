@@ -88,7 +88,7 @@ export function mount(el) {
     const L = m.last, sel0 = C.anyBot(S.sel || L.bot), sel = sel0 && (!sel0.ev || sel0.id.startsWith("ev-" + C.weekEvent().key)) ? sel0 : C.botById("eva"), tc = C.tcById(L.tc);
     return `${eventHTML(m)}<section class="sc-pick"><div class="sc-bubble-row"><span class="sc-ava big" aria-hidden="true">${sel.e}</span><div class="sc-bubble">${esc(sel.hi)}</div></div>
         <h2>${esc(sel.name)} <small>${sel.elo}</small>${sel.ev ? ` <span class="sc-evtag">Event · 💵 ${sel.reward}</span>` : ""}</h2></section>
-      ${C.CATS.map((cat) => { const bs = C.BOTS.filter((b) => b.cat === cat); return bs.length ? `<h3 class="sc-cat">${cat} <small>${bs.length}</small></h3><div class="sc-bots">${bs.map((b) => { const cr = C.crowns(m.bots[b.id]); return `<button type="button" class="sc-bot${b.id === sel.id ? " on" : ""}" data-a="bot" data-v="${b.id}"><span class="sc-ava" aria-hidden="true">${b.e}</span><small>${esc(b.name.split(" ").slice(-1)[0])} · ${b.elo}</small><span class="sc-cr" aria-label="${cr} von 3 Kronen">${"👑".repeat(cr)}${"<i>👑</i>".repeat(3 - cr)}</span></button>`; }).join("")}</div>` : ""; }).join("")}
+      ${C.CATS.map((cat) => { const all = C.BOTS.filter((b) => b.cat === cat), open = S.open === cat, bs = open ? all : all.slice(0, 10); return all.length ? `<h3 class="sc-cat">${cat} <small>${all.length}</small>${all.length > 10 ? `<button type="button" class="sc-more" data-a="catopen" data-v="${cat}">${open ? "weniger" : "alle anzeigen"}</button>` : ""}</h3><div class="sc-bots">${bs.map((b) => { const cr = C.crowns(m.bots[b.id]); return `<button type="button" class="sc-bot${b.id === sel.id ? " on" : ""}" data-a="bot" data-v="${b.id}"><span class="sc-ava" aria-hidden="true">${b.e}</span><small>${esc(b.name.split(" ").slice(-1)[0])} · ${b.elo}</small><span class="sc-cr" aria-label="${cr} von 3 Kronen">${"👑".repeat(cr)}${"<i>👑</i>".repeat(3 - cr)}</span></button>`; }).join("")}</div>` : ""; }).join("")}
       <div class="sc-opts">
         <button type="button" class="sc-tcbtn" data-a="tcopen">⏱️ <b>${esc(tc.label)}</b> <small>${tc.cat}</small><span>${S.tcOpen ? "▲" : "▼"}</span></button>
         <div class="sc-color" role="group" aria-label="Farbe">${[["w", "♔", "Weiß"], ["r", "?", "Zufall"], ["b", "♚", "Schwarz"]].map(([v, g, l]) => `<button type="button" data-a="color" data-v="${v}" aria-pressed="${L.color === v}" aria-label="${l}" class="c-${v}">${g}︎</button>`).join("")}</div>
@@ -107,7 +107,7 @@ export function mount(el) {
   function gamesHTML(m) {
     const h = m.hist.slice().reverse(); const bn = (id) => C.anyBot(id) || C.botById("eva");
     return `<section class="sc-card"><div class="sc-stat"><span>🎮 <b>${m.games}</b> Partien</span><span>✅ ${m.wins}</span><span>🤝 ${m.draws}</span><span>❌ ${m.losses}</span></div></section>
-      ${h.length ? `<ul class="sc-hist">${h.map((x, i) => { const B = bn(x.bot); return `<li><button type="button" data-a="review" data-i="${m.hist.length - 1 - i}"><span class="sc-ava" aria-hidden="true">${B.e}</span><span><b>${x.res === "win" ? "✅ Sieg" : x.res === "draw" ? "🤝 Remis" : "❌ Niederlage"}</b> gegen ${esc(B.name)}<small>${new Date(x.date).toLocaleDateString("de-AT")} · ${esc(C.tcById(x.tc).label)} · ${(x.moves || []).length} Halbzüge · Elo ${x.elo}</small></span><em>▶</em></button></li>`; }).join("")}</ul>` : `<p class="note">Noch keine Partien. Fordere einen Bot heraus!</p>`}`;
+      ${h.length ? `<ul class="sc-hist">${h.map((x, i) => { const B = bn(x.bot); return `<li><button type="button" data-a="review" data-i="${m.hist.length - 1 - i}"><span class="sc-ava" aria-hidden="true">${B.e}</span><span><b>${x.res === "win" ? "✅ Sieg" : x.res === "draw" ? "🤝 Remis" : "❌ Niederlage"}</b> gegen ${esc(B.name)}<small>${new Date(x.date).toLocaleDateString("de-AT")} · ${esc(C.tcById(x.tc).label)} · ${(x.moves || []).length} Halbzüge · Elo ${x.elo}</small></span><em>${x.an ? "🔍" : "▶"}</em></button></li>`; }).join("")}</ul>` : `<p class="note">Noch keine Partien. Fordere einen Bot heraus!</p>`}`;
   }
 
   /* ---------- Partie ---------- */
@@ -147,7 +147,7 @@ export function mount(el) {
         ${!g.over ? `${!g.clock ? `<button type="button" class="btn" data-a="undo"${g.moves.length < 1 || g.thinking ? " disabled" : ""}>↩️ Zurück</button>` : ""}
         <button type="button" class="btn" data-a="hint"${!myTurn ? " disabled" : ""}>💡 Tipp</button>
         <button type="button" class="btn" data-a="flip">🔄</button>
-        <button type="button" class="btn" data-a="resign">🏳️ Aufgeben</button>` : `<button type="button" class="btn primary" data-a="rematch">🔁 Revanche</button><button type="button" class="btn" data-a="home">🏠 Übersicht</button>`}
+        <button type="button" class="btn" data-a="resign">🏳️ Aufgeben</button>` : `<button type="button" class="btn primary" data-a="rematch">🔁 Revanche</button>${g.moves.length >= 2 ? `<button type="button" class="btn" data-a="analyse">🔍 Analyse</button>` : ""}<button type="button" class="btn" data-a="home">🏠</button>`}
       </div>
       ${g.over ? `<div class="sc-over ${g.over.res}"><b>${g.over.res === "win" ? "🏆 Gewonnen!" : g.over.res === "draw" ? "🤝 Remis" : "😵 Verloren"}</b><small>${esc(g.over.why)}${g.over.diff != null ? ` · Elo ${g.over.diff >= 0 ? "+" : ""}${g.over.diff}` : ""}</small></div>` : ""}
     </div>`;
@@ -182,7 +182,7 @@ export function mount(el) {
     const mv = g.ch.move(uciToMove(u));
     if (!mv) return false;
     if (g.clock) { g.clock[side] -= now - g.turnAt; g.clock[side] += g.tc.inc * 1000; }
-    g.turnAt = now; g.moves.push(u); g.last = { from: mv.from, to: mv.to }; g.sel = null; g.targets = []; g.hint = null;
+    g.turnAt = now; g.moves.push(u); g.last = { from: mv.from, to: mv.to }; S.anim = { from: mv.from, to: mv.to }; g.sel = null; g.targets = []; g.hint = null;
     if (byBot) {
       const talk = g.ch.inCheck() ? "Schach! ⚡" : mv.captured && Math.random() < 0.5 ? g.bot.talk[Math.floor(Math.random() * g.bot.talk.length)] : Math.random() < 0.12 ? g.bot.talk[Math.floor(Math.random() * g.bot.talk.length)] : null;
       if (talk) g.say = talk;
@@ -198,7 +198,8 @@ export function mount(el) {
     const ms = C.thinkMs(B, g.clock ? g.clock[g.ch.turn()] : null, g.tc.inc);
     const r = await engine(g.ch.fen(), { depth: B.depth, timeMs: ms, noise: ply < 10 ? Math.max(B.noise, 18) : B.noise });
     if (S.g !== g || g.over) return;
-    const wait = Math.max(0, 450 - (Date.now() - t0));
+    const minThink = g.clock && g.clock[g.ch.turn()] < 60e3 ? 250 : g.tc.min && g.tc.min <= 2 ? 400 : 700 + Math.random() * 900;
+    const wait = Math.max(0, minThink - (Date.now() - t0));
     setTimeout(() => { if (S.g !== g || g.over) return; g.thinking = false; if (!r.move || !applyMove(r.move, true)) { g.thinking = false; render(); } }, wait);
   }
 
@@ -208,7 +209,7 @@ export function mount(el) {
     const color = ch.turn();
     S.pz = { p, ch: new Chess(p.fen), color, step: 0, daily, failed: false, solved: false, last: null, sel: null, targets: [], flip: color === "b", msg: "", first };
     render();
-    setTimeout(() => { if (!S.pz || S.pz.p !== p) return; S.pz.ch.move(uciToMove(p.first)); S.pz.last = { from: first.from, to: first.to }; S.pz.msg = `${color === "w" ? "Weiß" : "Schwarz"} am Zug – finde den besten Zug!`; render(); }, 700);
+    setTimeout(() => { if (!S.pz || S.pz.p !== p) return; S.pz.ch.move(uciToMove(p.first)); S.pz.last = { from: first.from, to: first.to }; S.anim = { from: first.from, to: first.to }; S.pz.msg = `${color === "w" ? "Weiß" : "Schwarz"} am Zug – finde den besten Zug!`; render(); }, 700);
   }
   function puzzleHTML() {
     const z = S.pz, m = me(), myTurn = z.ch.turn() === z.color && !z.solved && z.last;
@@ -242,7 +243,57 @@ export function mount(el) {
       render(); return;
     }
     z.msg = "👍 Gut! Weiter …"; render();
-    setTimeout(() => { if (S.pz !== z) return; const r = z.p.sol[z.step]; const mv2 = z.ch.move(uciToMove(r)); z.last = { from: mv2.from, to: mv2.to }; z.step++; z.msg = "Und jetzt?"; render(); }, 600);
+    setTimeout(() => { if (S.pz !== z) return; const r = z.p.sol[z.step]; const mv2 = z.ch.move(uciToMove(r)); z.last = { from: mv2.from, to: mv2.to }; S.anim = { from: mv2.from, to: mv2.to }; z.step++; z.msg = "Und jetzt?"; render(); }, 600);
+  }
+
+  /* ---------- 🔍 Partie-Analyse ---------- */
+  async function runAnalysis(i) {
+    const m = me(), h = m.hist[i]; if (!h || !h.moves || h.moves.length < 2) return;
+    S.g = null; S.review = null;
+    if (h.an && Array.isArray(h.an.ev) && h.an.ev.length === h.moves.length + 1) { S.an = { i, ply: 0, data: C.analyse(h.moves, h.an.ev, h.an.best) }; render(); return; }
+    const ch = new Chess(), fens = [ch.fen()];
+    for (const u of h.moves) { ch.move(uciToMove(u)); fens.push(ch.fen()); }
+    const tok = (S.anTok = Symbol());
+    const ev = [], best = [];
+    for (let k = 0; k < fens.length; k++) {
+      if (S.anTok !== tok || !S.alive) return;
+      el.innerHTML = `<div class="sc sc-game"><div class="sc-anprog"><span aria-hidden="true">🔍</span><b>Partie wird analysiert …</b><small>Zug ${Math.ceil(k / 2)} von ${Math.ceil(h.moves.length / 2)}</small><span class="sc-anbar"><i style="width:${(k / fens.length) * 100}%"></i></span><button type="button" class="btn" data-a="home">Abbrechen</button></div></div>`;
+      const c2 = new Chess(fens[k]);
+      if (c2.isGameOver()) { ev.push(c2.isCheckmate() ? (c2.turn() === "w" ? -C.MATE_CP + 1 : C.MATE_CP - 1) : 0); best.push(""); continue; }
+      const r = await engine(fens[k], { depth: 9, timeMs: 380 });
+      const sc = r.bestScore != null ? r.bestScore : r.score;
+      ev.push(c2.turn() === "w" ? sc : -sc); best.push(r.best || r.move || "");
+    }
+    if (S.anTok !== tok) return;
+    const m2 = me(), hist = m2.hist.slice(); hist[i] = { ...hist[i], an: { ev, best } };
+    saveMe({ ...m2, hist });
+    S.an = { i, ply: 0, data: C.analyse(h.moves, ev, best) }; render();
+  }
+  function evalGraph(ev, ply) {
+    const W = 300, H = 70, n = ev.length - 1 || 1, y = (cp) => H / 2 - ((C.winPct(cp) - 50) / 50) * (H / 2 - 2);
+    const pts = ev.map((cp, k) => `${((k / n) * W).toFixed(1)},${y(cp).toFixed(1)}`).join(" ");
+    return `<svg class="sc-graph" viewBox="0 0 ${W} ${H}" preserveAspectRatio="none" aria-label="Bewertungsverlauf"><rect width="${W}" height="${H}" fill="#1f2937"/><polygon points="0,${H} ${pts} ${W},${H}" fill="#f1f5f9"/><line x1="0" y1="${H / 2}" x2="${W}" y2="${H / 2}" stroke="#94a3b8" stroke-width=".6"/><line x1="${(ply / n) * W}" y1="0" x2="${(ply / n) * W}" y2="${H}" stroke="#22c55e" stroke-width="2"/></svg>`;
+  }
+  function analysisHTML() {
+    const A = S.an, h = me().hist[A.i], B = C.anyBot(h.bot) || C.botById("eva"), D = A.data, ev = h.an.ev;
+    const ch = new Chess(); let last = null;
+    for (let k = 0; k < A.ply; k++) { const mv = ch.move(uciToMove(h.moves[k])); last = { from: mv.from, to: mv.to }; }
+    const cur = A.ply ? D.moves[A.ply - 1] : null, cls = cur && C.classOf(cur.cls);
+    const bestNext = h.an.best[A.ply], hint = bestNext ? { from: bestNext.slice(0, 2), to: bestNext.slice(2, 4) } : null;
+    const san = (k) => { const c = new Chess(); for (let j = 0; j < k; j++) c.move(uciToMove(h.moves[j])); const mv = c.move(uciToMove(h.moves[k])); return mv ? mv.san : h.moves[k]; };
+    const sanBest = (k) => { if (!h.an.best[k]) return ""; const c = new Chess(); for (let j = 0; j < k; j++) c.move(uciToMove(h.moves[j])); const mv = c.move(uciToMove(h.an.best[k])); return mv ? mv.san : ""; };
+    const me1 = h.color, opp = me1 === "w" ? "b" : "w";
+    const e = ev[A.ply], wp = C.winPct(e);
+    const row = (side, name, emoji) => `<tr><td>${emoji} ${esc(name)}</td><td><b>${D.acc[side]} %</b></td>${C.CLASSES.map((c) => `<td>${D.count[side][c.k]}</td>`).join("")}</tr>`;
+    return `<div class="sc sc-game">
+      <div class="sc-pzbar"><span>🔍 Analyse · gegen ${B.e} ${esc(B.name)}</span><b>${h.res === "win" ? "Sieg" : h.res === "draw" ? "Remis" : "Niederlage"}</b></div>
+      <table class="sc-antab"><thead><tr><th></th><th>Genauigkeit</th>${C.CLASSES.map((c) => `<th title="${c.t}">${c.e}</th>`).join("")}</tr></thead><tbody>${row(me1, "Du", "🧑‍🔧")}${row(opp, B.name, B.e)}</tbody></table>
+      ${evalGraph(ev, A.ply)}
+      <div class="sc-anboard"><div class="sc-evalbar" aria-label="Bewertung ${C.fmtEval(e)}"><i style="height:${h.color === "b" ? wp : 100 - wp}%"></i><b>${C.fmtEval(e)}</b></div>${boardHTML(ch, { flip: h.color === "b", last, hint: A.ply < h.moves.length ? hint : null, check: kingSq(ch), lock: true })}</div>
+      <div class="sc-anmove" style="--c:${cls ? cls.c : "#64748b"}">${cur ? `<b>${Math.floor((A.ply - 1) / 2) + 1}.${cur.side === "b" ? ".." : ""} ${esc(san(A.ply - 1))}</b> <span>${cls.e} ${cls.t}</span>${cur.cls !== "best" && sanBest(A.ply - 1) ? `<small>Besser war <b>${esc(sanBest(A.ply - 1))}</b></small>` : ""}` : `<b>Ausgangsstellung</b><small>Tippe ▶ oder einen Zug unten</small>`}${A.ply < h.moves.length && bestNext ? `<small>💡 Bester Zug jetzt (blau): <b>${esc(sanBest(A.ply))}</b></small>` : ""}</div>
+      <div class="sc-ctl"><button type="button" class="btn" data-a="an" data-v="0">⏮</button><button type="button" class="btn" data-a="an" data-v="-1">◀</button><button type="button" class="btn primary" data-a="an" data-v="1">▶</button><button type="button" class="btn" data-a="an" data-v="end">⏭</button><button type="button" class="btn" data-a="home">🏠</button></div>
+      <div class="sc-anlist">${D.moves.map((x, k) => `<button type="button" class="${A.ply === k + 1 ? "on" : ""}" data-a="an" data-v="p${k + 1}" style="--c:${C.classOf(x.cls).c}">${k % 2 === 0 ? `<em>${k / 2 + 1}.</em>` : ""}${esc(san(k))}${x.cls === "best" || x.cls === "good" ? "" : C.classOf(x.cls).e}</button>`).join("")}</div>
+    </div>`;
   }
 
   /* ---------- Partie nachspielen ---------- */
@@ -251,12 +302,24 @@ export function mount(el) {
     let last = null; for (let k = 0; k < R.ply; k++) { const mv = ch.move(uciToMove(h.moves[k])); last = { from: mv.from, to: mv.to }; }
     return `<div class="sc sc-game"><div class="sc-pzbar"><span>📜 ${h.res === "win" ? "Sieg" : h.res === "draw" ? "Remis" : "Niederlage"} gegen ${B.e} ${esc(B.name)}</span><b>${R.ply}/${h.moves.length}</b></div>
       ${boardHTML(ch, { flip: h.color === "b", last, check: kingSq(ch), lock: true })}
-      <div class="sc-ctl"><button type="button" class="btn" data-a="rv" data-v="0">⏮</button><button type="button" class="btn" data-a="rv" data-v="-1">◀</button><button type="button" class="btn primary" data-a="rv" data-v="1">▶</button><button type="button" class="btn" data-a="rv" data-v="999">⏭</button><button type="button" class="btn" data-a="home">🏠</button></div></div>`;
+      <div class="sc-ctl"><button type="button" class="btn" data-a="rv" data-v="0">⏮</button><button type="button" class="btn" data-a="rv" data-v="-1">◀</button><button type="button" class="btn primary" data-a="rv" data-v="1">▶</button><button type="button" class="btn" data-a="rv" data-v="999">⏭</button><button type="button" class="btn" data-a="analyse" data-i="${R.i}">🔍</button><button type="button" class="btn" data-a="home">🏠</button></div></div>`;
   }
 
   function render() {
     if (!S.alive) return;
-    el.innerHTML = S.pz ? puzzleHTML() : S.review ? reviewHTML() : S.g ? gameHTML() : homeHTML();
+    el.innerHTML = S.an ? analysisHTML() : S.pz ? puzzleHTML() : S.review ? reviewHTML() : S.g ? gameHTML() : homeHTML();
+    if (S.anim) { const a = S.anim; S.anim = null; slide(a.from, a.to); }
+  }
+  /** Figur gleitet vom Start- aufs Zielfeld (statt zu springen) */
+  function slide(from, to) {
+    try {
+      if (matchMedia("(prefers-reduced-motion: reduce)").matches) return;
+      const f = el.querySelector(`[data-sq="${from}"]`), t = el.querySelector(`[data-sq="${to}"]`), pc = t && t.querySelector(".pc");
+      if (!f || !pc) return;
+      const fr = f.getBoundingClientRect(), tr = t.getBoundingClientRect();
+      pc.style.transition = "none"; pc.style.transform = `translate(${fr.left - tr.left}px, ${fr.top - tr.top}px)`; pc.style.zIndex = "5";
+      requestAnimationFrame(() => requestAnimationFrame(() => { pc.style.transition = "transform .28s cubic-bezier(.3,.7,.4,1)"; pc.style.transform = "translate(0,0)"; setTimeout(() => { pc.style.zIndex = ""; }, 320); }));
+    } catch { /* egal */ }
   }
 
   /* ---------- Bedienung ---------- */
@@ -288,6 +351,9 @@ export function mount(el) {
       case "tab": S.tab = b.dataset.v; lsSet(TAB_KEY, S.tab); render(); break;
       case "bot": S.sel = b.dataset.v; saveMe({ ...m, last: { ...m.last, bot: S.sel } }); render(); break;
       case "tcopen": S.tcOpen = !S.tcOpen; render(); break;
+      case "catopen": S.open = S.open === b.dataset.v ? null : b.dataset.v; render(); break;
+      case "analyse": { const hi = b.dataset.i != null ? Number(b.dataset.i) : me().hist.length - 1; runAnalysis(hi); break; }
+      case "an": { const A = S.an, n = me().hist[A.i].moves.length, v = b.dataset.v; A.ply = v === "0" ? 0 : v === "end" ? n : v.startsWith("p") ? Number(v.slice(1)) : Math.max(0, Math.min(n, A.ply + Number(v))); A.animFrom = Number(v) === 1; render(); break; }
       case "tc": S.tcOpen = false; saveMe({ ...m, last: { ...m.last, tc: b.dataset.v } }); setTimeout(render, 30); break;
       case "color": saveMe({ ...m, last: { ...m.last, color: b.dataset.v } }); setTimeout(render, 30); break;
       case "play": if (lsGet(CUR_KEY)) { ui.openSheet({ title: "Neue Partie?", bodyHTML: `<p>Die laufende Partie wird dann als Niederlage gewertet … nein, keine Sorge: sie wird einfach verworfen.</p><div class="row" style="gap:8px"><button type="button" class="btn" data-no>Abbrechen</button><button type="button" class="btn primary" data-yes>Neue Partie</button></div>`, onMount(sh, close) { sh.querySelector("[data-no]").onclick = close; sh.querySelector("[data-yes]").onclick = () => { close(); lsSet(CUR_KEY, null); newGame(); }; } }); } else newGame(); break;
@@ -302,7 +368,7 @@ export function mount(el) {
         ui.toast(`🎁 ${can.map((i) => C.EV_TRACK[i].e + " " + C.EV_TRACK[i].t).join(" · ")} → Strom-Tycoon`, 3200);
         setTimeout(render, 50); break;
       }
-      case "home": S.g = null; S.pz = null; S.review = null; render(); break;
+      case "home": S.g = null; S.pz = null; S.review = null; S.an = null; render(); break;
       case "rematch": newGame(); break;
       case "flip": { const c = S.pz || S.g; c.flip = !c.flip; render(); break; }
       case "undo": { const g = S.g; if (g.thinking) break; const n = g.ch.turn() === g.color ? 2 : 1; for (let k = 0; k < n && g.moves.length; k++) { g.ch.undo(); g.moves.pop(); } const l = g.ch.history({ verbose: true }).slice(-1)[0]; g.last = l ? { from: l.from, to: l.to } : null; g.sel = null; g.targets = []; g.undos++; persist(); render(); maybeBot(); break; }

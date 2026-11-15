@@ -15,7 +15,7 @@ const ok = (c, m) => { console.log((c ? "  ✓ " : "  ✗ ") + m); if (!c) failu
   const errs = []; page.on("pageerror", (e) => errs.push(e.message));
   await page.goto(BASE); const bl = await page.$("#btn-local"); if (bl && await bl.isVisible()) await bl.click();
   await page.evaluate(() => { location.hash = "#alltag/schach"; }); await page.waitForSelector(".sc-bots");
-  ok((await page.$$(".sc-bot")).length === 10, "10 Bots in Kategorien");
+  ok((await page.$$(".sc-bot")).length >= 50, "Bots in 6 Stufen (je 10 sichtbar)"); await page.click('[data-a="catopen"] >> nth=0'); await page.waitForTimeout(150); ok((await page.$$(".sc-cat")).length === 6 && (await page.$$(".sc-bot")).length > 60, "Stufe aufklappen zeigt alle");
   await page.click('.sc-bot[data-v="hugo"]'); await page.waitForTimeout(200);
   ok(/Hamster Hugo/.test(await page.textContent(".sc-pick")) && /Quiek/.test(await page.textContent(".sc-bubble")), "Bot gewählt, Sprechblase");
   await page.click('[data-a="tcopen"]'); await page.waitForTimeout(150);
@@ -40,6 +40,11 @@ const ok = (c, m) => { console.log((c ? "  ✓ " : "  ✗ ") + m); if (!c) failu
   await page.click('[data-a="resume"]'); await page.waitForSelector(".sc-board");
   await page.click('[data-a="resign"]'); await page.click(".sheet [data-yes]"); await page.waitForTimeout(300);
   ok(/Verloren/.test(await page.textContent(".sc-over")) && /Elo/.test(await page.textContent(".sc-over")), "Aufgeben → Verloren mit Elo-Änderung");
+  await page.click('[data-a="analyse"]'); await page.waitForSelector(".sc-antab", { timeout: 20000 });
+  ok(/Genauigkeit/.test(await page.textContent(".sc-antab")) && await page.isVisible(".sc-graph") && await page.isVisible(".sc-evalbar"), "Partie-Analyse: Genauigkeit, Kurve, Bewertungsbalken");
+  await page.click('[data-a="an"][data-v="1"]'); await page.waitForTimeout(200);
+  ok(/1\. e4/.test(await page.textContent(".sc-anmove")), "Analyse: Zug 1 mit Bewertung");
+  await page.screenshot({ path: path.join(OUT, "sc-analyse.png") });
   await page.click('[data-a="home"]'); await page.click('[data-a="tab"][data-v="partien"]'); await page.waitForTimeout(200);
   ok(/Niederlage/.test(await page.textContent(".sc-hist")), "Partie im Verlauf");
   await page.click(".sc-hist button"); await page.click('[data-a="rv"][data-v="999"]'); await page.waitForTimeout(150);
