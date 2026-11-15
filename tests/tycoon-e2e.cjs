@@ -46,7 +46,7 @@ const ok = (c, m) => { console.log((c ? "  ✓ " : "  ✗ ") + m); if (!c) failu
   await page.evaluate(() => {
     const all = JSON.parse(localStorage.getItem("sk-a-spiel") || "[]").filter((d) => d.id !== "tycoon");
     const w = (m, t) => ({ money: m, total: t, grid: 0, gens: {} });
-    all.push({ id: "tycoon", v: 2, cur: 0, unlocked: 0, worlds: [{ ...w(5e5, 2e6), gens: { hamster: { lvl: 9 } } }, w(0, 0), w(0, 0), w(0, 0), w(0, 0)], allTime: 2e6, fuses: 20, chestDay: "2099-01-01", last: Date.now() - 3600e3, created: Date.now() });
+    all.push({ id: "tycoon", v: 4, cur: 0, unlocked: 0, worlds: [{ ...w(5e5, 2e6), gens: { hamster: { lvl: 9 } } }, w(0, 0), w(0, 0), w(0, 0), w(0, 0)], allTime: 2e6, fuses: 20, chestDay: "2099-01-01", last: Date.now() - 3600e3, created: Date.now() });
     sessionStorage.setItem("tyInject", JSON.stringify(all)); // erst beim Neuladen schreiben (das Spiel speichert beim Verlassen)
   });
   await page.reload(); await page.waitForTimeout(800);

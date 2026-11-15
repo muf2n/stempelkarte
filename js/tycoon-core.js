@@ -163,12 +163,15 @@ export function relicFx(s, fx) { return RELICS.filter((r) => r.fx === fx).reduce
 
 function newWorld(wi) { return { money: wi === 0 ? START_MONEY : 0, total: 0, grid: 0, umsp: 0, abilUntil: 0, abilCd: 0, gens: Object.fromEntries(WORLDS[wi].gens.map((g) => [g.id, { lvl: 0, mgr: false, buf: 0 }])) }; }
 export function newState(now = Date.now()) {
-  return { v: 3, cur: 0, unlocked: 0, worlds: WORLDS.map((_, i) => newWorld(i)), allTime: 0, stars: 0, resets: 0, akku: 0,
+  return { v: STATE_V, cur: 0, unlocked: 0, worlds: WORLDS.map((_, i) => newWorld(i)), allTime: 0, stars: 0, resets: 0, akku: 0,
     fuses: 5, boosts: [], inv: {}, tours: 0, exp: [], slots: 1, relics: {}, blitze: 0, taps: 0, ach: [], chestDay: "", streak: 0, wheelDay: "", spins: 0, ev: null, cups: 0, last: now, created: now };
 }
 
+/** Spielstand-Version: ältere Stände werden verworfen (Neustart – vom Spieler gewünscht, 15.11.2026). */
+export const STATE_V = 4;
 export function norm(x = {}, now = Date.now()) {
   const s = newState(now);
+  if (Number(x.v) !== STATE_V) return s;
   const ws = WORLDS.map((W, i) => {
     const r = (Array.isArray(x.worlds) && x.worlds[i]) || {};
     const gens = {};
