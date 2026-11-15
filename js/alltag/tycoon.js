@@ -172,7 +172,7 @@ export function mount(el) {
           <span class="ty-tgo" aria-hidden="true">Los!</span>
           <span class="ty-tloot"><span title="Geld: ${t.cash} min Ertrag">💶 ${t.cash} min</span><span title="Sicherungen">🔩 ${t.fuse[0]}–${t.fuse[1]}</span><span title="Booster">🎒 ${boostsOf(t)}</span><span class="rel" title="Chance auf ein Fundstück">🏺 ${Math.round(t.relic * 100)} %</span></span>
         </button>`).join("")}</div>` : `<p class="ty-allout">🥾 Alle Plätze sind unterwegs. ${g.slots < maxSlots ? "Mehr Plätze gibt's hier:" : ""}</p>`}
-        ${g.slots < maxSlots ? `<button type="button" class="ty-b3 purple ty-wide" data-a="slot" data-fuse="${T.SLOT_COST[g.slots]}">➕ ${g.slots + 1}. Expeditions-Platz <span class="ty-pr">🔩 ${T.SLOT_COST[g.slots]}</span></button>` : ""}</section>
+        ${g.slots < maxSlots ? `<button type="button" class="ty-b3 purple ty-wide" data-why="1" data-a="slot" data-fuse="${T.SLOT_COST[g.slots]}">➕ ${g.slots + 1}. Expeditions-Platz <span class="ty-pr">🔩 ${T.SLOT_COST[g.slots]}</span></button>` : ""}</section>
       ${relicsHTML()}`;
   }
   function relicsHTML() {
@@ -196,12 +196,12 @@ export function mount(el) {
     return `<section class="ty-card ty-pack">${secHead("🎒", "Dein Rucksack", inv.length ? `${invCount()} Booster` : "", "brown")}
         ${inv.length ? `<div class="ty-inv">${inv.map(([k, n]) => { const B = T.BOOSTS[k]; return `<button type="button" class="ty-item ty-invit" data-a="use" data-k="${k}"><span class="ty-iic" aria-hidden="true"><span class="ty-irays"></span><span class="ty-iem">${B.e}</span></span><i>×${n}</i><b>${esc(B.name)}</b><small>${esc(B.d)}</small><em>Einsetzen</em></button>`; }).join("")}</div>` : `<p class="ty-empty"><span aria-hidden="true">🕸️</span> Leer. Booster findest du auf Expeditionen und in der Truhe – oder kauf sie unten.</p>`}</section>
       <section class="ty-card ty-store">${secHead("🛒", "Booster-Shop", `<span class="ty-pill sm ty-pfuse"><i class="ty-pico" aria-hidden="true">🔩</i> <b>${g.fuses}</b></span>`, "purple")}
-        <div class="ty-shop">${T.SHOP.map((it) => { const B = T.BOOSTS[it.id]; return `<button type="button" class="ty-item ty-sit" data-a="shop" data-id="${it.id}" data-fuse="${it.cost}">${sticker(it)}<span class="ty-iic" aria-hidden="true"><span class="ty-irays"></span><span class="ty-iem">${B.e}</span></span><b>${esc(B.name)}</b><small>${esc(B.d)}</small><em><span aria-hidden="true">🔩</span> ${it.cost}</em></button>`; }).join("")}</div>
+        <div class="ty-shop">${T.SHOP.map((it) => { const B = T.BOOSTS[it.id]; return `<button type="button" class="ty-item ty-sit" data-why="1" data-a="shop" data-id="${it.id}" data-fuse="${it.cost}">${sticker(it)}<span class="ty-iic" aria-hidden="true"><span class="ty-irays"></span><span class="ty-iem">${B.e}</span></span><b>${esc(B.name)}</b><small>${esc(B.d)}</small><em><span aria-hidden="true">🔩</span> ${it.cost}</em></button>`; }).join("")}</div>
         <p class="ty-fair"><span aria-hidden="true">🔩</span> Sicherungen gibt's aus der Truhe, von goldenen Blitzen, Expeditionen und für Erfolge. <b>Kein echtes Geld – nie.</b></p></section>
       <section class="ty-card ty-akku">${secHead("🔋", "Akku", `${T.fmt(T.offlineHours(g))} h offline`, "green")}
         <div class="ty-batt" role="img" aria-label="Akku-Stufe ${ak + 1} von ${akMax + 1}"><span class="ty-cells">${T.AKKU.map((h, i) => `<i class="${i <= ak ? "on" : ""}"><small>${h} h</small></i>`).join("")}</span><span class="ty-tip"></span></div>
         <p class="note">So lange arbeiten deine Elektriker weiter, wenn die App zu ist.</p>
-        ${ak < akMax ? `<button type="button" class="ty-b3 green ty-wide" data-a="akku" data-cost="${akCost}">🔋 ${T.AKKU[ak]} h → ${T.AKKU[ak + 1]} h <span class="ty-pr">${T.fmt(akCost)} €</span></button>` : `<p class="ty-done">✓ Voll ausgebaut</p>`}</section>`;
+        ${ak < akMax ? `<button type="button" class="ty-b3 green ty-wide" data-why="1" data-a="akku" data-cost="${akCost}">🔋 ${T.AKKU[ak]} h → ${T.AKKU[ak + 1]} h <span class="ty-pr">${T.fmt(akCost)} €</span></button>` : `<p class="ty-done">✓ Voll ausgebaut</p>`}</section>`;
   }
 
   function moreHTML() {
@@ -302,6 +302,13 @@ export function mount(el) {
     el.querySelectorAll("[data-need]").forEach((b) => { b.classList.toggle("can", W.money + 1e-9 >= Number(b.dataset.need)); });
     el.querySelectorAll('[data-a="mgr"]').forEach((b) => { const m = W.mab && W.mab[b.dataset.id]; b.classList.toggle("on", !!m && m.u > now); b.classList.toggle("ready", !m || m.cd <= now); });
     el.querySelectorAll("[data-fuse]").forEach((b) => { b.disabled = g.fuses < Number(b.dataset.fuse); });
+    // Graue Knöpfe erklären: was fehlt noch?
+    el.querySelectorAll("[data-why]").forEach((b) => {
+      const inside = b.classList.contains("ty-sit"); let h = inside ? b.querySelector(".ty-miss") : b.nextElementSibling;
+      if (!h || !h.classList.contains("ty-miss")) { h = document.createElement("small"); h.className = "ty-miss"; if (inside) b.append(h); else b.after(h); }
+      const t = !b.disabled ? "" : b.dataset.fuse ? `Dir fehlen noch ${Number(b.dataset.fuse) - g.fuses} 🔩` : `Dir fehlen noch ${T.fmt(Number(b.dataset.cost) - W.money)} € (in dieser Welt)`;
+      if (h.textContent !== t) h.textContent = t; h.hidden = !t;
+    });
   }
 
   function pop(target, text, cls = "") {
