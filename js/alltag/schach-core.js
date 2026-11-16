@@ -63,11 +63,17 @@ export function thinkMs(bot, clockMs, incS) {
 
 /* ---------- Elo ---------- */
 export const expected = (a, b) => 1 / (1 + Math.pow(10, (b - a) / 400));
-/** Neue Elo nach einer Partie (score 1/0,5/0). K = 40 in den ersten 10 Partien, danach 24. */
+/** Neue Elo nach einer Partie (score 1/0,5/0). Fairer als reines Elo:
+ *  K = 32 in den ersten 10 Partien, danach 20 · Unterschied zählt höchstens ±400 ·
+ *  ein Sieg bringt immer mindestens +4, eine Niederlage kostet höchstens −20. */
 export function eloAfter(me, opp, score, games) {
-  const k = games < 10 ? 40 : 24;
-  return Math.max(100, Math.round(me + k * (score - expected(me, opp))));
+  const k = games < 10 ? 32 : 20, o = me + Math.max(-400, Math.min(400, opp - me));
+  let d = k * (score - expected(me, o));
+  if (score === 1) d = Math.max(4, d); else if (score === 0) d = Math.max(-20, d);
+  return Math.max(100, Math.round(me + d));
 }
+/** Was steht auf dem Spiel? (für die Anzeige vor der Partie) */
+export const stakes = (me, opp, games) => ({ win: eloAfter(me, opp, 1, games) - me, draw: eloAfter(me, opp, 0.5, games) - me, loss: eloAfter(me, opp, 0, games) - me });
 
 /* ---------- Spielstand ---------- */
 const num = (v, d = 0) => (Number.isFinite(Number(v)) ? Number(v) : d);

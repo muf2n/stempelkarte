@@ -5,8 +5,10 @@ import { Chess } from "../vendor/chess/chess.js";
 import { search, perft } from "../js/chess-engine.js";
 
 test("Elo, Kronen, Ergebnis", () => {
-  assert.equal(C.eloAfter(800, 800, 1, 0), 820);
-  assert.equal(C.eloAfter(800, 800, 0, 20), 788);
+  assert.equal(C.eloAfter(800, 800, 1, 0), 816);
+  assert.equal(C.eloAfter(1200, 300, 1, 20), 1204); // Sieg gegen viel Schwächere: trotzdem +4
+  assert.equal(C.eloAfter(800, 300, 0, 3), 780); // Niederlage höchstens −20
+  assert.equal(C.eloAfter(800, 800, 0, 20), 790);
   const r = C.recordGame({}, { bot: "eva", res: "win", color: "w", tc: "5", moves: ["e2e4"] });
   assert.equal(r.me.games, 1); assert.equal(r.me.bots.eva.w, 1); assert.ok(r.diff > 0);
   assert.equal(r.me.bots.eva.c, 3); assert.equal(C.recordGame({}, { bot: "eva", res: "win", moves: ["e2e4"], helps: 2 }).me.bots.eva.c, 2); assert.equal(C.recordGame({}, { bot: "eva", res: "win", moves: ["e2e4"], helps: 5 }).me.bots.eva.c, 1); assert.equal(C.recordGame({}, { bot: "eva", res: "loss", moves: ["e2e4"] }).me.bots.eva.c, 0);
