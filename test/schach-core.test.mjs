@@ -68,3 +68,11 @@ test("Coach erklärt: Figur hängt, Matt verpasst, Rochade", async () => {
   const ok = explain({ moves, ev, best, an, k: 4, who });
   assert.ok(/Schlägt die Dame/.test(ok.lines.join(" ")), ok.lines.join(" | "));
 });
+
+test("Menschliche Fehler: schwache Bots patzen oft, starke nie", async () => {
+  const { Chess } = await import("../vendor/chess/chess.js");
+  assert.ok(C.slipChance(200) > 0.5 && C.slipChance(800) > 0.1 && C.slipChance(1300) < 0.04 && C.slipChance(2000) === 0);
+  assert.ok(C.slipChance(500) < C.slipChance(400) && C.slipChance(500) > C.slipChance(600));
+  const ch = new Chess(); let seed = 1; const rnd = () => ((seed = (seed * 16807) % 2147483647) / 2147483647);
+  for (let i = 0; i < 40 && !ch.isGameOver(); i++) { const u = C.humanMove(ch, rnd); assert.ok(u); ch.move({ from: u.slice(0, 2), to: u.slice(2, 4), promotion: u[4] }); }
+});

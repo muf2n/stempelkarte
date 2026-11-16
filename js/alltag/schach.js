@@ -250,6 +250,8 @@ export function mount(el) {
     const ms = C.thinkMs(B, g.clock ? g.clock[g.ch.turn()] : null, g.tc.inc);
     const r = await engine(g.ch.fen(), { depth: B.depth, timeMs: ms, noise: ply < 10 ? Math.max(B.noise, 18) : B.noise });
     if (S.g !== g || g.over) return;
+    // Menschlicher Fehler: schwache Bots ziehen manchmal einfach „was gut aussieht“ (Matt nehmen sie aber meistens noch)
+    if (Math.random() < C.slipChance(B.elo) && !(r.bestScore > 20000 && Math.random() < 0.7)) { const hm = C.humanMove(g.ch); if (hm) r.move = hm; }
     if (r.bestScore != null && g.prevScore != null) {
       const d = r.bestScore - g.prevScore;
       if (d >= 180 && Math.abs(r.bestScore) < 20000) g.react = pickL(CH.blunder);

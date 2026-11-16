@@ -163,6 +163,34 @@ export function paramsFor(elo) {
   let p = pts[0]; for (const x of pts) if (elo >= x[0]) p = x;
   return { depth: p[1], noise: p[2], time: p[3] };
 }
+/* ---------- Menschliche Fehler (damit 200 Elo sich wie 200 Elo anfühlt) ----------
+ * Echte Anfänger rechnen nicht: sie ziehen, was „gut aussieht“ (schlagen, Schach geben, Dame raus),
+ * übersehen hängende Figuren und Matt-Drohungen. So oft „zieht“ ein Bot so statt mit der Engine: */
+export function slipChance(elo) {
+  const pts = [[200, 0.55], [400, 0.4], [600, 0.26], [800, 0.15], [1000, 0.08], [1200, 0.04], [1400, 0.015], [1600, 0]];
+  if (elo <= pts[0][0]) return pts[0][1];
+  for (let i = 1; i < pts.length; i++) if (elo <= pts[i][0]) { const [a, pa] = pts[i - 1], [b, pb] = pts[i]; return pa + ((elo - a) / (b - a)) * (pb - pa); }
+  return 0;
+}
+/** Ein „Anfänger-Zug“ ohne Vorausdenken. ch = chess.js-Instanz. Gibt uci zurück. */
+export function humanMove(ch, rnd = Math.random) {
+  const ms = ch.moves({ verbose: true }); if (!ms.length) return null;
+  const opening = ch.history().length < 16, back = ch.turn() === "w" ? "1" : "8";
+  const w = ms.map((m) => {
+    let x = 1;
+    if (m.captured) x += 3;                       // „Gratis-Figur!“ – auch wenn sie es nicht ist
+    if (m.san.includes("+")) x += 2;              // Schach geben macht Spaß
+    if (m.piece === "q") x += 1;                  // Dame raus!
+    if (m.piece === "k" && !m.flags.includes("k") && !m.flags.includes("q")) x *= 0.25;
+    if (opening && m.piece === "p" && /[de]/.test(m.from[0])) x += 2;
+    if (opening && (m.piece === "n" || m.piece === "b") && m.from[1] === back) x += 2;
+    if (m.promotion) x += m.promotion === "q" ? 4 : -0.9;
+    return Math.max(0.05, x);
+  });
+  let r = rnd() * w.reduce((a, b) => a + b, 0), i = 0;
+  while (i < w.length - 1 && (r -= w[i]) > 0) i++;
+  const m = ms[i]; return m.from + m.to + (m.promotion || "");
+}
 export function weekEvent(now = Date.now()) {
   const key = mondayKey(now), r = seeded("ev" + key);
   const [y, m, d] = key.split("-").map(Number), ends = new Date(y, m - 1, d + 7, 0, 0, 0).getTime();
