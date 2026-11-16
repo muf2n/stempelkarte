@@ -191,6 +191,78 @@ export function humanMove(ch, rnd = Math.random) {
   while (i < w.length - 1 && (r -= w[i]) > 0) i++;
   const m = ms[i]; return m.from + m.to + (m.promotion || "");
 }
+/* ---------- Menschen-Modell: so denkt ein Mensch mit dieser Elo ----------
+ * 1. Er bemerkt nur ein paar Kandidatenzüge – zuerst das Auffällige (Zurückschlagen, Schlagen, Schach, Entwickeln).
+ * 2. Bei jedem Kandidaten sieht er die Antwort des Gegners nur manchmal („Blindheit“) – sonst zählt er nur, was er sofort gewinnt.
+ * 3. Den besten Zug findet er öfter, je stärker er ist. 4. Eröffnungen spielt er so, wie Menschen sie spielen. */
+const lerp = (pts, x) => { if (x <= pts[0][0]) return pts[0][1]; for (let i = 1; i < pts.length; i++) if (x <= pts[i][0]) { const [a, pa] = pts[i - 1], [b, pb] = pts[i]; return pa + ((x - a) / (b - a)) * (pb - pa); } return pts[pts.length - 1][1]; };
+export const human = (elo) => ({
+  blind: lerp([[200, 0.85], [400, 0.68], [600, 0.5], [800, 0.3], [1000, 0.17], [1200, 0.08], [1400, 0.035], [1600, 0.015], [1800, 0.005], [1900, 0]], elo),
+  cands: Math.round(lerp([[200, 3], [600, 4], [1000, 6], [1400, 9], [1800, 14]], elo)),
+  findBest: lerp([[200, 0.12], [600, 0.3], [1000, 0.5], [1400, 0.7], [1800, 0.9]], elo),
+  temp: lerp([[200, 160], [600, 90], [1000, 40], [1400, 15], [1800, 6]], elo),
+});
+const HPV = { p: 1, n: 3, b: 3, r: 5, q: 9, k: 0 };
+// Eröffnungen wie Menschen sie spielen (Gewichte: [unter 800, ab 800])
+const BOOK = {
+  "": [["e2e4", 55, 50], ["d2d4", 15, 28], ["g1f3", 3, 8], ["c2c4", 2, 7], ["b1c3", 8, 2], ["f2f4", 5, 2], ["a2a4", 4, 0], ["h2h4", 4, 0], ["g2g3", 2, 3]],
+  "e2e4": [["e7e5", 50, 40], ["c7c5", 8, 22], ["e7e6", 6, 10], ["c7c6", 5, 8], ["d7d5", 8, 6], ["b8c6", 10, 3], ["d7d6", 8, 4], ["a7a6", 5, 0], ["h7h6", 4, 0]],
+  "d2d4": [["d7d5", 50, 45], ["g8f6", 10, 35], ["e7e6", 10, 8], ["b8c6", 10, 2], ["f7f5", 4, 4], ["e7e5", 10, 2]],
+  "e2e4 e7e5": [["g1f3", 45, 65], ["d1h5", 18, 2], ["f1c4", 15, 10], ["b1c3", 8, 8], ["d1f3", 8, 0], ["d2d4", 6, 10], ["f2f4", 3, 5]],
+  "e2e4 e7e5 g1f3": [["b8c6", 60, 70], ["d7d6", 15, 12], ["g8f6", 10, 15], ["f7f6", 8, 0], ["d8e7", 7, 0]],
+  "e2e4 e7e5 d1h5": [["b8c6", 45, 50], ["g7g6", 20, 40], ["d8e7", 15, 10], ["g8f6", 20, 0]],
+  "e2e4 e7e5 g1f3 b8c6": [["f1c4", 40, 30], ["f1b5", 15, 40], ["d2d4", 15, 20], ["b1c3", 15, 10], ["h2h3", 15, 0]],
+  "e2e4 e7e5 f1c4": [["b8c6", 40, 45], ["g8f6", 30, 45], ["d8g5", 15, 0], ["f8c5", 15, 10]],
+};
+function bookMove(ch, elo, rnd) {
+  const key = ch.history({ verbose: true }).map((m) => m.from + m.to).join(" "), L = BOOK[key]; if (!L) return null;
+  const col = elo < 800 ? 1 : 2, legal = new Set(ch.moves({ verbose: true }).map((m) => m.from + m.to));
+  const ok = L.filter((x) => legal.has(x[0]) && x[col] > 0); if (!ok.length) return null;
+  let r = rnd() * ok.reduce((a, x) => a + x[col], 0); for (const x of ok) if ((r -= x[col]) <= 0) return x[0];
+  return ok[0][0];
+}
+/** Wählt einen menschlichen Zug. list = Engine-Wertungen aller Züge [[uci, cp]] (Sicht der Seite am Zug). */
+export function humanChoose(ch, elo, list, rnd = Math.random) {
+  const ms = ch.moves({ verbose: true }); if (!ms.length) return null;
+  const plies = ch.history().length;
+  if (plies < 6) { const b = bookMove(ch, elo, rnd); if (b && rnd() < 0.9) return b; }
+  const H = human(elo), sc = new Map(list.map(([u, v]) => [u.slice(0, 4), v])), uci = (m) => m.from + m.to + (m.promotion || "");
+  const best = list.length ? list[0][1] : 0, last = ch.history({ verbose: true }).slice(-1)[0], back = ch.turn() === "w" ? "1" : "8";
+  if (best > 20000 && rnd() < 0.5 + H.findBest / 2) return list[0][0]; // Matt sehen auch Menschen oft
+  // Auffälligkeit: was springt ins Auge?
+  const sal = ms.map((m) => {
+    let x = 1 + rnd() * 1.5;
+    if (last && m.captured && m.to === last.to) x += 6;                  // zurückschlagen – Instinkt
+    if (m.captured) x += 2 + HPV[m.captured];
+    if (m.san.includes("+")) x += 2;
+    if (plies < 16 && (m.piece === "n" || m.piece === "b") && m.from[1] === back) x += 2.5;
+    if (plies < 10 && m.piece === "p" && /[cde]/.test(m.from[0]) && m.from[1] !== back) x += 1.5;
+    if (m.flags.includes("k") || m.flags.includes("q")) x += 2;
+    if (m.piece === "q" && elo < 900) x += 1.5;                           // Anfänger lieben die Dame
+    if (m.piece === "k" && !m.flags.includes("k") && !m.flags.includes("q")) x *= plies > 60 ? 1 : 0.3;
+    if (m.promotion) x += m.promotion === "q" ? 6 : -0.8;
+    return { m, x };
+  });
+  // Kandidaten ziehen (ohne Zurücklegen), der beste Zug ist mit findBest-Wahrscheinlichkeit dabei
+  const pool = sal.slice(), cands = [];
+  if (list.length && rnd() < H.findBest) { const i = pool.findIndex((c) => uci(c.m).slice(0, 4) === list[0][0].slice(0, 4)); if (i >= 0) cands.push(pool.splice(i, 1)[0]); }
+  while (cands.length < H.cands && pool.length) {
+    let r = rnd() * pool.reduce((a, c) => a + c.x, 0), i = 0; while (i < pool.length - 1 && (r -= pool[i].x) > 0) i++;
+    cands.push(pool.splice(i, 1)[0]);
+  }
+  // Bewerten, wie er es wahrnimmt
+  const now = sc.size ? Math.max(...sc.values()) : 0;
+  let pick = cands[0].m, top = -Infinity;
+  for (const { m } of cands) {
+    const eng = sc.has(m.from + m.to) ? sc.get(m.from + m.to) : 0;
+    const naive = Math.min(now, 300) + (m.captured ? HPV[m.captured] * 100 : 0) + (m.san.includes("+") ? 30 : 0) + (m.promotion === "q" ? 800 : 0);
+    const seen = rnd() >= H.blind, v = (seen ? eng : naive) + (rnd() * 2 - 1) * H.temp;
+    if (v > top) { top = v; pick = m; }
+  }
+  return uci(pick);
+}
+/** Starke Bots geben aussichtslose Partien auf (wie Menschen). Anfänger kämpfen bis zum Schluss. */
+export const resignsAt = (elo) => (elo >= 1200 ? -900 : null);
 export function weekEvent(now = Date.now()) {
   const key = mondayKey(now), r = seeded("ev" + key);
   const [y, m, d] = key.split("-").map(Number), ends = new Date(y, m - 1, d + 7, 0, 0, 0).getTime();

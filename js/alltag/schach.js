@@ -248,10 +248,14 @@ export function mount(el) {
     g.thinking = true; render();
     const t0 = Date.now(), ply = g.moves.length, B = g.bot;
     const ms = C.thinkMs(B, g.clock ? g.clock[g.ch.turn()] : null, g.tc.inc);
-    const r = await engine(g.ch.fen(), { depth: B.depth, timeMs: ms, noise: ply < 10 ? Math.max(B.noise, 18) : B.noise });
+    const hum = B.elo < 1900; // bis 1900: denkt wie ein Mensch dieser Stärke
+    const r = await engine(g.ch.fen(), hum ? { depth: Math.max(2, Math.min(B.depth, 5)), timeMs: ms, noise: 1 } : { depth: B.depth, timeMs: ms, noise: ply < 10 ? Math.max(B.noise, 18) : B.noise });
     if (S.g !== g || g.over) return;
     // Menschlicher Fehler: schwache Bots ziehen manchmal einfach „was gut aussieht“ (Matt nehmen sie aber meistens noch)
-    if (Math.random() < C.slipChance(B.elo) && !(r.bestScore > 20000 && Math.random() < 0.7)) { const hm = C.humanMove(g.ch); if (hm) r.move = hm; }
+    if (hum) { const hm = C.humanChoose(g.ch, B.elo, r.list || []); if (hm) r.move = hm; }
+    // Aufgeben wie ein Mensch: starke Bots, wenn es 3 Züge lang hoffnungslos ist
+    const ra = C.resignsAt(B.elo); g.lost = ra != null && r.bestScore != null && r.bestScore < ra ? (g.lost || 0) + 1 : 0;
+    if (g.lost >= 3 && g.moves.length > 20) { g.thinking = false; finish("win", `${B.name} gibt auf`); return; }
     if (r.bestScore != null && g.prevScore != null) {
       const d = r.bestScore - g.prevScore;
       if (d >= 180 && Math.abs(r.bestScore) < 20000) g.react = pickL(CH.blunder);
