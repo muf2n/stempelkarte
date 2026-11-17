@@ -6,6 +6,9 @@ import {
   prefs, savePrefs, abWeek, schoolDayLabel, hasSchoolSettings, subjectColor, subjectInputHTML, wireSubjectChips,
   emptyHTML, armDelete, abbr, PALETTE, WD, WD_LONG,
 } from "./school-core.js";
+import { askClaude, aiAvailable } from "./ai-client.js";
+import { shrinkImage } from "./unterwegs-shared.js";
+import { parsePlan, sameLesson, clashes } from "./school-photo-core.js";
 
 // Übliche Stundenzeiten (50 min) – nur Vorschlag, beim Eintragen änderbar
 export const PERIODS = [
@@ -140,6 +143,60 @@ export function lessonLine(S, l, { now = false } = {}) {
     ${now ? `<span class="ss-now">jetzt</span>` : ""}</li>`;
 }
 
+/* ---------- 📷 Stundenplan vom Foto ---------- */
+function pickPhoto() {
+  return new Promise((res) => {
+    const inp = document.createElement("input"); inp.type = "file"; inp.accept = "image/*";
+    inp.addEventListener("change", () => res(inp.files && inp.files[0] || null), { once: true });
+    inp.click();
+  });
+}
+export async function photoImport(S) {
+  const ui = S.ctx.ui;
+  if (!aiAvailable()) { ui.toast("📷 Stundenplan vom Foto geht mit der Google-Anmeldung und dem Claude-Server.", 3600); return; }
+  const file = await pickPhoto(); if (!file) return;
+  let img; try { img = await shrinkImage(file, { maxSide: 1800, maxBytes: 900 * 1024, quality: 0.85 }); } catch (e) { ui.toast(e.message || "Foto geht nicht."); return; }
+  const ctrl = new AbortController(); let closeWait = null, waitEl = null;
+  ui.openSheet({ title: "📷 Stundenplan lesen …", bodyHTML: `<div class="tt-ph-wait"><img src="${img.data}" alt="Dein Foto"><p>Claude liest deinen Stundenplan … (ca. 10–30 s)</p></div>`,
+    onMount(el, close) { closeWait = close; waitEl = el; } });
+  const gone = setInterval(() => { if (waitEl && !waitEl.isConnected) { clearInterval(gone); ctrl.abort(); } }, 500); // Fenster zu = abbrechen
+  let plan;
+  try {
+    const out = await askClaude([{ role: "user", content: "Lies bitte diesen Stundenplan ab." }], { body: { mode: "stundenplan", image: { type: "image/jpeg", data: img.data.replace(/^data:[^,]*,/, "") } }, timeoutMs: 120000, signal: ctrl.signal });
+    plan = parsePlan(out.reply);
+  } catch (e) { clearInterval(gone); if (closeWait && waitEl && waitEl.isConnected) closeWait(); if (e && e.code !== "abort") ui.toast(e.message || "Hat nicht geklappt.", 3600); return; }
+  clearInterval(gone); if (!waitEl || !waitEl.isConnected) return; closeWait();
+  reviewPlan(S, plan, img.data);
+}
+function reviewPlan(S, plan, src) {
+  const ui = S.ctx.ui, have = S.data.timetable || [];
+  const rows = plan.lessons.map((l, i) => {
+    const dup = have.some((h) => sameLesson(h, l)), clash = !dup && have.find((h) => clashes(h, l));
+    return { l, i, dup, clash };
+  });
+  const byDay = [1, 2, 3, 4, 5, 6].map((d) => rows.filter((r) => r.l.weekday === d)).filter((x) => x.length);
+  ui.openSheet({ title: "📷 Erkannter Stundenplan", bodyHTML: `<div class="tt-ph">
+      ${plan.note ? `<p class="hint">ℹ️ ${esc(plan.note)}</p>` : ""}
+      ${rows.length ? `<p class="note">Bitte kurz kontrollieren – Haken weg bei allem, was nicht stimmt. Einzelne Stunden kannst du danach antippen und ändern.</p>
+      ${byDay.map((day) => `<h4>${WD_LONG[day[0].l.weekday]}</h4><ul class="tt-ph-list">${day.map(({ l, i, dup, clash }) => `<li><label><input type="checkbox" data-i="${i}"${dup ? " disabled" : " checked"}>
+        <span class="tt-ph-p">${l.period}.${l.periods > 1 ? `–${l.period + l.periods - 1}.` : ""}</span>
+        <span class="tt-ph-s"><b>${esc(l.subject)}</b><small>${esc(l.from)}–${esc(l.to)}${l.room ? ` · ${esc(l.room)}` : ""}${l.teacher ? ` · ${esc(l.teacher)}` : ""}${l.week ? ` · ${l.week}-Woche` : ""}</small>
+        ${dup ? `<em>schon eingetragen</em>` : clash ? `<em class="warn">überschneidet sich mit ${esc(clash.subject)}</em>` : ""}</span></label></li>`).join("")}</ul>`).join("")}
+      <div class="row"><button type="button" class="btn primary" id="tt-ph-save">Eintragen</button></div>`
+      : `<p>Auf dem Foto habe ich keine Stunden gefunden.</p>`}
+      <details class="tt-ph-src"><summary>Dein Foto</summary><img src="${src}" alt="Dein Foto"></details>
+    </div>`,
+    onMount(el, close) {
+      const b = el.querySelector("#tt-ph-save"); if (!b) return;
+      b.addEventListener("click", () => {
+        const pick = [...el.querySelectorAll("input[data-i]:checked")].map((c) => plan.lessons[Number(c.dataset.i)]);
+        if (!pick.length) { ui.toast("Nichts ausgewählt."); return; }
+        for (const l of pick) safeWrite(col("timetable").put({ ...l, color: "" }));
+        ui.toast(`✅ ${pick.length} Stunde${pick.length === 1 ? "" : "n"} eingetragen`, 2600); close();
+      });
+    } });
+}
+
 export function renderTimetable(body, S) {
   const p = prefs(S.data);
   const today = todayKey();
@@ -191,12 +248,14 @@ export function renderTimetable(body, S) {
       <button type="button" class="ss-icon-btn" data-wk="7" aria-label="Nächste Woche">›</button>
       <span class="ss-spacer"></span>
       <button type="button" class="ss-icon-btn" id="tt-set" aria-label="Stundenplan-Einstellungen">⚙</button>
+      <button type="button" class="ss-icon-btn" data-act="photo-plan" aria-label="Stundenplan vom Foto eintragen" title="Vom Foto eintragen">📷</button>
       <button type="button" class="btn primary sm" data-act="add-lesson">+ Stunde</button>
     </div>
     ${configured ? `<p class="note ss-sc-note">🏫 Berufsschule: ${esc(schoolDaysTxt)} <button type="button" class="linkbtn" id="tt-sc">ändern</button></p>`
       : `<div class="hint ss-sc-hint">Tipp: Trag deine Schultage in der Übersicht unter <b>Berufsschule</b> ein – dann zeigt „Heute“ den Stundenplan genau an Schultagen (auch Blockschule). <button type="button" class="linkbtn" id="tt-sc">Jetzt eintragen</button></div>`}
     ${all.length ? grid + `<p class="note">Tippe auf eine Stunde zum Bearbeiten, auf ein leeres Feld zum Eintragen.</p>`
-      : emptyHTML("🗓️", "Stundenplan ist leer", "Trag deine Fächer mit Zeit, Raum und Lehrer/in ein – als Wochenraster mit Farben.", "Hinzufügen", "add-lesson")}`;
+      : emptyHTML("🗓️", "Stundenplan ist leer", "Trag deine Fächer mit Zeit, Raum und Lehrer/in ein – als Wochenraster mit Farben.", "Hinzufügen", "add-lesson") + `<div class="row" style="justify-content:center"><button type="button" class="btn sm" data-act="photo-plan">📷 Stundenplan fotografieren</button></div>`}`;
+  body.querySelectorAll("[data-act=photo-plan]").forEach((b) => b.addEventListener("click", () => photoImport(S)));
 
   body.querySelectorAll("[data-act=add-lesson]").forEach((b) => b.addEventListener("click", () => {
     const firstOn = st.find((x) => x.on && x.configured);

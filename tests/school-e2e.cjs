@@ -75,7 +75,7 @@ async function newPage(browser, { scheme = "light", viewport = { width: 390, hei
     if (chat === "fail") return route.fulfill({ status: 502, contentType: "application/json", body: JSON.stringify({ error: "Claude ist gerade nicht erreichbar." }) });
     const body = chatReqs[chatReqs.length - 1].body;
     const last = body.messages[body.messages.length - 1].content;
-    const reply = /Lernplaner/.test(last) ? AI_REPLY : "Hallo **Welt**\n- Punkt eins";
+    const reply = body.mode === "stundenplan" ? PLAN_REPLY : /Lernplaner/.test(last) ? AI_REPLY : "Hallo **Welt**\n- Punkt eins";
     return route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({ reply, actions: [], usage: { usd: 0.12, capUsd: 5 } }) });
   });
   await ctx.addInitScript(({ seed, hook }) => {
@@ -96,12 +96,37 @@ async function newPage(browser, { scheme = "light", viewport = { width: 390, hei
   return { ctx, page, chatReqs };
 }
 
+const PLAN_REPLY = JSON.stringify({ lessons: [
+  { weekday: 1, period: 1, periods: 2, subject: "Elektrotechnik", room: "E 204" },
+  { weekday: 2, period: 1, periods: 2, subject: "Deutsch", from: "08:00", to: "09:40", teacher: "Fr. Maier" },
+  { weekday: 3, period: 2, periods: 1, subject: "Politische Bildung" },
+], note: "Raum am Dienstag war unscharf." });
 const tab = (page, id) => page.click(`.ss-tabs [data-tab="${id}"]`);
 const shot = async (page, name) => { await page.waitForTimeout(500); return page.screenshot({ path: path.join(OUT, name), fullPage: true }); };
 
 (async () => {
   const browser = await chromium.launch();
   const errors = [];
+
+  console.log("Stundenplan vom Foto (gestubbtes /chat)");
+  {
+    const { ctx, page, chatReqs } = await newPage(browser, {}, errors);
+    await tab(page, "stundenplan"); await page.waitForSelector("[data-act=photo-plan]");
+    const fc = page.waitForEvent("filechooser");
+    await page.click("[data-act=photo-plan]");
+    await (await fc).setFiles(path.join(__dirname, "fixtures", "stundenplan.png"));
+    await page.waitForSelector(".tt-ph", { timeout: 15000 });
+    const b = chatReqs[chatReqs.length - 1].body;
+    ok(b.mode === "stundenplan" && b.image && b.image.type === "image/jpeg" && b.image.data.length > 100, "Foto als JPEG im Modus stundenplan gesendet");
+    const t = await page.textContent(".tt-ph");
+    ok(/Raum am Dienstag war unscharf/.test(t) && /Deutsch/.test(t) && /Fr\. Maier/.test(t), "Vorschau mit Hinweis und Stunden");
+    ok(/schon eingetragen/.test(t) && /überschneidet sich mit Englisch/.test(t), "Doppelte erkannt, Überschneidung gewarnt");
+    await page.screenshot({ path: path.join(OUT, "stundenplan-foto.png"), fullPage: true });
+    await page.click("#tt-ph-save"); await page.waitForTimeout(400);
+    const tt = await page.evaluate(() => JSON.parse(localStorage.getItem("sk-a-school_timetable") || "[]"));
+    ok(tt.length === 6 && tt.some((l) => l.subject === "Deutsch" && l.weekday === 2 && l.teacher === "Fr. Maier"), `2 neue Stunden eingetragen (${tt.length})`);
+    await ctx.close();
+  }
 
   console.log("Fächer + Detail (390, hell)");
   {

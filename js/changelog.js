@@ -1,6 +1,7 @@
 // Update 10 F – 🖥️ System-Status › Was ist neu: ehrliche Liste aus der Versionsgeschichte (git log des Projekts), neueste zuerst.
 // Beim Veröffentlichen neuer Versionen hier oben ergänzen.
 export const CHANGELOG = [
+  { v: "20261117-0950", items: ["📷 Stundenplan vom Foto: In der Schule → Stundenplan auf 📷 tippen, Plan fotografieren – Claude liest Fächer, Stunden, Zeiten, Räume und Lehrer ab, du kontrollierst kurz und trägst mit einem Tipp ein (Doppelte werden erkannt)"] },
   { v: "20261116-0800", items: ["🧠 Schach-Bots denken wie Menschen ihrer Elo: sie sehen nur ein paar Kandidatenzüge, schlagen instinktiv zurück, übersehen bei schwacher Elo oft die Antwort des Gegners und spielen menschliche Eröffnungen (bis hin zum Schäfermatt-Versuch bei Anfängern)", "🏳️ Starke Bots (ab 1200) geben hoffnungslose Partien auf"] },
   { v: "20261116-0610", items: ["🐣 Schach-Bots spielen wie echte Menschen ihrer Elo: schwache Bots ziehen oft einfach, was gut aussieht (schlagen, Schach geben, Dame raus), und lassen dabei Figuren hängen – bei 200 Elo jeder zweite Zug, ab 1600 nie"] },
   { v: "20261116-0600", items: ["♟️ Schach-Elo fairer: Sieg bringt immer mindestens +4, Niederlage kostet höchstens −20, große Elo-Unterschiede zählen nur bis 400", "📊 Vor der Partie siehst du, wie viel Elo du bei Sieg, Remis oder Niederlage bekommst"] },

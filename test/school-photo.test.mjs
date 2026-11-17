@@ -1,0 +1,15 @@
+import { test } from "node:test";
+import assert from "node:assert/strict";
+import { parsePlan, sameLesson, clashes } from "../js/alltag/school-photo-core.js";
+
+test("Stundenplan vom Foto: Antwort prüfen", () => {
+  const r = parsePlan('Hier:\n```json\n{"lessons":[{"weekday":2,"period":3,"periods":2,"subject":"AET","room":"E 204","teacher":"Hr. Huber"},{"weekday":1,"period":1,"subject":"Deutsch","from":"7:45","to":"08:35"},{"weekday":9,"period":1,"subject":"X"},{"weekday":1,"period":2,"subject":""},{"weekday":1,"period":12,"periods":4,"subject":"Spät","week":"C"}],"note":"Raum Mi unklar"}\n```');
+  assert.equal(r.lessons.length, 3);
+  assert.deepEqual(r.lessons[0], { weekday: 1, period: 1, periods: 1, from: "07:45", to: "08:35", subject: "Deutsch", room: "", teacher: "", week: "" });
+  assert.equal(r.lessons[1].periods, 1); assert.equal(r.lessons[1].to, "19:00"); // auf Stunde 12 begrenzt
+  assert.equal(r.lessons[2].from, "09:55"); assert.equal(r.lessons[2].to, "11:35");
+  assert.equal(r.note, "Raum Mi unklar");
+  assert.equal(parsePlan("Kein JSON").lessons.length, 0);
+  assert.ok(sameLesson({ weekday: 1, period: 1, subject: "deutsch" }, r.lessons[0]));
+  assert.ok(clashes({ weekday: 2, period: 4, periods: 1 }, r.lessons[2]) && !clashes({ weekday: 2, period: 5 }, r.lessons[2]));
+});

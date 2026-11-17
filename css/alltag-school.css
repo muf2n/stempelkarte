@@ -481,3 +481,20 @@ button.ss-fach-emo:focus-visible { outline: none; box-shadow: 0 0 0 3px #fff; }
 .ss-pv-u > span { display: flex; flex-direction: column; min-width: 0; color: var(--ink); font-weight: 400; }
 .ss-pv-u b { font-weight: 650; overflow-wrap: anywhere; }
 .ss-pv-u small { color: var(--muted); font-size: .8rem; }
+
+/* 📷 Stundenplan vom Foto */
+.tt-ph-wait { display: grid; gap: 12px; justify-items: center; text-align: center; }
+.tt-ph-wait img { max-width: 100%; max-height: 40vh; border-radius: 12px; opacity: .85; animation: tt-ph-pulse 1.4s ease-in-out infinite; }
+@keyframes tt-ph-pulse { 50% { opacity: .5; } }
+@media (prefers-reduced-motion: reduce) { .tt-ph-wait img { animation: none; } }
+.tt-ph { display: grid; gap: 8px; }
+.tt-ph h4 { margin: 8px 0 0; }
+.tt-ph-list { list-style: none; margin: 0; padding: 0; display: grid; gap: 4px; }
+.tt-ph-list label { display: flex; gap: 10px; align-items: center; padding: 8px 10px; border-radius: 12px; background: var(--card2, rgba(127,127,127,.1)); cursor: pointer; }
+.tt-ph-list input { width: 20px; height: 20px; flex: none; }
+.tt-ph-p { min-width: 42px; font-weight: 800; font-variant-numeric: tabular-nums; }
+.tt-ph-s { display: grid; gap: 1px; min-width: 0; }
+.tt-ph-s small { opacity: .75; }
+.tt-ph-s em { font-size: 12px; font-style: normal; opacity: .7; }
+.tt-ph-s em.warn { color: #d97706; opacity: 1; }
+.tt-ph-src img { width: 100%; border-radius: 10px; margin-top: 6px; }

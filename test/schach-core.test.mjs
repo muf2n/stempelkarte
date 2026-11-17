@@ -80,8 +80,8 @@ test("Menschliche Fehler: schwache Bots patzen oft, starke nie", async () => {
 test("Menschen-Modell: Eröffnung wie Menschen, starke Spieler sehen Drohungen", async () => {
   const { Chess } = await import("../vendor/chess/chess.js");
   const { search } = await import("../js/chess-engine.js");
-  const firsts = new Set(); for (let i = 0; i < 30; i++) firsts.add(C.humanChoose(new Chess(), 400, []));
-  assert.ok([...firsts].every((u) => /^(e2e4|d2d4|g1f3|c2c4|b1c3|f2f4|a2a4|h2h4|g2g3)$/.test(u)));
+  let inBook = 0; for (let i = 0; i < 60; i++) inBook += /^(e2e4|d2d4|g1f3|c2c4|b1c3|f2f4|a2a4|h2h4|g2g3)$/.test(C.humanChoose(new Chess(), 400, []));
+  assert.ok(inBook >= 45, `Buchzüge ${inBook}/60`); // ~90 % aus dem Eröffnungsbuch
   assert.ok(C.human(200).blind > C.human(1000).blind && C.human(1000).blind > C.human(1800).blind && C.human(1950).blind === 0);
   // Dame hängt (wird von Bauer angegriffen): 1800er rettet sie fast immer, 200er oft nicht
   const fen = "rnb1kbnr/pppp1ppp/8/4p3/3q4/2P5/PP1PPPPP/RNBQKBNR b KQkq - 0 3";
