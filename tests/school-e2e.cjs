@@ -75,7 +75,7 @@ async function newPage(browser, { scheme = "light", viewport = { width: 390, hei
     if (chat === "fail") return route.fulfill({ status: 502, contentType: "application/json", body: JSON.stringify({ error: "Claude ist gerade nicht erreichbar." }) });
     const body = chatReqs[chatReqs.length - 1].body;
     const last = body.messages[body.messages.length - 1].content;
-    const reply = body.mode === "stundenplan" ? PLAN_REPLY : /Lernplaner/.test(last) ? AI_REPLY : "Hallo **Welt**\n- Punkt eins";
+    const reply = body.mode === "mindmap" ? MM_REPLY : body.mode === "stundenplan" ? PLAN_REPLY : /Lernplaner/.test(last) ? AI_REPLY : "Hallo **Welt**\n- Punkt eins";
     return route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({ reply, actions: [], usage: { usd: 0.12, capUsd: 5 } }) });
   });
   await ctx.addInitScript(({ seed, hook }) => {
@@ -101,6 +101,7 @@ const PLAN_REPLY = JSON.stringify({ lessons: [
   { weekday: 2, period: 1, periods: 2, subject: "Deutsch", from: "08:00", to: "09:40", teacher: "Fr. Maier" },
   { weekday: 3, period: 2, periods: 1, subject: "Politische Bildung" },
 ], note: "Raum am Dienstag war unscharf." });
+const MM_REPLY = JSON.stringify({ title: "Drehstrom", children: [{ t: "Schaltungen", children: [{ t: "Stern (Y)" }, { t: "Dreieck (Δ)" }] }, { t: "Spannungen", children: ["U = 400 V", "U_Strang = 230 V"] }, "Leistung P = √3 · U · I · cos φ"] });
 const tab = (page, id) => page.click(`.ss-tabs [data-tab="${id}"]`);
 const shot = async (page, name) => { await page.waitForTimeout(500); return page.screenshot({ path: path.join(OUT, name), fullPage: true }); };
 
@@ -125,6 +126,42 @@ const shot = async (page, name) => { await page.waitForTimeout(500); return page
     await page.click("#tt-ph-save"); await page.waitForTimeout(400);
     const tt = await page.evaluate(() => JSON.parse(localStorage.getItem("sk-a-school_timetable") || "[]"));
     ok(tt.length === 6 && tt.some((l) => l.subject === "Deutsch" && l.weekday === 2 && l.teacher === "Fr. Maier"), `2 neue Stunden eingetragen (${tt.length})`);
+    await ctx.close();
+  }
+
+  console.log("Mindmaps");
+  {
+    const { ctx, page, chatReqs } = await newPage(browser, {}, errors);
+    await tab(page, "mindmaps"); await page.waitForSelector("[data-act=mm-new]");
+    await page.click("[data-act=mm-new]"); await page.fill("#mm-t", "Ohmsches Gesetz"); await page.fill("#mm-s", "Elektrotechnik");
+    await page.click("#mm-f button[type=submit]"); await page.waitForSelector(".mm-ed .mm-n");
+    const tapNode = async (txt) => { const box = await page.$$eval(".mm-n", (gs, t) => { const g = gs.find((x) => x.textContent.includes(t)); const r = g.querySelector("rect").getBoundingClientRect(); return { x: r.x + r.width / 2, y: r.y + r.height / 2 }; }, txt); await page.mouse.click(box.x, box.y); await page.waitForTimeout(120); };
+    await tapNode("Ohmsches"); ok(await page.isVisible(".mm-bar"), "Mitte antippen → Werkzeugleiste");
+    await page.click(".mm-bar [data-x=child]"); await page.fill(".mm-edit input", "Formel"); await page.press(".mm-edit input", "Enter"); await page.waitForTimeout(150);
+    await page.click(".mm-bar [data-x=child]"); await page.fill(".mm-edit input", "U = R · I"); await page.press(".mm-edit input", "Enter"); await page.waitForTimeout(150);
+    await page.click(".mm-bar [data-x=sib]"); await page.fill(".mm-edit input", "R = U / I"); await page.press(".mm-edit input", "Enter"); await page.waitForTimeout(150);
+    await page.click("[data-x=fit]"); await tapNode("Ohmsches"); await page.click(".mm-bar [data-x=child]"); await page.fill(".mm-edit input", "Einheiten"); await page.press(".mm-edit input", "Enter"); await page.waitForTimeout(150);
+    ok(await page.$$eval(".mm-n", (l) => l.length) === 5, "5 Punkte in der Mindmap");
+    await page.screenshot({ path: path.join(OUT, "mindmap-edit.png") });
+    await page.click("[data-x=learn]"); await page.waitForTimeout(150);
+    ok(await page.$$eval(".mm-n.hid", (l) => l.length) === 4, "Lernmodus verdeckt alle 4 Punkte");
+    await tapNode("❓"); ok(/1\/4 aufgedeckt/.test(await page.textContent(".mm-learnbar")), "Antippen deckt auf (1/4)");
+    await page.screenshot({ path: path.join(OUT, "mindmap-lernen.png") });
+    await page.click("[data-x=learn]"); await page.click("[data-x=zout]"); await page.click("[data-x=zout]"); await tapNode("Einheiten");
+    await page.click(".mm-bar [data-x=del]"); await page.click(".mm-bar [data-x=del]"); await page.waitForTimeout(100);
+    ok(await page.$$eval(".mm-n", (l) => l.length) === 4, "Löschen mit Zweifach-Tipp");
+    await page.click("[data-x=close]"); await page.waitForTimeout(300);
+    let mm = await page.evaluate(() => JSON.parse(localStorage.getItem("sk-a-school_mindmaps") || "[]"));
+    ok(mm.length === 1 && mm[0].nodes.length === 4 && mm[0].subject === "Elektrotechnik" && mm[0].title === "Ohmsches Gesetz", "Gespeichert (4 Punkte, Fach)");
+    ok(/Ohmsches Gesetz/.test(await page.textContent(".mm-list")) && /3 Punkte/.test(await page.textContent(".mm-list")), "Liste zeigt die Mindmap");
+    await page.click("[data-act=mm-ai]"); await page.fill("#mm-at", "Drehstrom"); await page.click("#mm-ago");
+    await page.waitForSelector(".mm-ed .mm-n"); await page.waitForTimeout(300);
+    ok(chatReqs.some((r) => r.body.mode === "mindmap" && /Drehstrom/.test(r.body.messages[0].content)), "Claude im Modus mindmap gefragt");
+    ok(await page.$$eval(".mm-n", (l) => l.length) === 8, "KI-Mindmap mit 8 Punkten");
+    await page.screenshot({ path: path.join(OUT, "mindmap-ki.png") });
+    await page.click("[data-x=close]"); await page.waitForTimeout(200);
+    mm = await page.evaluate(() => JSON.parse(localStorage.getItem("sk-a-school_mindmaps") || "[]"));
+    ok(mm.length === 2, "Zwei Mindmaps gespeichert");
     await ctx.close();
   }
 

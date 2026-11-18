@@ -11,12 +11,13 @@ import { renderTasks, renderProjects, taskRowHTML, wireTasks, openTaskForm, sort
 import { renderExams, renderGrades, upcomingExams, examCardHTML, wireExams, gradeStats, openExamForm } from "./school-exams.js";
 import { renderLearn, ensureEngine, tick, pomoMiniHTML, planDue, planRowHTML, wirePlan, sessionsStats, fmtMin } from "./school-learn.js";
 import { renderDocs } from "./school-docs.js";
+import { renderMindmaps } from "./school-mindmap.js";
 import { renderSubjects } from "./school-subjects.js";
 import { renderPlanner } from "./school-planner.js";
 
 const TABS = [
   ["faecher", "Fächer", "📚"], ["heute", "Heute", "☀️"], ["stundenplan", "Stundenplan", "🗓️"], ["aufgaben", "Aufgaben", "📝"], ["pruefungen", "Prüfungen", "🎯"], ["planer", "Planer", "📅"],
-  ["noten", "Noten", "⭐"], ["lernen", "Lernen", "🍅"], ["projekte", "Projekte", "🛠️"], ["dokumente", "Dokumente", "📂"],
+  ["noten", "Noten", "⭐"], ["lernen", "Lernen", "🍅"], ["mindmaps", "Mindmaps", "🧠"], ["projekte", "Projekte", "🛠️"], ["dokumente", "Dokumente", "📂"],
 ];
 const LS_TAB = "sk-school-tab";
 const MONTHS = ["Jänner", "Februar", "März", "April", "Mai", "Juni", "Juli", "August", "September", "Oktober", "November", "Dezember"];
@@ -127,7 +128,7 @@ function renderToday(body, S) {
 
 const VIEWS = {
   faecher: renderSubjects, planer: renderPlanner, heute: renderToday, stundenplan: renderTimetable, aufgaben: renderTasks, pruefungen: renderExams,
-  noten: renderGrades, lernen: renderLearn, projekte: renderProjects, dokumente: renderDocs,
+  noten: renderGrades, lernen: renderLearn, mindmaps: renderMindmaps, projekte: renderProjects, dokumente: renderDocs,
 };
 
 /* ---------- mount ---------- */

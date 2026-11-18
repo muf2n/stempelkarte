@@ -498,3 +498,38 @@ button.ss-fach-emo:focus-visible { outline: none; box-shadow: 0 0 0 3px #fff; }
 .tt-ph-s em { font-size: 12px; font-style: normal; opacity: .7; }
 .tt-ph-s em.warn { color: #d97706; opacity: 1; }
 .tt-ph-src img { width: 100%; border-radius: 10px; margin-top: 6px; }
+
+/* ---------- 🧠 Mindmaps ---------- */
+.mm-actions { gap: 8px; flex-wrap: wrap; }
+.mm-list { list-style: none; margin: 0; padding: 0; display: grid; gap: 8px; grid-column: 1 / -1; }
+.mm-item { display: flex; align-items: center; gap: 12px; width: 100%; padding: 12px 14px; border: 1px solid var(--line, rgba(127,127,127,.25)); border-left: 5px solid var(--c); border-radius: 14px; background: var(--card, #fff); color: inherit; font: inherit; text-align: left; cursor: pointer; }
+.mm-ic { font-size: 26px; } .mm-tx { display: grid; gap: 2px; flex: 1; min-width: 0; } .mm-tx b { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; } .mm-tx small { opacity: .7; }
+html.mm-open, html.mm-open body { overflow: hidden; }
+.mm-ed { --mm-bg: #f1f5f9; --mm-node: #fff; --mm-text: #0f172a; --mm-root: #1e293b; --mm-hid: #e2e8f0; --mm-ui: #fff; --mm-uit: #0f172a;
+  position: fixed; inset: 0; z-index: 1000; display: flex; flex-direction: column; background: var(--mm-bg); color: var(--mm-uit);
+  background-image: radial-gradient(circle, rgba(100,116,139,.18) 1px, transparent 1.4px); background-size: 22px 22px; }
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) .mm-ed { --mm-bg: #0b1220; --mm-node: #1e293b; --mm-text: #e2e8f0; --mm-root: #6366f1; --mm-hid: #334155; --mm-ui: #1e293b; --mm-uit: #e2e8f0; } }
+:root[data-theme="dark"] .mm-ed { --mm-bg: #0b1220; --mm-node: #1e293b; --mm-text: #e2e8f0; --mm-root: #6366f1; --mm-hid: #334155; --mm-ui: #1e293b; --mm-uit: #e2e8f0; }
+.mm-top { display: flex; align-items: center; gap: 6px; padding: calc(env(safe-area-inset-top, 0px) + 8px) 10px 8px; background: var(--mm-ui); box-shadow: 0 1px 0 rgba(127,127,127,.25); }
+.mm-title { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 17px; }
+.mm-b { min-width: 42px; height: 42px; border: 0; border-radius: 12px; background: rgba(127,127,127,.14); color: inherit; font: inherit; font-size: 18px; font-weight: 800; cursor: pointer; }
+.mm-b[aria-pressed="true"] { background: #f59e0b; color: #fff; }
+.mm-learnbar { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; padding: 8px 12px; background: #fef3c7; color: #78350f; font-weight: 800; }
+.mm-learnbar span { flex: 1; min-width: 140px; }
+.mm-svg { flex: 1 1 auto; min-height: 0; width: 100%; height: auto; touch-action: none; user-select: none; -webkit-user-select: none; cursor: grab; }
+.mm-svg text { font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; pointer-events: none; }
+.mm-n { cursor: pointer; } .mm-n.sel rect { filter: drop-shadow(0 0 6px rgba(99,102,241,.6)); }
+.mm-n rect { filter: drop-shadow(0 2px 3px rgba(0,0,0,.18)); }
+.mm-fold { cursor: pointer; }
+.mm-zoom { position: fixed; right: 12px; bottom: calc(env(safe-area-inset-bottom, 0px) + 100px); display: grid; gap: 6px; }
+.mm-zoom .mm-b { background: var(--mm-ui); box-shadow: 0 2px 6px rgba(0,0,0,.18); }
+.mm-bar { position: fixed; left: 8px; right: 8px; bottom: calc(env(safe-area-inset-bottom, 0px) + 10px); display: grid; grid-template-columns: repeat(7, 1fr); gap: 4px; padding: 6px; border-radius: 18px; background: var(--mm-ui); box-shadow: 0 6px 24px rgba(0,0,0,.25); }
+.mm-bar button { display: grid; justify-items: center; gap: 1px; padding: 6px 0; border: 0; border-radius: 12px; background: none; color: inherit; font: inherit; cursor: pointer; }
+.mm-bar button b { font-size: 18px; } .mm-bar button small { font-size: 10px; font-weight: 700; opacity: .8; white-space: nowrap; }
+.mm-bar button:disabled { opacity: .3; cursor: default; }
+.mm-bar .mm-del[data-armed] { background: #dc2626; color: #fff; }
+.mm-edit { position: fixed; left: 8px; right: 8px; bottom: calc(env(safe-area-inset-bottom, 0px) + 10px); display: flex; gap: 6px; padding: 8px; border-radius: 16px; background: var(--mm-ui); box-shadow: 0 6px 24px rgba(0,0,0,.25); }
+.mm-edit input { flex: 1; min-width: 0; padding: 10px 12px; border: 2px solid #6366f1; border-radius: 12px; background: transparent; color: inherit; font: inherit; font-size: 16px; }
+.mm-colors { position: fixed; left: 50%; transform: translateX(-50%); bottom: calc(env(safe-area-inset-bottom, 0px) + 86px); display: flex; gap: 8px; padding: 10px; border-radius: 16px; background: var(--mm-ui); box-shadow: 0 6px 24px rgba(0,0,0,.25); }
+.mm-colors button { width: 28px; height: 28px; border: 2px solid rgba(0,0,0,.2); border-radius: 50%; cursor: pointer; }
+[hidden].mm-bar, [hidden].mm-edit, [hidden].mm-colors, [hidden].mm-learnbar { display: none; }

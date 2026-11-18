@@ -31,7 +31,7 @@ export const META_DOCS = ["settings", "ical_feeds", "money_lock", "budget_alerts
 /** Bekannte Alltag-Sammlungen (js/alltag/db.js → a_<name>). Neue Module bitte hier ergänzen. */
 export const ALLTAG = [
   "money_tx", "money_cats", "money_subs", "money_split", "money_rules", "money_goals", "money_gmail", "money_budget",
-  "school_timetable", "school_tasks", "school_exams", "school_grades", "school_plan", "school_sessions", "school_projects", "school_docs", "school_meta",
+  "school_timetable", "school_tasks", "school_exams", "school_grades", "school_plan", "school_sessions", "school_projects", "school_docs", "school_meta", "school_mindmaps",
   "travel_trips", "travel_places", "travel_parking", "travel_packing", "travel_fuel",
   "material_items", "material_catalog", "site_log", "einkauf", "einkauf_lists", "freizeit", "berichtsheft", "werkzeug", "fahrzeug_info",
   "photo_index", "photo_albums", "photo_folders", "photo_imports",

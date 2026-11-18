@@ -1,11 +1,11 @@
 // Schule & Lernen – gemeinsame Hilfen: Sammlungen, Datum, Fächer, Farben, Formulare.
 // Sammlungen (über ../alltag/db.js): school_timetable, school_tasks, school_exams, school_grades,
-// school_plan, school_sessions, school_projects, school_docs, school_meta (Dokumente "prefs", "timer").
+// school_plan, school_sessions, school_projects, school_docs, school_mindmaps, school_meta (Dokumente "prefs", "timer").
 // Dateiinhalte der Dokumente liegen NICHT hier, sondern in school-docs.js (eigene Ablage).
 import { collection } from "./db.js";
 import { esc } from "../util.js";
 
-export const COLS = ["timetable", "tasks", "exams", "grades", "plan", "sessions", "projects", "docs", "meta"];
+export const COLS = ["timetable", "tasks", "exams", "grades", "plan", "sessions", "projects", "docs", "meta", "mindmaps"];
 export const col = (n) => collection("school_" + n);
 
 export const DEFAULT_PREFS = {
