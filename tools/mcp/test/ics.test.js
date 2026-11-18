@@ -172,3 +172,12 @@ test("GET /ics: kein Feed-Dokument → 404; nur POST ist falsch → 405", async 
   assert.equal((await t.get("?id=f1")).status, 404);
   assert.equal((await t.get("?id=f1", { method: "POST" })).status, 405);
 });
+
+test("WebUntis-Kalender-Links sind erlaubt, andere Pfade nicht", async () => {
+  const { feedUrlOk } = await import("../src/ics.js");
+  assert.equal(feedUrlOk("https://htl-test.webuntis.com/WebUntis/Ical.do?elemType=5&elemId=1&key=abc"), true);
+  assert.equal(feedUrlOk("https://thalia.webuntis.com/WebUntis/ical.do?x=1"), true);
+  assert.equal(feedUrlOk("https://thalia.webuntis.com/admin/x"), false);
+  assert.equal(feedUrlOk("https://webuntis.com.evil.at/WebUntis/x"), false);
+  assert.equal(feedUrlOk("http://thalia.webuntis.com/WebUntis/x"), false);
+});

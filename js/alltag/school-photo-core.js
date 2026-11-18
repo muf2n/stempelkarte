@@ -39,3 +39,29 @@ export const sameLesson = (a, b) => Number(a.weekday) === b.weekday && Number(a.
 /** Überschneidet sich mit einer anderen Stunde? */
 export const clashes = (a, b) => Number(a.weekday) === b.weekday && (!a.week || !b.week || a.week === b.week)
   && Number(a.period) < b.period + b.periods && b.period < Number(a.period) + Math.max(1, Number(a.periods) || 1);
+
+/* ---------- WebUntis-Kalender (iCal) → Stunden ---------- */
+const toM = (t) => { const m = RE_T.exec(String(t || "")); return m ? Number(m[1]) * 60 + Number(m[2]) : null; };
+/** Nummer der Stunde aus der Uhrzeit (nächster Beginn im Raster, sonst grob 50 min ab 08:00). */
+export function periodOf(from) {
+  const f = toM(from); if (f == null) return 1;
+  let best = 1, d = Infinity;
+  for (let i = 1; i < PHOTO_PERIODS.length; i++) { const x = Math.abs(toM(PHOTO_PERIODS[i][0]) - f); if (x < d) { d = x; best = i; } }
+  return d <= 20 ? best : Math.max(1, Math.min(12, 1 + Math.round((f - 480) / 50)));
+}
+/** Kalender-Termine (mehrere Wochen) → wiederkehrende Stunden: gleiche Wochentag/Zeit/Fach nur einmal. */
+export function lessonsFromEvents(evs) {
+  const map = new Map();
+  for (const e of evs || []) {
+    if (!e || e.allDay || !e.date || !e.time) continue;
+    const wd = new Date(e.date + "T12:00:00").getDay(); if (wd < 1 || wd > 6) continue;
+    const subject = txt(String(e.title || "").replace(/\s*\((?:entfällt|Entfall|cancelled)\)\s*/i, ""), 40); if (!subject) continue;
+    if (/entf(ä|ae)llt|cancel/i.test(String(e.title) + " " + String(e.note || ""))) continue;
+    const from = t(e.time), to = t(e.endTime) || "", key = `${wd}|${from}|${subject.toLowerCase()}`;
+    if (map.has(key)) { map.get(key).n++; continue; }
+    const len = to ? Math.max(1, Math.round((toM(to) - toM(from)) / 50)) : 1, period = periodOf(from);
+    const teacher = txt((/(?:Lehrer|Lehrkraft|Teacher)\s*:?\s*([^\n,;]+)/i.exec(String(e.note || "")) || [])[1], 40);
+    map.set(key, { n: 1, l: { weekday: wd, period, periods: Math.min(len, 13 - period, 6), from, to: to || PHOTO_PERIODS[period][1], subject, room: txt(e.location, 20), teacher, week: "" } });
+  }
+  return [...map.values()].map((x) => x.l).sort((a, b) => a.weekday - b.weekday || a.from.localeCompare(b.from));
+}

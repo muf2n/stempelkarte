@@ -8,7 +8,8 @@ import {
 } from "./school-core.js";
 import { askClaude, aiAvailable } from "./ai-client.js";
 import { shrinkImage } from "./unterwegs-shared.js";
-import { parsePlan, sameLesson, clashes } from "./school-photo-core.js";
+import { parsePlan, sameLesson, clashes, lessonsFromEvents } from "./school-photo-core.js";
+import * as FD from "../cal-feeds.js";
 
 // Übliche Stundenzeiten (50 min) – nur Vorschlag, beim Eintragen änderbar
 export const PERIODS = [
@@ -168,6 +169,48 @@ export async function photoImport(S) {
   clearInterval(gone); if (!waitEl || !waitEl.isConnected) return; closeWait();
   reviewPlan(S, plan, img.data);
 }
+/* ---------- 🔗 WebUntis (Kalender-Abo) ---------- */
+function untisEvents(id) {
+  const mon = mondayOf(todayKey()), to = addDays(mon, 13);
+  return FD.instancesFor(mon, to, (cal) => cal === "f:" + id);
+}
+function waitUntis(id, ms = 25000) {
+  return new Promise((res) => {
+    const t0 = Date.now(), done = () => { off(); clearInterval(iv); res(untisEvents(id)); };
+    const check = () => { const st = FD.status(id); if (untisEvents(id).length || (!FD.isLoading() && st.text !== "Noch nicht geladen" && Date.now() - t0 > 1500) || Date.now() - t0 > ms) done(); };
+    const off = FD.onChange(check), iv = setInterval(check, 700); check();
+  });
+}
+export function untisSheet(S) {
+  const ui = S.ctx.ui, f = FD.list().find((x) => x.untis);
+  if (f) {
+    ui.toast("🔗 Stundenplan wird aus WebUntis gelesen …", 2000);
+    if (!untisEvents(f.id).length) FD.refresh({ fresh: true });
+    waitUntis(f.id).then((evs) => {
+      const st = FD.status(f.id);
+      if (!evs.length) { ui.toast(st.bad ? `WebUntis: ${st.text}` : "In WebUntis sind für diese und nächste Woche keine Stunden zu finden.", 4200); return; }
+      reviewPlan(S, { lessons: lessonsFromEvents(evs), note: `Aus „${f.name}“ (diese und nächste Woche). Im Planer siehst du die echten Stunden inkl. Entfall automatisch.` }, null);
+    });
+    return;
+  }
+  ui.openSheet({ title: "🔗 Mit WebUntis verbinden", bodyHTML: `<form class="form" id="un-f">
+      <ol class="un-steps"><li>WebUntis öffnen (App oder Browser) und anmelden.</li><li>Unten links auf dein <b>Profil</b> → Reiter <b>Freigaben</b>.</li>
+        <li><b>„Kalender publizieren“</b> einschalten → <b>Standard</b> wählen → Link <b>kopieren</b>.</li><li>Hier einfügen und verbinden.</li></ol>
+      <p class="note">🔒 Der Link funktioniert wie ein Passwort – gib ihn niemandem weiter. Die App zeigt ihn nie ganz an. Gibt es „Freigaben“ bei dir nicht, hat die Schule das Kalender-Abo nicht freigeschaltet – dann frag im Sekretariat oder nimm 📷.</p>
+      <label>Kalender-Link aus WebUntis<input id="un-u" type="url" inputmode="url" autocomplete="off" autocapitalize="off" spellcheck="false" placeholder="https://….webuntis.com/WebUntis/…"></label>
+      <div class="row"><button class="btn primary" type="submit" id="un-go">Verbinden</button></div></form>`,
+    onMount(el, close) {
+      el.querySelector("#un-f").addEventListener("submit", async (e) => {
+        e.preventDefault();
+        const inp = el.querySelector("#un-u"), go = el.querySelector("#un-go");
+        if (!FD.isUntisFeed(inp.value)) { const c = FD.checkFeedUrl(inp.value); ui.toast(c.ok ? "Das ist kein WebUntis-Link." : c.error, 4000); return; }
+        go.disabled = true; go.textContent = "Verbinde …";
+        try { await FD.addFeed({ url: inp.value, name: "WebUntis", color: "lavendel" }); inp.value = ""; close(); untisSheet(S); }
+        catch (err) { ui.toast(err.message || "Verbinden hat nicht geklappt.", 4000); go.disabled = false; go.textContent = "Verbinden"; }
+      });
+    } });
+}
+
 function reviewPlan(S, plan, src) {
   const ui = S.ctx.ui, have = S.data.timetable || [];
   const rows = plan.lessons.map((l, i) => {
@@ -184,7 +227,7 @@ function reviewPlan(S, plan, src) {
         ${dup ? `<em>schon eingetragen</em>` : clash ? `<em class="warn">überschneidet sich mit ${esc(clash.subject)}</em>` : ""}</span></label></li>`).join("")}</ul>`).join("")}
       <div class="row"><button type="button" class="btn primary" id="tt-ph-save">Eintragen</button></div>`
       : `<p>Auf dem Foto habe ich keine Stunden gefunden.</p>`}
-      <details class="tt-ph-src"><summary>Dein Foto</summary><img src="${src}" alt="Dein Foto"></details>
+      ${src ? `<details class="tt-ph-src"><summary>Dein Foto</summary><img src="${src}" alt="Dein Foto"></details>` : ""}
     </div>`,
     onMount(el, close) {
       const b = el.querySelector("#tt-ph-save"); if (!b) return;
@@ -248,13 +291,15 @@ export function renderTimetable(body, S) {
       <button type="button" class="ss-icon-btn" data-wk="7" aria-label="Nächste Woche">›</button>
       <span class="ss-spacer"></span>
       <button type="button" class="ss-icon-btn" id="tt-set" aria-label="Stundenplan-Einstellungen">⚙</button>
+      <button type="button" class="ss-icon-btn" data-act="untis-plan" aria-label="Aus WebUntis übernehmen" title="WebUntis">🔗</button>
       <button type="button" class="ss-icon-btn" data-act="photo-plan" aria-label="Stundenplan vom Foto eintragen" title="Vom Foto eintragen">📷</button>
       <button type="button" class="btn primary sm" data-act="add-lesson">+ Stunde</button>
     </div>
     ${configured ? `<p class="note ss-sc-note">🏫 Berufsschule: ${esc(schoolDaysTxt)} <button type="button" class="linkbtn" id="tt-sc">ändern</button></p>`
       : `<div class="hint ss-sc-hint">Tipp: Trag deine Schultage in der Übersicht unter <b>Berufsschule</b> ein – dann zeigt „Heute“ den Stundenplan genau an Schultagen (auch Blockschule). <button type="button" class="linkbtn" id="tt-sc">Jetzt eintragen</button></div>`}
     ${all.length ? grid + `<p class="note">Tippe auf eine Stunde zum Bearbeiten, auf ein leeres Feld zum Eintragen.</p>`
-      : emptyHTML("🗓️", "Stundenplan ist leer", "Trag deine Fächer mit Zeit, Raum und Lehrer/in ein – als Wochenraster mit Farben.", "Hinzufügen", "add-lesson") + `<div class="row" style="justify-content:center"><button type="button" class="btn sm" data-act="photo-plan">📷 Stundenplan fotografieren</button></div>`}`;
+      : emptyHTML("🗓️", "Stundenplan ist leer", "Trag deine Fächer mit Zeit, Raum und Lehrer/in ein – als Wochenraster mit Farben.", "Hinzufügen", "add-lesson") + `<div class="row" style="justify-content:center"><button type="button" class="btn sm" data-act="untis-plan">🔗 Aus WebUntis</button><button type="button" class="btn sm" data-act="photo-plan">📷 Stundenplan fotografieren</button></div>`}`;
+  body.querySelectorAll("[data-act=untis-plan]").forEach((b) => b.addEventListener("click", () => untisSheet(S)));
   body.querySelectorAll("[data-act=photo-plan]").forEach((b) => b.addEventListener("click", () => photoImport(S)));
 
   body.querySelectorAll("[data-act=add-lesson]").forEach((b) => b.addEventListener("click", () => {

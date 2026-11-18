@@ -15,7 +15,7 @@ const CACHE_HOST = "https://ics-cache.stempelkarte.invalid/";
 const mem = new Map(); // key → {at, body}
 export function clearIcsCache() { mem.clear(); }
 
-/** Erlaubte Feed-Adresse? https, kein Login/Port-Trick, Host calendar.google.com oder Pfad endet auf .ics. */
+/** Erlaubte Feed-Adresse? https, kein Login/Port-Trick, Host calendar.google.com, *.webuntis.com (/WebUntis/…) oder Pfad endet auf .ics. */
 export function feedUrlOk(raw) {
   let u;
   try { u = new URL(String(raw || "").trim()); } catch { return false; }
@@ -25,6 +25,7 @@ export function feedUrlOk(raw) {
   if (!h.includes(".") || h === "localhost" || h.endsWith(".localhost") || h.endsWith(".local") || h.endsWith(".internal")) return false;
   if (/^\d{1,3}(\.\d{1,3}){3}$/.test(h) || h.startsWith("[")) return false; // keine IP-Adressen
   if (h === "calendar.google.com") return /^\/calendar\/ical\//.test(u.pathname);
+  if (h.endsWith(".webuntis.com")) return /^\/WebUntis\//i.test(u.pathname); // Stundenplan-Abo aus WebUntis (Profil → Freigaben)
   return /\.ics$/i.test(u.pathname);
 }
 

@@ -210,3 +210,11 @@ test("maskUrl zeigt nur Domain + Ende, googleCalId dekodiert", () => {
   assert.equal(F.googleCalId("https://outlook.office365.com/a/calendar.ics"), null);
   assert.equal(F.suggestName(URL_G), "Google Kalender");
 });
+
+test("WebUntis-Link: erlaubt, Name „WebUntis“, falscher Pfad mit Hilfe-Text", async () => {
+  const C = await import("../js/cal-feed-core.js");
+  const r = C.checkFeedUrl("webcal://htl-test.webuntis.com/WebUntis/Ical.do?key=abc");
+  assert.equal(r.ok, true); assert.ok(r.url.startsWith("https://"));
+  assert.equal(C.suggestName(r.url), "WebUntis"); assert.equal(C.isUntisFeed(r.url), true);
+  assert.match(C.checkFeedUrl("https://htl-test.webuntis.com/home").error, /Freigaben/);
+});

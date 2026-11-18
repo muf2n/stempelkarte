@@ -30,7 +30,11 @@ export function checkFeedUrl(raw) {
     }
     return { ok: true, url: u.toString() };
   }
-  if (!/\.ics$/i.test(u.pathname)) return { ok: false, error: "Die Adresse muss auf .ics enden (oder von calendar.google.com sein)." };
+  if (h.endsWith(".webuntis.com")) {
+    if (!/^\/WebUntis\//i.test(u.pathname)) return { ok: false, error: "Das ist nicht der Kalender-Link. In WebUntis: Profil → Freigaben → „Kalender publizieren“ → Link kopieren." };
+    return { ok: true, url: u.toString() };
+  }
+  if (!/\.ics$/i.test(u.pathname)) return { ok: false, error: "Die Adresse muss auf .ics enden (oder von calendar.google.com / WebUntis sein)." };
   return { ok: true, url: u.toString() };
 }
 
@@ -56,7 +60,9 @@ export function googleCalId(url) {
 export const isHolidayFeed = (url) => /holiday/i.test(String(url || ""));
 
 /** Vorschlag für den Namen aus der Adresse. */
+export const isUntisFeed = (url) => { try { return new URL(url).hostname.toLowerCase().endsWith(".webuntis.com"); } catch { return false; } };
 export function suggestName(url) {
+  if (isUntisFeed(url)) return "WebUntis";
   const id = googleCalId(url);
   if (id) {
     if (isHolidayFeed(id)) return "Feiertage (Google)";

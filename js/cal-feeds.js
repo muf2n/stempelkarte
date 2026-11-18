@@ -7,10 +7,10 @@
 import * as store from "./store.js";
 import { getFirebase } from "./firebase.js";
 import { serverUrl, idToken } from "./alltag/ai-client.js";
-import { parseFeed, expandFeed, checkFeedUrl, maskUrl, googleCalId, isHolidayFeed, suggestName } from "./cal-feed-core.js";
+import { parseFeed, expandFeed, checkFeedUrl, maskUrl, googleCalId, isHolidayFeed, isUntisFeed, suggestName } from "./cal-feed-core.js";
 import { holidayName } from "./util.js";
 
-export { checkFeedUrl, maskUrl, suggestName };
+export { checkFeedUrl, maskUrl, suggestName, isUntisFeed };
 
 const REFRESH_MS = 15 * 60 * 1000;
 const STALE_MS = 3 * 60 * 1000;     // beim Start/Zurückkehren neu holen, wenn älter
@@ -56,10 +56,11 @@ function derive(f) {
     ...(url ? { url } : {}),
     gcal: url ? googleCalId(url) : f.gcal || null,
     holiday: url ? isHolidayFeed(url) : !!f.holiday,
+    untis: url ? isUntisFeed(url) : !!f.untis,
     mask: url ? maskUrl(url) : f.mask || "…",
   };
 }
-const publicOf = (f) => ({ id: f.id, name: f.name, color: f.color, visible: f.visible, gcal: f.gcal, holiday: f.holiday, mask: f.mask });
+const publicOf = (f) => ({ id: f.id, name: f.name, color: f.color, visible: f.visible, gcal: f.gcal, holiday: f.holiday, untis: !!f.untis, mask: f.mask });
 const storedOf = (f) => ({ id: f.id, name: f.name, color: f.color, url: f.url, visible: f.visible });
 
 /* ---------- Offline-Zwischenspeicher (IndexedDB, sonst localStorage) ---------- */

@@ -126,6 +126,12 @@ const shot = async (page, name) => { await page.waitForTimeout(500); return page
     await page.click("#tt-ph-save"); await page.waitForTimeout(400);
     const tt = await page.evaluate(() => JSON.parse(localStorage.getItem("sk-a-school_timetable") || "[]"));
     ok(tt.length === 6 && tt.some((l) => l.subject === "Deutsch" && l.weekday === 2 && l.teacher === "Fr. Maier"), `2 neue Stunden eingetragen (${tt.length})`);
+    await page.keyboard.press("Escape"); await page.waitForTimeout(200);
+    await page.click("[data-act=untis-plan]"); await page.waitForSelector("#un-f");
+    ok(/Freigaben/.test(await page.textContent("#un-f")) && /Kalender publizieren/.test(await page.textContent("#un-f")), "WebUntis: Anleitung zum Kalender-Link");
+    await page.fill("#un-u", "https://htl-test.webuntis.com/home"); await page.click("#un-go"); await page.waitForTimeout(300);
+    ok(/Freigaben/.test(await page.textContent("body")) && await page.isVisible("#un-f"), "WebUntis: falscher Link → Hilfe, nichts gespeichert");
+    await page.screenshot({ path: path.join(OUT, "webuntis.png") });
     await ctx.close();
   }
 
@@ -150,7 +156,8 @@ const shot = async (page, name) => { await page.waitForTimeout(500); return page
     await page.click("[data-x=learn]"); await page.click("[data-x=zout]"); await page.click("[data-x=zout]"); await tapNode("Einheiten");
     await page.click(".mm-bar [data-x=del]"); await page.click(".mm-bar [data-x=del]"); await page.waitForTimeout(100);
     ok(await page.$$eval(".mm-n", (l) => l.length) === 4, "Löschen mit Zweifach-Tipp");
-    await page.click("[data-x=close]"); await page.waitForTimeout(300);
+    await page.click("[data-x=close]");
+    await page.waitForFunction(() => { const m = JSON.parse(localStorage.getItem("sk-a-school_mindmaps") || "[]"); return m.length === 1 && m[0].nodes.length === 4; }, null, { timeout: 5000 }).catch(() => {});
     let mm = await page.evaluate(() => JSON.parse(localStorage.getItem("sk-a-school_mindmaps") || "[]"));
     ok(mm.length === 1 && mm[0].nodes.length === 4 && mm[0].subject === "Elektrotechnik" && mm[0].title === "Ohmsches Gesetz", "Gespeichert (4 Punkte, Fach)");
     ok(/Ohmsches Gesetz/.test(await page.textContent(".mm-list")) && /3 Punkte/.test(await page.textContent(".mm-list")), "Liste zeigt die Mindmap");
