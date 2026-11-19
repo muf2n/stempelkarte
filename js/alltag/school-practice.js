@@ -10,14 +10,16 @@ export function practiceCardHTML(S) {
   const sets = (S.data.practice || []).slice().sort((a, b) => ((b.stats && b.stats.at) || b.created || 0) - ((a.stats && a.stats.at) || a.created || 0));
   return `<section class="card ss-card pr-card"><h3 class="ss-h">📝 Üben mit Claude <span class="ss-count">${sets.length}</span></h3>
     <p class="note">Foto vom Heft, Buch oder Arbeitsblatt – Claude macht ähnliche Aufgaben mit neuen Zahlen. Du rechnest, die App prüft sofort und zeigt den Rechenweg.</p>
-    <div class="row pr-actions"><button type="button" class="btn primary sm" data-pr="new-photo">📷 Aus Foto</button><button type="button" class="btn sm" data-pr="new-topic">✏️ Thema</button></div>
-    ${sets.length ? `<ul class="ss-list pr-list">${sets.slice(0, 12).map((s) => `<li><button type="button" class="pr-set" data-pr-set="${esc(s.id)}">
-        <span class="pr-tx"><b>${esc(s.title)}</b><small>${s.subject ? `${esc(s.subject)} · ` : ""}${s.tasks.length} Aufgaben${s.stats ? ` · zuletzt ${s.stats.last} % · best ${s.stats.best} %` : " · neu"}</small></span>
-        <span class="pr-go" aria-hidden="true">▶</span></button></li>`).join("")}</ul>` : ""}
+    <div class="pr-secs" role="list">${P.SECTIONS.map((x) => `<button type="button" role="listitem" class="pr-sec" data-pr-sec="${x.id}"><span aria-hidden="true">${x.e}</span><b>${esc(x.name)}</b><small>${esc(x.long)}</small></button>`).join("")}</div>
+    <div class="row pr-actions"><button type="button" class="btn primary sm" data-pr="new-photo">📷 Aus Foto</button><button type="button" class="btn sm" data-pr="new-topic">✏️ Eigenes Thema</button></div>
+    ${P.groupSets(sets).map((g) => `<div class="pr-group"><div class="lbl ss-sub">${g.e} ${esc(g.name)}</div><ul class="ss-list pr-list">${g.sets.slice(0, 10).map((s) => `<li><button type="button" class="pr-set" data-pr-set="${esc(s.id)}">
+        <span class="pr-tx"><b>${esc(s.title)}</b><small>${s.tasks.length} Aufgaben${s.stats ? ` · zuletzt ${s.stats.last} % · best ${s.stats.best} %` : " · neu"}</small></span>
+        <span class="pr-go" aria-hidden="true">▶</span></button></li>`).join("")}</ul></div>`).join("")}
   </section>`;
 }
 export function wirePractice(root, S) {
   root.querySelectorAll("[data-pr]").forEach((b) => b.addEventListener("click", () => newSheet(S, b.dataset.pr === "new-photo")));
+  root.querySelectorAll("[data-pr-sec]").forEach((b) => b.addEventListener("click", () => sectionSheet(S, P.SECTIONS.find((x) => x.id === b.dataset.prSec))));
   root.querySelectorAll("[data-pr-set]").forEach((b) => b.addEventListener("click", () => { const s = (S.data.practice || []).find((x) => x.id === b.dataset.prSet); if (s) runSet(S, s); }));
 }
 
@@ -25,7 +27,38 @@ function pickPhoto() {
   return new Promise((res) => { const inp = document.createElement("input"); inp.type = "file"; inp.accept = "image/*"; inp.addEventListener("change", () => res((inp.files && inp.files[0]) || null), { once: true }); inp.click(); });
 }
 
-async function newSheet(S, withPhoto) {
+/** Aufgaben erstellen lassen → gespeichertes Set */
+async function createSet({ topic, subject, photo }) {
+  const sec = P.sectionOf(subject);
+  const msg = `${subject ? `Fach: ${sec ? `${sec.long} (${sec.name})` : subject}\n` : ""}${topic ? `Thema: ${topic}\n` : ""}Bitte Übungsaufgaben${photo ? " zum Stoff auf dem Foto" : ""}.`;
+  const out = await askClaude([{ role: "user", content: msg }], { body: { mode: "uebung", ...(photo ? { image: { type: "image/jpeg", data: photo.data.replace(/^data:[^,]*,/, "") } } : {}) }, timeoutMs: 150000 });
+  const set = P.parseSet(out.reply);
+  if (!set) throw new Error("Claude hat keine brauchbaren Aufgaben geliefert – bitte nochmal.");
+  const doc = { id: newId(), title: topic && topic.length < 60 ? topic : set.title, subject, tasks: set.tasks, created: Date.now() };
+  safeWrite(col("practice").put(doc)); return doc;
+}
+/** Abschnitt (z. B. AWL): Themen antippen → sofort Aufgaben */
+function sectionSheet(S, sec) {
+  const ui = S.ctx.ui; if (!sec) return;
+  if (!aiAvailable()) { ui.toast("📝 Geht mit der Google-Anmeldung und dem Claude-Server.", 3600); return; }
+  const mine = (S.data.practice || []).filter((x) => P.sectionOf(x.subject) === sec);
+  ui.openSheet({ title: `${sec.e} ${sec.name} – ${sec.long}`, bodyHTML: `<div class="pr-topics">
+      <p class="note">Thema antippen – Claude macht 6–8 neue Aufgaben dazu.</p>
+      ${sec.topics.map((t) => { const done = mine.filter((x) => x.title === t); const best = done.reduce((a, x) => Math.max(a, (x.stats && x.stats.best) || 0), 0);
+        return `<button type="button" class="pr-topic" data-t="${esc(t)}"><span>${esc(t)}</span>${done.length ? `<small class="${best >= 90 ? "ok" : ""}">${best >= 90 ? "✓ " : ""}best ${best} %</small>` : ""}</button>`; }).join("")}
+      <button type="button" class="pr-topic own" data-own="1"><span>✏️ Anderes ${esc(sec.name)}-Thema …</span></button></div>`,
+    onMount(el, close) {
+      el.addEventListener("click", async (e) => {
+        const b = e.target.closest(".pr-topic"); if (!b || el.dataset.busy) return;
+        if (b.dataset.own) { close(); newSheet(S, false, sec.name); return; }
+        el.dataset.busy = "1"; b.classList.add("busy"); b.querySelector("span").textContent = `⏳ ${b.dataset.t} – Claude schreibt Aufgaben …`;
+        try { const doc = await createSet({ topic: b.dataset.t, subject: sec.name }); close(); runSet(S, doc); }
+        catch (err) { ui.toast(err.message || "Hat nicht geklappt.", 3600); delete el.dataset.busy; b.classList.remove("busy"); b.querySelector("span").textContent = b.dataset.t; }
+      });
+    } });
+}
+
+async function newSheet(S, withPhoto, presetSubject = "") {
   const ui = S.ctx.ui;
   if (!aiAvailable()) { ui.toast("📝 Geht mit der Google-Anmeldung und dem Claude-Server.", 3600); return; }
   let photo = null;
@@ -38,19 +71,13 @@ async function newSheet(S, withPhoto) {
       <div class="row"><button class="btn primary" type="submit" id="pr-go">Aufgaben erstellen</button></div></form>`,
     onMount(el, close) {
       wireSubjectChips(el);
+      if (presetSubject) el.querySelector("#pr-s").value = presetSubject;
       el.querySelector("#pr-f").addEventListener("submit", async (e) => {
         e.preventDefault();
         const topic = el.querySelector("#pr-t").value.trim(), subject = el.querySelector("#pr-s").value.trim(), go = el.querySelector("#pr-go");
         if (!topic && !photo) return;
         go.disabled = true; go.textContent = "Claude schreibt Aufgaben … (ca. 20–40 s)";
-        try {
-          const msg = `${subject ? `Fach: ${subject}\n` : ""}${topic ? `Thema: ${topic}\n` : ""}Bitte Übungsaufgaben${photo ? " zum Stoff auf dem Foto" : ""}.`;
-          const out = await askClaude([{ role: "user", content: msg }], { body: { mode: "uebung", ...(photo ? { image: { type: "image/jpeg", data: photo.data.replace(/^data:[^,]*,/, "") } } : {}) }, timeoutMs: 150000 });
-          const set = P.parseSet(out.reply);
-          if (!set) { ui.toast("Claude hat keine brauchbaren Aufgaben geliefert – bitte nochmal.", 3600); go.disabled = false; go.textContent = "Aufgaben erstellen"; return; }
-          const doc = { id: newId(), title: topic && topic.length < 60 ? topic : set.title, subject, tasks: set.tasks, created: Date.now() };
-          safeWrite(col("practice").put(doc)); close(); runSet(S, doc);
-        } catch (err) { ui.toast(err.message || "Hat nicht geklappt.", 3600); go.disabled = false; go.textContent = "Aufgaben erstellen"; }
+        try { const doc = await createSet({ topic, subject, photo }); close(); runSet(S, doc); } catch (err) { ui.toast(err.message || "Hat nicht geklappt.", 3600); go.disabled = false; go.textContent = "Aufgaben erstellen"; }
       });
     } });
 }

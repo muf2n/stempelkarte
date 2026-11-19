@@ -70,3 +70,30 @@ export function addResult(set, right, total, now = Date.now()) {
   const pct = total ? Math.round((right / total) * 100) : 0;
   return { ...set, stats: { runs: st.runs + 1, best: Math.max(st.best || 0, pct), last: pct, at: now } };
 }
+
+/* ---------- Abschnitte: Fächer und Themen in der Berufsschule (Elektro/Elektronik, Österreich) ---------- */
+export const SECTIONS = [
+  { id: "awl", e: "💶", name: "AWL", long: "Angewandte Wirtschaftslehre", topics: [
+    "Lehrlingseinkommen & aliquote Sonderzahlungen", "Brutto – Netto (Sozialversicherung, Lohnsteuer)", "Prozentrechnung, Rabatt & Skonto",
+    "Zinsrechnung (Sparen, Kredit)", "Kalkulation: Einkauf – Verkauf – Gewinn", "Urlaub & Arbeitszeit (Ansprüche)", "Haushaltsbudget & Fixkosten"] },
+  { id: "aet", e: "⚡", name: "AET", long: "Angewandte Elektrotechnik", topics: [
+    "Ohmsches Gesetz", "Reihen- und Parallelschaltung", "Gemischte Schaltungen & Ersatzwiderstand", "Leistung, Arbeit & Energiekosten",
+    "Leitungswiderstand & Spannungsfall", "Wirkungsgrad", "Wechselstrom: Effektivwert, Frequenz, Periodendauer", "Drehstrom: Stern- und Dreieckschaltung",
+    "Kondensator & Kapazität", "Spule, Induktivität & Blindwiderstand"] },
+  { id: "mathe", e: "📐", name: "Mathe", long: "Angewandte Mathematik", topics: [
+    "Formeln umstellen", "Einheiten & Vorsätze (m, k, M, µ)", "Zehnerpotenzen & wissenschaftliche Schreibweise", "Schlussrechnung (Dreisatz)",
+    "Flächen & Leitungsquerschnitt", "Pythagoras & Winkelfunktionen (sin, cos, tan)"] },
+  { id: "elektronik", e: "🔌", name: "Elektronik", long: "Elektronik & Digitaltechnik", topics: [
+    "Vorwiderstand für LEDs", "Spannungsteiler (belastet / unbelastet)", "Zahlensysteme: binär, dezimal, hexadezimal", "Logikgatter & Wahrheitstabellen",
+    "RC-Glied & Zeitkonstante", "Transistor als Schalter", "Dioden & Gleichrichtung"] },
+  { id: "install", e: "🏠", name: "Installation", long: "Installationstechnik & Sicherheit", topics: [
+    "Leitungsschutz & Leitungsquerschnitt wählen", "Fehlerschutz & FI-Schutzschalter (RCD)", "Die 5 Sicherheitsregeln", "Schutzarten (IP) & Schutzklassen",
+    "Schaltzeichen & Installationsschaltungen (Wechsel-, Kreuzschaltung)", "Erdung, Potentialausgleich & Schleifenimpedanz"] },
+];
+export const sectionOf = (subject) => SECTIONS.find((s) => s.name === subject || s.long === subject) || null;
+/** Sets nach Abschnitt gruppieren (unbekanntes Fach → „Sonstiges“) */
+export function groupSets(sets) {
+  const out = SECTIONS.map((s) => ({ ...s, sets: [] })), other = { id: "other", e: "📚", name: "Sonstiges", sets: [] };
+  for (const x of sets) { const s = sectionOf(x.subject); (s ? out.find((o) => o.id === s.id) : other).sets.push(x); }
+  return [...out, other].filter((g) => g.sets.length);
+}

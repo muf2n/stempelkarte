@@ -165,6 +165,14 @@ const shot = async (page, name) => { await page.waitForTimeout(500); return page
     const pr = await page.evaluate(() => JSON.parse(localStorage.getItem("sk-a-school_practice") || "[]"));
     ok(pr.length === 1 && pr[0].stats && pr[0].stats.last === 67, `Übung gespeichert mit Ergebnis (${pr[0] && pr[0].stats && pr[0].stats.last} %)`);
     ok(/zuletzt 67 %/.test(await page.textContent(".pr-card")), "Liste zeigt das Ergebnis");
+    await page.click("[data-pr-sec=aet]"); await page.waitForSelector(".pr-topic");
+    ok(/Ohmsches Gesetz/.test(await page.textContent(".pr-topics")) && /Drehstrom/.test(await page.textContent(".pr-topics")), "Abschnitt AET mit Themen");
+    await page.screenshot({ path: path.join(OUT, "ueben-aet.png") });
+    await page.click(".pr-topic[data-t='Ohmsches Gesetz']"); await page.waitForSelector(".pr-q", { timeout: 15000 });
+    ok(chatReqs.some((r) => r.body.mode === "uebung" && /Angewandte Elektrotechnik/.test(r.body.messages[0].content) && /Ohmsches Gesetz/.test(r.body.messages[0].content)), "Thema + Fach an Claude");
+    await page.keyboard.press("Escape"); await page.waitForTimeout(300);
+    ok(/⚡ AET/.test(await page.textContent(".pr-card")), "Übungen nach Abschnitt gruppiert");
+    await page.screenshot({ path: path.join(OUT, "ueben-karte.png"), fullPage: true });
     await ctx.close();
   }
 
@@ -193,6 +201,7 @@ const shot = async (page, name) => { await page.waitForTimeout(500); return page
     await page.waitForFunction(() => { const m = JSON.parse(localStorage.getItem("sk-a-school_mindmaps") || "[]"); return m.length === 1 && m[0].nodes.length === 4; }, null, { timeout: 5000 }).catch(() => {});
     let mm = await page.evaluate(() => JSON.parse(localStorage.getItem("sk-a-school_mindmaps") || "[]"));
     ok(mm.length === 1 && mm[0].nodes.length === 4 && mm[0].subject === "Elektrotechnik" && mm[0].title === "Ohmsches Gesetz", "Gespeichert (4 Punkte, Fach)");
+    await page.waitForFunction(() => /3 Punkte/.test((document.querySelector(".mm-list") || {}).textContent || ""), null, { timeout: 5000 }).catch(() => {});
     ok(/Ohmsches Gesetz/.test(await page.textContent(".mm-list")) && /3 Punkte/.test(await page.textContent(".mm-list")), "Liste zeigt die Mindmap");
     await page.click("[data-act=mm-ai]"); await page.fill("#mm-at", "Drehstrom"); await page.click("#mm-ago");
     await page.waitForSelector(".mm-ed .mm-n"); await page.waitForTimeout(300);

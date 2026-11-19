@@ -561,3 +561,11 @@ html.mm-open, html.mm-open body { overflow: hidden; }
 .pr-score { display: grid; justify-items: center; font-size: 40px; } .pr-score b { font-size: 30px; } .pr-score small { font-size: 14px; opacity: .75; }
 .pr-ans input { flex: 1 1 auto; width: 100%; } .pr-ans .btn { flex: none; width: auto; }
 .pr-run.done .pr-nav { display: none; }
+.pr-secs { display: grid; grid-template-columns: repeat(auto-fill, minmax(96px, 1fr)); gap: 8px; }
+.pr-sec { display: grid; justify-items: center; gap: 1px; padding: 10px 6px; border: 1px solid var(--line, rgba(127,127,127,.25)); border-radius: 14px; background: var(--card2, rgba(127,127,127,.06)); color: inherit; font: inherit; text-align: center; cursor: pointer; }
+.pr-sec span { font-size: 24px; } .pr-sec b { font-size: 14px; } .pr-sec small { font-size: 10.5px; line-height: 1.2; opacity: .7; }
+.pr-group { display: grid; gap: 4px; }
+.pr-topics { display: grid; gap: 8px; }
+.pr-topic { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 12px 14px; border: 1px solid var(--line, rgba(127,127,127,.25)); border-radius: 12px; background: none; color: inherit; font: inherit; text-align: left; cursor: pointer; }
+.pr-topic small { flex: none; padding: 2px 8px; border-radius: 99px; background: rgba(127,127,127,.15); font-weight: 800; font-size: 11px; } .pr-topic small.ok { background: rgba(22,163,74,.15); color: #16a34a; }
+.pr-topic.own { border-style: dashed; } .pr-topic.busy { opacity: .7; }
