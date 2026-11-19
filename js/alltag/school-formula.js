@@ -1,6 +1,7 @@
 // Schule → Lernen → 🎲 Formel-Trainer: zufällige Werte und zufälliges Umformen, offline. Logik: formula-core.js.
 import { esc } from "./school-core.js";
 import * as F from "./formula-core.js";
+import { photoBtnHTML, photoCheck } from "./school-photocheck.js";
 
 const KEY = "sk-formel-trainer";
 const DEF = { ids: ["ohm", "pui", "pi2r", "pu2r", "reihe", "parallel", "prozent", "rabatt"], mode: "mix", pre: true, n: 10 };
@@ -64,8 +65,10 @@ function run(S) {
           ${task.kind === "form" ? `<div class="pr-choices">${task.choices.map((c, k) => `<button type="button" class="pr-ch ft-f" data-ch="${k}">${esc(c)}</button>`).join("")}</div>`
             : `<ul class="ft-given">${task.given.map((g) => `<li>${esc(g)}</li>`).join("")}</ul>
                <form class="pr-ans" id="ft-a"><input id="ft-in" inputmode="decimal" autocomplete="off" placeholder="Ergebnis" aria-label="Ergebnis in ${esc(task.unit || "ohne Einheit")}"><span class="pr-unit">${esc(task.unit)}</span><button class="btn primary" type="submit">Prüfen</button></form>`}
+          <div class="pc-box" aria-live="polite"></div>
           <div class="pr-fb" aria-live="polite"></div>
-          <div class="row pr-nav"><button type="button" class="btn sm" data-x="skip">Lösung zeigen</button></div>`;
+          <div class="row pr-nav">${task.kind === "calc" ? photoBtnHTML() : ""}<button type="button" class="btn sm" data-x="skip">Lösung zeigen</button></div>
+          ${task.kind === "calc" ? `<p class="note pc-tip">✍️ Auf Papier rechnen, dann Ergebnis eintippen – oder den Rechenweg fotografieren, Claude schaut drüber.</p>` : ""}`;
         const inp = box.querySelector("#ft-in"); if (inp) setTimeout(() => inp.focus(), 60);
       };
       const judge = (ok) => {
@@ -89,6 +92,15 @@ function run(S) {
         const b = e.target.closest("[data-ch],[data-x]"); if (!b || b.disabled) return;
         if (b.dataset.ch != null) return judge(F.check(task, Number(b.dataset.ch)));
         const x = b.dataset.x;
+        if (x === "photo") {
+          const t = task, pc = box.querySelector(".pc-box"); b.disabled = true;
+          photoCheck(ui, { text: `${t.q} Gegeben: ${t.given.join(", ")}`, unit: t.unit, solution: t.steps.join("\n"), check: (raw, unit) => F.checkUnit(t, raw, unit) }, pc).then((r) => {
+            if (task !== t || done) return;
+            b.disabled = false; if (!r) return;
+            pc.innerHTML = ""; judge(r.ok); box.querySelector(".pr-fb .pr-verdict").insertAdjacentHTML("afterend", r.html);
+          });
+          return;
+        }
         if (x === "skip") judge(false);
         else if (x === "next") { i++; next(); }
         else if (x === "again") { i = 0; right = 0; streak = 0; next(); }

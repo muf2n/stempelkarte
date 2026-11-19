@@ -208,7 +208,7 @@ export function makeTask(settings, rnd = Math.random) {
     const given = base.filter((k) => k !== x);
     const unitPre = settings.pre && Q[x].pre ? prefixOf(res) : { n: res, p: "", f: 1 };
     return {
-      kind: "calc", fid: F.id, x, answer: res, unit: `${unitPre.p}${Q[x].u}`, f: unitPre.f,
+      kind: "calc", fid: F.id, x, answer: res, unit: `${unitPre.p}${Q[x].u}`, f: unitPre.f, base: Q[x].u,
       q: `${F.name}: Berechne ${Q[x].n} ${sym(x)}.`, given: given.map((k) => `${sym(k)} = ${show(k, v[k], settings.pre)}`),
       steps: [formText(F, x), `${sym(x)} = ${subst(F, x, v, settings.pre)}`, `${sym(x)} ≈ ${fmt(sig(res / unitPre.f, 4))} ${unitPre.p}${Q[x].u}`.trim()],
     };
@@ -228,6 +228,17 @@ function subst(F, x, v, pre) {
   return s.replace(/§(\d+)§/g, (m, i) => done[Number(i)]);
 }
 
+/** Ergebnis mit (evtl. anderer) Einheit prüfen, z. B. „0,22“ + „A“ statt „223“ mA. */
+const PF = { G: 1e9, M: 1e6, k: 1e3, "": 1, m: 1e-3, "µ": 1e-6, u: 1e-6, n: 1e-9, p: 1e-12 };
+export function checkUnit(task, raw, unit = "") {
+  if (task.kind !== "calc") return check(task, raw);
+  const u = String(unit || "").replace(/\s+/g, ""), b = task.base || "";
+  if (b && u.endsWith(b) && PF[u.slice(0, u.length - b.length)] != null) {
+    const f = PF[u.slice(0, u.length - b.length)];
+    return check({ ...task, f: 1, answer: task.answer / f }, raw);
+  }
+  return check(task, raw);
+}
 /** Eingabe prüfen: 1 % Abweichung ist ok (Rundung von Zwischenergebnissen). Eingabe in der angegebenen Einheit. */
 export function check(task, raw) {
   if (task.kind === "form") return Number(raw) === task.answer;

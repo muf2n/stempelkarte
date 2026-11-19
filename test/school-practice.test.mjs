@@ -26,3 +26,4 @@ test("Üben: Claude-Antwort prüfen, falsches Ergebnis wird nachgerechnet", () =
   assert.equal(P.parseSet("nix"), null);
   const s2 = P.addResult(P.addResult({}, 3, 4), 4, 4); assert.deepEqual([s2.stats.runs, s2.stats.best, s2.stats.last], [2, 100, 100]);
 });
+

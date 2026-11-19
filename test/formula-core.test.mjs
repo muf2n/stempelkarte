@@ -45,3 +45,9 @@ test("Einheiten mit Vorsätzen", () => {
   assert.deepEqual(F.prefixOf(0.025), { n: 25, p: "m", f: 1e-3 });
   assert.equal(F.show("R", 4700), "4,7 kΩ"); assert.equal(F.show("C", 2.2e-6), "2,2 µF"); assert.match(F.show("R", 4700, false), /^4\D?700 Ω$/);
 });
+
+test("Ergebnis in anderer Einheit (vom Foto)", () => {
+  const t = { kind: "calc", answer: 0.2236, f: 1e-3, unit: "mA", base: "A" };
+  assert.ok(F.checkUnit(t, "223,6", "mA")); assert.ok(F.checkUnit(t, "0,2236", "A")); assert.ok(F.checkUnit(t, "223,6", ""));
+  assert.ok(!F.checkUnit(t, "223,6", "A")); assert.ok(F.checkUnit({ kind: "calc", answer: 4700, f: 1e3, base: "Ω" }, "4,7", "kΩ"));
+});

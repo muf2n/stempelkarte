@@ -75,7 +75,8 @@ async function newPage(browser, { scheme = "light", viewport = { width: 390, hei
     if (chat === "fail") return route.fulfill({ status: 502, contentType: "application/json", body: JSON.stringify({ error: "Claude ist gerade nicht erreichbar." }) });
     const body = chatReqs[chatReqs.length - 1].body;
     const last = body.messages[body.messages.length - 1].content;
-    const reply = body.mode === "uebung" ? PR_REPLY : body.mode === "mindmap" ? MM_REPLY : body.mode === "stundenplan" ? PLAN_REPLY : /Lernplaner/.test(last) ? AI_REPLY : "Hallo **Welt**\n- Punkt eins";
+    const pm = body.mode === "pruefen" && /≈ ([\d.,\u202f\u00a0 ]+?) ?([^\s\d]*)\s*$/m.exec(last);
+    const reply = body.mode === "pruefen" ? JSON.stringify(pm ? { result: pm[1].trim(), unit: pm[2], readable: true, steps_ok: true, feedback: "Sauber umgestellt!", fehler: [] } : { result: "", readable: false }) : body.mode === "uebung" ? PR_REPLY : body.mode === "mindmap" ? MM_REPLY : body.mode === "stundenplan" ? PLAN_REPLY : /Lernplaner/.test(last) ? AI_REPLY : "Hallo **Welt**\n- Punkt eins";
     return route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({ reply, actions: [], usage: { usd: 0.12, capUsd: 5 } }) });
   });
   await ctx.addInitScript(({ seed, hook }) => {
@@ -195,7 +196,12 @@ const shot = async (page, name) => { await page.waitForTimeout(500); return page
       await page.click("[data-x=next]"); okCount++;
     }
     await page.waitForSelector(".pr-end"); ok(/0\/10/.test(await page.textContent(".pr-score")), "Rundenende 0/10 (alles aufgedeckt)");
-    await page.click("[data-x=again]"); await page.waitForSelector(".ft-run .pr-q");
+    await page.click("[data-x=again]"); await page.waitForSelector(".ft-run .pc-btn");
+    const fc = page.waitForEvent("filechooser"); await page.click(".ft-run .pc-btn"); await (await fc).setFiles(path.join(__dirname, "fixtures", "stundenplan.png"));
+    await page.waitForSelector(".pc-res", { timeout: 15000 });
+    const fbt = await page.textContent(".pr-fb");
+    ok(/Richtig/.test(fbt) && /Sauber umgestellt/.test(fbt) && /nicht gespeichert/.test(fbt), "Foto vom Rechenweg: Claude liest, App prüft → richtig");
+    await page.screenshot({ path: path.join(OUT, "formel-foto.png") });
     await page.keyboard.press("Escape"); await page.waitForTimeout(200);
     await page.click("[data-ft=setup]"); await page.click(".ft-seg input[value=umformen] + span"); await page.click("#ft-f button[type=submit]");
     await page.waitForSelector(".ft-run .pr-ch");

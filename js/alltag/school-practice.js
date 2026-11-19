@@ -5,6 +5,7 @@ import { newId } from "./db.js";
 import { askClaude, aiAvailable } from "./ai-client.js";
 import { shrinkImage } from "./unterwegs-shared.js";
 import * as P from "./school-practice-core.js";
+import { photoBtnHTML, photoCheck } from "./school-photocheck.js";
 
 export function practiceCardHTML(S) {
   const sets = (S.data.practice || []).slice().sort((a, b) => ((b.stats && b.stats.at) || b.created || 0) - ((a.stats && a.stats.at) || a.created || 0));
@@ -97,8 +98,9 @@ function runSet(S, set, only = null) {
           <p class="pr-q">${esc(t.q)}</p>
           ${t.kind === "choice" ? `<div class="pr-choices">${t.choices.map((c, i) => `<button type="button" class="pr-ch" data-ch="${i}">${esc(c)}</button>`).join("")}</div>`
             : `<form class="pr-ans" id="pr-a"><input id="pr-in" inputmode="decimal" autocomplete="off" placeholder="Ergebnis" aria-label="Dein Ergebnis"><span class="pr-unit">${esc(t.unit || "")}</span><button class="btn primary" type="submit">Prüfen</button></form>`}
+          <div class="pc-box" aria-live="polite"></div>
           <div class="pr-fb" aria-live="polite"></div>
-          <div class="row pr-nav">${t.hint ? `<button type="button" class="btn sm" data-x="hint">💡 Tipp</button>` : ""}<button type="button" class="btn sm" data-x="skip">Lösung zeigen</button></div>`;
+          <div class="row pr-nav">${t.hint ? `<button type="button" class="btn sm" data-x="hint">💡 Tipp</button>` : ""}${t.kind === "num" ? photoBtnHTML() : ""}<button type="button" class="btn sm" data-x="skip">Lösung zeigen</button></div>`;
         answered = false; hintShown = false; box.classList.remove("done");
         const inp = box.querySelector("#pr-in"); if (inp) setTimeout(() => inp.focus(), 60);
       };
@@ -134,6 +136,14 @@ function runSet(S, set, only = null) {
         if (b.dataset.ch != null) return judge(P.isRight(t, Number(b.dataset.ch)), t);
         const x = b.dataset.x;
         if (x === "hint" && !hintShown) { hintShown = true; b.closest(".pr-nav").insertAdjacentHTML("beforebegin", `<p class="pr-hint">💡 ${esc(t.hint)}</p>`); b.remove(); }
+        else if (x === "photo") {
+          const pc = box.querySelector(".pc-box"), at = pos; b.disabled = true;
+          photoCheck(ui, { text: t.q, unit: t.unit, solution: `${t.steps.join("\n")}\nErgebnis: ${P.fmtNum(t.answer, t.dec)} ${t.unit || ""}`, check: (raw) => P.isRight(t, raw) }, pc).then((r) => {
+            if (pos !== at || answered) return;
+            b.disabled = false; if (!r) return;
+            pc.innerHTML = ""; judge(r.ok, t); box.querySelector(".pr-fb .pr-verdict").insertAdjacentHTML("afterend", r.html);
+          });
+        }
         else if (x === "skip") judge(false, t);
         else if (x === "next") { pos++; draw(); }
         else if (x === "again-wrong") { close(); runSet(S, set, wrong.slice()); }
