@@ -6,6 +6,7 @@ import {
   subjects, subjectColor, emptyHTML, pad,
 } from "./school-core.js";
 import { examTitle } from "./school-exams.js";
+import { practiceCardHTML, wirePractice } from "./school-practice.js";
 
 /* ---------- Timer-Kern ---------- */
 
@@ -274,6 +275,7 @@ export function renderLearn(body, S) {
   const maxW = Math.max(1, ...st.bySubject.map((x) => x.week));
   const hasPlan = (S.data.plan || []).length > 0;
   body.innerHTML = `<div class="ss-grid ss-grid-learn">
+    ${practiceCardHTML(S)}
     ${pomoCardHTML(S)}
     <section class="card ss-card"><h3 class="ss-h">Heute lernen <span class="ss-count">${due.length}</span></h3>
       ${due.length || doneToday.length ? `<ul class="ss-list">${[...due, ...doneToday].map((p) => planRowHTML(S, p)).join("")}</ul>`
@@ -308,4 +310,5 @@ export function renderLearn(body, S) {
   on("#pm-stop", () => stopTimer(S.ctx));
   body.querySelectorAll("[data-act=go-exams]").forEach((b) => b.addEventListener("click", () => S.go("pruefungen")));
   wirePlan(body, S);
+  wirePractice(body, S);
 }

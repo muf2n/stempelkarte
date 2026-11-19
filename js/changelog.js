@@ -1,6 +1,7 @@
 // Update 10 F – 🖥️ System-Status › Was ist neu: ehrliche Liste aus der Versionsgeschichte (git log des Projekts), neueste zuerst.
 // Beim Veröffentlichen neuer Versionen hier oben ergänzen.
 export const CHANGELOG = [
+  { v: "20261119-1915", items: ["📝 Üben mit Claude: Schule → Lernen → Foto vom Heft oder Thema – Claude macht ähnliche Aufgaben mit neuen Zahlen, die App prüft deine Antwort sofort, zeigt Tipp und Rechenweg und lässt dich die falschen wiederholen", "🧮 Ergebnisse werden in der App nachgerechnet – rechnet Claude falsch, zählt das richtige Ergebnis"] },
   { v: "20261118-1245", items: ["🔗 WebUntis verbinden: In WebUntis Profil → Freigaben → „Kalender publizieren“, Link in der Schule → Stundenplan → 🔗 einfügen – der Stundenplan wird übernommen und die echten Stunden (inkl. Entfall) erscheinen im Planer"] },
   { v: "20261118-1200", items: ["🧠 Mindmaps zum Lernen: Schule → Mindmaps. Äste und Unterpunkte antippen und anlegen, Farben, ziehen und zoomen", "🙈 Lernmodus: alles verdeckt – überlegen, antippen, aufdecken", "🤖 Mindmap von Claude aus einem Thema oder Foto vom Heft · ⤓ als Bild speichern · als Text kopieren"] },
   { v: "20261117-0950", items: ["📷 Stundenplan vom Foto: In der Schule → Stundenplan auf 📷 tippen, Plan fotografieren – Claude liest Fächer, Stunden, Zeiten, Räume und Lehrer ab, du kontrollierst kurz und trägst mit einem Tipp ein (Doppelte werden erkannt)"] },

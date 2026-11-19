@@ -75,7 +75,7 @@ async function newPage(browser, { scheme = "light", viewport = { width: 390, hei
     if (chat === "fail") return route.fulfill({ status: 502, contentType: "application/json", body: JSON.stringify({ error: "Claude ist gerade nicht erreichbar." }) });
     const body = chatReqs[chatReqs.length - 1].body;
     const last = body.messages[body.messages.length - 1].content;
-    const reply = body.mode === "mindmap" ? MM_REPLY : body.mode === "stundenplan" ? PLAN_REPLY : /Lernplaner/.test(last) ? AI_REPLY : "Hallo **Welt**\n- Punkt eins";
+    const reply = body.mode === "uebung" ? PR_REPLY : body.mode === "mindmap" ? MM_REPLY : body.mode === "stundenplan" ? PLAN_REPLY : /Lernplaner/.test(last) ? AI_REPLY : "Hallo **Welt**\n- Punkt eins";
     return route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({ reply, actions: [], usage: { usd: 0.12, capUsd: 5 } }) });
   });
   await ctx.addInitScript(({ seed, hook }) => {
@@ -102,6 +102,11 @@ const PLAN_REPLY = JSON.stringify({ lessons: [
   { weekday: 3, period: 2, periods: 1, subject: "Politische Bildung" },
 ], note: "Raum am Dienstag war unscharf." });
 const MM_REPLY = JSON.stringify({ title: "Drehstrom", children: [{ t: "Schaltungen", children: [{ t: "Stern (Y)" }, { t: "Dreieck (Δ)" }] }, { t: "Spannungen", children: ["U = 400 V", "U_Strang = 230 V"] }, "Leistung P = √3 · U · I · cos φ"] });
+const PR_REPLY = JSON.stringify({ title: "Aliquote Sonderzahlungen", tasks: [
+  { q: "LE 950 €, 7 Monate. Aliquote Sonderzahlung?", calc: "950*7/12", answer: 554.17, unit: "€", hint: "Monate durch 12", steps: ["950 × 7 / 12 = 554,17 €"] },
+  { q: "LE 1.120 €, 18 Wochen?", calc: "1120*18/52", answer: 390, unit: "€", steps: ["1120 × 18 / 52"] },
+  { q: "Wofür steht UZ?", choices: ["Urlaubszuschuss", "Überstundenzuschlag", "Unterhalt"], answer: 0, steps: ["UZ = Urlaubszuschuss"] },
+] });
 const tab = (page, id) => page.click(`.ss-tabs [data-tab="${id}"]`);
 const shot = async (page, name) => { await page.waitForTimeout(500); return page.screenshot({ path: path.join(OUT, name), fullPage: true }); };
 
@@ -132,6 +137,34 @@ const shot = async (page, name) => { await page.waitForTimeout(500); return page
     await page.fill("#un-u", "https://htl-test.webuntis.com/home"); await page.click("#un-go"); await page.waitForTimeout(300);
     ok(/Freigaben/.test(await page.textContent("body")) && await page.isVisible("#un-f"), "WebUntis: falscher Link → Hilfe, nichts gespeichert");
     await page.screenshot({ path: path.join(OUT, "webuntis.png") });
+    await ctx.close();
+  }
+
+  console.log("Üben mit Claude");
+  {
+    const { ctx, page, chatReqs } = await newPage(browser, {}, errors);
+    await tab(page, "lernen"); await page.waitForSelector("[data-pr=new-topic]");
+    await page.click("[data-pr=new-topic]"); await page.fill("#pr-t", "Aliquote Sonderzahlungen"); await page.click("#pr-go");
+    await page.waitForSelector(".pr-q", { timeout: 15000 });
+    ok(chatReqs.some((r) => r.body.mode === "uebung"), "Claude im Modus uebung gefragt");
+    ok(/Aufgabe 1\/3/.test(await page.textContent(".pr-prog")), "Runde mit 3 Aufgaben");
+    await page.click("[data-x=hint]"); ok(/Monate durch 12/.test(await page.textContent(".pr-run")), "Tipp anzeigen");
+    await page.fill("#pr-in", "554,17"); await page.click("#pr-a button"); await page.waitForTimeout(100);
+    ok(/Richtig/.test(await page.textContent(".pr-fb")) && /554,17/.test(await page.textContent(".pr-fb")), "Richtige Antwort erkannt + Rechenweg");
+    await page.screenshot({ path: path.join(OUT, "ueben-richtig.png") });
+    await page.click("[data-x=next]"); await page.fill("#pr-in", "390"); await page.click("#pr-a button"); await page.waitForTimeout(100);
+    ok(/Leider nicht/.test(await page.textContent(".pr-fb")) && /387,69/.test(await page.textContent(".pr-fb")), "Falsches KI-Ergebnis nachgerechnet (387,69 statt 390)");
+    await page.click("[data-x=next]"); await page.click(".pr-ch[data-ch='0']"); await page.waitForTimeout(100);
+    ok(/Richtig/.test(await page.textContent(".pr-fb")), "Auswahlfrage richtig");
+    await page.click("[data-x=next]"); await page.waitForSelector(".pr-end");
+    ok(/2\/3/.test(await page.textContent(".pr-score")) && await page.isVisible("[data-x=again-wrong]"), "Ergebnis 2/3 + Falsche nochmal");
+    await page.screenshot({ path: path.join(OUT, "ueben-ende.png") });
+    await page.click("[data-x=again-wrong]"); await page.waitForSelector(".pr-q");
+    ok(/Aufgabe 1\/1/.test(await page.textContent(".pr-prog")) && /18 Wochen/.test(await page.textContent(".pr-q")), "Nur die falsche wird wiederholt");
+    await page.keyboard.press("Escape"); await page.waitForTimeout(300);
+    const pr = await page.evaluate(() => JSON.parse(localStorage.getItem("sk-a-school_practice") || "[]"));
+    ok(pr.length === 1 && pr[0].stats && pr[0].stats.last === 67, `Übung gespeichert mit Ergebnis (${pr[0] && pr[0].stats && pr[0].stats.last} %)`);
+    ok(/zuletzt 67 %/.test(await page.textContent(".pr-card")), "Liste zeigt das Ergebnis");
     await ctx.close();
   }
 
