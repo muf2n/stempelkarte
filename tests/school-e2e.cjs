@@ -176,6 +176,36 @@ const shot = async (page, name) => { await page.waitForTimeout(500); return page
     await ctx.close();
   }
 
+  console.log("Formel-Trainer");
+  {
+    const { ctx, page } = await newPage(browser, {}, errors);
+    await tab(page, "lernen"); await page.waitForSelector("[data-ft=setup]");
+    await page.click("[data-ft=setup]"); await page.waitForSelector("#ft-f");
+    await page.click("[data-all='0']"); await page.check("input[name=id][value=ohm]"); await page.check("input[name=id][value=prozent]");
+    await page.click(".ft-seg input[value=rechnen] + span"); await page.click(".ft-seg input[value='10'] + span");
+    await page.screenshot({ path: path.join(OUT, "formel-setup.png") });
+    await page.click("#ft-f button[type=submit]"); await page.waitForSelector(".ft-run .pr-q");
+    let okCount = 0;
+    for (let k = 0; k < 10; k++) {
+      const q = await page.textContent(".ft-run .pr-q"); ok(/Ohmsches|Prozentwert/.test(q), `nur gewählte Formeln (${k + 1})`);
+        await page.click("[data-x=skip]");
+      const last = await page.$$eval(".pr-steps li", (l) => l[l.length - 1].textContent);
+      ok(/≈/.test(last), "Rechenweg mit Ergebnis");
+      if (k === 0) await page.screenshot({ path: path.join(OUT, "formel-loesung.png") });
+      await page.click("[data-x=next]"); okCount++;
+    }
+    await page.waitForSelector(".pr-end"); ok(/0\/10/.test(await page.textContent(".pr-score")), "Rundenende 0/10 (alles aufgedeckt)");
+    await page.click("[data-x=again]"); await page.waitForSelector(".ft-run .pr-q");
+    await page.keyboard.press("Escape"); await page.waitForTimeout(200);
+    await page.click("[data-ft=setup]"); await page.click(".ft-seg input[value=umformen] + span"); await page.click("#ft-f button[type=submit]");
+    await page.waitForSelector(".ft-run .pr-ch");
+    ok((await page.$$(".ft-run .pr-ch")).length >= 3, "Umformen: mehrere Antwortmöglichkeiten");
+    await page.click(".ft-run .pr-ch"); await page.waitForSelector(".pr-fb.ok, .pr-fb.bad");
+    ok(await page.isVisible(".pr-ch.right"), "Richtige Umstellung wird markiert");
+    await page.screenshot({ path: path.join(OUT, "formel-umformen.png") });
+    await ctx.close();
+  }
+
   console.log("Mindmaps");
   {
     const { ctx, page, chatReqs } = await newPage(browser, {}, errors);
