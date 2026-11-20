@@ -80,13 +80,15 @@ test("Menschliche Fehler: schwache Bots patzen oft, starke nie", async () => {
 test("Menschen-Modell: Eröffnung wie Menschen, starke Spieler sehen Drohungen", async () => {
   const { Chess } = await import("../vendor/chess/chess.js");
   const { search } = await import("../js/chess-engine.js");
-  let inBook = 0; for (let i = 0; i < 60; i++) inBook += /^(e2e4|d2d4|g1f3|c2c4|b1c3|f2f4|a2a4|h2h4|g2g3)$/.test(C.humanChoose(new Chess(), 400, []));
+  let sd = 7; const rb = () => ((sd = (sd * 16807) % 2147483647) / 2147483647);
+  let inBook = 0; for (let i = 0; i < 60; i++) inBook += /^(e2e4|d2d4|g1f3|c2c4|b1c3|f2f4|a2a4|h2h4|g2g3)$/.test(C.humanChoose(new Chess(), 400, [], rb));
   assert.ok(inBook >= 45, `Buchzüge ${inBook}/60`); // ~90 % aus dem Eröffnungsbuch
   assert.ok(C.human(200).blind > C.human(1000).blind && C.human(1000).blind > C.human(1800).blind && C.human(1950).blind === 0);
   // Dame hängt (wird von Bauer angegriffen): 1800er rettet sie fast immer, 200er oft nicht
   const fen = "rnb1kbnr/pppp1ppp/8/4p3/3q4/2P5/PP1PPPPP/RNBQKBNR b KQkq - 0 3";
   const ch = new Chess(fen), r = search(fen, { depth: 3, timeMs: 400, noise: 1 });
   const safe = (u) => (r.list.find(([m]) => m === u) || [, -9999])[1] > -300;
-  let s18 = 0, s2 = 0; for (let i = 0; i < 40; i++) { s18 += safe(C.humanChoose(ch, 1800, r.list)); s2 += safe(C.humanChoose(ch, 200, r.list)); }
+  let seed = 42; const rnd = () => ((seed = (seed * 16807) % 2147483647) / 2147483647); // fester Zufall → kein Wackeln
+  let s18 = 0, s2 = 0; for (let i = 0; i < 40; i++) { s18 += safe(C.humanChoose(ch, 1800, r.list, rnd)); s2 += safe(C.humanChoose(ch, 200, r.list, rnd)); }
   assert.ok(s18 >= 36, `1800 rettet ${s18}/40`); assert.ok(s2 < s18, `200 rettet ${s2}/40`);
 });
