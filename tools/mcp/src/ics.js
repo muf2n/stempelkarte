@@ -25,7 +25,7 @@ export function feedUrlOk(raw) {
   if (!h.includes(".") || h === "localhost" || h.endsWith(".localhost") || h.endsWith(".local") || h.endsWith(".internal")) return false;
   if (/^\d{1,3}(\.\d{1,3}){3}$/.test(h) || h.startsWith("[")) return false; // keine IP-Adressen
   if (h === "calendar.google.com") return /^\/calendar\/ical\//.test(u.pathname);
-  if (h.endsWith(".webuntis.com")) return /^\/WebUntis\//i.test(u.pathname); // Stundenplan-Abo aus WebUntis (Profil → Freigaben)
+  if (h.endsWith(".webuntis.com")) return /^\/WebUntis\//i.test(u.pathname) || /ical/i.test(u.pathname + u.search); // Stundenplan-Abo aus WebUntis (Profil → Freigaben)
   return /\.ics$/i.test(u.pathname);
 }
 

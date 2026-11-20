@@ -218,3 +218,9 @@ test("WebUntis-Link: erlaubt, Name „WebUntis“, falscher Pfad mit Hilfe-Text"
   assert.equal(C.suggestName(r.url), "WebUntis"); assert.equal(C.isUntisFeed(r.url), true);
   assert.match(C.checkFeedUrl("https://htl-test.webuntis.com/home").error, /Freigaben/);
 });
+
+test("WebUntis: normale Stundenplan-Seite wird mit Hilfe abgelehnt, iCal-Links im neuen Design erlaubt", async () => {
+  const C = await import("../js/cal-feed-core.js");
+  assert.match(C.checkFeedUrl("https://lbs-voitsberg.webuntis.com/timetable/my-student?date=2026-11-16").error, /normale Stundenplan-Seite/);
+  assert.equal(C.checkFeedUrl("https://lbs-voitsberg.webuntis.com/api/ical/student?key=abc").ok, true);
+});

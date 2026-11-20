@@ -31,7 +31,7 @@ export function checkFeedUrl(raw) {
     return { ok: true, url: u.toString() };
   }
   if (h.endsWith(".webuntis.com")) {
-    if (!/^\/WebUntis\//i.test(u.pathname)) return { ok: false, error: "Das ist nicht der Kalender-Link. In WebUntis: Profil → Freigaben → „Kalender publizieren“ → Link kopieren." };
+    if (!/^\/WebUntis\//i.test(u.pathname) && !/ical/i.test(u.pathname + u.search)) return { ok: false, error: "Das ist die normale Stundenplan-Seite, nicht der Kalender-Link. In WebUntis: Profil (dein Name) → Freigaben → „Kalender publizieren“/iCal → Link kopieren." };
     return { ok: true, url: u.toString() };
   }
   if (!/\.ics$/i.test(u.pathname)) return { ok: false, error: "Die Adresse muss auf .ics enden (oder von calendar.google.com / WebUntis sein)." };

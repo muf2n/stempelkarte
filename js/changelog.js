@@ -1,6 +1,7 @@
 // Update 10 F – 🖥️ System-Status › Was ist neu: ehrliche Liste aus der Versionsgeschichte (git log des Projekts), neueste zuerst.
 // Beim Veröffentlichen neuer Versionen hier oben ergänzen.
 export const CHANGELOG = [
+  { v: "20261120-0750", items: ["🔗 WebUntis: auch Kalender-Links aus dem neuen WebUntis-Design werden angenommen; wer versehentlich die normale Stundenplan-Seite einfügt, bekommt einen Hinweis, wo der richtige Link ist"] },
   { v: "20261119-2045", items: ["📷 Rechenweg fotografieren: Im Formel-Trainer und bei „Üben mit Claude“ auf Papier rechnen, Foto machen – Claude liest dein Ergebnis und schaut den Rechenweg durch, die App prüft das Ergebnis (auch mit anderen Vorsätzen wie A statt mA). Das Foto wird nicht gespeichert"] },
   { v: "20261119-2000", items: ["🎲 Formel-Trainer (Schule → Lernen): zufällige Zahlen und zufälliges Umformen – du wählst die Formeln (Ohm, Leistung, Schaltungen, Wechsel- und Drehstrom, Elektronik, Installation, AWL, Mathe), mit oder ohne Vorsätze, mit Rechenweg und 🔥-Serie. Geht offline", "💯 Prozentrechnen: Prozentwert, Rabatt/Skonto, Aufschlag, Umsatzsteuer 20 % und prozentuale Veränderung"] },
   { v: "20261119-1930", items: ["📚 Üben nach Fächern: AWL, AET, Mathe, Elektronik und Installation – Thema antippen (z. B. Ohmsches Gesetz, Brutto–Netto, Spannungsteiler, FI-Schutzschalter) und sofort neue Aufgaben bekommen; deine Übungen sind nach Fach sortiert"] },

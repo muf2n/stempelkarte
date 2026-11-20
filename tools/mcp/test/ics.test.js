@@ -181,3 +181,9 @@ test("WebUntis-Kalender-Links sind erlaubt, andere Pfade nicht", async () => {
   assert.equal(feedUrlOk("https://webuntis.com.evil.at/WebUntis/x"), false);
   assert.equal(feedUrlOk("http://thalia.webuntis.com/WebUntis/x"), false);
 });
+
+test("WebUntis neues Design: iCal-Pfad erlaubt, Stundenplan-Seite nicht", async () => {
+  const { feedUrlOk } = await import("../src/ics.js");
+  assert.equal(feedUrlOk("https://lbs-voitsberg.webuntis.com/api/ical/student?key=abc"), true);
+  assert.equal(feedUrlOk("https://lbs-voitsberg.webuntis.com/timetable/my-student?date=2026-11-16"), false);
+});
