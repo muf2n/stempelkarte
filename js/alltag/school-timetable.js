@@ -145,29 +145,36 @@ export function lessonLine(S, l, { now = false } = {}) {
 }
 
 /* ---------- 📷 Stundenplan vom Foto ---------- */
-function pickPhoto() {
+function pickPhotos() {
   return new Promise((res) => {
-    const inp = document.createElement("input"); inp.type = "file"; inp.accept = "image/*";
-    inp.addEventListener("change", () => res(inp.files && inp.files[0] || null), { once: true });
+    const inp = document.createElement("input"); inp.type = "file"; inp.accept = "image/*"; inp.multiple = true;
+    inp.addEventListener("change", () => res(inp.files ? [...inp.files].slice(0, 6) : []), { once: true });
     inp.click();
   });
 }
 export async function photoImport(S) {
   const ui = S.ctx.ui;
   if (!aiAvailable()) { ui.toast("📷 Stundenplan vom Foto geht mit der Google-Anmeldung und dem Claude-Server.", 3600); return; }
-  const file = await pickPhoto(); if (!file) return;
-  let img; try { img = await shrinkImage(file, { maxSide: 1800, maxBytes: 900 * 1024, quality: 0.85 }); } catch (e) { ui.toast(e.message || "Foto geht nicht."); return; }
+  const files = await pickPhotos(); if (!files.length) return;
+  const imgs = [];
+  for (const f of files) { try { imgs.push(await shrinkImage(f, { maxSide: 1800, maxBytes: 900 * 1024, quality: 0.85 })); } catch (e) { ui.toast(e.message || "Foto geht nicht."); return; } }
   const ctrl = new AbortController(); let closeWait = null, waitEl = null;
-  ui.openSheet({ title: "📷 Stundenplan lesen …", bodyHTML: `<div class="tt-ph-wait"><img src="${img.data}" alt="Dein Foto"><p>Claude liest deinen Stundenplan … (ca. 10–30 s)</p></div>`,
+  ui.openSheet({ title: "📷 Stundenplan lesen …", bodyHTML: `<div class="tt-ph-wait"><img src="${imgs[0].data}" alt="Dein Foto"><p data-k="st">Claude liest deinen Stundenplan … (ca. 10–30 s${imgs.length > 1 ? ` pro Bild, ${imgs.length} Bilder` : ""})</p></div>`,
     onMount(el, close) { closeWait = close; waitEl = el; } });
   const gone = setInterval(() => { if (waitEl && !waitEl.isConnected) { clearInterval(gone); ctrl.abort(); } }, 500); // Fenster zu = abbrechen
-  let plan;
+  const all = [], notes = [];
   try {
-    const out = await askClaude([{ role: "user", content: "Lies bitte diesen Stundenplan ab." }], { body: { mode: "stundenplan", image: { type: "image/jpeg", data: img.data.replace(/^data:[^,]*,/, "") } }, timeoutMs: 120000, signal: ctrl.signal });
-    plan = parsePlan(out.reply);
+    for (let i = 0; i < imgs.length; i++) {
+      if (waitEl) { const st = waitEl.querySelector("[data-k=st]"), im = waitEl.querySelector("img"); if (st && imgs.length > 1) st.textContent = `Claude liest Bild ${i + 1} von ${imgs.length} …`; if (im) im.src = imgs[i].data; }
+      const out = await askClaude([{ role: "user", content: `Lies bitte diesen Stundenplan ab.${imgs.length > 1 ? ` (Bild ${i + 1} von ${imgs.length} – die Bilder können sich überschneiden, z. B. Vormittag und Nachmittag derselben Woche.)` : ""}` }], { body: { mode: "stundenplan", image: { type: "image/jpeg", data: imgs[i].data.replace(/^data:[^,]*,/, "") } }, timeoutMs: 120000, signal: ctrl.signal });
+      const p = parsePlan(out.reply);
+      for (const l of p.lessons) if (!all.some((x) => sameLesson(x, l))) all.push(l);
+      if (p.note) notes.push(p.note);
+    }
   } catch (e) { clearInterval(gone); if (closeWait && waitEl && waitEl.isConnected) closeWait(); if (e && e.code !== "abort") ui.toast(e.message || "Hat nicht geklappt.", 3600); return; }
   clearInterval(gone); if (!waitEl || !waitEl.isConnected) return; closeWait();
-  reviewPlan(S, plan, img.data);
+  all.sort((a, b) => a.weekday - b.weekday || a.from.localeCompare(b.from));
+  reviewPlan(S, { lessons: all, note: [...new Set(notes)].join(" ") }, imgs.length === 1 ? imgs[0].data : null);
 }
 /* ---------- 🔗 WebUntis (Kalender-Abo) ---------- */
 function untisEvents(id) {

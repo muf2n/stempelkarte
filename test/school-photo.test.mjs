@@ -27,3 +27,10 @@ test("WebUntis-Kalender → Stunden (doppelte Wochen zusammengefasst, Entfall we
   assert.equal(L[1].period, 3);
   assert.equal(periodOf("07:45"), 1); assert.equal(periodOf("13:45"), 7);
 });
+
+test("WebUntis-Kürzel: Vorsilbe PG_/FG_/UÜ_ wird entfernt", async () => {
+  const { parsePlan } = await import("../js/alltag/school-photo-core.js");
+  const r = parsePlan(JSON.stringify({ lessons: [{ weekday: 3, period: 1, subject: "PG_DUK", from: "07:45", to: "08:30", teacher: "UKH", room: "LS6" }, { weekday: 2, period: 7, subject: "UÜ_BSP" }] }));
+  assert.deepEqual(r.lessons.map((l) => l.subject), ["BSP", "DUK"]);
+  assert.equal(r.lessons[1].from, "07:45");
+});

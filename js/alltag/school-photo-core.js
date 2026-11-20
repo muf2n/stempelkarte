@@ -23,7 +23,7 @@ export function parsePlan(reply) {
   const out = [];
   for (const x of j.lessons.slice(0, 80)) {
     if (!x || typeof x !== "object") continue;
-    const weekday = int(x.weekday, 1, 6), period = int(x.period, 1, 12), subject = txt(x.subject, 40);
+    const weekday = int(x.weekday, 1, 6), period = int(x.period, 1, 12), subject = txt(String(x.subject || "").replace(/^(PG|FG|UÜ|UU|WPG|FÜ)_/i, ""), 40);
     if (!weekday || !period || !subject) continue;
     const periods = Math.min(int(x.periods, 1, 6) || 1, 13 - period);
     const from = t(x.from) || PHOTO_PERIODS[period][0], to = t(x.to) || PHOTO_PERIODS[period + periods - 1][1];
