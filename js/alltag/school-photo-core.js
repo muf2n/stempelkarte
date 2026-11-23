@@ -65,3 +65,21 @@ export function lessonsFromEvents(evs) {
   }
   return [...map.values()].map((x) => x.l).sort((a, b) => a.weekday - b.weekday || a.from.localeCompare(b.from));
 }
+
+/** Stunden-Nummern aus den echten Uhrzeiten neu bestimmen (wie in WebUntis: jede Beginn-Zeit = eine Stunde). */
+export function normalizePeriods(lessons) {
+  const starts = [...new Set(lessons.map((l) => l.from).filter(Boolean))].sort();
+  if (!starts.length) return lessons;
+  return lessons.map((l) => {
+    if (!l.from) return l;
+    const p = starts.indexOf(l.from) + 1, to = l.to || l.from;
+    const n = Math.max(1, starts.filter((s) => s >= l.from && s < to).length);
+    return { ...l, period: Math.min(12, p), periods: Math.min(n, 13 - Math.min(12, p)) };
+  });
+}
+/** Parallele Stunden (Gruppenteilung) gleichen Tags und Beginns zusammenfassen → für Nebeneinander-Anzeige */
+export function groupParallel(lessons) {
+  const m = new Map();
+  for (const l of lessons) { const k = `${l.weekday}|${l.period}`; if (!m.has(k)) m.set(k, []); m.get(k).push(l); }
+  return [...m.values()];
+}

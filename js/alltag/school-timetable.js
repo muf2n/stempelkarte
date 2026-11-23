@@ -1,14 +1,10 @@
 // Schule & Lernen – Stundenplan (school_timetable) als Wochenraster.
 // Baut auf den Berufsschul-Tagen aus den Einstellungen auf (settings.school: wöchentliche Tage + Blockschule):
 // Stunden an Tagen ohne Schule werden in der gewählten Woche blass angezeigt.
-import {
-  col, safeWrite, esc, todayKey, addDays, mondayOf, dateOf, fmtDay, fmtDate, pad, toMin, fromMin, RE_DATE,
-  prefs, savePrefs, abWeek, schoolDayLabel, hasSchoolSettings, subjectColor, subjectInputHTML, wireSubjectChips,
-  emptyHTML, armDelete, abbr, PALETTE, WD, WD_LONG,
-} from "./school-core.js";
+import { col, safeWrite, esc, todayKey, addDays, mondayOf, dateOf, fmtDay, fmtDate, pad, toMin, fromMin, RE_DATE, prefs, savePrefs, abWeek, schoolDayLabel, hasSchoolSettings, subjectColor, subjectInputHTML, wireSubjectChips, emptyHTML, armDelete, abbr, PALETTE, WD, WD_LONG,  } from "./school-core.js";
 import { askClaude, aiAvailable } from "./ai-client.js";
 import { shrinkImage } from "./unterwegs-shared.js";
-import { parsePlan, sameLesson, clashes, lessonsFromEvents } from "./school-photo-core.js";
+import { parsePlan, sameLesson, clashes, lessonsFromEvents, normalizePeriods } from "./school-photo-core.js";
 import * as FD from "../cal-feeds.js";
 
 // Übliche Stundenzeiten (50 min) – nur Vorschlag, beim Eintragen änderbar
@@ -117,6 +113,8 @@ function openTtSettings(S) {
         <div class="chips ss-abpick"><button type="button" class="chip" data-ab="A" aria-pressed="${cur === "A"}">A-Woche</button><button type="button" class="chip" data-ab="B" aria-pressed="${cur === "B"}">B-Woche</button></div></div>
       <p class="note">Deine Schultage (wöchentlich oder Blockschule) stellst du in der Übersicht unter „Berufsschule“ ein – der Stundenplan zeigt sich dann an genau diesen Tagen.</p>
       <button type="button" class="btn ghost sm" id="ab-sc">Berufsschul-Tage öffnen</button>
+      ${(S.data.timetable || []).length ? `<div class="lbl">Neu anfangen</div><p class="note">Löscht alle ${(S.data.timetable || []).length} Stunden im Stundenplan – z. B. um ihn neu vom Foto einzulesen. Tippe zweimal zum Bestätigen.</p>
+      <button type="button" class="btn ghost sm danger" id="tt-clear">🗑 Stundenplan leeren</button>` : ""}
       <div class="row"><button type="button" class="btn primary" id="ab-save">Speichern</button></div>
     </div>`,
     onMount(el, close) {
@@ -127,6 +125,8 @@ function openTtSettings(S) {
         el.querySelectorAll("[data-ab]").forEach((x) => x.setAttribute("aria-pressed", String(x === b)));
       });
       el.querySelector("#ab-sc").addEventListener("click", () => { close(); if (S.ctx.jump) S.ctx.jump("school-panel"); });
+      const clr = el.querySelector("#tt-clear");
+      if (clr) armDelete(clr, () => { const ids = (S.data.timetable || []).map((l) => l.id); for (const id of ids) safeWrite(col("timetable").remove(id)); S.ctx.ui.toast(`🗑 ${ids.length} Stunden gelöscht`); close(); });
       el.querySelector("#ab-save").addEventListener("click", () => {
         const on = el.querySelector("#ab-on").checked;
         savePrefs(S.data, { abWeeks: on, abRef: ab === "A" ? mon : addDays(mon, -7) });
@@ -174,7 +174,7 @@ export async function photoImport(S) {
   } catch (e) { clearInterval(gone); if (closeWait && waitEl && waitEl.isConnected) closeWait(); if (e && e.code !== "abort") ui.toast(e.message || "Hat nicht geklappt.", 3600); return; }
   clearInterval(gone); if (!waitEl || !waitEl.isConnected) return; closeWait();
   all.sort((a, b) => a.weekday - b.weekday || a.from.localeCompare(b.from));
-  reviewPlan(S, { lessons: all, note: [...new Set(notes)].join(" ") }, imgs.length === 1 ? imgs[0].data : null);
+  reviewPlan(S, { lessons: normalizePeriods(all), note: [...new Set(notes)].join(" ") }, imgs.length === 1 ? imgs[0].data : null);
 }
 /* ---------- 🔗 WebUntis (Kalender-Abo) ---------- */
 function untisEvents(id) {
@@ -255,10 +255,7 @@ export function renderTimetable(body, S) {
   const ab = abWeek(p, mon);
   const lessons = all.filter((l) => !ab || !l.week || l.week === ab);
   const days = [1, 2, 3, 4, 5, ...(all.some((l) => Number(l.weekday) === 6) ? [6] : [])];
-  const maxP = Math.max(6, ...lessons.map((l) => Number(l.period) + span(l) - 1));
-  const minP = Math.min(1, ...lessons.map((l) => Number(l.period) || 1));
   const configured = hasSchoolSettings(S.ctx);
-  const timeOf = (n) => { const l = all.find((x) => Number(x.period) === n && x.from); return l ? l.from : (PERIODS[n] || [""])[0]; };
   const st = days.map((d) => { const k = addDays(mon, d - 1); return { d, k, ...schoolStatus(S, k) }; });
   const schoolDaysTxt = (() => {
     try {
@@ -272,22 +269,38 @@ export function renderTimetable(body, S) {
     } catch { return ""; }
   })();
 
+  // Zeit-Raster wie in WebUntis: Stunden liegen genau nach Uhrzeit, Gruppen (gleiche Zeit) nebeneinander
   let grid = "";
   if (all.length) {
-    const rows = maxP - minP + 1;
-    grid = `<div class="ss-tt" style="--cols:${days.length};--rows:${rows}">
+    const toMin = (t) => { const m = /^(\d{1,2}):(\d{2})$/.exec(String(t || "")); return m ? Number(m[1]) * 60 + Number(m[2]) : null; };
+    const lt = (l) => {
+      const f = toMin(l.from) ?? toMin((PERIODS[Number(l.period)] || PERIODS[1])[0]);
+      let e = toMin(l.to) ?? toMin((PERIODS[Math.min(12, Number(l.period) + span(l) - 1)] || PERIODS[1])[1]);
+      if (e == null || e <= f) e = f + 45; return [f, e];
+    };
+    const SL = 5, times = lessons.map(lt);
+    const t0 = Math.floor(Math.min(...times.map((x) => x[0]), 8 * 60) / 60) * 60, t1 = Math.ceil(Math.max(...times.map((x) => x[1]), 12 * 60) / 60) * 60;
+    const rows = (t1 - t0) / SL, R = (m) => Math.round((m - t0) / SL) + 2;
+    const groups = new Map();
+    lessons.forEach((l, j) => { const k = `${l.weekday}|${times[j][0]}`; if (!groups.has(k)) groups.set(k, []); groups.get(k).push([l, times[j]]); });
+    const one = (l, f, e, x, i, solo) => {
+      const c = l.color || subjectColor(S.data, l.subject);
+      const pos = solo ? `grid-column:${i + 2};grid-row:${R(f)} / ${R(e)};` : "";
+      return `<button type="button" class="ss-tt-l${x.on ? "" : " off"}${x.k === today ? " today" : ""}${e - f < 40 ? " tiny" : ""}" data-lesson="${esc(l.id)}" style="${pos}--c:${esc(c)}" title="${esc(`${l.subject} · ${l.from || ""}–${l.to || ""}${l.teacher ? ` · ${l.teacher}` : ""}${l.room ? ` · ${l.room}` : ""}`)}">
+          <b class="full">${esc(l.subject)}</b><b class="short">${esc(abbr(l.subject))}</b>${l.teacher ? `<span class="tch">${esc(l.teacher)}</span>` : ""}${l.room ? `<span>${esc(l.room)}</span>` : ""}${l.week ? `<i>${esc(l.week)}</i>` : ""}</button>`;
+    };
+    const hours = []; for (let h = t0; h < t1; h += 60) hours.push(h);
+    grid = `<div class="ss-tt ss-tt-time" style="--cols:${days.length};--rows:${rows}">
       <div class="ss-tt-corner"></div>
       ${st.map((x, i) => `<div class="ss-tt-dh${x.k === today ? " today" : ""}${x.on ? "" : " off"}" style="grid-column:${i + 2}">
         <b>${WD[x.d]}</b><span>${esc(fmtDay(x.k).slice(4, 10))}</span>${x.configured ? `<i class="${x.on ? "on" : ""}">${esc(x.on ? (x.label === "Berufsschule" ? "Schule" : x.label) : "frei")}</i>` : ""}</div>`).join("")}
-      ${Array.from({ length: rows }, (_, r) => `<div class="ss-tt-ph" style="grid-row:${r + 2}"><b>${minP + r}</b><span>${esc(timeOf(minP + r))}</span></div>`).join("")}
-      ${st.map((x, i) => Array.from({ length: rows }, (_, r) => `<button type="button" class="ss-tt-empty${x.on ? "" : " off"}" style="grid-column:${i + 2};grid-row:${r + 2}" data-new="${x.d}:${minP + r}" aria-label="Stunde am ${WD_LONG[x.d]}, ${minP + r}. Stunde eintragen"></button>`).join("")).join("")}
-      ${lessons.map((l) => {
-        const i = days.indexOf(Number(l.weekday)); if (i < 0) return "";
-        const x = st[i];
-        const c = l.color || subjectColor(S.data, l.subject);
-        const sp = Math.min(span(l), maxP - l.period + 1);
-        return `<button type="button" class="ss-tt-l${x.on ? "" : " off"}${x.k === today ? " today" : ""}" data-lesson="${esc(l.id)}" style="grid-column:${i + 2};grid-row:${l.period - minP + 2} / span ${sp};--c:${esc(c)}" title="${esc(`${l.subject} · ${l.from || ""}–${l.to || ""}${l.room ? " · " + l.room : ""}`)}">
-          <b class="full">${esc(l.subject)}</b><b class="short">${esc(abbr(l.subject))}</b>${l.room ? `<span>${esc(l.room)}</span>` : ""}${l.week ? `<i>${esc(l.week)}</i>` : ""}</button>`;
+      ${hours.map((h) => `<div class="ss-tt-hr" style="grid-row:${R(h)} / span ${60 / SL}">${String(Math.floor(h / 60)).padStart(2, "0")}:00</div>`).join("")}
+      ${st.map((x, i) => `<button type="button" class="ss-tt-day${x.on ? "" : " off"}" style="grid-column:${i + 2};grid-row:2 / span ${rows};--hr:${(60 / SL) * 7}px" data-new="${x.d}:1" aria-label="Stunde am ${WD_LONG[x.d]} hinzufügen"></button>`).join("")}
+      ${[...groups.values()].map((grp) => {
+        const i = days.indexOf(Number(grp[0][0].weekday)); if (i < 0) return "";
+        const x = st[i], f = grp[0][1][0], e = Math.max(...grp.map((g) => g[1][1]));
+        if (grp.length === 1) return one(grp[0][0], f, grp[0][1][1], x, i, true);
+        return `<div class="ss-tt-par" style="grid-column:${i + 2};grid-row:${R(f)} / ${R(e)}">${grp.map(([l, t]) => one(l, t[0], t[1], x, i, false)).join("")}</div>`;
       }).join("")}
     </div>`;
   }

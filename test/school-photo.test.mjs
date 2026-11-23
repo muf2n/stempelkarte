@@ -34,3 +34,14 @@ test("WebUntis-Kürzel: Vorsilbe PG_/FG_/UÜ_ wird entfernt", async () => {
   assert.deepEqual(r.lessons.map((l) => l.subject), ["BSP", "DUK"]);
   assert.equal(r.lessons[1].from, "07:45");
 });
+
+test("Stunden-Nummern aus echten Zeiten (WebUntis 45-min-Raster) + Gruppen nebeneinander", async () => {
+  const { normalizePeriods, groupParallel } = await import("../js/alltag/school-photo-core.js");
+  const L = normalizePeriods([
+    { weekday: 1, from: "07:45", to: "08:30", subject: "BFE" }, { weekday: 1, from: "08:30", to: "09:15", subject: "SPTE" },
+    { weekday: 2, from: "07:45", to: "10:15", subject: "ETL", room: "MTL2" }, { weekday: 2, from: "07:45", to: "10:15", subject: "ETL", room: "SRTL2" },
+    { weekday: 1, from: "09:30", to: "10:15", subject: "RL" },
+  ]);
+  assert.deepEqual(L.map((l) => [l.period, l.periods]), [[1, 1], [2, 1], [1, 3], [1, 3], [3, 1]]);
+  assert.equal(groupParallel(L).find((g) => g.length === 2)[0].subject, "ETL");
+});
