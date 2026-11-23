@@ -296,6 +296,21 @@ export function renderTimetable(body, S) {
         <b>${WD[x.d]}</b><span>${esc(fmtDay(x.k).slice(4, 10))}</span>${x.configured ? `<i class="${x.on ? "on" : ""}">${esc(x.on ? (x.label === "Berufsschule" ? "Schule" : x.label) : "frei")}</i>` : ""}</div>`).join("")}
       ${hours.map((h) => `<div class="ss-tt-hr" style="grid-row:${R(h)} / span ${60 / SL}">${String(Math.floor(h / 60)).padStart(2, "0")}:00</div>`).join("")}
       ${st.map((x, i) => `<button type="button" class="ss-tt-day${x.on ? "" : " off"}" style="grid-column:${i + 2};grid-row:2 / span ${rows};--hr:${(60 / SL) * 7}px" data-new="${x.d}:1" aria-label="Stunde am ${WD_LONG[x.d]} hinzufügen"></button>`).join("")}
+      ${st.map((x, i) => {
+        // Pausen zwischen den Stunden sichtbar machen (5, 10, 15 min … Mittagspause)
+        const iv = lessons.map((l, j) => [Number(l.weekday), times[j]]).filter(([d]) => d === x.d).map(([, t]) => t).sort((a, b) => a[0] - b[0]);
+        const merged = []; for (const [f, e] of iv) { const m = merged[merged.length - 1]; if (m && f <= m[1]) m[1] = Math.max(m[1], e); else merged.push([f, e]); }
+        let out = "";
+        for (let k = 1; k < merged.length; k++) {
+          const g = merged[k][0] - merged[k - 1][1]; if (g < 5 || g > 120) continue;
+          out += `<div class="ss-tt-pause${g < 10 ? " s" : ""}" style="grid-column:${i + 2};grid-row:${R(merged[k - 1][1])} / ${R(merged[k][0])}" aria-label="${g} Minuten Pause">${g >= 10 ? `<span>${g >= 30 ? "🍽 " : "☕ "}${g}′</span>` : ""}</div>`;
+        }
+        return out;
+      }).join("")}
+      ${(() => { // Jetzt-Linie wie in WebUntis
+        const i = st.findIndex((x) => x.k === today), d = new Date(), m = d.getHours() * 60 + d.getMinutes();
+        return i >= 0 && m >= t0 && m < t1 ? `<div class="ss-tt-now" style="grid-column:2 / ${days.length + 2};grid-row:${R(m)}" aria-hidden="true"></div>` : "";
+      })()}
       ${[...groups.values()].map((grp) => {
         const i = days.indexOf(Number(grp[0][0].weekday)); if (i < 0) return "";
         const x = st[i], f = grp[0][1][0], e = Math.max(...grp.map((g) => g[1][1]));

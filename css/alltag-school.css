@@ -616,3 +616,8 @@ html.mm-open, html.mm-open body { overflow: hidden; }
 .ss-tt-par > .ss-tt-l { padding: 4px 3px; border-left-width: 2px; }
 .ss-tt-par > .ss-tt-l b { font-size: .7rem; overflow-wrap: normal; word-break: keep-all; white-space: nowrap; overflow: hidden; text-overflow: clip; }
 .ss-tt-par > .ss-tt-l span { font-size: .6rem; text-overflow: clip; }
+.ss-tt-pause { z-index: 1; display: flex; align-items: center; justify-content: center; margin: 1px 6px; border-radius: 6px; pointer-events: none;
+  background: repeating-linear-gradient(135deg, color-mix(in srgb, var(--muted) 18%, transparent) 0 4px, transparent 4px 8px); }
+.ss-tt-pause span { font-size: .6rem; font-weight: 800; color: var(--muted); white-space: nowrap; line-height: 1; }
+.ss-tt-pause.s { margin: 2px 10px; background: none; border-top: 1px dashed color-mix(in srgb, var(--muted) 55%, transparent); }
+.ss-tt-now { z-index: 2; align-self: start; height: 2px; background: #ef4444; pointer-events: none; box-shadow: 0 0 4px rgba(239,68,68,.6); }
