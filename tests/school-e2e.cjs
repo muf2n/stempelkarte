@@ -179,7 +179,7 @@ const shot = async (page, name) => { await page.waitForTimeout(500); return page
 
   console.log("Formel-Trainer");
   {
-    const { ctx, page } = await newPage(browser, {}, errors);
+    const { ctx, page, chatReqs } = await newPage(browser, {}, errors);
     await tab(page, "lernen"); await page.waitForSelector("[data-ft=setup]");
     await page.click("[data-ft=setup]"); await page.waitForSelector("#ft-f");
     await page.click("[data-all='0']"); await page.check("input[name=id][value=ohm]"); await page.check("input[name=id][value=prozent]");
@@ -198,7 +198,16 @@ const shot = async (page, name) => { await page.waitForTimeout(500); return page
     await page.waitForSelector(".pr-end"); ok(/0\/10/.test(await page.textContent(".pr-score")), "Rundenende 0/10 (alles aufgedeckt)");
     await page.click("[data-x=again]"); await page.waitForSelector(".ft-run .pc-btn");
     const fc = page.waitForEvent("filechooser"); await page.click(".ft-run .pc-btn"); await (await fc).setFiles(path.join(__dirname, "fixtures", "stundenplan.png"));
+    await page.waitForSelector(".pm-ov img"); await page.waitForFunction(() => document.querySelector(".pm-ov img").naturalWidth > 0);
+    ok(await page.isDisabled(".pm-ov [data-x=ok]"), "Markieren: erst nach dem Rahmen-Ziehen bestätigbar");
+    const ib = await (await page.$(".pm-ov img")).boundingBox();
+    await page.mouse.move(ib.x + ib.width * 0.1, ib.y + ib.height * 0.1); await page.mouse.down();
+    await page.mouse.move(ib.x + ib.width * 0.6, ib.y + ib.height * 0.5, { steps: 5 }); await page.mouse.up();
+    ok(await page.isVisible(".pm-box") && !(await page.isDisabled(".pm-ov [data-x=ok]")), "Markieren: Rahmen gezogen");
+    await page.screenshot({ path: path.join(OUT, "foto-markieren.png") });
+    await page.click(".pm-ov [data-x=ok]");
     await page.waitForSelector(".pc-res", { timeout: 15000 });
+    ok(/Ausschnitt/.test(chatReqs[chatReqs.length - 1].body.messages[0].content), "Nur der markierte Ausschnitt wird geprüft");
     const fbt = await page.textContent(".pr-fb");
     ok(/Richtig/.test(fbt) && /Sauber umgestellt/.test(fbt) && /nicht gespeichert/.test(fbt), "Foto vom Rechenweg: Claude liest, App prüft → richtig");
     await page.screenshot({ path: path.join(OUT, "formel-foto.png") });

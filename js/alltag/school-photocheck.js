@@ -2,6 +2,7 @@
 import { esc } from "./school-core.js";
 import { askClaude, aiAvailable } from "./ai-client.js";
 import { shrinkImage } from "./unterwegs-shared.js";
+import { markArea } from "./photo-mark.js";
 
 export const photoBtnHTML = () => `<button type="button" class="btn sm pc-btn" data-x="photo">📷 Rechenweg fotografieren</button>`;
 
@@ -24,13 +25,14 @@ export function parseCheck(reply) {
  */
 export async function photoCheck(ui, info, box) {
   if (!aiAvailable()) { ui.toast("📷 Prüfen per Foto geht mit der Google-Anmeldung und dem Claude-Server. Tipp das Ergebnis einfach ein.", 4200); return null; }
-  const file = await pickPhoto(); if (!file) return null;
+  const raw = await pickPhoto(); if (!raw) return null;
+  const file = await markArea(raw); if (!file) return null; // nur die markierte Rechnung wird geprüft
   let img = null;
   try { img = await shrinkImage(file, { maxSide: 1600, maxBytes: 800 * 1024, quality: 0.85 }); } catch (e) { ui.toast(e.message || "Foto geht nicht."); return null; }
   box.innerHTML = `<p class="pc-wait">⏳ Claude schaut sich deinen Rechenweg an … (ca. 10–25 s)</p>`;
   let r = null;
   try {
-    const msg = `Aufgabe: ${info.text}\nGesucht in: ${info.unit || "(ohne Einheit)"}\nRichtiger Rechenweg und Lösung:\n${info.solution}`;
+    const msg = `${file !== raw ? "Das Foto ist ein Ausschnitt: genau diese Rechnung prüfen.\n" : "Falls mehrere Rechnungen auf dem Foto sind: nimm die, die zu dieser Aufgabe passt.\n"}Aufgabe: ${info.text}\nGesucht in: ${info.unit || "(ohne Einheit)"}\nRichtiger Rechenweg und Lösung:\n${info.solution}`;
     const out = await askClaude([{ role: "user", content: msg }], { body: { mode: "pruefen", image: { type: "image/jpeg", data: img.data.replace(/^data:[^,]*,/, "") } }, timeoutMs: 120000 });
     r = parseCheck(out.reply);
   } catch (e) { box.innerHTML = ""; ui.toast(e.message || "Prüfen hat nicht geklappt.", 3600); return null; }
