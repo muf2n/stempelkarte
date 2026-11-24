@@ -621,3 +621,7 @@ html.mm-open, html.mm-open body { overflow: hidden; }
 .ss-tt-pause span { font-size: .6rem; font-weight: 800; color: var(--muted); white-space: nowrap; line-height: 1; }
 .ss-tt-pause.s { margin: 2px 10px; background: none; border-top: 1px dashed color-mix(in srgb, var(--muted) 55%, transparent); }
 .ss-tt-now { z-index: 2; align-self: start; height: 2px; background: #ef4444; pointer-events: none; box-shadow: 0 0 4px rgba(239,68,68,.6); }
+.ft-why { display: grid; gap: 4px; padding: 10px 12px; border-radius: 12px; background: rgba(245,158,11,.16); border-left: 4px solid #f59e0b; }
+.ft-why p { margin: 0; line-height: 1.4; }
+.ft-how { display: grid; gap: 4px; }
+.ft-how .pr-steps li { line-height: 1.45; font-variant-numeric: tabular-nums; }

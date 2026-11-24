@@ -147,8 +147,8 @@ export function solve(F, x, v) {
   if (F.custom) return F.solve[x](v);
   const all = { [F.lhs]: -1, ...F.f }, ex = all[x];
   let r = 1;
-  for (const [k, e] of Object.entries(all)) { if (k === x) continue; const val = CONST[k] != null ? CONST[k] : v[k]; r *= val ** (-e / ex); }
-  return Math.abs(ex) === 2 ? Math.sqrt(r) : r;
+  for (const [k, e] of Object.entries(all)) { if (k === x) continue; const val = CONST[k] != null ? CONST[k] : v[k]; r *= val ** (-e / ex); } // Exponent −e/ex enthält schon die Wurzel
+  return r;
 }
 /** Plausible falsche Umstellungen (Exponenten-Vorzeichen vertauscht, Wurzel vergessen). */
 export function wrongForms(F, x, rnd = Math.random) {
@@ -210,12 +210,76 @@ export function makeTask(settings, rnd = Math.random) {
     return {
       kind: "calc", fid: F.id, x, answer: res, unit: `${unitPre.p}${Q[x].u}`, f: unitPre.f, base: Q[x].u,
       q: `${F.name}: Berechne ${Q[x].n} ${sym(x)}.`, given: given.map((k) => `${sym(k)} = ${show(k, v[k], settings.pre)}`),
-      steps: [formText(F, x), `${sym(x)} = ${subst(F, x, v, settings.pre)}`, `${sym(x)} ≈ ${fmt(sig(res / unitPre.f, 4))} ${unitPre.p}${Q[x].u}`.trim()],
+      steps: explainSteps(F, x, v, res, unitPre), v: { ...v },
     };
   }
   return null;
 }
 const k99 = (v) => v > 1e12 || v < 1e-12;
+const base = (k, v) => show(k, v, false);
+
+/** Rechenweg Schritt für Schritt, so wie man ihn auf Papier schreibt. */
+export function explainSteps(F, x, v, res, unitPre = { p: "", f: 1 }) {
+  const steps = [];
+  const right = formText(F, x);
+  steps.push(F.custom || x === F.lhs ? `Formel: ${right}` : `Formel nach ${sym(x)} umstellen: ${right}`);
+  // 1. Vorsätze weg: alles in Grundeinheiten
+  const conv = Object.keys(v).filter((k) => k !== x && Q[k] && Q[k].pre && prefixOf(v[k]).p).map((k) => `${sym(k)} = ${show(k, v[k], true)} = ${base(k, v[k])}`);
+  if (conv.length) steps.push(`In Grundeinheiten umrechnen: ${conv.join(" · ")}`);
+  // 2. Einsetzen (mit Klammern bei Quadrat)
+  steps.push(`Einsetzen: ${sym(x)} = ${subst(F, x, v, false)}`);
+  // 3. Zwischenschritte bei Produktformeln: Quadrate ausrechnen, Zähler/Nenner
+  if (!F.custom) {
+    const all = { [F.lhs]: -1, ...F.f }, ex = all[x], num = [], den = [], sq = [];
+    for (const [k, e] of Object.entries(all)) {
+      if (k === x) continue;
+      const val = CONST[k] != null ? CONST[k] : v[k], q = -e * Math.sign(ex), p = Math.abs(q); // für x^|ex| = …
+      if (p === 2) sq.push(`${sym(k)}² = ${fmt(sig(val, 4), 6)}² = ${fmt(sig(val * val, 4), 8)}`);
+      (q > 0 ? num : den).push(val ** p);
+    }
+    if (sq.length) steps.push(`Quadrat zuerst: ${sq.join(" · ")}`);
+    const N = num.reduce((a, b) => a * b, 1), D = den.reduce((a, b) => a * b, 1);
+    if (den.length && (num.length > 1 || den.length > 1)) steps.push(`Oben: ${fmt(sig(N, 4), 6)} · unten: ${fmt(sig(D, 4), 8)}`);
+    const raw = N / D;
+    if (Math.abs(ex) === 2) steps.push(`Wurzel ziehen: ${sym(x)} = √${fmt(sig(raw, 4), 6)} = ${fmt(sig(Math.sqrt(raw), 4), 6)} ${Q[x].u}`);
+    else if (den.length) steps.push(`Rechnen: ${sym(x)} = ${fmt(sig(N, 4), 6)} / ${fmt(sig(D, 4), 8)} = ${fmt(sig(raw, 4), 6)} ${Q[x].u}`);
+  }
+  steps.push(`Ergebnis: ${sym(x)} ≈ ${fmt(sig(res / unitPre.f, 4))} ${unitPre.p}${Q[x].u}`.trim() + (unitPre.p ? ` (= ${base(x, res)})` : ""));
+  return steps;
+}
+
+/** Was hat man wahrscheinlich falsch gemacht? Vergleicht die Eingabe mit typischen Fehlern. */
+export function diagnose(task, raw) {
+  if (!task || task.kind !== "calc" || !task.v) return null;
+  let s = String(raw || "").trim().replace(/\s+/g, "");
+  if (/,\d+$/.test(s)) s = s.replace(/\./g, "").replace(",", "."); else s = s.replace(/,/g, "");
+  const got = Number(s) * (task.f || 1); if (!Number.isFinite(got) || !got) return null;
+  const F = FORMULAS.find((y) => y.id === task.fid), x = task.x, v = task.v, want = task.answer;
+  const near = (a) => Number.isFinite(a) && a !== 0 && Math.abs(got - a) <= Math.abs(a) * 0.01;
+  const tips = [];
+  // Vorsatz / Einheit
+  for (const [f, t] of [[1000, "1000-mal zu groß"], [1e-3, "1000-mal zu klein"], [1e6, "1 Million-mal zu groß"], [1e-6, "1 Million-mal zu klein"]])
+    if (near(want * f)) tips.push(`Dein Ergebnis ist genau ${t} – da ist ein Vorsatz (m, k, µ …) verrutscht. Rechne zuerst alles in Grundeinheiten um (z. B. 200 mA = 0,2 A) und gib das Ergebnis in ${task.unit || "der angegebenen Einheit"} ein.`);
+  if (F && !F.custom && x !== F.lhs) {
+    const all = { [F.lhs]: -1, ...F.f }, ex = all[x];
+    const calcWith = (mut, root = Math.abs(ex) === 2) => { let r = 1; for (const [k, e] of Object.entries(mut)) { if (k === x) continue; const val = CONST[k] != null ? CONST[k] : v[k]; r *= val ** (-e * Math.sign(ex)); } return root ? Math.sqrt(r) : r; };
+    for (const k of Object.keys(all)) if (k !== x && Math.abs(all[k]) === 2) {
+      const m = { ...all, [k]: Math.sign(all[k]) };
+      if (near(calcWith(m))) tips.push(`Du hast ${sym(k)} nicht quadriert. In der Formel steht ${sym(k)}² – also zuerst ${sym(k)} · ${sym(k)} rechnen (${fmt(sig(v[k], 4), 6)} · ${fmt(sig(v[k], 4), 6)} = ${fmt(sig(v[k] * v[k], 4), 8)}), dann weiter.`);
+    }
+    if (Math.abs(ex) === 2 && near(calcWith(all, false))) tips.push(`Fast! Du hast nur die Wurzel vergessen: ${sym(x)} steht in der Formel im Quadrat, also am Ende noch √ ziehen.`);
+    for (const k of Object.keys(all)) if (k !== x) {
+      const m = { ...all, [k]: -all[k] };
+      if (near(calcWith(m))) tips.push(`${sym(k)} steht auf der falschen Seite des Bruchstrichs. Richtig umgestellt: ${formText(F, x)}.`);
+    }
+    if (near(1 / want)) tips.push(`Du hast den Bruch verkehrt herum gerechnet (oben und unten vertauscht). Richtig: ${formText(F, x)}.`);
+  }
+  if (!tips.length) {
+    const r = got / want;
+    tips.push(r > 1.01 && r < 1.2 || r < 0.99 && r > 0.8 ? "Knapp daneben – wahrscheinlich zu früh gerundet. Rechne mit allen Kommastellen und runde erst am Ende." : `Schau dir den Rechenweg unten Schritt für Schritt an und vergleiche mit deinem Zettel – wo weicht deine Rechnung ab?`);
+  }
+  return [...new Set(tips)].slice(0, 2);
+}
 function subst(F, x, v, pre) {
   let s = formText(F, x).replace(/^.*? = /, "");
   const keys = Object.keys(Q).sort((a, b) => sym(b).length - sym(a).length);
@@ -223,7 +287,7 @@ function subst(F, x, v, pre) {
   for (const k of keys) {
     if (k === x || v[k] == null) continue;
     const name = sym(k), re = new RegExp(`(^|[^A-Za-z_])${name.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}(?![A-Za-z_0-9])`, "g");
-    s = s.replace(re, (m, a) => { const tok = `§${done.length}§`; done.push(show(k, v[k], pre)); return a + tok; });
+    s = s.replace(new RegExp(re.source + "(²?)", "g"), (m, a, sq) => { const tok = `§${done.length}§`; const val = show(k, v[k], pre); done.push(sq ? `(${val})²` : val); return a + tok; });
   }
   return s.replace(/§(\d+)§/g, (m, i) => done[Number(i)]);
 }
@@ -246,4 +310,23 @@ export function check(task, raw) {
   if (/,\d+$/.test(s)) s = s.replace(/\./g, "").replace(",", "."); else s = s.replace(/,/g, "");
   const n = Number(s); if (!Number.isFinite(n)) return false;
   const want = task.answer / task.f; return Math.abs(n - want) <= Math.abs(want) * 0.01 + 1e-12;
+}
+
+/** Umformen erklärt: was wandert wohin? (Produktformeln) */
+export function formSteps(F, x) {
+  const right = formText(F, x);
+  if (F.custom) return [`Ausgangsformel: ${Object.values(F.show)[0]}`, `Nach ${sym(x)} umgestellt: ${right}`];
+  const start = formText(F, F.lhs);
+  if (x === F.lhs) return [`${sym(x)} steht schon allein: ${start}`];
+  const out = [`Ausgangsformel: ${start}`, `Ziel: ${sym(x)} soll allein auf einer Seite stehen.`];
+  for (const [k, e] of Object.entries(F.f)) {
+    if (k === x) continue;
+    const t = sym(k) + (Math.abs(e) === 2 ? "²" : "");
+    out.push(e > 0 ? `„· ${t}“ steht bei ${sym(x)} → kommt auf die andere Seite als „/ ${t}“ (unter den Bruchstrich).` : `„/ ${t}“ steht bei ${sym(x)} → kommt auf die andere Seite als „· ${t}“ (über den Bruchstrich).`);
+  }
+  const ex = F.f[x];
+  if (ex < 0) out.push(`${sym(x)} steht unten im Bruch → beide Seiten umdrehen (Kehrwert), dann ist ${sym(x)} oben.`);
+  if (Math.abs(ex) === 2) out.push(`Gesucht ist ${sym(x)}, in der Formel steht aber ${sym(x)}² → am Ende die Wurzel ziehen.`);
+  out.push(`Ergebnis: ${right}`);
+  return out;
 }

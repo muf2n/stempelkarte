@@ -51,3 +51,26 @@ test("Ergebnis in anderer Einheit (vom Foto)", () => {
   assert.ok(F.checkUnit(t, "223,6", "mA")); assert.ok(F.checkUnit(t, "0,2236", "A")); assert.ok(F.checkUnit(t, "223,6", ""));
   assert.ok(!F.checkUnit(t, "223,6", "A")); assert.ok(F.checkUnit({ kind: "calc", answer: 4700, f: 1e3, base: "Ω" }, "4,7", "kΩ"));
 });
+
+test("Erklären: Rechenweg Schritt für Schritt und typische Fehler erkennen", () => {
+  const Fm = F.FORMULAS.find((x) => x.id === "pi2r"), v = { P: 1.56, I: 0.2 }, res = F.solve(Fm, "R", v);
+  const st = F.explainSteps(Fm, "R", v, res);
+  assert.ok(st.some((s) => /I = 200 mA = 0,2 A/.test(s)) && st.some((s) => /\(0,2 A\)²/.test(s)) && st.some((s) => /0,2² = 0,04/.test(s)) && st.some((s) => /1,56 \/ 0,04 = 39/.test(s)));
+  const t = { kind: "calc", fid: "pi2r", x: "R", v, answer: res, f: 1, unit: "Ω" };
+  assert.match(F.diagnose(t, "7,8")[0], /nicht quadriert/);
+  assert.match(F.diagnose(t, "0,039")[0], /1000-mal zu klein/);
+  const ti = { kind: "calc", fid: "pi2r", x: "I", v: { P: 1.56, R: 39 }, answer: 0.2, f: 1, unit: "A" };
+  assert.match(F.diagnose(ti, "0,04")[0], /Wurzel vergessen/);
+  assert.ok(F.formSteps(Fm, "I").some((s) => /Wurzel/.test(s)) && F.formSteps(Fm, "I").at(-1) === "Ergebnis: I = √(P / R)");
+});
+
+test("Gegenprobe: jede umgestellte Lösung erfüllt die Originalformel", () => {
+  let sd = 11; const r = () => ((sd = (sd * 16807) % 2147483647) / 2147483647);
+  for (const Fm of F.FORMULAS) for (let i = 0; i < 8; i++) {
+    const t = F.makeTask({ ids: [Fm.id], mode: "rechnen", pre: false }, r); if (!t) continue;
+    const v = { ...t.v, [t.x]: t.answer };
+    if (Fm.custom) { const first = Fm.vars[0], again = Fm.solve[first](v); assert.ok(Math.abs(again - v[first]) <= Math.abs(v[first]) * 0.002, `${Fm.id}/${t.x}`); }
+    else { const again = F.solve(Fm, Fm.lhs, v); assert.ok(Math.abs(again - v[Fm.lhs]) <= Math.abs(v[Fm.lhs]) * 0.002, `${Fm.id}/${t.x}: ${again} ≠ ${v[Fm.lhs]}`); }
+  }
+  const f = F.FORMULAS.find((x) => x.id === "pi2r"); assert.ok(Math.abs(F.solve(f, "I", { P: 1.56, R: 39 }) - 0.2) < 1e-9);
+});

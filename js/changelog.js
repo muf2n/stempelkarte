@@ -1,6 +1,7 @@
 // Update 10 F – 🖥️ System-Status › Was ist neu: ehrliche Liste aus der Versionsgeschichte (git log des Projekts), neueste zuerst.
 // Beim Veröffentlichen neuer Versionen hier oben ergänzen.
 export const CHANGELOG = [
+  { v: "20261124-1940", items: ["🤔 Formel-Trainer erklärt Fehler: erkennt z. B. „nicht quadriert“, „Wurzel vergessen“, „Vorsatz verrutscht (1000-mal zu groß)“, „falsche Seite vom Bruch“", "🪜 Rechenweg Schritt für Schritt: umstellen, in Grundeinheiten umrechnen (200 mA = 0,2 A), einsetzen mit Klammern, Quadrat zuerst, ausrechnen – beim Umformen wird erklärt, was wohin wandert", "🐞 Fehler behoben: Wenn die gesuchte Größe im Quadrat stand (z. B. I aus P = I² · R), war die Lösung falsch"] },
   { v: "20261123-1000", items: ["☕ Pausen im Stundenplan: 5-Minuten-Pausen als Linie, 10/15 Minuten mit ☕, Mittagspause mit 🍽 – plus rote Jetzt-Linie wie in WebUntis"] },
   { v: "20261123-0945", items: ["🗓️ Stundenplan wie in WebUntis: Stunden liegen genau nach Uhrzeit (auch 45-min-Stunden ab 07:45 und unterschiedliche Zeiten je Tag), Gruppen nebeneinander, mit Lehrer-Kürzel und Raum", "📷 Foto-Import verwechselt Lehrer und Fach nicht mehr und macht keine falschen Samstage", "🗑 Stundenplan leeren (⚙, zweimal tippen) – um ihn neu einzulesen"] },
   { v: "20261120-1045", items: ["📷 Stundenplan vom Foto: mehrere Screenshots auf einmal (z. B. Vormittag + Nachmittag), versteht die WebUntis-Wochenansicht (Lehrer, Fach-Kürzel, Raum, Gruppen) und macht aus „PG_AWL“ einfach „AWL“"] },

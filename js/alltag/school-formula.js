@@ -71,12 +71,14 @@ function run(S) {
           ${task.kind === "calc" ? `<p class="note pc-tip">✍️ Auf Papier rechnen, dann Ergebnis eintippen – oder den Rechenweg fotografieren, Claude schaut drüber.</p>` : ""}`;
         const inp = box.querySelector("#ft-in"); if (inp) setTimeout(() => inp.focus(), 60);
       };
-      const judge = (ok) => {
+      const judge = (ok, raw = null) => {
         if (done) return; done = true; box.classList.add("done");
         if (ok) { right++; streak++; if (streak > best) { best = streak; save({ ...load(), best }); } } else streak = 0;
         const fb = box.querySelector(".pr-fb"); fb.className = `pr-fb ${ok ? "ok" : "bad"}`;
-        const sol = task.kind === "form" ? `<p><b>Richtig:</b> ${esc(task.choices[task.answer])}</p>`
-          : `<ol class="pr-steps">${task.steps.map((s) => `<li>${esc(s)}</li>`).join("")}</ol>`;
+        const Fm = F.FORMULAS.find((y) => y.id === task.fid);
+        const why = !ok && raw != null && task.kind === "calc" ? F.diagnose(task, raw) : null;
+        const sol = task.kind === "form" ? `<p><b>Richtig:</b> ${esc(task.choices[task.answer])}</p>${ok ? "" : `<div class="ft-how"><b>So stellst du um:</b><ol class="pr-steps">${F.formSteps(Fm, task.x).map((s) => `<li>${esc(s)}</li>`).join("")}</ol></div>`}`
+          : `${why ? `<div class="ft-why"><b>🤔 Was ist passiert?</b>${why.map((w) => `<p>${esc(w)}</p>`).join("")}</div>` : ""}<div class="ft-how"><b>${ok ? "Rechenweg:" : "So geht's Schritt für Schritt:"}</b><ol class="pr-steps">${task.steps.map((s) => `<li>${esc(s)}</li>`).join("")}</ol></div>`;
         fb.innerHTML = `<p class="pr-verdict">${ok ? (streak >= 5 ? `🔥 ${streak} in Folge!` : "✅ Richtig!") : "❌ Leider nicht."}</p>${sol}<button type="button" class="btn primary" data-x="next">${st.n && i + 1 >= st.n ? "Fertig" : "Nächste ›"}</button>`;
         box.querySelectorAll(".pr-ch, #ft-a button, #ft-in").forEach((x) => { x.disabled = true; });
         if (task.kind === "form") box.querySelectorAll(".pr-ch").forEach((x) => x.classList.toggle("right", Number(x.dataset.ch) === task.answer));
@@ -87,17 +89,17 @@ function run(S) {
         box.innerHTML = `<div class="pr-end"><div class="pr-score">${pct >= 90 ? "🏆" : pct >= 60 ? "👍" : "💪"}<b>${right}/${i}</b><small>${pct} % · 🔥 Rekord ${best}</small></div>
           <div class="row"><button type="button" class="btn primary" data-x="again">🎲 Neue Runde</button><button type="button" class="btn" data-x="setup">⚙️ Formeln wählen</button></div></div>`;
       };
-      box.addEventListener("submit", (e) => { e.preventDefault(); const v = box.querySelector("#ft-in").value; if (v.trim()) judge(F.check(task, v)); });
+      box.addEventListener("submit", (e) => { e.preventDefault(); const v = box.querySelector("#ft-in").value; if (v.trim()) judge(F.check(task, v), v); });
       box.addEventListener("click", (e) => {
         const b = e.target.closest("[data-ch],[data-x]"); if (!b || b.disabled) return;
-        if (b.dataset.ch != null) return judge(F.check(task, Number(b.dataset.ch)));
+        if (b.dataset.ch != null) return judge(F.check(task, Number(b.dataset.ch)), Number(b.dataset.ch));
         const x = b.dataset.x;
         if (x === "photo") {
           const t = task, pc = box.querySelector(".pc-box"); b.disabled = true;
           photoCheck(ui, { text: `${t.q} Gegeben: ${t.given.join(", ")}`, unit: t.unit, solution: t.steps.join("\n"), check: (raw, unit) => F.checkUnit(t, raw, unit) }, pc).then((r) => {
             if (task !== t || done) return;
             b.disabled = false; if (!r) return;
-            pc.innerHTML = ""; judge(r.ok); box.querySelector(".pr-fb .pr-verdict").insertAdjacentHTML("afterend", r.html);
+            pc.innerHTML = ""; judge(r.ok, r.ok ? null : r.res.result); box.querySelector(".pr-fb .pr-verdict").insertAdjacentHTML("afterend", r.html);
           });
           return;
         }
